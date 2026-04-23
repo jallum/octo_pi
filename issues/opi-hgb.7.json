@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T20:18:48Z",
   "created": "2026-04-23T19:57:58Z",
   "description": "Review found:\n- StreamOptions.signal: declared + documented, never read anywhere (cancellation is implemented by killing the producer pid).\n- StreamOptions.session_id: declared, never read.\n- Model.headers: declared, never merged into Anthropic request (only StreamOptions.headers is).\n\nDelete from @type + defstruct + moduledoc in each struct.\n\nTDD:\n- Existing struct/contract tests stay green (these fields have no assertions).\n- mix compile must still succeed — if any emission site turns out to read them (shouldn't, per grep), fix up.\n- Add a one-line comment on StreamOptions noting these were removed and when they're needed later (e.g., adding signal back when we support AbortSignal-style cancel from external processes — if ever).\n\nFiles: stream_options.ex, model.ex, stream_options (any docstring refs).",
   "id": "opi-hgb.7",
   "labels": [],
   "parent": "opi-hgb",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Drop dead struct fields: StreamOptions.signal/session_id, Model.headers",
   "type": "task",
-  "updated_at": "2026-04-23T20:17:59Z"
+  "updated_at": "2026-04-23T20:18:48Z"
 }
