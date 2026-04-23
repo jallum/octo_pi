@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T20:15:10Z",
   "created": "2026-04-23T19:57:58Z",
   "description": "pi-mono's parseStreamingJson returns whatever JSON.parse yields (arrays, primitives, fallback {}); ours returns only maps, silently coercing everything else to %{}. Benign for Anthropic today (tool args are always objects) but it's an implicit contract divergence not called out anywhere.\n\nDecision: keep the map-only contract (simpler, type-safe, Anthropic tool-args ARE always objects). Pin the deviation explicitly:\n\nTDD:\n- RED: write a regression test \\`test \\\"pi-mono would return the array; we coerce to %{}\\\"\\` asserting parse_streaming(\\\"[1,2,3]\\\") == %{} with a comment citing the TS line and this ticket ID.\n- GREEN: verify the test passes with current impl.\n- REFACTOR: update partial_json.ex moduledoc to state the deviation + update docs/port-map/anthropic.md §4.2 (currently implies parity, but we diverge).\n\nFiles: partial_json.ex, partial_json_test.exs, docs/port-map/anthropic.md.",
   "id": "opi-hgb.5",
   "labels": [],
   "parent": "opi-hgb",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "parse_streaming: document map-only contract deviation from pi-mono",
   "type": "task",
-  "updated_at": "2026-04-23T20:13:27Z"
+  "updated_at": "2026-04-23T20:15:10Z"
 }
