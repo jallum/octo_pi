@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T21:30:57Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-06w",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Fill test gaps: queue-full facade, set_queue_mode :steering, abort-during-stream",
   "type": "task",
-  "updated_at": "2026-04-23T21:30:57Z"
+  "updated_at": "2026-04-23T21:46:59Z"
 }
