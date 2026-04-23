@@ -6,14 +6,15 @@
   "blocks": [
     "octo-z1d.8"
   ],
+  "closed_at": "2026-04-23T21:05:07Z",
   "created": "2026-04-23T20:40:06Z",
   "description": "Queue module + integration (port-map §5).\n\nOctoPi.Agent.PendingMessageQueue:\n- new(mode :: :one_at_a_time | :all, bound \\\\\\\\ 1_000)\n- enqueue/2 returns {:ok, q} or {:error, :full}\n- has_items?/1, drain/1 (per mode), clear/1\n\nLoop integration:\n- After turn_end, before next inner iteration → drain steering queue,\n  convert to messages, inject into context. If nonempty, re-enter\n  inner loop immediately.\n- After inner would exit → drain follow-up queue. If nonempty, re-enter\n  inner loop; else break and emit agent_end.\n- follow_up/2 on an idle session enqueues but does not wake. Next\n  prompt/continue picks it up.\n\nPer-session mode setter (mirrors TS agent.steeringMode = \"all\"):\n  OctoPi.Agent.set_queue_mode(pid, :steering | :follow_up, mode)\n\nTDD:\n- enqueue beyond bound → {:error, :full}\n- drain with :one_at_a_time returns [msg], leaves rest\n- drain with :all returns all, clears queue\n- steer during tool exec: message lands in next LLM context\n- follow_up during idle: does NOT re-invoke loop; next prompt drains\n- two-back-to-back follow_ups with :all mode: both run in one continuation\n\nDepends on z1d.3.",
   "id": "octo-z1d.5",
   "labels": [],
   "parent": "octo-z1d",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Steering + follow-up queues wired into loop drainage points",
   "type": "task",
-  "updated_at": "2026-04-23T21:01:19Z"
+  "updated_at": "2026-04-23T21:05:07Z"
 }
