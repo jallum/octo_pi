@@ -310,8 +310,10 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
       indices = events |> Enum.map(& &1.content_index) |> Enum.uniq()
       assert indices == [0, 1]
 
+      # `state.message.content` is reverse-ordered during streaming
+      # (open block at head); use Decoder.message/1 for forward order.
       assert [%Content.Text{text: "first"}, %Content.Text{text: "second"}] =
-               state.message.content
+               Decoder.message(state).content
     end
   end
 
@@ -630,12 +632,12 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
 
       {_events, state} = feed(state, events)
 
+      assert %Event.Done{reason: :tool_use, message: final} = Decoder.finalize(state)
+
       assert [
                %Content.Text{text: "Let me check."},
                %ToolCall{id: "toolu_1", name: "edit", arguments: %{"path" => "x"}}
-             ] = state.message.content
-
-      assert %Event.Done{reason: :tool_use} = Decoder.finalize(state)
+             ] = final.content
     end
 
     test "out-of-order content_block indices still route to the right block" do
@@ -662,10 +664,12 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
 
       # Content is appended in arrival order, not by Anthropic index:
       # position 0 (arrived first) has index:1's data, and vice versa.
+      # `state.message.content` is reverse-ordered during streaming;
+      # use `Decoder.message/1` for the forward (arrival-order) view.
       assert [
                %Content.Text{text: "second-block"},
                %Content.Text{text: "first-block"}
-             ] = state.message.content
+             ] = Decoder.message(state).content
     end
   end
 
@@ -699,8 +703,335 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
 
       assert %Event.ToolCallEnd{tool_call: %ToolCall{} = tool_call} = List.last(events_out)
       refute Map.has_key?(tool_call, :partial_json)
-      assert [%ToolCall{} = persisted] = state.message.content
+      assert [%ToolCall{} = persisted] = Decoder.message(state).content
       refute Map.has_key?(persisted, :partial_json)
+    end
+  end
+
+  describe "reverse-order content storage (opi-se9)" do
+    # The decoder stores `state.message.content` reverse-ordered during
+    # streaming so the open block sits at the head and every delta
+    # mutates it in O(1) via `[head | rest]` instead of walking the
+    # spine via `List.update_at`. These tests pin the invariants:
+    #
+    # - Final assembled message (post-finalize) is forward-order.
+    # - Mid-stream `partial:` carried by every event is forward-order.
+    # - The open block's text/thinking accumulates correctly across
+    #   many deltas (binary append optimization friendly).
+    # - The forward-order accessor `Decoder.message/1` matches what
+    #   `Decoder.finalize/1` produces.
+
+    test "text + thinking + tool_use blocks land in arrival order in finalize" do
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{
+          "type" => "message_start",
+          "message" => %{"id" => "m", "usage" => %{"input_tokens" => 1}}
+        },
+        %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{"type" => "thinking"}
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "thinking_delta", "thinking" => "ponder"}
+        },
+        %{"type" => "content_block_stop", "index" => 0},
+        %{"type" => "content_block_start", "index" => 1, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 1,
+          "delta" => %{"type" => "text_delta", "text" => "Let me edit"}
+        },
+        %{"type" => "content_block_stop", "index" => 1},
+        %{
+          "type" => "content_block_start",
+          "index" => 2,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "t1",
+            "name" => "edit",
+            "input" => %{}
+          }
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 2,
+          "delta" => %{"type" => "input_json_delta", "partial_json" => ~s({"path":"a"})}
+        },
+        %{"type" => "content_block_stop", "index" => 2},
+        %{
+          "type" => "message_delta",
+          "delta" => %{"stop_reason" => "tool_use"},
+          "usage" => %{}
+        }
+      ]
+
+      {_events, state} = feed(state, events)
+
+      assert %Event.Done{message: final} = Decoder.finalize(state)
+
+      assert [
+               %Content.Thinking{thinking: "ponder"},
+               %Content.Text{text: "Let me edit"},
+               %ToolCall{id: "t1", name: "edit", arguments: %{"path" => "a"}}
+             ] = final.content
+
+      # Decoder.message/1 matches what finalize hands out for the
+      # content list (modulo Done's other metadata).
+      assert Decoder.message(state).content == final.content
+    end
+
+    test "many text deltas to one block produce the right concatenated text" do
+      {_, state} = Decoder.new(model())
+
+      n = 75
+      chunks = for i <- 1..n, do: "[#{i}]"
+      expected_text = Enum.join(chunks, "")
+
+      events =
+        [
+          %{
+            "type" => "message_start",
+            "message" => %{"id" => "m", "usage" => %{"input_tokens" => 1}}
+          },
+          %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}}
+        ] ++
+          Enum.map(chunks, fn chunk ->
+            %{
+              "type" => "content_block_delta",
+              "index" => 0,
+              "delta" => %{"type" => "text_delta", "text" => chunk}
+            }
+          end) ++
+          [
+            %{"type" => "content_block_stop", "index" => 0},
+            %{
+              "type" => "message_delta",
+              "delta" => %{"stop_reason" => "end_turn"},
+              "usage" => %{}
+            }
+          ]
+
+      {emitted_events, state} = feed(state, events)
+
+      # Each TextDelta carries the partial in forward order, with the
+      # open block at the tail. The final TextDelta's partial.content
+      # should hold the fully-assembled text in a single Text block.
+      text_deltas = Enum.filter(emitted_events, &match?(%Event.TextDelta{}, &1))
+      assert length(text_deltas) == n
+
+      last_delta = List.last(text_deltas)
+      assert [%Content.Text{text: text_so_far}] = last_delta.partial.content
+      assert text_so_far == expected_text
+
+      # Final message after finalize is forward-order with the right text.
+      assert %Event.Done{message: final} = Decoder.finalize(state)
+      assert [%Content.Text{text: ^expected_text}] = final.content
+    end
+
+    test "many text deltas mixed with a trailing tool_use keep block ordering" do
+      # Stress the multi-block-with-many-deltas case: a long text
+      # block followed by a tool_use. The text block ends up at
+      # position 0, tool_use at position 1, in the final message.
+      {_, state} = Decoder.new(model())
+
+      n = 50
+      text_chunks = for i <- 1..n, do: "x#{i}"
+      expected_text = Enum.join(text_chunks, "")
+
+      events =
+        [
+          %{
+            "type" => "message_start",
+            "message" => %{"id" => "m", "usage" => %{"input_tokens" => 1}}
+          },
+          %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}}
+        ] ++
+          Enum.map(text_chunks, fn chunk ->
+            %{
+              "type" => "content_block_delta",
+              "index" => 0,
+              "delta" => %{"type" => "text_delta", "text" => chunk}
+            }
+          end) ++
+          [
+            %{"type" => "content_block_stop", "index" => 0},
+            %{
+              "type" => "content_block_start",
+              "index" => 1,
+              "content_block" => %{
+                "type" => "tool_use",
+                "id" => "t1",
+                "name" => "edit",
+                "input" => %{}
+              }
+            },
+            %{
+              "type" => "content_block_delta",
+              "index" => 1,
+              "delta" => %{"type" => "input_json_delta", "partial_json" => ~s({"path":"x"})}
+            },
+            %{"type" => "content_block_stop", "index" => 1},
+            %{
+              "type" => "message_delta",
+              "delta" => %{"stop_reason" => "tool_use"},
+              "usage" => %{}
+            }
+          ]
+
+      {_events, state} = feed(state, events)
+
+      assert %Event.Done{message: final} = Decoder.finalize(state)
+
+      assert [
+               %Content.Text{text: ^expected_text},
+               %ToolCall{id: "t1", name: "edit", arguments: %{"path" => "x"}}
+             ] = final.content
+    end
+
+    test "every emitted partial: holds content in forward order" do
+      # Pin the contract that consumers (Loop, agent.demo, etc.) see
+      # forward-ordered content on every event, regardless of the
+      # decoder's internal reverse-ordered storage.
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "first"}
+        },
+        %{"type" => "content_block_stop", "index" => 0},
+        %{"type" => "content_block_start", "index" => 1, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 1,
+          "delta" => %{"type" => "text_delta", "text" => "second"}
+        },
+        %{"type" => "content_block_stop", "index" => 1}
+      ]
+
+      {emitted, _state} = feed(state, events)
+
+      # After both blocks have been started, every event's `partial:`
+      # (or its TextEnd `content`) reflects forward-order arrival.
+      partials =
+        emitted
+        |> Enum.map(fn
+          %{partial: p} -> p
+          _ -> nil
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      # The last event in this stream is a TextEnd for index 1 — its
+      # partial.content has both blocks, in arrival order.
+      last_partial = List.last(partials)
+
+      assert [
+               %Content.Text{text: "first"},
+               %Content.Text{text: "second"}
+             ] = last_partial.content
+    end
+
+    test "out-of-order content_block_start indices preserve arrival ordering" do
+      # Already covered by the earlier "out-of-order" test, but pin
+      # the stronger claim: with the new reverse-order storage and
+      # the open-block fast path, an out-of-order delta to the
+      # NON-open (older) block still routes via the index_map and
+      # falls back to the cold path correctly.
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}},
+        %{"type" => "content_block_start", "index" => 1, "content_block" => %{"type" => "text"}},
+        # Delta to the OLDER (forward position 0) block while the
+        # newer one is open — exercises the cold path that translates
+        # forward index to reverse index inside `update_block/3`.
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "OLD"}
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 1,
+          "delta" => %{"type" => "text_delta", "text" => "NEW"}
+        },
+        %{"type" => "content_block_stop", "index" => 0},
+        %{"type" => "content_block_stop", "index" => 1}
+      ]
+
+      {_events, state} = feed(state, events)
+
+      assert [
+               %Content.Text{text: "OLD"},
+               %Content.Text{text: "NEW"}
+             ] = Decoder.message(state).content
+    end
+
+    test "input_json_delta accumulation across many fragments yields full args" do
+      # Simulate a realistic streamed tool call where the JSON arrives
+      # in many small fragments. PartialJson handles repair; we want
+      # to confirm the reverse-order storage doesn't disturb the
+      # accumulator (state.partial_json) or final argument map.
+      {_, state} = Decoder.new(model())
+
+      json = ~s({"path":"src/main.ex","mode":"replace","text":"defmodule M do\\nend"})
+      fragments = for <<chunk::binary-size(3) <- json>>, do: chunk
+
+      fragments =
+        fragments ++
+          [binary_part(json, length(fragments) * 3, byte_size(json) - length(fragments) * 3)]
+
+      events =
+        [
+          %{
+            "type" => "content_block_start",
+            "index" => 0,
+            "content_block" => %{
+              "type" => "tool_use",
+              "id" => "t1",
+              "name" => "edit",
+              "input" => %{}
+            }
+          }
+        ] ++
+          Enum.map(fragments, fn frag ->
+            %{
+              "type" => "content_block_delta",
+              "index" => 0,
+              "delta" => %{"type" => "input_json_delta", "partial_json" => frag}
+            }
+          end) ++
+          [
+            %{"type" => "content_block_stop", "index" => 0},
+            %{
+              "type" => "message_delta",
+              "delta" => %{"stop_reason" => "tool_use"},
+              "usage" => %{}
+            }
+          ]
+
+      {_events, state} = feed(state, events)
+
+      assert %Event.Done{message: final} = Decoder.finalize(state)
+
+      assert [
+               %ToolCall{
+                 id: "t1",
+                 name: "edit",
+                 arguments: %{
+                   "path" => "src/main.ex",
+                   "mode" => "replace",
+                   "text" => "defmodule M do\nend"
+                 }
+               }
+             ] = final.content
     end
   end
 end
