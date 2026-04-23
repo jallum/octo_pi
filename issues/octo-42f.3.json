@@ -1,19 +1,17 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "octo-42f.5"
   ],
-  "comments": [],
   "created": "2026-04-23T16:42:38.759445Z",
   "description": "Port pi-ai's partial-JSON parsing (utils/json-parse.ts + `partial-json` npm lib). Input: a potentially incomplete JSON string arriving as deltas. Output: best-effort parsed map, re-parsed on each delta.\n\nElixir's binary pattern matching makes this cleaner than the TS version. Unit tests with incrementally-built JSON fixtures from real Anthropic tool-call streams.",
   "id": "octo-42f.3",
   "labels": [],
   "parent": "octo-42f",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Streaming JSON parser for tool-call arguments",
   "type": "task",
-  "updated_at": "2026-04-23T16:42:38.759445Z"
+  "updated_at": "2026-04-23T18:24:18Z"
 }
