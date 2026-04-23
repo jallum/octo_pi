@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:57:58Z",
+  "description": "Three review findings on the Producer converge into one refactor:\n\n1. Stop using Process.put/get to share state with Req's \\`into:\\` callback. Use Req's \\`private:\\` option — pass \\`private: %{producer: state}\\` to Req.post!, read/write via Req.Request.get_private/put_private inside the callback.\n\n2. Replace \\`GenServer.start\\` (unlinked) + mutual monitor with a supervised Task under a Task.Supervisor owned by OctoPi.AI.Providers.Anthropic.Application. Task is the idiomatic shape: caller wants a linked process that emits messages and ends.\n\n3. Narrow the rescue: replace \\`rescue e\\` catch-all with \\`rescue e in [Req.TransportError, Req.HTTPError, Jason.DecodeError, RuntimeError]\\`. Let unknown crashes propagate to the supervisor. Log stacktrace via Logger.error(Exception.format(:error, e, __STACKTRACE__)) before converting to Event.Error.\n\nTDD:\n- Existing producer tests stay green (106 currently).\n- Add a regression test: spawn 2 concurrent producers against different fake plugs, assert no state cross-contamination.\n- Add a test: raising a random RuntimeError mid-stream emits Event.Error with the message and the stream terminates.\n\nFiles: apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/{producer.ex, application.ex, anthropic.ex}; producer_test.exs.",
+  "id": "opi-hgb.1",
+  "labels": [],
+  "parent": "opi-hgb",
+  "priority": 1,
+  "status": "open",
+  "title": "Producer refactor: Req :private state, supervised Task, narrow rescue",
+  "type": "task",
+  "updated_at": "2026-04-23T19:57:58Z"
+}
