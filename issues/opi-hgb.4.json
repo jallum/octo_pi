@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:57:58Z",
+  "description": "Current provider registration (\\`Application.get_env(:octo_pi_ai, :providers) |\u003e Map.put(...) |\u003e Application.put_env/3\\`) races under concurrent app start — the moment OpenAI/Google apps land and boot in parallel with Anthropic, one provider's merge stomps another.\n\nRESEARCH.md §5 already specifies this seam: \\\"OctoPi.AI.ProviderRegistry (ETS owner).\\\"\n\nCreate OctoPi.AI.ProviderRegistry under OctoPi.AI.Application's supervisor. Provides:\n- register(api :: atom, module)\n- lookup(api) :: module | nil\n- list() :: %{atom =\u003e module}\n\nUses a public, named ETS table (read_concurrency: true). Each provider's Application.start/2 calls ProviderRegistry.register(:anthropic_messages, OctoPi.AI.Providers.Anthropic) instead of the current Application.put_env dance.\n\nCore OctoPi.AI.stream/3 reads via ProviderRegistry.lookup instead of Application.get_env.\n\nTDD:\n- RED: test \\\"two apps calling ProviderRegistry.register concurrently don't lose registrations\\\" (use Task.async pair).\n- RED: test \\\"lookup returns module after register\\\", \\\"lookup returns nil for unknown api\\\".\n- GREEN: implement the GenServer-owned ETS table.\n- REGRESSION: existing ai_stream_test and mix ai.demo still work.\n\nFiles: new apps/octo_pi_ai/lib/octo_pi/ai/provider_registry.ex + test; ai.ex (switch to lookup); anthropic/application.ex (switch to register call).",
+  "id": "opi-hgb.4",
+  "labels": [],
+  "parent": "opi-hgb",
+  "priority": 1,
+  "status": "open",
+  "title": "Provider registry: ETS-owned dispatch table instead of Application.put_env",
+  "type": "task",
+  "updated_at": "2026-04-23T19:57:58Z"
+}
