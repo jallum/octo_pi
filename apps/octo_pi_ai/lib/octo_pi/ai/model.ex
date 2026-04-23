@@ -25,8 +25,7 @@ defmodule OctoPi.AI.Model do
           input: [input_modality()],
           cost: Cost.t(),
           context_window: pos_integer(),
-          max_tokens: pos_integer(),
-          headers: %{optional(String.t()) => String.t()} | nil
+          max_tokens: pos_integer()
         }
 
   defstruct [
@@ -37,7 +36,6 @@ defmodule OctoPi.AI.Model do
     :base_url,
     :context_window,
     :max_tokens,
-    :headers,
     reasoning: false,
     input: [:text],
     cost: %Cost{}
