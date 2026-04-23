@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-dkl.1"
+  ],
   "blocks": [],
   "created": "2026-04-23T22:28:12Z",
   "description": "Two coverage gaps:\n\n1. No live-Anthropic integration test for `mix pi --print \"...\"`.\n   Phase 2 has one (`apps/octo_pi_agent/test/octo_pi/agent/\n   integration_test.exs`); Phase 3 should too. Tag `:integration`,\n   excluded by default, opt-in via\n   `ANTHROPIC_API_KEY=... mix test --only integration`.\n\n   Trivial prompt: \"Echo the string 'hello' exactly\" with tools\n   disabled. Assert stdout contains \"hello\", exit code 0.\n\n2. No end-to-end RPC test. The opi-dkl.1 fix covers\n   subscribe-target + event-drain; follow up here with a true\n   E2E that simulates a client sending JSON lines and asserts\n   both response + event lines arrive on stdout.\n\n   Use StringIO for stdin, CaptureIO for stdout, drive a full\n   prompt-through-AgentEnd flow against FakeTransport.\n\nTDD:\n- Live Anthropic integration test lands with `:integration` tag.\n- RPC E2E test lands without tag, runs in default suite.\n\nDepends on opi-dkl.1.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Integration + E2E tests: live Anthropic Print + RPC flow",
   "type": "task",
-  "updated_at": "2026-04-23T22:28:12Z"
+  "updated_at": "2026-04-23T22:28:21Z"
 }
