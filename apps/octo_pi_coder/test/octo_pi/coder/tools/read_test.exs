@@ -80,4 +80,40 @@ defmodule OctoPi.Coder.Tools.ReadTest do
 
     assert msg =~ "escapes session cwd"
   end
+
+  describe "line counting" do
+    test "file ending with a newline: total_lines matches actual line count",
+         %{tmp: tmp, ref: ref} do
+      path = Path.join(tmp, "trailing_nl.txt")
+      File.write!(path, "a\nb\nc\n")
+
+      assert {:ok, %Result{details: %{total_lines: 3, output_lines: 3}}} =
+               exec(%{"path" => path}, ref, tmp)
+    end
+
+    test "file without trailing newline: total_lines matches actual line count",
+         %{tmp: tmp, ref: ref} do
+      path = Path.join(tmp, "no_trailing.txt")
+      File.write!(path, "a\nb")
+
+      assert {:ok, %Result{details: %{total_lines: 2, output_lines: 2}}} =
+               exec(%{"path" => path}, ref, tmp)
+    end
+
+    test "single line without newline: total_lines is 1", %{tmp: tmp, ref: ref} do
+      path = Path.join(tmp, "single.txt")
+      File.write!(path, "only")
+
+      assert {:ok, %Result{details: %{total_lines: 1}}} =
+               exec(%{"path" => path}, ref, tmp)
+    end
+
+    test "empty file: total_lines is 0", %{tmp: tmp, ref: ref} do
+      path = Path.join(tmp, "empty.txt")
+      File.write!(path, "")
+
+      assert {:ok, %Result{details: %{total_lines: 0}}} =
+               exec(%{"path" => path}, ref, tmp)
+    end
+  end
 end

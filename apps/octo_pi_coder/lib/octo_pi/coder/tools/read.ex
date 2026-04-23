@@ -63,11 +63,15 @@ defmodule OctoPi.Coder.Tools.Read do
   end
 
   defp slice_and_truncate(body, offset, limit) do
-    lines = String.split(body, "\n")
-    total = length(lines) - 1
+    # Keep the raw split (which preserves the trailing newline via a
+    # trailing empty element) for output. Compute the actual line
+    # count separately so files without a trailing newline report
+    # the correct total.
+    raw = split_raw(body)
+    total = line_count(raw)
 
     sliced =
-      lines
+      raw
       |> maybe_drop(offset)
       |> maybe_take(limit)
 
@@ -80,10 +84,10 @@ defmodule OctoPi.Coder.Tools.Read do
            truncated: true,
            truncated_by: :bytes,
            total_lines: total,
-           output_lines: length(sliced)
+           output_lines: line_count(sliced)
          }}
 
-      length(sliced) > @max_lines ->
+      line_count(sliced) > @max_lines ->
         kept = Enum.take(sliced, @max_lines)
 
         {Enum.join(kept, "\n"),
@@ -95,9 +99,22 @@ defmodule OctoPi.Coder.Tools.Read do
            truncated: false,
            truncated_by: nil,
            total_lines: total,
-           output_lines: length(sliced)
+           output_lines: line_count(sliced)
          }}
     end
+  end
+
+  defp split_raw(""), do: []
+  defp split_raw(body), do: String.split(body, "\n")
+
+  # Counts real lines, ignoring the trailing empty element that
+  # `String.split/2` produces when the file ends with `\n`. An empty
+  # file is 0 lines; "a" is 1 line; "a\n" is 1 line; "a\nb" is 2
+  # lines; "a\nb\n" is 2 lines.
+  defp line_count([]), do: 0
+
+  defp line_count(lines) do
+    if List.last(lines) == "", do: length(lines) - 1, else: length(lines)
   end
 
   defp maybe_drop(lines, nil), do: lines
