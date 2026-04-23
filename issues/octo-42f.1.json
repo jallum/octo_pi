@@ -11,9 +11,15 @@
     "spike"
   ],
   "parent": "octo-42f",
+  "comments": [
+    {
+      "text": "Pivoted from live end-to-end demo to committed port map (docs/port-map/anthropic.md). Rationale: pi-mono hand-rolls SSE parsing on top of fetch bytes, so Req vs Finch is a non-question — both work as byte pipes. Cancel = kill the Producer GenServer, cleaner than TS AbortSignal. Live Anthropic smoke happens naturally in octo-42f.5 when the key is set.",
+      "timestamp": "2026-04-23T18:05:36Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Spike: Req vs Finch for streaming + cancellation",
   "type": "task",
-  "updated_at": "2026-04-23T18:01:18Z"
+  "updated_at": "2026-04-23T18:05:36Z"
 }
