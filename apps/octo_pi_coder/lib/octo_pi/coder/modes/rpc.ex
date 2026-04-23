@@ -33,6 +33,7 @@ defmodule OctoPi.Coder.Modes.Rpc do
   """
 
   alias OctoPi.Agent.Event
+  alias OctoPi.AI.Content
 
   @doc """
   Parse a single JSON line into a request map, or return
@@ -100,38 +101,91 @@ defmodule OctoPi.Coder.Modes.Rpc do
   @doc """
   Convert an `OctoPi.Agent.Event.*` struct into a JSON-friendly
   map of the shape `{"type": "event", "event": name, "data": ...}`.
-  Complex fields (messages, results) are rendered in a
-  human-readable way but not fully round-trip-safe yet.
+
+  The `data` payload carries the fields a progress UI actually
+  needs — text content for message updates, result text for tool
+  completions, reason + turn count for agent end. Full struct
+  round-trip is intentionally *not* preserved; callers who need
+  the raw transcript should read the session JSONL file directly.
   """
   @spec event_to_json(struct()) :: map()
   def event_to_json(%Event.AgentStart{}), do: event("agent_start", %{})
 
   def event_to_json(%Event.AgentEnd{reason: reason, messages: msgs}) do
-    event("agent_end", %{"reason" => to_string(reason), "message_count" => length(msgs)})
+    event("agent_end", %{
+      "reason" => to_string(reason),
+      "message_count" => length(msgs),
+      "final_text" => final_assistant_text(msgs)
+    })
   end
 
   def event_to_json(%Event.TurnStart{turn: turn}), do: event("turn_start", %{"turn" => turn})
   def event_to_json(%Event.TurnEnd{turn: turn}), do: event("turn_end", %{"turn" => turn})
 
   def event_to_json(%Event.MessageStart{}), do: event("message_start", %{})
-  def event_to_json(%Event.MessageUpdate{}), do: event("message_update", %{})
-  def event_to_json(%Event.MessageEnd{}), do: event("message_end", %{})
+
+  def event_to_json(%Event.MessageUpdate{partial: partial}) do
+    event("message_update", %{"text" => extract_text(partial)})
+  end
+
+  def event_to_json(%Event.MessageEnd{message: msg}) do
+    event("message_end", %{
+      "text" => extract_text(msg),
+      "stop_reason" => stop_reason_string(msg)
+    })
+  end
 
   def event_to_json(%Event.ToolExecutionStart{tool_call_id: id, tool_name: name}) do
     event("tool_execution_start", %{"tool_call_id" => id, "tool_name" => name})
   end
 
-  def event_to_json(%Event.ToolExecutionUpdate{tool_call_id: id}) do
-    event("tool_execution_update", %{"tool_call_id" => id})
+  def event_to_json(%Event.ToolExecutionUpdate{tool_call_id: id, partial: partial}) do
+    event("tool_execution_update", %{
+      "tool_call_id" => id,
+      "text" => extract_result_text(partial)
+    })
   end
 
   def event_to_json(%Event.ToolExecutionEnd{tool_call_id: id, tool_name: name, result: result}) do
     event("tool_execution_end", %{
       "tool_call_id" => id,
       "tool_name" => name,
-      "is_error" => result.is_error?
+      "is_error" => result.is_error?,
+      "text" => extract_result_text(result)
     })
   end
 
   defp event(name, data), do: %{"type" => "event", "event" => name, "data" => data}
+
+  defp final_assistant_text(msgs) do
+    msgs
+    |> Enum.reverse()
+    |> Enum.find(&match?(%OctoPi.AI.Message.Assistant{}, &1))
+    |> case do
+      nil -> ""
+      %{content: content} -> extract_text(%{content: content})
+    end
+  end
+
+  defp stop_reason_string(%{stop_reason: nil}), do: nil
+  defp stop_reason_string(%{stop_reason: reason}), do: to_string(reason)
+  defp stop_reason_string(_), do: nil
+
+  defp extract_text(nil), do: ""
+
+  defp extract_text(%{content: content}) when is_list(content) do
+    content
+    |> Enum.filter(&match?(%Content.Text{}, &1))
+    |> Enum.map_join("", & &1.text)
+  end
+
+  defp extract_text(_), do: ""
+
+  defp extract_result_text(%{content: content}) when is_list(content) do
+    content
+    |> Enum.filter(&match?(%Content.Text{}, &1))
+    |> Enum.map_join("", & &1.text)
+  end
+
+  defp extract_result_text(_), do: ""
 end

@@ -122,22 +122,106 @@ defmodule OctoPi.Coder.Modes.RpcTest do
   end
 
   describe "event_to_json/1" do
-    test "converts an AgentStart event to a JSON-friendly map" do
+    alias OctoPi.Agent.Tool.Result
+    alias OctoPi.AI.Content
+    alias OctoPi.AI.Message.Assistant
+
+    test "AgentStart → empty data" do
       json = Rpc.event_to_json(%Event.AgentStart{})
       assert json["type"] == "event"
       assert json["event"] == "agent_start"
+      assert json["data"] == %{}
     end
 
-    test "converts a TurnStart event with turn metadata" do
-      json = Rpc.event_to_json(%Event.TurnStart{turn: 3})
-      assert json["event"] == "turn_start"
-      assert json["data"]["turn"] == 3
+    test "AgentEnd carries reason, message_count, and final assistant text" do
+      user = %OctoPi.AI.Message.User{content: "hi", timestamp: 0}
+
+      final =
+        %Assistant{
+          api: :fake,
+          provider: :fake,
+          model: "m",
+          timestamp: 0,
+          content: [%Content.Text{text: "bye"}],
+          stop_reason: :stop
+        }
+
+      json =
+        Rpc.event_to_json(%Event.AgentEnd{reason: :stop, messages: [user, final]})
+
+      assert json["event"] == "agent_end"
+      assert json["data"]["reason"] == "stop"
+      assert json["data"]["message_count"] == 2
+      assert json["data"]["final_text"] == "bye"
     end
 
-    test "converts a ToolExecutionStart event" do
-      json = Rpc.event_to_json(%Event.ToolExecutionStart{tool_call_id: "c", tool_name: "read"})
+    test "TurnStart + TurnEnd carry turn number" do
+      assert %{"event" => "turn_start", "data" => %{"turn" => 3}} =
+               Rpc.event_to_json(%Event.TurnStart{turn: 3})
 
-      assert json["event"] == "tool_execution_start"
+      assert %{"event" => "turn_end", "data" => %{"turn" => 3}} =
+               Rpc.event_to_json(%Event.TurnEnd{turn: 3})
+    end
+
+    test "MessageUpdate carries current full assistant text" do
+      partial = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0,
+        content: [%Content.Text{text: "hello"}]
+      }
+
+      json = Rpc.event_to_json(%Event.MessageUpdate{partial: partial})
+      assert json["data"]["text"] == "hello"
+    end
+
+    test "MessageEnd carries finalized text + stop_reason" do
+      msg = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0,
+        content: [%Content.Text{text: "done"}],
+        stop_reason: :stop
+      }
+
+      json = Rpc.event_to_json(%Event.MessageEnd{message: msg})
+      assert json["data"]["text"] == "done"
+      assert json["data"]["stop_reason"] == "stop"
+    end
+
+    test "ToolExecutionStart carries id + name" do
+      json =
+        Rpc.event_to_json(%Event.ToolExecutionStart{tool_call_id: "c", tool_name: "read"})
+
+      assert json["data"] == %{"tool_call_id" => "c", "tool_name" => "read"}
+    end
+
+    test "ToolExecutionUpdate carries partial result text" do
+      partial = %Result{content: [%Content.Text{text: "streaming..."}]}
+
+      json =
+        Rpc.event_to_json(%Event.ToolExecutionUpdate{tool_call_id: "c", partial: partial})
+
+      assert json["data"]["text"] == "streaming..."
+    end
+
+    test "ToolExecutionEnd carries full result text + is_error" do
+      result = %Result{
+        content: [%Content.Text{text: "file contents here"}],
+        is_error?: false
+      }
+
+      json =
+        Rpc.event_to_json(%Event.ToolExecutionEnd{
+          tool_call_id: "c",
+          tool_name: "read",
+          result: result
+        })
+
+      assert json["data"]["text"] == "file contents here"
+      assert json["data"]["is_error"] == false
       assert json["data"]["tool_name"] == "read"
     end
   end
