@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-t58.2"
+  ],
   "blocks": [],
   "created": "2026-04-23T21:55:34Z",
   "description": "Port-map §7. Long-lived JSON-line server over stdin/stdout.\n\nModules:\n- OctoPi.Coder.Modes.Rpc — main server GenServer\n- OctoPi.Coder.Modes.Rpc.JsonL — line reader from :stdio\n- OctoPi.Coder.Modes.Rpc.Protocol — request/response encoding\n\nRequest shape (JSON per line):\n  {\"id\": \"req-1\", \"method\": \"prompt\", \"params\": {...}}\n\nResponse shape:\n  {\"id\": \"req-1\", \"result\": ...}       // or\n  {\"id\": \"req-1\", \"error\": {...}}\n\nEvents (no id):\n  {\"type\": \"event\", \"event\": \"turn_start\", \"data\": {...}}\n\nMethods at minimum: prompt, continue, steer, follow_up, abort,\nwait_for_idle. Events: every Agent.Event.* forwarded as JSON.\n\nPort map flags JSON serialization of complex AI structs as a\nconcrete concern — probably needs a protocol/to_json helper per\nevent.\n\nTDD:\n- Write a JSONL line to stdin, assert response line on stdout\n- Event streaming: prompt → assert JSON event lines arrive in\n  order\n- Malformed JSON → error response with id: null\n- Abort via RPC → session stops\n\nDepends on .2, .4, .5, .6.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "RPC mode: JSONL stdin/stdout protocol",
   "type": "task",
-  "updated_at": "2026-04-23T21:55:34Z"
+  "updated_at": "2026-04-23T21:55:40Z"
 }

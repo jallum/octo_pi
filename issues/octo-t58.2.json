@@ -4,7 +4,8 @@
     "octo-t58.1"
   ],
   "blocks": [
-    "octo-t58.7"
+    "octo-t58.7",
+    "octo-t58.8"
   ],
   "created": "2026-04-23T21:54:43Z",
   "description": "Port-map §1. Byte-compatible v3 JSONL at\n~/.pi/agent/sessions/--\u003cencoded-cwd\u003e--/\u003cuuid\u003e.jsonl.\n\nModules:\n- OctoPi.Coder.Session.Header / Entry types\n- OctoPi.Coder.SessionStore (GenServer per session id; appends\n  JSONL entries; keeps a small in-memory tail for re-reads)\n- OctoPi.Coder.SessionStore.Supervisor (DynamicSupervisor keyed\n  on session id)\n- OctoPi.Coder.Session.Encoder — matches upstream field order\n  exactly; use an explicit serialization (no Map.to_list iteration\n  order trust)\n- OctoPi.Coder.Session.Migrations — chain v1→v2→v3 on read\n\nCritical: key ordering of emitted JSON must match TS. Write a\nfixture-based test that round-trips a known-good upstream session.\n\nTDD:\n- Append entries, read back, verify JSONL byte-equivalence with\n  a pinned upstream fixture (capture ~3 small session files).\n- Migration tests: v1 → v3, v2 → v3 produce byte-equal output.\n- Concurrent appends from same session pid are serialized (one\n  GenServer per session).\n\nDepends on .1.",
