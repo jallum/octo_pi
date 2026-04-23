@@ -468,6 +468,91 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "cancellation" do
+    test "abort during tool execution kills the loop and emits AgentEnd :aborted" do
+      call = %ToolCall{
+        id: "long",
+        name: "probe",
+        arguments: %{"sleep_ms" => 1_000, "label" => "never returns"}
+      }
+
+      tool_turn = assistant([call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "unreached"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "long task")
+      # Give the loop time to reach the tool's Process.sleep.
+      Process.sleep(50)
+
+      {elapsed_us, :ok} =
+        :timer.tc(fn ->
+          :ok = OctoPi.Agent.abort(session)
+          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+        end)
+
+      # Well under the tool's 1s sleep — brutal kill, not cooperative
+      # wait.
+      assert elapsed_us < 500_000,
+             "expected abort to be fast (< 500ms) got #{div(elapsed_us, 1000)}ms"
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted, messages: msgs}}
+
+      # Synthesized assistant with :aborted stop reason.
+      assert %OctoPi.AI.Message.Assistant{stop_reason: :aborted} = List.last(msgs)
+
+      # Session should now be idle.
+      refute OctoPi.Agent.state(session).is_streaming?
+    end
+
+    test "double abort is a no-op (single AgentEnd, returns :ok both times)" do
+      call = %ToolCall{
+        id: "c",
+        name: "probe",
+        arguments: %{"sleep_ms" => 500, "label" => "x"}
+      }
+
+      tool_turn = assistant([call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "x"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "x")
+      Process.sleep(50)
+
+      assert :ok = OctoPi.Agent.abort(session)
+      assert :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted}}
+      refute_received {:octo_pi_agent_event, %Event.AgentEnd{}}
+    end
+  end
+
   describe "error stop_reason exits the loop" do
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)

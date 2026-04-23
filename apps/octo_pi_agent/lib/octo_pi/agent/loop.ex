@@ -173,31 +173,19 @@ defmodule OctoPi.Agent.Loop do
     end)
   end
 
+  # Uses `async_stream` (linked) rather than `_nolink` so that when
+  # the loop task is brutally killed on abort, these child tool
+  # tasks receive the linked exit and die with it.
   defp run_parallel(session, tools, tool_calls, abort_ref) do
     OctoPi.Agent.ToolSupervisor
-    |> Task.Supervisor.async_stream_nolink(
+    |> Task.Supervisor.async_stream(
       tool_calls,
       fn call -> {call, execute_one_tool_call(session, tools, call, abort_ref)} end,
       ordered: true,
       max_concurrency: max(length(tool_calls), 1),
       timeout: :infinity
     )
-    |> Enum.map(fn
-      {:ok, {call, result}} ->
-        build_tool_result_message(result, call)
-
-      {:exit, reason} ->
-        # async_stream_nolink catches task crashes; shouldn't normally
-        # fire because execute_one_tool_call has its own rescue, but
-        # handle it for belt-and-braces.
-        %OctoPi.AI.Message.ToolResult{
-          tool_call_id: "",
-          tool_name: "",
-          content: [%OctoPi.AI.Content.Text{text: "tool task exited: #{inspect(reason)}"}],
-          is_error?: true,
-          timestamp: :os.system_time(:millisecond)
-        }
-    end)
+    |> Enum.map(fn {:ok, {call, result}} -> build_tool_result_message(result, call) end)
   end
 
   defp execute_one_tool_call(session, tools, %ToolCall{} = call, abort_ref) do

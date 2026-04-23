@@ -25,11 +25,14 @@ defmodule OctoPi.Agent.Session do
   use GenServer
 
   alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message.Custom
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
+  alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Transport
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
 
   @type mode :: :sync | :async
@@ -147,14 +150,15 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call(:abort, _from, store) do
     if store.session.is_streaming? do
-      # Cooperative: flip the ETS flag so the loop's between-turn
-      # check bails out. Hard-kill via Task.shutdown lands in
-      # octo-z1d.6.
+      # Flip the ETS flag (cooperative backstop) and brutal-kill the
+      # loop task. Tool tasks started under `ToolSupervisor` are
+      # linked to the loop, so they die with it. Cleanup (AgentEnd +
+      # idle transition) happens in `handle_info({:DOWN, ...})`.
       if store.session.abort_ref, do: AbortRef.abort(store.session.abort_ref)
-      {:reply, :ok, store}
-    else
-      {:reply, :ok, store}
+      if store.session.loop_task, do: Process.exit(store.session.loop_task, :kill)
     end
+
+    {:reply, :ok, store}
   end
 
   def handle_call(:state, _from, store), do: {:reply, store.session, store}
@@ -180,18 +184,14 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_info({:DOWN, _mref, :process, pid, _reason}, store) do
+  def handle_info({:DOWN, _mref, :process, pid, reason}, store) do
     if pid == store.session.loop_task do
-      # Loop died (crashed, brutal kill, or just completed without
-      # having cast :run_complete yet). Release the abort ref +
-      # flip idle.
-      session = %{
-        store.session
-        | abort_ref: maybe_forget_ref(store.session.abort_ref),
-          loop_task: nil
-      }
-
-      {:noreply, idle(%{store | session: session})}
+      # Loop died. If the reason is :normal, the loop completed
+      # cleanly and its `run_complete` cast will have already landed
+      # (or will shortly) — nothing to synthesize. Otherwise (brutal
+      # kill from abort, crash, etc.) synthesize an aborted assistant
+      # message + AgentEnd so subscribers see a terminal event.
+      {:noreply, on_loop_down(store, reason)}
     else
       {:noreply, store}
     end
@@ -227,6 +227,44 @@ defmodule OctoPi.Agent.Session do
 
     Process.monitor(pid)
     %{store | session: %{session_snapshot | loop_task: pid}}
+  end
+
+  defp on_loop_down(store, :normal) do
+    # Normal completion: run_complete handled (or will be) the
+    # transcript update. Just release the abort ref + flip idle.
+    session = %{
+      store.session
+      | abort_ref: maybe_forget_ref(store.session.abort_ref),
+        loop_task: nil
+    }
+
+    idle(%{store | session: session})
+  end
+
+  defp on_loop_down(store, _reason) do
+    synthesized = %Assistant{
+      api: :octo_pi_agent,
+      provider: :octo_pi_agent,
+      model: "",
+      timestamp: :os.system_time(:millisecond),
+      content: [],
+      stop_reason: :aborted,
+      error_message: "aborted by caller"
+    }
+
+    messages = store.session.messages ++ [synthesized]
+
+    Subscribers.dispatch(self(), %Event.AgentEnd{reason: :aborted, messages: messages})
+
+    session = %{
+      store.session
+      | messages: messages,
+        error_message: "aborted by caller",
+        abort_ref: maybe_forget_ref(store.session.abort_ref),
+        loop_task: nil
+    }
+
+    idle(%{store | session: session})
   end
 
   defp idle(store) do
