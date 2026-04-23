@@ -59,29 +59,35 @@ defmodule Mix.Tasks.Agent.Demo do
     Mix.shell().info("-> #{model.id}\n")
 
     :ok = OctoPi.Agent.prompt(session, prompt)
-    loop_until_end()
+    loop_until_end("")
   end
 
-  defp loop_until_end do
+  # `printed` tracks how much of the current partial assistant's
+  # text we've already written to stdout so each MessageUpdate only
+  # prints the new delta. It resets to "" when the assistant message
+  # ends.
+  defp loop_until_end(printed) do
     receive do
       {:octo_pi_agent_event, %Event.MessageUpdate{partial: p}} ->
-        print_latest_text_delta(p)
-        loop_until_end()
+        loop_until_end(print_latest_text_delta(p, printed))
+
+      {:octo_pi_agent_event, %Event.MessageEnd{}} ->
+        loop_until_end("")
 
       {:octo_pi_agent_event, %Event.ToolExecutionStart{tool_name: name}} ->
         IO.write("\n[tool_use: #{name}] ")
-        loop_until_end()
+        loop_until_end(printed)
 
       {:octo_pi_agent_event, %Event.ToolExecutionEnd{result: result}} ->
         text = result.content |> Enum.map_join("", fn %Content.Text{text: t} -> t end)
         IO.write("<- #{text}\n")
-        loop_until_end()
+        loop_until_end(printed)
 
       {:octo_pi_agent_event, %Event.AgentEnd{reason: reason}} ->
         IO.write("\n\n-- stop: #{reason}\n")
 
       {:octo_pi_agent_event, _} ->
-        loop_until_end()
+        loop_until_end(printed)
     after
       60_000 ->
         Mix.shell().error("\n[timeout] agent didn't finish in 60s")
@@ -89,23 +95,21 @@ defmodule Mix.Tasks.Agent.Demo do
     end
   end
 
-  # Track how much of the current partial text we've already printed
-  # so each delta is written exactly once.
-  defp print_latest_text_delta(%{content: content}) do
+  defp print_latest_text_delta(%{content: content}, printed) do
     text =
       content
       |> Enum.filter(&match?(%Content.Text{}, &1))
       |> Enum.map_join("", & &1.text)
 
-    printed = Process.get(:__agent_demo_printed, "")
-
     if String.starts_with?(text, printed) do
       IO.write(String.slice(text, String.length(printed)..-1//1))
-      Process.put(:__agent_demo_printed, text)
+      text
+    else
+      printed
     end
   end
 
-  defp print_latest_text_delta(_), do: :ok
+  defp print_latest_text_delta(_, printed), do: printed
 
   defp echo_tool do
     %OctoPi.Agent.Tool{
