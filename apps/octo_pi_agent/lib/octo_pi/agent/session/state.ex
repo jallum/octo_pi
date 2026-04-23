@@ -53,7 +53,7 @@ defmodule OctoPi.Agent.Session.State do
           error_message: String.t() | nil,
           steering_queue: PendingMessageQueue.t(),
           follow_up_queue: PendingMessageQueue.t(),
-          loop_task: Task.t() | nil,
+          loop_task: pid() | nil,
           abort_ref: AbortRef.t() | nil,
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,

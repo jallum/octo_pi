@@ -24,10 +24,10 @@ defmodule OctoPi.Agent.Session do
 
   use GenServer
 
-  alias OctoPi.Agent.Event
+  alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message.Custom
   alias OctoPi.Agent.Session
-  alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Transport
   alias OctoPi.AI.Message.User
 
@@ -87,7 +87,7 @@ defmodule OctoPi.Agent.Session do
       {:reply, {:error, :already_streaming}, store}
     else
       session = %{store.session | messages: store.session.messages ++ msgs}
-      {:reply, :ok, stub_run(%{store | session: session})}
+      {:reply, :ok, start_run(%{store | session: session})}
     end
   end
 
@@ -95,7 +95,7 @@ defmodule OctoPi.Agent.Session do
     if store.session.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      {:reply, :ok, stub_run(store)}
+      {:reply, :ok, start_run(store)}
     end
   end
 
@@ -111,14 +111,11 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call(:abort, _from, store) do
     if store.session.is_streaming? do
-      # With no real loop yet, we just flip idle and emit an aborted
-      # AgentEnd. Real cancellation wiring lands in octo-z1d.6.
-      Subscribers.dispatch(
-        self(),
-        %Event.AgentEnd{reason: :aborted, messages: store.session.messages}
-      )
-
-      {:reply, :ok, idle(%{store | session: %{store.session | error_message: "aborted"}})}
+      # Cooperative: flip the ETS flag so the loop's between-turn
+      # check bails out. Hard-kill via Task.shutdown lands in
+      # octo-z1d.6.
+      if store.session.abort_ref, do: AbortRef.abort(store.session.abort_ref)
+      {:reply, :ok, store}
     else
       {:reply, :ok, store}
     end
@@ -134,27 +131,79 @@ defmodule OctoPi.Agent.Session do
     end
   end
 
-  # ---------- internal helpers (stubbed) ----------
+  @impl true
+  def handle_cast({:run_complete, messages, _reason}, store) do
+    session = %{
+      store.session
+      | messages: messages,
+        abort_ref: maybe_forget_ref(store.session.abort_ref),
+        loop_task: nil
+    }
 
-  # Stub run: emits AgentStart + AgentEnd{reason: :stop} synchronously
-  # via the subscriber dispatcher. Real loop lands in octo-z1d.3.
-  defp stub_run(store) do
+    {:noreply, idle(%{store | session: session})}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _mref, :process, pid, _reason}, store) do
+    if pid == store.session.loop_task do
+      # Loop died (crashed, brutal kill, or just completed without
+      # having cast :run_complete yet). Release the abort ref +
+      # flip idle.
+      session = %{
+        store.session
+        | abort_ref: maybe_forget_ref(store.session.abort_ref),
+          loop_task: nil
+      }
+
+      {:noreply, idle(%{store | session: session})}
+    else
+      {:noreply, store}
+    end
+  end
+
+  def handle_info(_msg, store), do: {:noreply, store}
+
+  # ---------- internal helpers ----------
+
+  defp start_run(store) do
+    abort_ref = AbortRef.new()
     session_pid = self()
-    session = %{store.session | is_streaming?: true, error_message: nil}
-    Subscribers.dispatch(session_pid, %Event.AgentStart{})
 
-    Subscribers.dispatch(
-      session_pid,
-      %Event.AgentEnd{reason: :stop, messages: session.messages}
-    )
+    session_snapshot = %{
+      store.session
+      | is_streaming?: true,
+        error_message: nil,
+        abort_ref: abort_ref
+    }
 
-    idle(%{store | session: session})
+    {:ok, pid} =
+      Task.Supervisor.start_child(
+        OctoPi.Agent.LoopSupervisor,
+        fn ->
+          Loop.run(%{
+            session: session_pid,
+            session_state: session_snapshot,
+            abort_ref: abort_ref
+          })
+        end,
+        restart: :temporary
+      )
+
+    Process.monitor(pid)
+    %{store | session: %{session_snapshot | loop_task: pid}}
   end
 
   defp idle(store) do
     store = %{store | session: %{store.session | is_streaming?: false}}
     for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
     %{store | idle_waiters: []}
+  end
+
+  defp maybe_forget_ref(nil), do: nil
+
+  defp maybe_forget_ref(ref) do
+    AbortRef.forget(ref)
+    nil
   end
 
   # Enqueue into a PendingMessageQueue. The full behaviour (bound
