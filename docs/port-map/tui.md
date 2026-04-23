@@ -285,23 +285,30 @@ defmodule OctoPi.Tui.StdinFSM do
   use GenServer
 
   def init(_opts) do
-    {:ok, %{buffer: "", timeout_ref: nil}}
+    {:ok, %{buffer: ""}}
   end
 
+  # Every call returns a GenServer timeout; if the buffer has a
+  # partial escape sequence sitting in it and no new chunk arrives
+  # within @flush_ms, the runtime delivers `:timeout` to handle_info
+  # below. No timer refs to track or cancel — the mailbox itself
+  # gives us idle semantics for free.
+
+  @flush_ms 10
+
   def handle_call({:process, chunk}, _from, state) do
-    cancel_timeout(state.timeout_ref)
     new_buffer = state.buffer <> chunk
     {sequences, remainder} = extract_complete_sequences(new_buffer)
     emit_sequences(sequences)
-    new_timeout_ref = schedule_flush(remainder, 10)
-    {:reply, :ok, %{buffer: remainder, timeout_ref: new_timeout_ref}}
+
+    timeout = if remainder == "", do: :infinity, else: @flush_ms
+    {:reply, :ok, %{state | buffer: remainder}, timeout}
   end
 
-  def handle_info({:flush_timeout, _ref}, state) do
-    if state.buffer != "" do
-      emit_sequences([state.buffer])
-    end
-    {:noreply, %{state | buffer: "", timeout_ref: nil}}
+  def handle_info(:timeout, %{buffer: ""} = state), do: {:noreply, state}
+  def handle_info(:timeout, %{buffer: buf} = state) do
+    emit_sequences([buf])
+    {:noreply, %{state | buffer: ""}}
   end
 
   defp extract_complete_sequences(buffer) do
@@ -312,17 +319,6 @@ defmodule OctoPi.Tui.StdinFSM do
 
   defp emit_sequences(sequences) do
     Enum.each(sequences, &broadcast_sequence/1)
-  end
-
-  defp schedule_flush(remainder, ms) when remainder != "" do
-    {:ok, ref} = :timer.send_after(ms, {:flush_timeout, ref})
-    ref
-  end
-  defp schedule_flush("", _), do: nil
-
-  defp cancel_timeout(nil), do: :ok
-  defp cancel_timeout(ref) do
-    :timer.cancel(ref)
   end
 end
 ```
@@ -413,8 +409,15 @@ ones. If 10ms passes with no new data, flush the buffer.
 tell us explicitly when paste mode is active. Outside those markers, raw `\x1b`
 starts a key sequence. No ambiguity.
 
-**Implementation**: Use `Process.send_after/3` to schedule a flush timeout. On
-each new chunk, cancel and restart the timer. On timeout, emit whatever's left.
+**Implementation**: Use the GenServer timeout return tuple —
+`{:reply, :ok, state, @flush_ms}` — rather than `Process.send_after/3`.
+The runtime automatically resets the idle timer every time a new chunk
+arrives, and delivers `:timeout` to `handle_info/2` if the mailbox
+stays quiet for `@flush_ms`. No timer refs to cancel, no off-by-one
+races between incoming chunks and pending timers.
+
+Return `:infinity` when the buffer is empty (nothing pending to flush)
+so an idle session doesn't wake up every 10ms for nothing.
 
 ---
 
@@ -1615,8 +1618,10 @@ them.
   old-style X11 mouse (`ESC M + 3 bytes`), arrows, function keys, SS3, meta,
   Kitty press/release/repeat events, Kitty functional keys with modifiers,
   bracketed paste split across chunks, paste with Unicode, flush/destroy.
-  **ExUnit port**: pure binary processing — ports cleanly. Timeout uses
-  `Process.send_after/3` in production, mock timer in tests.
+  **ExUnit port**: pure binary processing — ports cleanly. Timeout is
+  driven by the GenServer's own `{:reply, state, @flush_ms}` return
+  tuple (not `Process.send_after/3`); tests feed chunks + assert the
+  handler's `:timeout` clause produces the right flush.
 
 ### 14.2 Keybindings & key parsing
 

@@ -10,6 +10,11 @@ defmodule OctoPi.Telemetry.Logger do
 
   Kept in the core (`octo_pi_ai`) so sibling provider apps can depend
   on it without reaching into each other.
+
+  The bridge is opt-in and defaults to off so tests and production
+  stay quiet. Enable it in config with:
+
+      config :octo_pi_ai, OctoPi.Telemetry.Logger, enabled: true
   """
 
   require Logger
@@ -18,10 +23,21 @@ defmodule OctoPi.Telemetry.Logger do
   Attach a Logger-backed handler to a list of telemetry events.
   `handler_id` should be unique across the VM (conventional shape:
   `"<app-name>-<purpose>"`).
+
+  No-op unless the bridge is enabled (see module doc).
   """
   @spec attach(String.t(), [:telemetry.event_name()]) :: :ok | {:error, :already_exists}
   def attach(handler_id, events) when is_binary(handler_id) and is_list(events) do
-    :telemetry.attach_many(handler_id, events, &__MODULE__.handle_event/4, nil)
+    if enabled?() do
+      :telemetry.attach_many(handler_id, events, &__MODULE__.handle_event/4, nil)
+    else
+      :ok
+    end
+  end
+
+  defp enabled? do
+    Application.get_env(:octo_pi_ai, __MODULE__, [])
+    |> Keyword.get(:enabled, false)
   end
 
   @doc false
