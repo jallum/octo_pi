@@ -180,11 +180,18 @@ defmodule OctoPi.Coder.Tools.Bash do
 
     {:ok,
      %Result{
-       is_error?: reason != :exit or (is_integer(code) and code != 0),
+       is_error?: error?(reason, code),
        content: [%Content.Text{text: text}],
        details: details
      }}
   end
+
+  # Timeout / aborted / exec-failed / crashed are all error exits.
+  # A normal exit is an error only when the child returned a
+  # non-zero status.
+  defp error?(:exit, code) when is_integer(code), do: code != 0
+  defp error?(:exit, _), do: false
+  defp error?(_other_reason, _code), do: true
 
   defp render_output(stdout_buf, ""), do: stdout_buf
   defp render_output("", stderr_buf), do: stderr_buf

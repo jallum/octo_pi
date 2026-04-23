@@ -10,7 +10,8 @@ defmodule OctoPi.Coder.SessionStore do
 
   File handle stays open for the lifetime of the store to avoid
   re-opening on every append. `close/1` flushes and terminates
-  the GenServer cleanly.
+  the GenServer cleanly — it is *terminal*, subsequent calls to
+  the same pid will fail with `:noproc`.
 
   ## Byte-compatibility with upstream `pi`
 
@@ -18,6 +19,11 @@ defmodule OctoPi.Coder.SessionStore do
   match upstream v3 byte-for-byte. Entries passed to `append/2`
   are encoded with their given key order (callers that care about
   cross-tool readability should pass a keyword list).
+
+  The cwd-encoding scheme (`/` → `-`) is lossy: `/a/b` and `/a-b`
+  both encode to `a-b` and would share the same session directory.
+  This matches upstream pi exactly — changing it would break
+  cross-tool session sharing.
   """
 
   use GenServer, restart: :temporary
