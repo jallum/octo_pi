@@ -27,6 +27,7 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message.Custom
+  alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.Transport
   alias OctoPi.AI.Message.User
@@ -53,6 +54,19 @@ defmodule OctoPi.Agent.Session do
 
   @doc false
   def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, normalize(msg)})
+
+  @doc false
+  def set_queue_mode(pid, queue, mode)
+      when queue in [:steering, :follow_up] and
+             mode in [:one_at_a_time, :all] do
+    GenServer.call(pid, {:set_queue_mode, queue, mode})
+  end
+
+  @doc false
+  def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
+
+  @doc false
+  def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
 
   @doc false
   def abort(pid), do: GenServer.call(pid, :abort)
@@ -100,13 +114,35 @@ defmodule OctoPi.Agent.Session do
   end
 
   def handle_call({:steer, msg}, _from, store) do
-    q = enqueue(store.session.steering_queue, msg)
-    {:reply, :ok, put_in(store.session.steering_queue, q)}
+    case PendingMessageQueue.enqueue(store.session.steering_queue, msg) do
+      {:ok, q} -> {:reply, :ok, put_in(store.session.steering_queue, q)}
+      {:error, :full} = err -> {:reply, err, store}
+    end
   end
 
   def handle_call({:follow_up, msg}, _from, store) do
-    q = enqueue(store.session.follow_up_queue, msg)
-    {:reply, :ok, put_in(store.session.follow_up_queue, q)}
+    case PendingMessageQueue.enqueue(store.session.follow_up_queue, msg) do
+      {:ok, q} -> {:reply, :ok, put_in(store.session.follow_up_queue, q)}
+      {:error, :full} = err -> {:reply, err, store}
+    end
+  end
+
+  def handle_call({:set_queue_mode, :steering, mode}, _from, store) do
+    {:reply, :ok, put_in(store.session.steering_queue.mode, mode)}
+  end
+
+  def handle_call({:set_queue_mode, :follow_up, mode}, _from, store) do
+    {:reply, :ok, put_in(store.session.follow_up_queue.mode, mode)}
+  end
+
+  def handle_call(:drain_steering, _from, store) do
+    {msgs, q} = PendingMessageQueue.drain(store.session.steering_queue)
+    {:reply, msgs, put_in(store.session.steering_queue, q)}
+  end
+
+  def handle_call(:drain_follow_up, _from, store) do
+    {msgs, q} = PendingMessageQueue.drain(store.session.follow_up_queue)
+    {:reply, msgs, put_in(store.session.follow_up_queue, q)}
   end
 
   def handle_call(:abort, _from, store) do
@@ -204,13 +240,6 @@ defmodule OctoPi.Agent.Session do
   defp maybe_forget_ref(ref) do
     AbortRef.forget(ref)
     nil
-  end
-
-  # Enqueue into a PendingMessageQueue. The full behaviour (bound
-  # checks, modes, draining) lands in octo-z1d.5; for this ticket
-  # we just need enqueue + count for state assertions.
-  defp enqueue(queue, msg) do
-    %{queue | items: :queue.in(msg, queue.items), count: queue.count + 1}
   end
 
   # Normalize an incoming message: strings become User messages,

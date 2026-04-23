@@ -317,6 +317,157 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "steering queue drainage" do
+    # Steer a message while a tool is executing. The message should
+    # be injected into the transcript before the follow-up LLM call
+    # of the same run. We verify indirectly by checking messages in
+    # AgentEnd: user → assistant(tool_use) → tool_result → steered
+    # user → assistant(stop).
+    test "steered messages land in the transcript for the next turn" do
+      tool_call = %ToolCall{
+        id: "c1",
+        name: "probe",
+        # sleep gives the test time to steer during tool exec
+        arguments: %{"sleep_ms" => 80, "label" => "ok"}
+      }
+
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "go")
+      # Steer while the probe tool is sleeping.
+      Process.sleep(20)
+      :ok = OctoPi.Agent.steer(session, "midway note")
+
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      assert Enum.map(users, & &1.content) == ["go", "midway note"]
+    end
+  end
+
+  describe "follow-up queue drainage" do
+    test "follow_up during a run injects after terminal stop and re-loops" do
+      first = assistant([%OctoPi.AI.Content.Text{text: "first"}], :stop)
+      second = assistant([%OctoPi.AI.Content.Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      session = start_session()
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "hi")
+      # Queue follow-up before the first turn reaches terminal.
+      :ok = OctoPi.Agent.follow_up(session, "and then?")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
+      assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 2}}
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      assert Enum.map(users, & &1.content) == ["hi", "and then?"]
+    end
+
+    test "follow_up during idle does not start a run; next prompt drains" do
+      session = start_session()
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.follow_up(session, "carried over")
+      refute_receive {:octo_pi_agent_event, _}, 50
+
+      only = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: only}
+        ]
+      ])
+
+      # Next prompt drains the idle-queued follow-up at terminal exit
+      # and re-enters the loop.
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: only}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: only}
+        ]
+      ])
+
+      :ok = OctoPi.Agent.prompt(session, "now")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      assert Enum.map(users, & &1.content) == ["now", "carried over"]
+    end
+
+    test "set_queue_mode(:all) drains multiple follow_ups in one pass" do
+      first = assistant([%OctoPi.AI.Content.Text{text: "first"}], :stop)
+      second = assistant([%OctoPi.AI.Content.Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      session = start_session()
+      :ok = OctoPi.Agent.set_queue_mode(session, :follow_up, :all)
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "hi")
+      :ok = OctoPi.Agent.follow_up(session, "a")
+      :ok = OctoPi.Agent.follow_up(session, "b")
+
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      # Only two turns should have run (initial + one combined
+      # follow-up turn) because :all drained both in one pass.
+      assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
+      assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 2}}
+      refute_received {:octo_pi_agent_event, %Event.TurnStart{turn: 3}}
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      assert Enum.map(users, & &1.content) == ["hi", "a", "b"]
+    end
+  end
+
   describe "error stop_reason exits the loop" do
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)

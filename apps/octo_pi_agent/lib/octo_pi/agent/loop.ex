@@ -23,6 +23,7 @@ defmodule OctoPi.Agent.Loop do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Session
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Context, as: AIContext
@@ -58,10 +59,14 @@ defmodule OctoPi.Agent.Loop do
   end
 
   # Outer loop: keep turning until we hit a terminal reason.
+  # At the top of each iteration we drain the session's steering
+  # queue and fold any drained messages into the transcript before
+  # the next LLM call.
   defp loop(session, state, messages, abort_ref, turn) do
     if AbortRef.aborted?(abort_ref) do
       {aborted_messages(messages), :aborted}
     else
+      messages = messages ++ Session.drain_steering(session)
       dispatch(session, %Event.TurnStart{turn: turn})
       assistant = stream_turn(session, state, messages)
       updated = messages ++ [assistant]
@@ -81,8 +86,14 @@ defmodule OctoPi.Agent.Loop do
     loop(session, state, updated ++ tool_results, ref, turn + 1)
   end
 
-  defp continue_or_stop(_session, _state, updated, %{stop_reason: reason}, _ref, _turn) do
-    {updated, reason}
+  # Terminal stop — drain the follow-up queue. If anything was
+  # queued, fold it in and keep looping; otherwise exit with the
+  # stop reason.
+  defp continue_or_stop(session, state, updated, %{stop_reason: reason}, abort_ref, turn) do
+    case Session.drain_follow_up(session) do
+      [] -> {updated, reason}
+      followups -> loop(session, state, updated ++ followups, abort_ref, turn + 1)
+    end
   end
 
   # Stream one turn through the configured Transport; collect

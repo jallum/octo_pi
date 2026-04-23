@@ -45,12 +45,20 @@ defmodule OctoPi.Agent do
   def continue(pid), do: Session.continue(pid)
 
   @doc "Enqueue a message for injection before the next LLM call of the current run."
-  @spec steer(session(), String.t() | Message.t()) :: :ok
+  @spec steer(session(), String.t() | Message.t()) :: :ok | {:error, :full}
   def steer(pid, msg), do: Session.steer(pid, msg)
 
   @doc "Enqueue a message for injection when the current run would otherwise stop."
-  @spec follow_up(session(), String.t() | Message.t()) :: :ok
+  @spec follow_up(session(), String.t() | Message.t()) :: :ok | {:error, :full}
   def follow_up(pid, msg), do: Session.follow_up(pid, msg)
+
+  @doc """
+  Switch the drainage mode of one of the session's pending-message
+  queues. `:one_at_a_time` drains one item per pass; `:all` drains
+  every queued item in one shot.
+  """
+  @spec set_queue_mode(session(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
+  def set_queue_mode(pid, queue, mode), do: Session.set_queue_mode(pid, queue, mode)
 
   @doc "Abort the current run. No-op if the session is idle."
   @spec abort(session()) :: :ok

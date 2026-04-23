@@ -81,6 +81,57 @@ defmodule OctoPi.AgentTest do
     end
   end
 
+  describe "PendingMessageQueue behaviour" do
+    alias OctoPi.AI.Message.User
+
+    defp user(text), do: %User{content: text, timestamp: 0}
+
+    test "enqueue appends and updates count" do
+      q = PendingMessageQueue.new()
+      assert {:ok, q} = PendingMessageQueue.enqueue(q, user("a"))
+      assert q.count == 1
+      assert PendingMessageQueue.has_items?(q)
+    end
+
+    test "enqueue beyond bound returns {:error, :full}" do
+      q = PendingMessageQueue.new(:one_at_a_time, 2)
+      assert {:ok, q} = PendingMessageQueue.enqueue(q, user("a"))
+      assert {:ok, q} = PendingMessageQueue.enqueue(q, user("b"))
+      assert {:error, :full} = PendingMessageQueue.enqueue(q, user("c"))
+    end
+
+    test "drain :one_at_a_time returns head, leaves rest" do
+      q = PendingMessageQueue.new(:one_at_a_time)
+      {:ok, q} = PendingMessageQueue.enqueue(q, user("a"))
+      {:ok, q} = PendingMessageQueue.enqueue(q, user("b"))
+      {drained, q} = PendingMessageQueue.drain(q)
+      assert [%User{content: "a"}] = drained
+      assert q.count == 1
+    end
+
+    test "drain :all returns everything, clears queue" do
+      q = PendingMessageQueue.new(:all)
+      {:ok, q} = PendingMessageQueue.enqueue(q, user("a"))
+      {:ok, q} = PendingMessageQueue.enqueue(q, user("b"))
+      {drained, q} = PendingMessageQueue.drain(q)
+      assert length(drained) == 2
+      assert PendingMessageQueue.empty?(q)
+    end
+
+    test "drain on empty queue yields []" do
+      q = PendingMessageQueue.new()
+      assert {[], ^q} = PendingMessageQueue.drain(q)
+    end
+
+    test "clear empties the queue" do
+      q = PendingMessageQueue.new()
+      {:ok, q} = PendingMessageQueue.enqueue(q, user("a"))
+      assert PendingMessageQueue.has_items?(q)
+      q = PendingMessageQueue.clear(q)
+      refute PendingMessageQueue.has_items?(q)
+    end
+  end
+
   describe "Transport behaviour" do
     test "Direct implements OctoPi.Agent.Transport" do
       behaviours = Transport.Direct.module_info(:attributes) |> Keyword.get_values(:behaviour)
