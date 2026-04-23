@@ -1,24 +1,33 @@
 defmodule OctoPi.Agent.Loop do
   @moduledoc """
   The inner + outer agent loop. Runs as a Task spawned from the
-  Session on `prompt` / `continue`. Emits events via
-  `OctoPi.Agent.Subscribers.dispatch/2` and builds up a new message
-  list from the run; on completion, it `cast`s the final state back
-  to the Session, which transitions to idle.
+  Session on `prompt`/`continue`. Drives turns until a terminal
+  stop reason, emitting agent events via
+  `OctoPi.Agent.Subscribers.dispatch/2` and building up a new
+  message list as it goes; on completion it casts
+  `{:run_complete, messages, reason}` back to the Session.
 
-  Scope for `octo-z1d.3`:
-    - full turn lifecycle (TurnStart → MessageStart/Update/End →
-      ToolExecution* → TurnEnd)
-    - sequential tool dispatch only (parallel lands in `octo-z1d.4`)
-    - exit conditions (stop_reason terminal, or no tool calls)
-    - no steering / follow-up drainage (`octo-z1d.5`)
-    - no before/after tool hooks (`octo-z1d.7`)
-    - cooperative abort ref checked between turns; hard abort via
-      `Task.shutdown` lands in `octo-z1d.6`
+  Control flow per iteration:
 
-  Maintains its own local state during the run. On completion the
-  Session's post-run cast is what moves the transcript forward;
-  Session's `state/1` won't see in-flight messages.
+    1. Cooperative abort check (ETS flag on `AbortRef`).
+    2. Drain the steering queue (skipped on turn 1).
+    3. Stream one turn through the configured Transport.
+    4. If `stop_reason` is `:tool_use`, dispatch tool calls
+       (parallel via `Task.Supervisor.async_stream` unless any tool
+       is `:sequential`), then loop. If terminal, drain the
+       follow-up queue — if it yielded messages, loop; otherwise
+       exit.
+
+  Tool dispatch runs under `OctoPi.Agent.ToolSupervisor` with tasks
+  linked to the loop so a brutal-kill from `Session` (hard abort)
+  propagates to in-flight tools. Tool hooks (`before_tool_call`,
+  `after_tool_call`) wrap each handler invocation; exceptions in
+  hooks or handlers fold into error results so the loop keeps
+  running.
+
+  Maintains its own local state during the run; the Session's
+  `state/1` does not see in-flight messages until `:run_complete`
+  lands.
   """
 
   alias OctoPi.Agent.AbortRef

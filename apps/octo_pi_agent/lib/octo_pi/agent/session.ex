@@ -4,22 +4,23 @@ defmodule OctoPi.Agent.Session do
   subscriber list. Called via the `OctoPi.Agent` facade; no one
   should import this module directly.
 
-  This ticket (`octo-z1d.2`) lands the state machine — Idle →
-  Running → Idle, with abort flipping Running → Aborting → Idle —
-  plus the public API surface (prompt / continue / steer / follow_up
-  / abort / subscribe / state / wait_for_idle). The actual LLM call
-  + tool dispatch land in `octo-z1d.3`; for now prompt/continue
-  stub out the run by immediately emitting `AgentStart` then
-  `AgentEnd{reason: :stop}` without doing any work.
+  Runs the state machine (Idle ↔ Running), spawns the `Loop` task
+  on `prompt`/`continue`, and handles loop completion via
+  `:run_complete` cast or abnormal `:DOWN`. Also emits the
+  `[:octo_pi_agent, :session, :stop]` telemetry event for both
+  clean and aborted exits so duration metering covers every run.
 
   State invariants:
 
     - `is_streaming?` is `true` iff a run is in flight.
-    - `loop_task` is the Task.t of the running loop (nil when idle).
+    - `loop_task` is the pid of the running loop (nil when idle).
     - `abort_ref` is the current run's ref (nil when idle; set on
-      run start and forgotten on run end).
-    - Steering + follow-up enqueue works in any state; drainage only
-      happens during a run (z1d.5 wires the drainage).
+      run start and forgotten when the run settles).
+    - `run_started_at_mono` is the monotonic start time of the
+      current run (nil when idle).
+    - Steering + follow-up enqueue works in any state; drainage
+      happens inside the Loop between turns (steering) or at
+      terminal exit (follow-up).
   """
 
   use GenServer
