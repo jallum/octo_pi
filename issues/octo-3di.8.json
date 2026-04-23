@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T23:37:35Z",
+  "description": "Port-map §8 MVP. Bulk of the component work, but trimmed.\n\nMust ship for Phase 4 MVP:\n- Multi-line editable text state.\n- Grapheme-aware cursor position (String.graphemes + display width\n  via :unicode_util or cached East Asian Width table).\n- Word-wrap render at width, respecting wide chars.\n- Insert/delete at cursor (char, backspace).\n- Cursor movement: left, right, home (Ctrl+A), end (Ctrl+E),\n  word-left (Alt+B), word-right (Alt+F).\n- Submit on Enter.\n- Plain character insertion (including wide CJK).\n\nExplicitly deferred to 4.1:\n- Kill ring (Ctrl+W/U/K/Alt+D/Alt+Y).\n- Undo/redo stack with coalescing.\n- Slash-command autocomplete.\n- File-path autocomplete (tab completion).\n- Paste markers / bracketed-paste atomic undo.\n- History navigation.\n\nTests: port-map §14.1 (input.test.ts cursor + wrap subset).\n\nTDD:\n- Single-char insert, backspace, delete.\n- Cursor movement (atoms for each direction).\n- Ctrl+A / Ctrl+E.\n- Wide-char insertion tracks display width correctly.\n- Word-wrap at width with CJK boundary.\n\nDepends on .7.",
+  "id": "octo-3di.8",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 1,
+  "status": "open",
+  "title": "Editor component: multi-line with grapheme-aware wrap + cursor",
+  "type": "task",
+  "updated_at": "2026-04-23T23:37:35Z"
+}
