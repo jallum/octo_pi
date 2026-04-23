@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T23:36:59Z",
+  "description": "Port-map §4. Pure function. Takes a complete byte sequence from\nStdinFSM and returns {:key, %Key{}} or {:char, bin} or\n:paste_start/:paste_end or :unknown.\n\n- OctoPi.Tui.KeyParser.parse/1 — multi-head pattern matching on\n  binary shape (Kitty CSI-u / legacy ESC-prefix / printable ASCII\n  / printable Unicode / fallback). NO top-level cond.\n- OctoPi.Tui.Key struct: {key, modifiers, event_type}.\n- Legacy table as a @module attribute map: \"\\e[A\" → {:key, :up},\n  etc. Full set: arrows, F1-F12, Home, End, PgUp/Dn, Insert,\n  Delete, paste-start/end, Shift/Ctrl/Alt variants.\n- Kitty CSI-u: parse \"\\e[\u003ccode\u003e[;\u003cmod\u003e[:\u003cevent\u003e]]u\", translate\n  modifier bitmask (shift=1, alt=2, ctrl=4, super=8, stored as\n  mod-1), decode event_type (press/repeat/release).\n\nMirrors upstream keys.ts (1,100+ LOC TS) → ~300 LOC Elixir thanks\nto pattern matching. Tests lift from port-map §14.2 (keys.test.ts,\n615 lines).\n\nTDD:\n- Pure function, no I/O, no state — pure unit tests.\n- Cover every case in §14.2: alternate layouts (Cyrillic, Dvorak),\n  keypad, event types, shifted keys, modifyOtherKeys, legacy\n  Ctrl+letter, Alt-prefix, arrows CSI+SS3, F1-F12, env-aware\n  (SSH_CONNECTION, WT_SESSION).\n\nDepends on .1.",
+  "id": "octo-3di.4",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 1,
+  "status": "open",
+  "title": "Key parser: CSI-u + legacy + printable → %Key{}",
+  "type": "task",
+  "updated_at": "2026-04-23T23:36:59Z"
+}
