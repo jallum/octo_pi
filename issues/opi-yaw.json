@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:16:25Z",
+  "description": "Per the user's note during opi-y1y: with the Anthropic provider's API stabilized (octo-42f + opi-y1y landed), lift it out of octo_pi_ai so it has its own mix.exs, deps, tests, and a well-defined dependency on the core.\n\nScope:\n- New app `apps/octo_pi_anthropic/` with `{:octo_pi_ai, in_umbrella: true}` dep and its own req/plug/jason deps.\n- Move all `OctoPi.AI.Providers.Anthropic.*` modules to `OctoPi.Anthropic.*` (match the new app's root namespace).\n- Core `OctoPi.AI.stream/3` dispatches via a providers registry in Application env; each provider app registers itself on start.\n- Move Anthropic-specific tests + the FakeAnthropicPlug test helper. Keep generic tests (SSE, PartialJson, contract types) in core.\n- Drop req/plug/bandit from octo_pi_ai's mix.exs once the Anthropic pieces are gone.\n- `mix ai.demo` moves to the Anthropic app (it builds Claude Model structs).\n- `config/runtime.exs` keychain config key name stays `:octo_pi_ai, :anthropic_keychain_reader`... actually move that to `:octo_pi_anthropic` namespace as part of the extraction.\n\nDoD: mix check green, `mix ai.demo \"ping\"` still works end-to-end, both apps compile standalone.",
+  "id": "opi-yaw",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Extract Anthropic provider into its own umbrella app (octo_pi_anthropic)",
+  "type": "task",
+  "updated_at": "2026-04-23T19:16:25Z"
+}
