@@ -24,15 +24,30 @@ and immutable data structures. Canonical reference: pi-mono v0.69.0 at
 
 ### 1.1 Problem statement
 
-JavaScript's `process.stdin.setRawMode(true)` is a Node.js runtime feature that
-calls the `termios` system interface under the hood. BEAM has no direct equivalent.
-RESEARCH.md §7.Q5 identified three architectural options:
+The equivalent of `process.stdin.setRawMode(true)` (Node) on BEAM is the
+OTP 28 first-class raw submode for `-noshell`, introduced in
+[PR #8962](https://github.com/erlang/otp/pull/8962). We're on OTP 28.3 for
+this project, so this is the primary path.
 
-1. **Shell-out to `stty raw -echo`** — simplest, works everywhere, but leaves a
-   long-lived shell process and adds latency.
-2. **A dedicated `/dev/tty` Port** — opens `/dev/tty` as a file descriptor,
-   reads/writes directly, avoids reliance on `:stdio`. Only works on Unix.
-3. **A `termios` NIF** — most robust, zero-latency, but requires C compilation.
+Key APIs we use:
+- `:shell.start_interactive({:noshell, :raw})` — flip the terminal into
+  raw mode. No echo, no line editing, keystrokes delivered as they arrive.
+- `:shell.start_interactive({:noshell, :cooked})` — restore normal mode
+  (the `after` clause in a `try/after`).
+- `:io.get_chars("", N)` — read up to N bytes (keystrokes as they
+  happen; no Enter required). Reads are **lazy** — the underlying
+  syscall only fires when this is called, so nothing accumulates behind
+  the app's back.
+
+Also worth knowing:
+- `-noinput` is largely obsolete under OTP 28's lazy-read behavior.
+- `:io.get_password/0` in stdlib wraps the common "read a secret without
+  echo" case.
+- A lot of old Windows-in-`-noshell` Unicode weirdness got fixed in the
+  same PR (ReadFile now runs in non-overlapped mode).
+- The old `io:setopts(standard_io, [{echo, false}, {binary, true}])` dance
+  still works for compatibility, but new code should reach for
+  `shell:start_interactive({noshell, raw})` directly.
 
 ### 1.2 Upstream approach
 
@@ -47,154 +62,131 @@ RESEARCH.md §7.Q5 identified three architectural options:
 Cleanup (terminal.ts L266-307): restores raw-mode state, disables bracketed
 paste, pauses stdin, removes listeners.
 
-### 1.3 BEAM option analysis
+### 1.3 Recommended approach: OTP 28 native raw mode
 
-**Option A: stty shell-out (recommended for Phase 4 MVP)**
+`shell:start_interactive/1` toggles the noshell submode at runtime. Combined
+with `io:get_chars/2`, that's everything we need — no NIFs, no shell-outs,
+no Ports for the stdin reader.
 
 ```elixir
-defmodule OctoPi.Tui.Terminal do
-  def enable_raw_mode do
-    case System.cmd("stty", ["raw", "-echo"], []) do
-      {_, 0} -> :ok
-      {err, code} -> {:error, "stty failed: #{err} (code #{code})"}
-    end
-  end
+defmodule OctoPi.Tui.RawMode do
+  @moduledoc """
+  Enter/exit OTP 28 raw noshell mode. Bracket with `try/after` so exit
+  runs even if the TUI crashes.
+  """
 
-  def disable_raw_mode do
-    System.cmd("stty", ["sane"], [])
-    :ok
-  end
+  @spec enter() :: :ok | {:error, term()}
+  def enter, do: :shell.start_interactive({:noshell, :raw})
+
+  @spec exit() :: :ok | {:error, term()}
+  def exit, do: :shell.start_interactive({:noshell, :cooked})
 end
 ```
 
-**Pros:**
-- Zero friction; every Unix system has `stty`.
-- Tested; Erlang TUI libraries (ratatouille, owl) use this.
-- Leaves stdin as `:stdio`, no special file handling.
-
-**Cons:**
-- `System.cmd/3` is synchronous and blocks the BEAM scheduler during the call.
-  Acceptable for startup/shutdown but undesirable for mid-session resizes.
-- On Windows, `stty` doesn't exist; need a separate code path (or punt on
-  Windows support for MVP).
-
-**Option B: Port-based /dev/tty reader**
+Reading a single keystroke:
 
 ```elixir
-Port.open({:spawn_executable, "/bin/cat"}, [
-  {:args, ["/dev/tty"]},
-  :binary,
-  :stream,
-  {:error_to_stdout, false}
-])
+# No Enter required, no echo. Returns a charlist/binary of one codepoint.
+{:ok, char} = :io.get_chars("", 1)
 ```
 
-**Pros:**
-- Non-blocking; Port messages go to the mailbox.
-- Full control over file descriptor lifecycle.
-- Pairs naturally with SIGWINCH handling via `:os.set_signal/2`.
+Stdin reads are **lazy** under OTP 28 — the runtime doesn't greedily buffer
+anything; the ReadFile/read() syscall only happens when the process calls
+`io:get_chars/2` or equivalent. That's exactly the shape we want: the
+Terminal GenServer drives the read loop, nothing runs ahead of it.
 
-**Cons:**
-- Only works on Unix (Linux, macOS, BSD).
-- Requires coordination: one process owns the Port (stdin reader), another owns
-  `:stdout` for writes. If they're not coordinated, terminal state can become
-  inconsistent.
-- Error handling is tricky (partial reads, unexpected EOF, permission denied).
+There's also `io:get_password/0` in stdlib now, which wraps the common
+"read a secret without echo" case — not directly useful for the TUI, but
+it's proof the raw-mode plumbing is stable API.
 
-**Option C: termios NIF**
-
-Compile a small C module wrapping `tcgetattr(3)` / `tcsetattr(3)`.
-
-**Pros:**
-- Most robust; zero-latency syscalls, no subprocesses.
-
-**Cons:**
-- Adds a C dependency and compilation step.
-- Defers the MVP; not justified until we hit performance issues.
-
-### 1.4 Recommendation: hybrid approach
-
-**For Phase 4 MVP**: Use **stty shell-out** (Option A) on startup and shutdown.
-It's simple and works. Wrap it in a `OctoPi.Tui.Terminal` GenServer that owns
-the raw-mode lifecycle and guards against double-enables.
-
-**For Phase 4.1 or later**: If we need better signal handling or zero-jitter
-resizes, implement the termios NIF or adopt the `/dev/tty` Port strategy.
-
-### 1.5 IO boundary sketch
+### 1.4 IO boundary sketch
 
 ```elixir
 defmodule OctoPi.Tui.Terminal do
   use GenServer
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
+  alias OctoPi.Tui.RawMode
 
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+
+  @impl true
   def init(_opts) do
-    # Assume `:stdio` is already in raw mode (setup by startup script or caller)
-    # Or enable it now with stty
-    enable_raw_mode()
+    :ok = RawMode.enter()
 
-    # Hide cursor, enable bracketed paste
-    IO.write(["\x1b[?25l", "\x1b[?2004h"])
+    # Hide cursor, enable bracketed paste, enable focus events.
+    IO.write(["\e[?25l", "\e[?2004h", "\e[?1004h"])
 
-    # Install SIGWINCH handler
+    # Route SIGWINCH into this GenServer's mailbox.
     :os.set_signal(:sigwinch, :handle)
 
-    # Start reading stdin in a background task
-    {:ok, %{raw_mode_active: true}}
+    # Spawn a stdin reader that loops on io:get_chars/2 and forwards
+    # chunks back here as messages. Because reads are lazy under
+    # OTP 28, the reader only blocks when it's actually asking.
+    reader = spawn_link(fn -> read_loop(self()) end)
+
+    {:ok, %{reader: reader, cols: term_cols(), rows: term_rows()}}
   end
 
-  def write(data) do
-    GenServer.cast(__MODULE__, {:write, data})
-  end
-
-  def get_dimensions do
-    GenServer.call(__MODULE__, :get_dimensions)
-  end
-
-  def handle_cast({:write, data}, state) do
-    IO.write(data)
+  @impl true
+  def handle_info({:stdin_chunk, bin}, state) do
+    OctoPi.Tui.StdinFSM.feed(bin)
     {:noreply, state}
-  end
-
-  def handle_call(:get_dimensions, _from, state) do
-    cols = IO.inspect(:io, :get_cols, [])  # or System.cmd("tput", ["cols"])
-    rows = IO.inspect(:io, :get_rows, [])
-    {:reply, {rows, cols}, state}
   end
 
   def handle_info({:signal, :sigwinch}, state) do
-    # Broadcast resize event to subscribers
-    Phoenix.PubSub.broadcast(:octo_pi_pubsub, "tui:resize", {:resize, get_dimensions()})
-    {:noreply, state}
+    cols = term_cols()
+    rows = term_rows()
+    OctoPi.Tui.Events.broadcast({:resize, rows, cols})
+    {:noreply, %{state | cols: cols, rows: rows}}
   end
 
+  @impl true
   def terminate(_reason, _state) do
-    IO.write(["\x1b[?25h", "\x1b[?2004l"])  # restore cursor, disable paste
-    disable_raw_mode()
+    # Restore cursor, disable paste/focus, then cooked mode.
+    IO.write(["\e[?25h", "\e[?2004l", "\e[?1004l"])
+    RawMode.exit()
   end
 
-  defp enable_raw_mode do
-    case System.cmd("stty", ["raw", "-echo"], []) do
-      {_, 0} -> :ok
-      {err, code} -> raise "stty failed: #{err} (code #{code})"
+  defp read_loop(owner) do
+    # Read up to 256 bytes at a time; the FSM handles reassembly.
+    case :io.get_chars("", 256) do
+      :eof -> :ok
+      {:error, _} = err -> send(owner, {:stdin_error, err})
+      data -> send(owner, {:stdin_chunk, IO.iodata_to_binary(data)})
     end
+
+    read_loop(owner)
   end
 
-  defp disable_raw_mode do
-    System.cmd("stty", ["sane"], [])
-  end
+  defp term_cols, do: with({:ok, c} <- :io.columns(), do: c, else: (_ -> 80))
+  defp term_rows, do: with({:ok, r} <- :io.rows(),    do: r, else: (_ -> 24))
 end
 ```
 
 **Key design points:**
-- Single `OctoPi.Tui.Terminal` GenServer owns terminal state.
-- Callers use `Terminal.write(data)` to send output (async cast).
-- SIGWINCH is routed through the message loop; broadcasts to subscribers.
-- `terminate/2` restores terminal on graceful shutdown.
-- For crash recovery (BEAM exits without cleanup), rely on shell to run `stty sane` at exit.
+- `OctoPi.Tui.Terminal` GenServer owns raw-mode lifecycle + SIGWINCH.
+- A linked reader process loops on `io:get_chars/2`; because reads are
+  lazy, it blocks cheaply when nothing is on stdin.
+- `terminate/2` runs on clean shutdown (and on normal supervisor teardown);
+  it restores cursor/paste/focus state and exits raw mode.
+- Crash recovery: if BEAM exits before `terminate/2` runs (SIGKILL),
+  the user's terminal is still in raw mode. Same recovery as every other
+  Unix TUI — `stty sane` or `reset`. Document this.
+- `:io.columns/0` and `:io.rows/0` give the current window size. OTP 28's
+  stdlib returns `{:ok, n} | {:error, :enotsup}`; fall back to 80×24.
+
+### 1.5 MVP startup flow
+
+1. User runs `mix pi` (no `--print`, no `--mode rpc`) → interactive.
+2. `Mix.Tasks.Pi.run/1` calls `OctoPi.Tui.start_link/1`.
+3. Terminal GenServer enters raw mode, enables paste/focus, installs
+   SIGWINCH, spawns the reader.
+4. TUI main loop subscribes to session events, renders, handles keys.
+5. On Ctrl+C (or ordinary exit), the Terminal GenServer terminates;
+   `terminate/2` restores state.
+
+No shell-out in the common path; single GenServer owns the terminal
+surface.
 
 ---
 
@@ -225,37 +217,29 @@ SIGWINCH and broadcasts via `Phoenix.PubSub` or a fan-out loop.
 defmodule OctoPi.Tui.Terminal do
   use GenServer
 
+  alias OctoPi.Tui.RawMode
+
   def init(_opts) do
-    enable_raw_mode()
+    :ok = RawMode.enter()
     :os.set_signal(:sigwinch, :handle)
-    Phoenix.PubSub.subscribe(:octo_pi_pubsub, "tui:lifecycle")
-    {:ok, %{width: 80, height: 24}}
+    {:ok, %{width: term_cols(), height: term_rows()}}
   end
 
   def handle_info({:signal, :sigwinch}, state) do
-    {rows, cols} = get_dimensions()
-    new_state = %{state | width: cols, height: rows}
-    Phoenix.PubSub.broadcast(:octo_pi_pubsub, "tui:resize", {:resize, cols, rows})
-    {:noreply, new_state}
+    cols = term_cols()
+    rows = term_rows()
+    OctoPi.Tui.Events.broadcast({:resize, rows, cols})
+    {:noreply, %{state | width: cols, height: rows}}
   end
 
-  defp get_dimensions do
-    # Query terminal size via ioctl or external tool
-    # Option 1: System.cmd("tput", ["lines"]) / System.cmd("tput", ["cols"])
-    # Option 2: Implement via a NIF wrapping ioctl(TIOCGWINSZ)
-    # For MVP, use tput (simpler, no NIF needed)
-    cols = System.cmd("tput", ["cols"]) |> String.trim() |> String.to_integer() || 80
-    rows = System.cmd("tput", ["lines"]) |> String.trim() |> String.to_integer() || 24
-    {rows, cols}
-  end
+  defp term_cols, do: with({:ok, c} <- :io.columns(), do: c, else: (_ -> 80))
+  defp term_rows, do: with({:ok, r} <- :io.rows(),    do: r, else: (_ -> 24))
 end
 ```
 
-**Alternative (synchronous with no external deps):**
-
-Use `File.read("/dev/tty")` on Unix or query Windows console APIs. However, this
-requires careful error handling and per-platform logic. **For Phase 4 MVP, stick
-with `tput` or `stty` shell-outs.** They're slow but reliable.
+`:io.columns/0` and `:io.rows/0` are stdlib — no shell-out, no NIF, no
+ioctl. They return `{:ok, n} | {:error, :enotsup}`; the fallback to 80×24
+keeps us safe if the terminal is weird (dumb term, detached).
 
 ---
 
@@ -1355,18 +1339,22 @@ OctoPi.Coder.InteractiveMode
 
 ### 11.1 Raw-mode ownership and TTY setup
 
-**Problem**: Once `:stdio` is in raw mode, IEx and Mix integration breaks.
-Debugging becomes hard.
+**Problem**: `shell:start_interactive({noshell, raw})` flips the entire
+BEAM VM's stdio into raw mode. If someone has an IEx session attached or a
+mix task expects cooked input, they'll see strange behavior until we
+restore.
 
-**Solution for development**: 
+**Solution for development**:
 - Use `MIX_ENV=test` to avoid TUI entirely during tests.
 - Add a `--no-tui` flag to the CLI for debugging.
-- In the interactive handler, wrap everything in exception handling that restores terminal on crash.
+- The Terminal GenServer's `terminate/2` runs `RawMode.exit()` on normal
+  shutdown; that covers the supervised case.
 
-**Crash recovery**: If the BEAM process dies without cleaning up, the terminal
-stays in raw mode. The shell will be unusable until `stty sane` is run manually.
-This is unavoidable without a `trap EXIT` handler in a wrapper shell script or a
-NIF. For MVP, document it.
+**Crash recovery**: If the BEAM VM dies abruptly (SIGKILL, OOM, `erl -s
+halt`), `terminate/2` doesn't run and the terminal stays in raw mode.
+Standard Unix recovery: user types `reset` or `stty sane` blindly (their
+typing won't echo until it lands). Document this; every TUI has the same
+failure mode.
 
 ### 11.2 SIGWINCH delivery and multiple processes
 
@@ -1831,13 +1819,18 @@ Renderer depends on KeyParser but not Terminal. Editor depends on everything.
 
 ## 16. Windows and cross-platform notes
 
-### 16.1 Windows TTY differences
+### 16.1 Windows TTY
 
-Windows console doesn't support POSIX termios. Upstream uses `koffi` FFI to set
-`ENABLE_VIRTUAL_TERMINAL_INPUT` on the console handle (terminal.ts L205–226).
+Windows console doesn't support POSIX termios, but OTP 28's `-noshell raw`
+submode handles Windows too — the same PR that introduced raw mode also
+[fixed](https://github.com/erlang/otp/pull/8962) a pile of Windows Unicode
+weirdness (aborted overlapped reads, `ReadFile` running in non-overlapped
+mode, etc.). Upstream pi-mono had to `koffi`-FFI `ENABLE_VIRTUAL_TERMINAL_INPUT`
+onto the console handle (terminal.ts L205-226); we get that for free.
 
-**For MVP**: Windows support is **deferred**. Document this and recommend WSL2.
-Phase 4.1 can add Windows support if needed (requires a NIF or FFI wrapper).
+That said, **Phase 4 MVP targets Unix (Linux, macOS, BSD)** — we still
+haven't exercised the OTP 28 Windows path ourselves and it's not a Phase 4
+goal. If the tests pass on Windows, great; if not, Phase 4.1 can chase it.
 
 ### 16.2 macOS Homebrew integration
 
