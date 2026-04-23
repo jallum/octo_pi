@@ -2,13 +2,14 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T22:25:38Z",
   "created": "2026-04-23T22:14:49Z",
   "description": "Replace `list ++ [item]` append pattern in session/loop/request with a `%OctoPi.Agent.MessageLog{rev: [newest-first], count: n}` struct that prepends in O(1), exposes oldest-first via `to_list/1` (using `:lists.reverse/1` BIF), and maintains `count` so `length(messages)` callers become O(1).\n\n## New module\n`apps/octo_pi_agent/lib/octo_pi/agent/message_log.ex`\n- `@opaque t :: %__MODULE__{rev: [msg], count: non_neg_integer}`\n- API: `new/1`, `push/2`, `append_many/2`, `to_list/1`, `count/1`, `drop_oldest/2`\n- All ops keep `count` in sync with `rev`.\n\n## Edit sites\n- `apps/octo_pi_agent/lib/octo_pi/agent/session/state.ex` — `messages: []` → `messages: %MessageLog{}` (or `MessageLog.new()`).\n- `apps/octo_pi_agent/lib/octo_pi/agent/session.ex`\n  - L117 `store.session.messages ++ msgs` → `MessageLog.append_many/2`\n  - L266 `store.session.messages ++ [aborted_assistant()]` → `MessageLog.push/2`\n  - Any `length(messages)` (e.g. emit_session_stop) → `MessageLog.count/1`\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop.ex`\n  - L103 `messages ++ [assistant]` → `push/2`\n  - L123 `updated ++ tool_results` → `append_many/2`\n  - L132 `updated ++ followups` → `append_many/2`\n  - L141 `messages ++ Session.drain_steering(...)` → `append_many/2`\n  - L380 `aborted_messages/1` → `push/2`\n- `apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/request.ex`\n  - L176/L180/L189 (`Enum.reduce` building `acc ++ [...]`) → prepend, `Enum.reverse/1` once at end.\n- `apps/octo_pi_ai/lib/octo_pi/ai/sse.ex` L74 — drive-by, prepend + reverse.\n\n## Public API\nZero change. Anywhere that today returns/accepts a list keeps doing so via `MessageLog.to_list/1` and `MessageLog.new/1`.\n\n## Tests\n- New `apps/octo_pi_agent/test/octo_pi/agent/message_log_test.exs` covering push/append_many/to_list/count/drop_oldest invariants.\n- Existing session/loop/anthropic/sse tests pass unchanged.\n- Run `mix test` (umbrella-wide) and `mix format`.\n\n## Out of scope\nAnthropic decoder `content_rev` rewrite — separate ticket.",
   "id": "opi-fvf",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Introduce MessageLog struct: O(1) prepend, reverse on emit",
   "type": "task",
-  "updated_at": "2026-04-23T22:19:15Z"
+  "updated_at": "2026-04-23T22:25:38Z"
 }
