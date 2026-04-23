@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-hgb.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-hgb",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Producer refactor: Req :private state, supervised Task, narrow rescue",
   "type": "task",
-  "updated_at": "2026-04-23T19:58:06Z"
+  "updated_at": "2026-04-23T20:00:36Z"
 }
