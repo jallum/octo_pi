@@ -331,4 +331,53 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
                      2_000
     end
   end
+
+  describe "utf-8 across chunk boundaries" do
+    test "emoji split across HTTP chunks arrives intact in a text_delta" do
+      # Build a full, valid SSE event whose JSON-encoded text contains an
+      # emoji, then slice its BYTE STREAM mid-emoji across two chunks.
+      # The SSE layer's line buffer holds the partial bytes until the
+      # second chunk completes them.
+      delta_frame =
+        Fake.sse("content_block_delta", %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "hi🚀"}
+        })
+
+      # Find the first byte of the emoji (0xF0) and split there.
+      {emoji_pos, _} = :binary.match(delta_frame, <<0xF0>>)
+      <<prefix::binary-size(emoji_pos + 2), suffix::binary>> = delta_frame
+
+      chunks = [
+        Fake.sse("message_start", %{
+          "type" => "message_start",
+          "message" => %{"id" => "m", "usage" => %{"input_tokens" => 1}}
+        }),
+        Fake.sse("content_block_start", %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{"type" => "text"}
+        }),
+        prefix,
+        suffix,
+        Fake.sse("content_block_stop", %{"type" => "content_block_stop", "index" => 0}),
+        Fake.sse("message_delta", %{
+          "type" => "message_delta",
+          "delta" => %{"stop_reason" => "end_turn"},
+          "usage" => %{}
+        })
+      ]
+
+      {_pid, ref} = start_producer(chunks)
+      events = collect_events(ref)
+
+      text =
+        events
+        |> Enum.filter(&match?(%Event.TextDelta{}, &1))
+        |> Enum.map_join("", & &1.delta)
+
+      assert text == "hi🚀"
+    end
+  end
 end

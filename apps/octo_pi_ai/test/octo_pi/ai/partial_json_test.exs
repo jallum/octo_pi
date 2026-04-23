@@ -231,4 +231,30 @@ defmodule OctoPi.AI.PartialJsonTest do
       assert PartialJson.parse_streaming("[1, 2,") == %{}
     end
   end
+
+  describe "parse_streaming/1 — edge cases in unterminated strings" do
+    # Realistic tool-call streams hit these mid-arrival; regression-test
+    # them so a refactor of close_partial/scan_brackets stays honest.
+
+    test "escaped quote inside an unterminated string survives close" do
+      assert PartialJson.parse_streaming(~s({"regex": "a\\"b)) ==
+               %{"regex" => "a\"b"}
+    end
+
+    test "backslash at end of unterminated string is repaired" do
+      # Raw backslash as last char of an in-flight string. repair/1 doubles
+      # it so Jason parses the resulting {"path":"x\\"} to path=~S(x\).
+      assert PartialJson.parse_streaming(~s({"path":"x\\)) == %{"path" => "x\\"}
+    end
+
+    test "array value mid-stream is closed" do
+      assert PartialJson.parse_streaming(~s({"cmd": ["ls", "-la)) ==
+               %{"cmd" => ["ls", "-la"]}
+    end
+
+    test "nested object with unterminated leaf string closes both" do
+      assert PartialJson.parse_streaming(~s({"a": {"b": "c)) ==
+               %{"a" => %{"b" => "c"}}
+    end
+  end
 end

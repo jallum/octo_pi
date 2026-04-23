@@ -585,4 +585,122 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
       assert [%ToolCall{name: "Glob"}] = state.message.content
     end
   end
+
+  describe "interleaved content blocks" do
+    test "text block followed by tool_use in one stream" do
+      # Claude's common "Let me look... <tool_use>" pattern. Previous
+      # tests only covered text+text; this ensures two different block
+      # types coexist in one message.
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{
+          "type" => "message_start",
+          "message" => %{"id" => "m", "usage" => %{"input_tokens" => 5}}
+        },
+        %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "Let me check."}
+        },
+        %{"type" => "content_block_stop", "index" => 0},
+        %{
+          "type" => "content_block_start",
+          "index" => 1,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "toolu_1",
+            "name" => "edit",
+            "input" => %{}
+          }
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 1,
+          "delta" => %{"type" => "input_json_delta", "partial_json" => ~s({"path":"x"})}
+        },
+        %{"type" => "content_block_stop", "index" => 1},
+        %{
+          "type" => "message_delta",
+          "delta" => %{"stop_reason" => "tool_use"},
+          "usage" => %{}
+        }
+      ]
+
+      {_events, state} = feed(state, events)
+
+      assert [
+               %Content.Text{text: "Let me check."},
+               %ToolCall{id: "toolu_1", name: "edit", arguments: %{"path" => "x"}}
+             ] = state.message.content
+
+      assert %Event.Done{reason: :tool_use} = Decoder.finalize(state)
+    end
+
+    test "out-of-order content_block indices still route to the right block" do
+      # pi-mono uses findIndex on the content list; we use an index_map.
+      # Verify index:1 arriving before index:0 doesn't break routing.
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{"type" => "content_block_start", "index" => 1, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 1,
+          "delta" => %{"type" => "text_delta", "text" => "second-block"}
+        },
+        %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}},
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "text_delta", "text" => "first-block"}
+        }
+      ]
+
+      {_events, state} = feed(state, events)
+
+      # Content is appended in arrival order, not by Anthropic index:
+      # position 0 (arrived first) has index:1's data, and vice versa.
+      assert [
+               %Content.Text{text: "second-block"},
+               %Content.Text{text: "first-block"}
+             ] = state.message.content
+    end
+  end
+
+  describe "tool-call persistence invariant" do
+    test "finalized ToolCall struct carries no `partial_json` scratch field" do
+      # Structurally enforced — ToolCall is a plain struct without that
+      # field. Pin the invariant so a future change can't re-introduce
+      # it without updating this test.
+      {_, state} = Decoder.new(model())
+
+      events = [
+        %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "t1",
+            "name" => "x",
+            "input" => %{}
+          }
+        },
+        %{
+          "type" => "content_block_delta",
+          "index" => 0,
+          "delta" => %{"type" => "input_json_delta", "partial_json" => ~s({"k":"v"})}
+        },
+        %{"type" => "content_block_stop", "index" => 0}
+      ]
+
+      {events_out, state} = feed(state, events)
+
+      assert %Event.ToolCallEnd{tool_call: %ToolCall{} = tool_call} = List.last(events_out)
+      refute Map.has_key?(tool_call, :partial_json)
+      assert [%ToolCall{} = persisted] = state.message.content
+      refute Map.has_key?(persisted, :partial_json)
+    end
+  end
 end

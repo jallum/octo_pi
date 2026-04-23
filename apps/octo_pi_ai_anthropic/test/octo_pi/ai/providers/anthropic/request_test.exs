@@ -251,6 +251,35 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       assert String.length(block["id"]) == 64
       assert Regex.match?(~r/^[a-zA-Z0-9_-]+$/, block["id"])
     end
+
+    # Parameterized — real IDs from other providers' histories.
+    for {label, input, expected} <- [
+          {"OpenAI-style pipe", "call_abc|arg0", "call_abc_arg0"},
+          {"Google-style dot", "tool.call.123", "tool_call_123"},
+          {"pure dashes / underscores pass through", "call-abc_123", "call-abc_123"},
+          {"exclamation marks get underscored", "!!!", "___"},
+          {"unicode coerces to underscores", "café", "caf__"},
+          {"max-length clamp", String.duplicate("x", 100), String.duplicate("x", 64)}
+        ] do
+      @input input
+      @expected expected
+
+      test "tool-call id sanitization — #{label}" do
+        assistant = %Message.Assistant{
+          api: :anthropic_messages,
+          provider: :anthropic,
+          model: "claude-haiku-4-5",
+          timestamp: 0,
+          content: [%ToolCall{id: @input, name: "x", arguments: %{}}]
+        }
+
+        r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+        [msg] = r.body["messages"]
+        [block] = msg["content"]
+        assert block["id"] == @expected
+        assert Regex.match?(~r/^[a-zA-Z0-9_-]{1,64}$/, block["id"])
+      end
+    end
   end
 
   describe "messages — tool_result bundling" do
