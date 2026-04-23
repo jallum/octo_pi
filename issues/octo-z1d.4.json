@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "octo-z1d.3"
   ],
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "octo-z1d",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Tool dispatch: parallel via Task.async_stream + per-tool mode + onUpdate",
   "type": "task",
-  "updated_at": "2026-04-23T20:40:17Z"
+  "updated_at": "2026-04-23T20:58:31Z"
 }
