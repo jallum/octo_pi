@@ -5,7 +5,13 @@
   "blocks": [
     "octo-w29.2"
   ],
-  "comments": [],
+  "comments": [
+    {
+      "author": "",
+      "text": "Resolved in-chat 2026-04-23: **umbrella, four apps to start** (octo_pi_ai, octo_pi_agent, octo_pi_coder, octo_pi_tui). Peripheral apps (mom, future web) added lazily by their phase. No apps/shared.\n\nRationale: structural decomposition matches upstream's linear ai → agent → coder dep chain; per-app deps genuinely differ (tui has no HTTP client, ai has no terminal); leaves the door open to publish octo_pi_ai / octo_pi_agent as standalone Hex libs. Compiler enforces dep graph, not a linter.\n\nDecision recorded in RESEARCH.md §7 Q1. Unblocks octo-w29.2 (Scaffold umbrella project with four apps).",
+      "timestamp": "2026-04-23T16:50:58.481124Z"
+    }
+  ],
   "created": "2026-04-23T16:42:06.865304Z",
   "description": "Resolve RESEARCH.md §7 Q1. Decide between Mix umbrella (four child apps) vs single app with enforced module boundaries (e.g., via `boundary` or `mix xref`).\n\nDeliverable: a short decision note in RESEARCH.md §7 (or a new ADR file) with the call and rationale.\n\nDefault recommendation from research: lean umbrella. This spike is to validate and commit.",
   "id": "octo-w29.1",
@@ -17,5 +23,5 @@
   "status": "open",
   "title": "Spike: umbrella vs single-app layout",
   "type": "task",
-  "updated_at": "2026-04-23T16:43:58.351093Z"
+  "updated_at": "2026-04-23T16:50:58.481124Z"
 }
