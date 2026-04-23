@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-t58.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-t58.7"
+  ],
   "created": "2026-04-23T21:55:09Z",
   "description": "Port-map §4. The hard one. Shell command execution with:\n\n- Streaming stdout/stderr back via on_update as chunks arrive\n- Working dir = session cwd (optional override via args)\n- Env merge with session env\n- Timeout (default 120s, configurable per-call)\n- Hard kill on abort: SIGTERM the process group (pgid) first,\n  SIGKILL after grace window. Must terminate child processes\n  recursively (`bash -c 'sleep 100 \u0026 wait'` should fully die).\n\nImplementation: depend on `:erlexec` — it supports setpgid and\nsignal propagation to the group. Add via mix.exs.\n\nModule: OctoPi.Coder.Tools.Bash (implements Tool.Handler).\nEmits telemetry [:octo_pi_coder, :bash, :start/:stop/:timeout].\n\nOutput truncation: match upstream rules (max 100 lines or 32 KB\nof stdout, tail rest with a \"...truncated N lines\" marker).\n\nTDD:\n- Simple `echo hi` → stdout captured.\n- Streaming: `for i in 1 2 3; do echo $i; sleep 0.05; done` — on_update\n  fires at least twice with partial output.\n- Timeout: `sleep 10` with timeout 200ms → error result.\n- Abort propagation: start `sleep 60`, abort session, verify `ps`\n  shows no orphan (integration test, @tag :integration).\n- pgid kill: `bash -c 'sleep 60 \u0026 sleep 60 \u0026 wait'` — abort kills\n  all three processes.\n\nDepends on .1.",
   "id": "octo-t58.5",
