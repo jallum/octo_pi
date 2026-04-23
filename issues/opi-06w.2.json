@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:30:32Z",
+  "description": "Three small one-liner-ish fixes bundled:\n\na) `loop.ex:137` — `stream_turn` reduces AI events with nil seed.\n   If the transport never emits Done/Error, the accumulator stays\n   nil and we append nil to messages. Fix: if acc is nil at the\n   end, synthesize an \"unexpected end of stream\" error assistant.\n\nb) `session.ex:158` — `Process.exit(loop_task, :kill)` on the\n   second call of a double-abort hits a dead pid. Harmless but\n   noisy. Guard with `Process.alive?/1` (or check `loop_task != nil`\n   which already happens; tighten to live-only).\n\nc) `loop.ex:82` — `Session.drain_steering(session)` runs on every\n   loop iteration including turn 1 (empty queue, harmless but an\n   unnecessary GenServer round-trip). Skip on first turn.\n\nTDD:\n- Test: FakeTransport script with no Done/Error → run completes\n  with synthesized error, not a nil-bearing transcript.\n- Existing cancellation tests cover (b) once guard is added; add a\n  new test that calls abort twice rapidly and asserts no crash.\n- (c) is pure perf, covered by existing tests (should still pass).",
+  "id": "opi-06w.2",
+  "labels": [],
+  "parent": "opi-06w",
+  "priority": 2,
+  "status": "open",
+  "title": "Small defensive hardening: nil stream, dead-pid guard, skip drain turn 1",
+  "type": "task",
+  "updated_at": "2026-04-23T21:30:32Z"
+}
