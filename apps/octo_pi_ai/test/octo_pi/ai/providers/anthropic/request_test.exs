@@ -1,0 +1,355 @@
+defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
+  use ExUnit.Case, async: false
+
+  alias OctoPi.AI.{Content, Context, Message, Model, StreamOptions, Tool, ToolCall}
+  alias OctoPi.AI.Providers.Anthropic.Request
+
+  setup do
+    System.put_env("ANTHROPIC_API_KEY", "test-key-from-env")
+    on_exit(fn -> System.delete_env("ANTHROPIC_API_KEY") end)
+    :ok
+  end
+
+  defp model(overrides \\ []) do
+    base = %Model{
+      id: "claude-haiku-4-5",
+      name: "Claude Haiku 4.5",
+      api: :anthropic_messages,
+      provider: :anthropic,
+      base_url: "https://api.anthropic.com/v1",
+      context_window: 200_000,
+      max_tokens: 6000
+    }
+
+    struct!(base, overrides)
+  end
+
+  defp user_context(opts \\ []) do
+    %Context{
+      system_prompt: opts[:system_prompt],
+      messages: [%Message.User{content: "hello", timestamp: 0}],
+      tools: opts[:tools] || []
+    }
+  end
+
+  describe "URL + method" do
+    test "posts to {base_url}/messages" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      assert r.method == :post
+      assert r.url == "https://api.anthropic.com/v1/messages"
+    end
+
+    test "trims a trailing slash from base_url" do
+      r =
+        Request.build(model(base_url: "https://proxy.example/"), user_context(), %StreamOptions{})
+
+      assert r.url == "https://proxy.example/messages"
+    end
+  end
+
+  describe "headers" do
+    test "includes x-api-key from env by default" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      assert {"x-api-key", "test-key-from-env"} in r.headers
+    end
+
+    test "opts.api_key overrides env" do
+      r = Request.build(model(), user_context(), %StreamOptions{api_key: "override"})
+      assert {"x-api-key", "override"} in r.headers
+      refute {"x-api-key", "test-key-from-env"} in r.headers
+    end
+
+    test "falls back to ANTHROPIC_OAUTH_TOKEN when ANTHROPIC_API_KEY is unset" do
+      System.delete_env("ANTHROPIC_API_KEY")
+      System.put_env("ANTHROPIC_OAUTH_TOKEN", "oauth-token")
+      on_exit(fn -> System.delete_env("ANTHROPIC_OAUTH_TOKEN") end)
+
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      assert {"x-api-key", "oauth-token"} in r.headers
+    end
+
+    test "raises when no API key is available" do
+      System.delete_env("ANTHROPIC_API_KEY")
+
+      assert_raise RuntimeError, ~r/Anthropic API key not set/, fn ->
+        Request.build(model(), user_context(), %StreamOptions{})
+      end
+    end
+
+    test "includes anthropic-version, content-type, accept" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      assert {"anthropic-version", "2023-06-01"} in r.headers
+      assert {"content-type", "application/json"} in r.headers
+      assert {"accept", "application/json"} in r.headers
+    end
+
+    test "merges opts.headers after defaults" do
+      r =
+        Request.build(model(), user_context(), %StreamOptions{
+          headers: %{"x-custom" => "1", "x-tracing" => "abc"}
+        })
+
+      assert {"x-custom", "1"} in r.headers
+      assert {"x-tracing", "abc"} in r.headers
+    end
+  end
+
+  describe "body basics" do
+    test "always sets model, stream, and default max_tokens = floor(model.max_tokens / 3)" do
+      r = Request.build(model(max_tokens: 9999), user_context(), %StreamOptions{})
+      assert r.body["model"] == "claude-haiku-4-5"
+      assert r.body["stream"] == true
+      assert r.body["max_tokens"] == div(9999, 3)
+    end
+
+    test "opts.max_tokens overrides default" do
+      r = Request.build(model(), user_context(), %StreamOptions{max_tokens: 512})
+      assert r.body["max_tokens"] == 512
+    end
+
+    test "omits temperature by default" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      refute Map.has_key?(r.body, "temperature")
+    end
+
+    test "includes temperature when set" do
+      r = Request.build(model(), user_context(), %StreamOptions{temperature: 0.2})
+      assert r.body["temperature"] == 0.2
+    end
+
+    test "omits metadata, tools, system when unset/empty" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      refute Map.has_key?(r.body, "metadata")
+      refute Map.has_key?(r.body, "tools")
+      refute Map.has_key?(r.body, "system")
+    end
+
+    test "includes metadata when set" do
+      r = Request.build(model(), user_context(), %StreamOptions{metadata: %{"user_id" => "u1"}})
+      assert r.body["metadata"] == %{"user_id" => "u1"}
+    end
+  end
+
+  describe "system prompt" do
+    test "is shaped as a list of text blocks" do
+      r = Request.build(model(), user_context(system_prompt: "be terse"), %StreamOptions{})
+      assert r.body["system"] == [%{"type" => "text", "text" => "be terse"}]
+    end
+
+    test "empty string is treated as no system prompt" do
+      r = Request.build(model(), user_context(system_prompt: ""), %StreamOptions{})
+      refute Map.has_key?(r.body, "system")
+    end
+  end
+
+  describe "messages — user" do
+    test "string content becomes a single text block" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+
+      assert r.body["messages"] == [
+               %{"role" => "user", "content" => [%{"type" => "text", "text" => "hello"}]}
+             ]
+    end
+
+    test "list content with text + image is preserved as blocks" do
+      ctx = %Context{
+        messages: [
+          %Message.User{
+            content: [
+              %Content.Text{text: "what is this?"},
+              %Content.Image{data: "base64==", mime_type: "image/png"}
+            ],
+            timestamp: 0
+          }
+        ]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [msg] = r.body["messages"]
+      assert msg["role"] == "user"
+
+      assert msg["content"] == [
+               %{"type" => "text", "text" => "what is this?"},
+               %{
+                 "type" => "image",
+                 "source" => %{
+                   "type" => "base64",
+                   "media_type" => "image/png",
+                   "data" => "base64=="
+                 }
+               }
+             ]
+    end
+  end
+
+  describe "messages — assistant" do
+    test "text + thinking + tool_use blocks convert correctly" do
+      assistant = %Message.Assistant{
+        api: :anthropic_messages,
+        provider: :anthropic,
+        model: "claude-haiku-4-5",
+        timestamp: 0,
+        content: [
+          %Content.Text{text: "Let me think."},
+          %Content.Thinking{thinking: "inner", signature: "sig"},
+          %ToolCall{id: "toolu_1", name: "edit", arguments: %{"path" => "x"}}
+        ]
+      }
+
+      ctx = %Context{messages: [assistant]}
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      assert [msg] = r.body["messages"]
+      assert msg["role"] == "assistant"
+
+      assert msg["content"] == [
+               %{"type" => "text", "text" => "Let me think."},
+               %{"type" => "thinking", "thinking" => "inner", "signature" => "sig"},
+               %{
+                 "type" => "tool_use",
+                 "id" => "toolu_1",
+                 "name" => "edit",
+                 "input" => %{"path" => "x"}
+               }
+             ]
+    end
+
+    test "redacted thinking serializes as redacted_thinking with data" do
+      assistant = %Message.Assistant{
+        api: :anthropic_messages,
+        provider: :anthropic,
+        model: "claude-haiku-4-5",
+        timestamp: 0,
+        content: [
+          %Content.Thinking{
+            thinking: "[Reasoning redacted]",
+            signature: "opaque-blob",
+            redacted?: true
+          }
+        ]
+      }
+
+      r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+      [msg] = r.body["messages"]
+      assert msg["content"] == [%{"type" => "redacted_thinking", "data" => "opaque-blob"}]
+    end
+
+    test "tool-call id with illegal chars is sanitized to ^[a-zA-Z0-9_-]{1,64}$" do
+      bad = String.duplicate("a", 70) <> "|foo$"
+
+      assistant = %Message.Assistant{
+        api: :anthropic_messages,
+        provider: :anthropic,
+        model: "claude-haiku-4-5",
+        timestamp: 0,
+        content: [%ToolCall{id: bad, name: "x", arguments: %{}}]
+      }
+
+      r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+      [msg] = r.body["messages"]
+      [block] = msg["content"]
+      assert String.length(block["id"]) == 64
+      assert Regex.match?(~r/^[a-zA-Z0-9_-]+$/, block["id"])
+    end
+  end
+
+  describe "messages — tool_result bundling" do
+    test "consecutive tool_result messages bundle into one user message" do
+      results = [
+        %Message.ToolResult{
+          tool_call_id: "toolu_1",
+          tool_name: "edit",
+          content: [%Content.Text{text: "ok"}],
+          is_error?: false,
+          timestamp: 0
+        },
+        %Message.ToolResult{
+          tool_call_id: "toolu_2",
+          tool_name: "edit",
+          content: [%Content.Text{text: "oops"}],
+          is_error?: true,
+          timestamp: 0
+        }
+      ]
+
+      ctx = %Context{messages: results ++ [%Message.User{content: "next", timestamp: 0}]}
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      assert [bundled, next] = r.body["messages"]
+      assert bundled["role"] == "user"
+      assert length(bundled["content"]) == 2
+
+      assert [first_tr, second_tr] = bundled["content"]
+      assert first_tr["type"] == "tool_result"
+      assert first_tr["tool_use_id"] == "toolu_1"
+      assert first_tr["is_error"] == false
+
+      assert second_tr["tool_use_id"] == "toolu_2"
+      assert second_tr["is_error"] == true
+
+      assert next["role"] == "user"
+    end
+
+    test "tool_results at the end of history are still bundled" do
+      result = %Message.ToolResult{
+        tool_call_id: "toolu_1",
+        tool_name: "edit",
+        content: [%Content.Text{text: "done"}],
+        is_error?: false,
+        timestamp: 0
+      }
+
+      ctx = %Context{messages: [%Message.User{content: "do x", timestamp: 0}, result]}
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      assert [_user, bundled] = r.body["messages"]
+      assert bundled["role"] == "user"
+      assert [%{"type" => "tool_result"}] = bundled["content"]
+    end
+  end
+
+  describe "tools" do
+    test "each tool carries input_schema (normalized) and eager_input_streaming" do
+      tool = %Tool{
+        name: "edit",
+        description: "Edit a file.",
+        parameters: %{
+          "properties" => %{
+            "path" => %{"type" => "string"},
+            "text" => %{"type" => "string"}
+          },
+          "required" => ["path", "text"]
+        }
+      }
+
+      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %StreamOptions{})
+
+      assert [converted] = r.body["tools"]
+      assert converted["name"] == "edit"
+      assert converted["description"] == "Edit a file."
+      assert converted["eager_input_streaming"] == true
+
+      assert converted["input_schema"] == %{
+               "type" => "object",
+               "properties" => %{
+                 "path" => %{"type" => "string"},
+                 "text" => %{"type" => "string"}
+               },
+               "required" => ["path", "text"]
+             }
+    end
+
+    test "missing properties / required default to empties" do
+      tool = %Tool{name: "noop", description: "", parameters: %{}}
+
+      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %StreamOptions{})
+      [converted] = r.body["tools"]
+
+      assert converted["input_schema"] == %{
+               "type" => "object",
+               "properties" => %{},
+               "required" => []
+             }
+    end
+  end
+end
