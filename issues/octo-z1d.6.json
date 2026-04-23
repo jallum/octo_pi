@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-z1d.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-z1d.8"
+  ],
   "created": "2026-04-23T20:40:06Z",
   "description": "Abort semantics (port-map §4, §10.2).\n\nOctoPi.Agent.AbortRef:\n- new/0 → reference, creates ETS row\n- abort/1 → sets the flag\n- aborted?/1 → reads flag (read_concurrent ETS table owned by\n  OctoPi.Agent.AbortRegistry GenServer)\n- forget/1 → deletes row (called at session end)\n\nLoop integration:\n- Loop checks AbortRef.aborted?/1 between turns and before LLM stream.\n- Tool handlers receive the abort_ref as third arg; they must check\n  periodically OR pass it into Task.Supervisor.async_stream with an\n  on_timeout.\n- OctoPi.Agent.abort/1:\n  1. Sets the ETS flag so cooperative checkers see it immediately.\n  2. Task.shutdown(loop_task, :brutal_kill) for hard abort — tool\n     tasks are linked so they die with it.\n- Cleanup: session appends synthetic assistant message with\n  stop_reason :aborted + errorMessage, emits agent_end, becomes idle.\n  Queues are NOT cleared (ape TS).\n\nTDD:\n- abort between turns → loop exits with :aborted on next check\n- abort during LLM stream → Producer's caller-dies path fires (from\n  Phase 1 opi-hgb.2); loop translates to :aborted agent_end\n- abort during tool exec → tool Task.shutdown kills it; loop emits\n  tool_execution_end with cancelled flag, then agent_end\n- double-abort is a no-op\n\nDepends on z1d.3.",
   "id": "octo-z1d.6",
