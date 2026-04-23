@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T23:36:59Z",
+  "description": "Port-map §5. Owns the output side of the terminal surface.\n\n- OctoPi.Tui.Renderer GenServer.\n- render/1 takes a list of %Line{} structs (or a component tree);\n  diffs vs previous frame; emits CSI move + redraw for changed\n  range only.\n- find_diff_range/2: find first + last changed line index.\n  emit_diff/2 pattern-matched on {first, last} with first \u003e last\n  (no changes) as its own clause — NO top-level `if`.\n- Full-redraw triggers: width change, height change, overlay\n  config change, component tree change. Four guards, each its\n  own function head.\n- CSI 2026 (synchronized output): wrap batch in \"\\e[?2026h\" and\n  \"\\e[?2026l\" when supported; plain write otherwise. Support\n  detection via DCS query at startup (cache result).\n- Termux height-change suppression per upstream tui-render.test.ts.\n\nTests: port-map §14.5 (tui-render.test.ts, 510 lines).\n\nTDD:\n- Line-diff correctness: no-change → empty output; single-line\n  change → cursor move + one line; first-line only; last-line\n  only; multiple non-adjacent changes; middle-line spinner case.\n- Full-redraw on width/height change.\n- Termux env var suppresses height-change redraw.\n- CSI 2026 wrapping when enabled.\n- Shrinkage: content → empty transitions, cursor tracking on\n  shrink, stale content cleared.\n\nDepends on .1.",
+  "id": "octo-3di.5",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 1,
+  "status": "open",
+  "title": "Differential renderer: screen buffer + line diff + CSI 2026",
+  "type": "task",
+  "updated_at": "2026-04-23T23:36:59Z"
+}
