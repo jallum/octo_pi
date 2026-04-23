@@ -205,6 +205,16 @@ pi-mono uses the `partial-json` npm lib for step 2; no Elixir equivalent
 exists, so we write ~60-80 lines of tolerant parsing. Semantics: best-effort,
 never raise.
 
+**Deliberate deviation from pi-mono.** Upstream's
+`parseStreamingJson<T>` returns whatever `JSON.parse` produces —
+arrays, primitives, or `{}` fallback. We narrow the contract to
+"always a map" and coerce non-map parses (lone arrays/primitives)
+to `%{}`. This is safe for Anthropic (tool-call `input_json_delta`
+always builds up an object) and keeps the downstream Decoder's
+types tight. The regression test `parse_streaming/1 — explicit
+pi-mono deviation` pins the narrowed behaviour. Revisit if another
+provider's tool-call stream ever yields non-object arguments.
+
 ---
 
 ## 5. Canonical event union

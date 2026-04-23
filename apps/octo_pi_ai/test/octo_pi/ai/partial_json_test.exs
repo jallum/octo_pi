@@ -205,4 +205,30 @@ defmodule OctoPi.AI.PartialJsonTest do
       assert %{"path" => "A\\H"} = PartialJson.parse_streaming(mid)
     end
   end
+
+  describe "parse_streaming/1 — explicit pi-mono deviation" do
+    # pi-mono's parseStreamingJson returns whatever JSON.parse yields
+    # (arrays, primitives, empty-object fallback). We narrow the
+    # contract to "always a map"; non-map parses are coerced to %{}.
+    # These tests pin the deviation — a future refactor that widens
+    # the return has to update them explicitly.
+    #
+    # See moduledoc in partial_json.ex + docs/port-map/anthropic.md §4.
+    # Ticket: opi-hgb.5.
+
+    test "well-formed array coerces to %{}" do
+      assert PartialJson.parse_streaming("[1, 2, 3]") == %{}
+    end
+
+    test "well-formed primitive coerces to %{}" do
+      assert PartialJson.parse_streaming("42") == %{}
+      assert PartialJson.parse_streaming(~s("hello")) == %{}
+      assert PartialJson.parse_streaming("true") == %{}
+      assert PartialJson.parse_streaming("null") == %{}
+    end
+
+    test "partial array falls through to %{} (pi-mono would yield partial [1, 2])" do
+      assert PartialJson.parse_streaming("[1, 2,") == %{}
+    end
+  end
 end

@@ -13,6 +13,22 @@ defmodule OctoPi.AI.PartialJson do
     the JSON is truncated mid-flight. Always returns a map — even if
     the input is empty, a primitive, an array, or unrepairable.
 
+  ## Deliberate deviation from pi-mono
+
+  pi-mono's `parseStreamingJson<T>` returns whatever `JSON.parse`
+  yields (objects, arrays, primitives, `{}` fallback) and annotates
+  the return type as `T`. Our port narrows the contract: `parse_streaming/1`
+  **only returns maps**. Non-map parses (e.g. a lone array, number,
+  string) are coerced to `%{}` the same way an unparseable input
+  would be.
+
+  This is safe for Anthropic's tool-call inputs — `input_json_delta`
+  always produces an object — and avoids leaking a polymorphic return
+  type through the rest of the decoder. Regression test in
+  `parse_streaming/1 — explicit pi-mono deviation` pins the behaviour;
+  revisit if another provider's tool-call stream ever yields
+  non-object arguments.
+
   See `docs/port-map/anthropic.md` §4.
   """
 
