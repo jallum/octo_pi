@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:30:57Z",
+  "description": "`loop.ex:209` — run_parallel uses\n`max_concurrency: max(length(tool_calls), 1)`. A model returning\n50 parallel tool calls (rare but possible) spawns 50 tasks. Cap\nto a sensible limit (e.g. 16) so a pathological batch can't blow\nup the scheduler.\n\nTDD:\n- Test: 20 tool calls with a 2-tool-cap still executes all 20.\n- Timing test (existing 2-tool parallel) should still pass\n  unchanged.",
+  "id": "opi-06w.6",
+  "labels": [],
+  "parent": "opi-06w",
+  "priority": 3,
+  "status": "open",
+  "title": "Cap max_concurrency for parallel tool dispatch",
+  "type": "task",
+  "updated_at": "2026-04-23T21:30:57Z"
+}
