@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T20:40:06Z",
+  "description": "Per-tool execution shape (port-map §3).\n\n- Default: parallel. Task.Supervisor.async_stream_nolink(\n    tool_calls,\n    \u0026execute/1,\n    ordered: false, max_concurrency: :infinity, on_timeout: :kill_task\n  ).\n- Collect {index, result} tuples with the assistant-source index,\n  Enum.sort_by/2 at the end, emit tool_result messages in order.\n- If any tool in the batch has :execution_mode == :sequential, the\n  whole batch runs sequentially (ape pi-mono L349).\n- onUpdate: tool task sends {:tool_update, call_id, partial} to\n  the Session; Session forwards as tool_execution_update event.\n- Tool crashes: caught in the async_stream, wrapped as error\n  tool-result with the exception message. Tool process is linked to\n  the stream so hard aborts propagate.\n\nTDD:\n- Two tools, default parallel → both run concurrently; verify via\n  timing (each sleeps 100ms, wall-clock \u003c 150ms).\n- Sequential flag on one → wall-clock ~200ms.\n- onUpdate fires tool_execution_update events in order.\n- Tool that raises yields an error tool-result with the message.\n- Results appear in source order even when completion order differs.\n\nDepends on z1d.3.",
+  "id": "octo-z1d.4",
+  "labels": [],
+  "parent": "octo-z1d",
+  "priority": 1,
+  "status": "open",
+  "title": "Tool dispatch: parallel via Task.async_stream + per-tool mode + onUpdate",
+  "type": "task",
+  "updated_at": "2026-04-23T20:40:06Z"
+}
