@@ -1,9 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [
-    "opi-y1y.1"
-  ],
+  "blocks": [],
   "created": "2026-04-23T19:02:45Z",
   "description": "Port enough of Claude Code's own credential storage to seamlessly pick up its OAuth token. Runs `security find-generic-password -a $USER -s 'Claude Code-credentials' -w` on macOS, parses the JSON body (top-level claudeAiOauth.accessToken), and returns the access token.\n\nGraceful fallback:\n- Non-macOS: return nil (don't error)\n- `security` command unavailable: nil\n- Entry not found: nil\n- JSON malformed: nil\n\nWire into the Auth precedence chain from opi-y1y.1 (between env vars and raise).\n\nTest with: a fake `security` binary via PATH shadowing OR by parameterizing the shell-out (easier). Cover macOS/non-macOS paths with OS detection.",
   "id": "opi-y1y.2",
@@ -13,5 +11,5 @@
   "status": "open",
   "title": "Claude Code keychain reader (macOS)",
   "type": "task",
-  "updated_at": "2026-04-23T19:02:51Z"
+  "updated_at": "2026-04-23T19:03:07Z"
 }
