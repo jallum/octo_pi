@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:30:57Z",
+  "description": "Three small test gaps from the review:\n\n1. Queue-full at facade: no test asserts `OctoPi.Agent.steer/2` or\n   `follow_up/2` returns `{:error, :full}`. Wire a 1-bounded queue\n   via set_queue_mode + bound override (need to expose bound on\n   session opts) and fill it.\n\n2. `set_queue_mode(:steering, :all)`: follow_up ':all' is covered;\n   steering isn't. Add a symmetric test.\n\n3. Abort during LLM stream: all abort tests currently fire during\n   tool sleep. The Producer's caller-dies path (Phase 1 opi-hgb.2)\n   should also produce an :aborted AgentEnd when the loop is killed\n   mid-stream. Add a FakeTransport that blocks on receive (so the\n   loop is stuck in the stream reducer) and assert that\n   abort/1 still yields a timely :aborted AgentEnd.\n\nNote for (1): PendingMessageQueue already supports a custom bound,\nbut Session.init/1 doesn't accept it as an opt. May need a small\nplumbing change — call it out in the commit.",
+  "id": "opi-06w.7",
+  "labels": [],
+  "parent": "opi-06w",
+  "priority": 2,
+  "status": "open",
+  "title": "Fill test gaps: queue-full facade, set_queue_mode :steering, abort-during-stream",
+  "type": "task",
+  "updated_at": "2026-04-23T21:30:57Z"
+}
