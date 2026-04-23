@@ -69,7 +69,7 @@ with `io:get_chars/2`, that's everything we need — no NIFs, no shell-outs,
 no Ports for the stdin reader.
 
 ```elixir
-defmodule OctoPi.Tui.RawMode do
+defmodule OctoPi.TUI.RawMode do
   @moduledoc """
   Enter/exit OTP 28 raw noshell mode. Bracket with `try/after` so exit
   runs even if the TUI crashes.
@@ -102,10 +102,10 @@ it's proof the raw-mode plumbing is stable API.
 ### 1.4 IO boundary sketch
 
 ```elixir
-defmodule OctoPi.Tui.Terminal do
+defmodule OctoPi.TUI.Terminal do
   use GenServer
 
-  alias OctoPi.Tui.RawMode
+  alias OctoPi.TUI.RawMode
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -129,14 +129,14 @@ defmodule OctoPi.Tui.Terminal do
 
   @impl true
   def handle_info({:stdin_chunk, bin}, state) do
-    OctoPi.Tui.StdinFSM.feed(bin)
+    OctoPi.TUI.StdinFSM.feed(bin)
     {:noreply, state}
   end
 
   def handle_info({:signal, :sigwinch}, state) do
     cols = term_cols()
     rows = term_rows()
-    OctoPi.Tui.Events.broadcast({:resize, rows, cols})
+    OctoPi.TUI.Events.broadcast({:resize, rows, cols})
     {:noreply, %{state | cols: cols, rows: rows}}
   end
 
@@ -164,7 +164,7 @@ end
 ```
 
 **Key design points:**
-- `OctoPi.Tui.Terminal` GenServer owns raw-mode lifecycle + SIGWINCH.
+- `OctoPi.TUI.Terminal` GenServer owns raw-mode lifecycle + SIGWINCH.
 - A linked reader process loops on `io:get_chars/2`; because reads are
   lazy, it blocks cheaply when nothing is on stdin.
 - `terminate/2` runs on clean shutdown (and on normal supervisor teardown);
@@ -178,7 +178,7 @@ end
 ### 1.5 MVP startup flow
 
 1. User runs `mix pi` (no `--print`, no `--mode rpc`) → interactive.
-2. `Mix.Tasks.Pi.run/1` calls `OctoPi.Tui.start_link/1`.
+2. `Mix.Tasks.Pi.run/1` calls `OctoPi.TUI.start_link/1`.
 3. Terminal GenServer enters raw mode, enables paste/focus, installs
    SIGWINCH, spawns the reader.
 4. TUI main loop subscribes to session events, renders, handles keys.
@@ -214,10 +214,10 @@ SIGWINCH and broadcasts via `Phoenix.PubSub` or a fan-out loop.
 ### 2.3 OTP design: Terminal GenServer with broadcast
 
 ```elixir
-defmodule OctoPi.Tui.Terminal do
+defmodule OctoPi.TUI.Terminal do
   use GenServer
 
-  alias OctoPi.Tui.RawMode
+  alias OctoPi.TUI.RawMode
 
   def init(_opts) do
     :ok = RawMode.enter()
@@ -228,7 +228,7 @@ defmodule OctoPi.Tui.Terminal do
   def handle_info({:signal, :sigwinch}, state) do
     cols = term_cols()
     rows = term_rows()
-    OctoPi.Tui.Events.broadcast({:resize, rows, cols})
+    OctoPi.TUI.Events.broadcast({:resize, rows, cols})
     {:noreply, %{state | width: cols, height: rows}}
   end
 
@@ -281,7 +281,7 @@ Classes detected (stdin-buffer.ts L29-78, L132-179):
 **Option A: GenServer with accumulated `state: binary`**
 
 ```elixir
-defmodule OctoPi.Tui.StdinFSM do
+defmodule OctoPi.TUI.StdinFSM do
   use GenServer
 
   def init(_opts) do
@@ -452,7 +452,7 @@ Two protocols:
 ### 4.2 OTP mapping: pure `parse/1` function
 
 ```elixir
-defmodule OctoPi.Tui.KeyParser do
+defmodule OctoPi.TUI.KeyParser do
   # Head order matters: check the Kitty CSI-u shape before the legacy
   # table, and fall through to single-char handling. No top-level
   # `cond` — each clause owns its shape.
@@ -552,7 +552,7 @@ end
 **Elixir representation:**
 
 ```elixir
-defmodule OctoPi.Tui.Key do
+defmodule OctoPi.TUI.Key do
   defstruct [
     :key,           # atom: :a, :up, :f1, :enter, :tab, :escape
     modifiers: [],  # list of atoms: [:ctrl, :shift, :alt, :super]
@@ -613,7 +613,7 @@ bold, etc. Width-aware: East Asian wide characters and emoji are 2 columns.
 ### 5.2 OTP mapping: Renderer GenServer
 
 ```elixir
-defmodule OctoPi.Tui.Renderer do
+defmodule OctoPi.TUI.Renderer do
   use GenServer
 
   def init(_opts) do
@@ -747,7 +747,7 @@ characters. East Asian wide (CJK, emoji) characters occupy 2 columns; others 1.
 `get-east-asian-width` has ~1000 entries. Port the critical ranges.
 
 ```elixir
-defmodule OctoPi.Tui.Width do
+defmodule OctoPi.TUI.Width do
   def visible_width(string) when is_binary(string) do
     string
     |> String.graphemes()
@@ -824,7 +824,7 @@ percentages or absolutes, margin control, visibility predicates, focus capture.
 ### 6.2 OTP mapping
 
 ```elixir
-defmodule OctoPi.Tui.Overlay do
+defmodule OctoPi.TUI.Overlay do
   defstruct [
     :id,
     :component,
@@ -870,7 +870,7 @@ defmodule OctoPi.Tui.Overlay do
   # ... etc
 end
 
-defmodule OctoPi.Tui.Renderer do
+defmodule OctoPi.TUI.Renderer do
   def composite_overlays(base_lines, overlays, width, height) do
     Enum.reduce(overlays, base_lines, fn overlay, lines ->
       if overlay.hidden or not should_display?(overlay, width, height) do
@@ -944,7 +944,7 @@ interface Focusable {
 **Behaviour definition:**
 
 ```elixir
-defmodule OctoPi.Tui.Component do
+defmodule OctoPi.TUI.Component do
   @callback render(width :: integer()) :: [String.t()]
   @callback handle_input(component :: term(), data :: String.t()) :: term()
   @callback invalidate(component :: term()) :: term()
@@ -955,8 +955,8 @@ end
 **Concrete component struct:**
 
 ```elixir
-defmodule OctoPi.Tui.Components.Text do
-  @behaviour OctoPi.Tui.Component
+defmodule OctoPi.TUI.Components.Text do
+  @behaviour OctoPi.TUI.Component
 
   defstruct [
     :content,
@@ -974,8 +974,8 @@ defmodule OctoPi.Tui.Components.Text do
   def invalidate(component), do: component
 end
 
-defmodule OctoPi.Tui.Components.Input do
-  @behaviour OctoPi.Tui.Component
+defmodule OctoPi.TUI.Components.Input do
+  @behaviour OctoPi.TUI.Component
 
   defstruct [
     :value,
@@ -1023,14 +1023,14 @@ end
 ### 7.3 Focusable interface
 
 ```elixir
-defprotocol OctoPi.Tui.Focusable do
+defprotocol OctoPi.TUI.Focusable do
   @doc "Set focus on a component"
   def focus(component)
   @doc "Remove focus from a component"
   def blur(component)
 end
 
-defimpl OctoPi.Tui.Focusable, for: OctoPi.Tui.Components.Input do
+defimpl OctoPi.TUI.Focusable, for: OctoPi.TUI.Components.Input do
   def focus(%__MODULE__{} = comp), do: %{comp | focused: true}
   def blur(%__MODULE__{} = comp), do: %{comp | focused: false}
 end
@@ -1070,7 +1070,7 @@ cycles through older entries.
 **OTP mapping:**
 
 ```elixir
-defmodule OctoPi.Tui.KillRing do
+defmodule OctoPi.TUI.KillRing do
   def new, do: {[], 0}  # {entries, current_index}
 
   def push({entries, _idx}, text, opts) do
@@ -1109,7 +1109,7 @@ Upstream: undo-stack.ts (29 lines). Stack of deep clones; push clones, pop
 returns directly.
 
 ```elixir
-defmodule OctoPi.Tui.UndoStack do
+defmodule OctoPi.TUI.UndoStack do
   def new, do: {[], []}  # {undo, redo}
 
   def push({undo, _redo}, state) do
@@ -1195,7 +1195,7 @@ Upstream: autocomplete.ts (23K LOC!). Three types:
 **OTP mapping** (MVP: slash commands only):
 
 ```elixir
-defmodule OctoPi.Tui.Autocomplete do
+defmodule OctoPi.TUI.Autocomplete do
   def slash_commands do
     [
       %{name: "read", description: "Read a file"},
@@ -1269,7 +1269,7 @@ defmodule OctoPi.Coder.InteractiveMode do
     cwd = args[:cwd] || File.cwd!()
 
     # Start TUI supervision tree
-    {:ok, _pid} = OctoPi.Tui.Supervisor.start_link([])
+    {:ok, _pid} = OctoPi.TUI.Supervisor.start_link([])
 
     # Start agent session
     {:ok, session_pid} = OctoPi.Agent.Session.start_link(
@@ -1279,7 +1279,7 @@ defmodule OctoPi.Coder.InteractiveMode do
     )
 
     # Create TUI components
-    editor = OctoPi.Tui.Components.Editor.new(
+    editor = OctoPi.TUI.Components.Editor.new(
       on_submit: fn text -> handle_user_input(session_pid, text) end
     )
 
@@ -1291,13 +1291,13 @@ defmodule OctoPi.Coder.InteractiveMode do
 
   defp render_loop(session_pid, editor) do
     # Render editor
-    lines = OctoPi.Tui.Renderer.render(editor, 80)  # width from Terminal
-    OctoPi.Tui.Terminal.write(render_to_ansi(lines))
+    lines = OctoPi.TUI.Renderer.render(editor, 80)  # width from Terminal
+    OctoPi.TUI.Terminal.write(render_to_ansi(lines))
 
     # Poll for new messages
     receive do
       {:input, data} ->
-        new_editor = OctoPi.Tui.Component.handle_input(editor, data)
+        new_editor = OctoPi.TUI.Component.handle_input(editor, data)
         render_loop(session_pid, new_editor)
 
       {:agent_update, event} ->
@@ -1325,24 +1325,24 @@ end
 ### 10.1 New octo_pi_tui app
 
 ```
-OctoPi.Tui.Application
-├── OctoPi.Tui.Terminal (GenServer)
+OctoPi.TUI.Application
+├── OctoPi.TUI.Terminal (GenServer)
 │   ├── Owns `:stdio` in raw mode
 │   ├── Handles SIGWINCH → broadcasts resize
 │   └── Provides Terminal.write/1 for output
-├── OctoPi.Tui.StdinFSM (GenServer)
+├── OctoPi.TUI.StdinFSM (GenServer)
 │   ├── Accumulates chunks into complete sequences
 │   ├── Emits via message to KeyDispatcher
 │   └── Manages 10ms timeout flush
-├── OctoPi.Tui.KeyDispatcher (GenServer)
+├── OctoPi.TUI.KeyDispatcher (GenServer)
 │   ├── Receives sequences from StdinFSM
 │   ├── Parses via KeyParser
 │   └── Routes to focused component
-├── OctoPi.Tui.Renderer (GenServer)
+├── OctoPi.TUI.Renderer (GenServer)
 │   ├── Holds previous render state
 │   ├── Computes diffs, outputs CSI 2026 wrapped
 │   └── Manages overlay Z-order
-└── OctoPi.Tui.ComponentTree (dynamic)
+└── OctoPi.TUI.ComponentTree (dynamic)
     ├── Various components (Editor, Text, SelectList, ...)
     └── Per-component state (if stateful)
 ```
@@ -1351,7 +1351,7 @@ OctoPi.Tui.Application
 
 ```
 OctoPi.Coder.InteractiveMode
-├── Starts OctoPi.Tui.Supervisor
+├── Starts OctoPi.TUI.Supervisor
 ├── Subscribes to OctoPi.Agent.Session events
 ├── Renders session state via TUI components
 ├── Routes TUI input (editor submit, escape, etc.) back to session
@@ -1432,7 +1432,7 @@ try do
 rescue
   e ->
     IO.inspect(e, label: "TUI error")
-    OctoPi.Tui.Terminal.restore()
+    OctoPi.TUI.Terminal.restore()
     reraise e, __STACKTRACE__
 end
 ```
@@ -1495,29 +1495,29 @@ timeout flush).
 **Elixir tests:**
 
 ```elixir
-defmodule OctoPi.Tui.StdinFSMTest do
+defmodule OctoPi.TUI.StdinFSMTest do
   use ExUnit.Case
 
   test "assembles CSI sequence from three chunks" do
-    fsm = OctoPi.Tui.StdinFSM.new()
-    {:ok, fsm, []} = OctoPi.Tui.StdinFSM.process(fsm, "\x1b")
-    {:ok, fsm, []} = OctoPi.Tui.StdinFSM.process(fsm, "[5")
-    {:ok, _fsm, [seq]} = OctoPi.Tui.StdinFSM.process(fsm, "A")
+    fsm = OctoPi.TUI.StdinFSM.new()
+    {:ok, fsm, []} = OctoPi.TUI.StdinFSM.process(fsm, "\x1b")
+    {:ok, fsm, []} = OctoPi.TUI.StdinFSM.process(fsm, "[5")
+    {:ok, _fsm, [seq]} = OctoPi.TUI.StdinFSM.process(fsm, "A")
     assert seq == "\x1b[5A"
   end
 
   test "flushes after 10ms timeout" do
-    fsm = OctoPi.Tui.StdinFSM.new()
-    {:ok, fsm, []} = OctoPi.Tui.StdinFSM.process(fsm, "\x1b[")
+    fsm = OctoPi.TUI.StdinFSM.new()
+    {:ok, fsm, []} = OctoPi.TUI.StdinFSM.process(fsm, "\x1b[")
     Process.sleep(15)
-    {:ok, _fsm, sequences} = OctoPi.Tui.StdinFSM.flush(fsm)
+    {:ok, _fsm, sequences} = OctoPi.TUI.StdinFSM.flush(fsm)
     assert sequences == ["\x1b["]
   end
 
   test "detects bracketed paste boundaries" do
-    fsm = OctoPi.Tui.StdinFSM.new()
-    {:ok, fsm, []} = OctoPi.Tui.StdinFSM.process(fsm, "\x1b[200~hello\x1b[201~")
-    {:ok, _fsm, events} = OctoPi.Tui.StdinFSM.flush(fsm)
+    fsm = OctoPi.TUI.StdinFSM.new()
+    {:ok, fsm, []} = OctoPi.TUI.StdinFSM.process(fsm, "\x1b[200~hello\x1b[201~")
+    {:ok, _fsm, events} = OctoPi.TUI.StdinFSM.flush(fsm)
     assert events == [{:paste, "hello"}]
   end
 end
@@ -1528,26 +1528,26 @@ end
 **Upstream**: `test/keys.test.ts` (100+ cases: CSI-u, legacy, modifiers, edge cases).
 
 ```elixir
-defmodule OctoPi.Tui.KeyParserTest do
+defmodule OctoPi.TUI.KeyParserTest do
   use ExUnit.Case
 
   test "parses Kitty CSI-u" do
-    assert OctoPi.Tui.KeyParser.parse("\x1b[97u") ==
-      {:key, %OctoPi.Tui.Key{key: :a, modifiers: []}}
+    assert OctoPi.TUI.KeyParser.parse("\x1b[97u") ==
+      {:key, %OctoPi.TUI.Key{key: :a, modifiers: []}}
   end
 
   test "parses CSI-u with Ctrl modifier" do
-    assert OctoPi.Tui.KeyParser.parse("\x1b[97;5u") ==
-      {:key, %OctoPi.Tui.Key{key: :a, modifiers: [:ctrl]}}
+    assert OctoPi.TUI.KeyParser.parse("\x1b[97;5u") ==
+      {:key, %OctoPi.TUI.Key{key: :a, modifiers: [:ctrl]}}
   end
 
   test "parses legacy arrow key" do
-    assert OctoPi.Tui.KeyParser.parse("\x1b[A") ==
-      {:key, %OctoPi.Tui.Key{key: :up, modifiers: []}}
+    assert OctoPi.TUI.KeyParser.parse("\x1b[A") ==
+      {:key, %OctoPi.TUI.Key{key: :up, modifiers: []}}
   end
 
   test "parses simple character" do
-    assert OctoPi.Tui.KeyParser.parse("a") == {:char, "a"}
+    assert OctoPi.TUI.KeyParser.parse("a") == {:char, "a"}
   end
 end
 ```
@@ -1557,13 +1557,13 @@ end
 **Upstream**: `test/tui-render.test.ts` (snapshot tests of diffs).
 
 ```elixir
-defmodule OctoPi.Tui.RendererTest do
+defmodule OctoPi.TUI.RendererTest do
   use ExUnit.Case
 
   test "diff detects single line change" do
     old_lines = ["line 1", "line 2", "line 3"]
     new_lines = ["line 1", "CHANGED", "line 3"]
-    {first, last} = OctoPi.Tui.Renderer.find_diff_range(new_lines, old_lines)
+    {first, last} = OctoPi.TUI.Renderer.find_diff_range(new_lines, old_lines)
     assert first == 1
     assert last == 1
   end
@@ -1581,24 +1581,24 @@ end
 **Upstream**: `test/editor.test.ts` (insertion, deletion, movement, word-wrap, undo).
 
 ```elixir
-defmodule OctoPi.Tui.Components.EditorTest do
+defmodule OctoPi.TUI.Components.EditorTest do
   use ExUnit.Case
 
   test "inserts character at cursor" do
-    editor = OctoPi.Tui.Components.Editor.new()
-    editor = OctoPi.Tui.Components.Editor.handle_input(editor, "a")
+    editor = OctoPi.TUI.Components.Editor.new()
+    editor = OctoPi.TUI.Components.Editor.handle_input(editor, "a")
     assert editor.text == "a"
   end
 
   test "cursor moves left with arrow" do
-    editor = OctoPi.Tui.Components.Editor.new(text: "abc")
+    editor = OctoPi.TUI.Components.Editor.new(text: "abc")
     editor = %{editor | cursor: 3}  # after 'c'
-    editor = OctoPi.Tui.Components.Editor.handle_input(editor, "\x1b[D")  # left
+    editor = OctoPi.TUI.Components.Editor.handle_input(editor, "\x1b[D")  # left
     assert editor.cursor == 2
   end
 
   test "word-wraps at boundary" do
-    lines = OctoPi.Tui.Components.Editor.word_wrap_line("hello world", 7)
+    lines = OctoPi.TUI.Components.Editor.word_wrap_line("hello world", 7)
     assert lines == ["hello", "world"]
   end
 end
