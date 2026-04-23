@@ -1,0 +1,205 @@
+defmodule OctoPi.Coder.Tools.Bash do
+  @moduledoc """
+  `bash` built-in tool. Runs a shell command under `erlexec` with
+  streaming stdout/stderr, a deadline, and cooperative abort.
+
+  On timeout or abort, `:exec.stop/1` signals the direct child.
+  Process-group kill (`:kill_group` on erlexec) proved unstable on
+  macOS; orphaned grand-children from background jobs are a known
+  limitation to revisit.
+  """
+
+  @behaviour OctoPi.Agent.Tool.Handler
+
+  alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Tool
+  alias OctoPi.Agent.Tool.Result
+  alias OctoPi.AI.Content
+
+  @default_timeout_ms 120_000
+  @abort_poll_ms 50
+  @max_output_bytes 32 * 1024
+  @max_output_lines 100
+
+  @doc "Build a `%Tool{}` registered under the agent."
+  @spec tool() :: Tool.t()
+  def tool do
+    %Tool{
+      name: "bash",
+      label: "Bash",
+      description: "Run a shell command. Use for file operations, builds, tests, etc.",
+      parameters: %{
+        "type" => "object",
+        "properties" => %{
+          "cmd" => %{"type" => "string", "description" => "The shell command line."},
+          "cwd" => %{"type" => "string", "description" => "Working directory (optional)."},
+          "timeout_ms" => %{"type" => "integer", "description" => "Kill after this many ms."}
+        },
+        "required" => ["cmd"]
+      },
+      handler: __MODULE__
+    }
+  end
+
+  @impl true
+  def execute(_id, %{"cmd" => cmd} = args, abort_ref, on_update) do
+    cwd = Map.get(args, "cwd", File.cwd!())
+    timeout_ms = Map.get(args, "timeout_ms", @default_timeout_ms)
+    start_mono = System.monotonic_time()
+
+    :telemetry.execute(
+      [:octo_pi_coder, :bash, :start],
+      %{system_time: System.system_time()},
+      %{cmd: cmd, cwd: cwd}
+    )
+
+    # NOTE: `:kill_group` would give us robust termination of
+    # process trees launched by the command, but empirically it
+    # crashes the erlexec singleton GenServer on macOS. Without it,
+    # `:exec.stop/1` still signals the direct child — sufficient for
+    # typical tool commands (ls, grep, builds). Background jobs
+    # launched by the command may leak; revisit when we port
+    # upstream's full bash-executor semantics.
+    exec_opts = [
+      :monitor,
+      {:stdout, self()},
+      {:stderr, self()},
+      {:cd, to_charlist(cwd)}
+    ]
+
+    # `run/2` (no link) + `:monitor` — child exits propagate as
+    # `:DOWN` messages to this process, not as link-exits that would
+    # crash the loop task when the command returns non-zero.
+    case :exec.run(String.to_charlist(cmd), exec_opts) do
+      {:ok, pid, ospid} ->
+        deadline = System.monotonic_time(:millisecond) + timeout_ms
+        collect(pid, ospid, abort_ref, on_update, deadline, "", "", start_mono)
+
+      {:error, reason} ->
+        emit_stop(:exec_failed, start_mono)
+
+        {:ok,
+         %Result{
+           is_error?: true,
+           content: [%Content.Text{text: "exec failed: #{inspect(reason)}"}]
+         }}
+    end
+  end
+
+  defp collect(pid, ospid, abort_ref, on_update, deadline, stdout_buf, stderr_buf, start_mono) do
+    now = System.monotonic_time(:millisecond)
+
+    cond do
+      now >= deadline ->
+        :exec.stop(pid)
+        emit_stop(:timeout, start_mono)
+        finalize(:timeout, stdout_buf, stderr_buf, nil)
+
+      AbortRef.aborted?(abort_ref) ->
+        :exec.stop(pid)
+        emit_stop(:aborted, start_mono)
+        finalize(:aborted, stdout_buf, stderr_buf, nil)
+
+      true ->
+        receive do
+          {:stdout, ^ospid, data} ->
+            new_buf = stdout_buf <> to_string(data)
+            stream_update(on_update, new_buf, stderr_buf)
+            collect(pid, ospid, abort_ref, on_update, deadline, new_buf, stderr_buf, start_mono)
+
+          {:stderr, ^ospid, data} ->
+            new_buf = stderr_buf <> to_string(data)
+            stream_update(on_update, stdout_buf, new_buf)
+            collect(pid, ospid, abort_ref, on_update, deadline, stdout_buf, new_buf, start_mono)
+
+          {:DOWN, _mref, :process, ^pid, :normal} ->
+            emit_stop(:ok, start_mono)
+            finalize(:exit, stdout_buf, stderr_buf, 0)
+
+          {:DOWN, _mref, :process, ^pid, {:exit_status, raw}} ->
+            status = :exec.status(raw)
+            code = normal_exit_code(status)
+            emit_stop(:ok, start_mono)
+            finalize(:exit, stdout_buf, stderr_buf, code)
+
+          {:DOWN, _mref, :process, ^pid, _other} ->
+            emit_stop(:crashed, start_mono)
+            finalize(:exit, stdout_buf, stderr_buf, 1)
+        after
+          @abort_poll_ms ->
+            collect(
+              pid,
+              ospid,
+              abort_ref,
+              on_update,
+              deadline,
+              stdout_buf,
+              stderr_buf,
+              start_mono
+            )
+        end
+    end
+  end
+
+  defp normal_exit_code({:status, code}), do: code
+  defp normal_exit_code({:signal, _sig, _core}), do: 1
+
+  defp stream_update(on_update, stdout_buf, stderr_buf) do
+    on_update.(%Result{
+      content: [%Content.Text{text: render_output(stdout_buf, stderr_buf)}]
+    })
+  end
+
+  defp finalize(reason, stdout_buf, stderr_buf, code) do
+    text = render_output(stdout_buf, stderr_buf)
+
+    {text, truncation} = maybe_truncate(text)
+
+    details =
+      %{exit_status: code, reason: reason}
+      |> Map.merge(truncation)
+
+    {:ok,
+     %Result{
+       is_error?: reason != :exit or (is_integer(code) and code != 0),
+       content: [%Content.Text{text: text}],
+       details: details
+     }}
+  end
+
+  defp render_output(stdout_buf, ""), do: stdout_buf
+  defp render_output("", stderr_buf), do: stderr_buf
+
+  defp render_output(stdout_buf, stderr_buf),
+    do: stdout_buf <> "\n--- stderr ---\n" <> stderr_buf
+
+  defp maybe_truncate(text) do
+    lines = String.split(text, "\n")
+    line_count = length(lines)
+
+    cond do
+      byte_size(text) > @max_output_bytes ->
+        {binary_part(text, 0, @max_output_bytes) <> "\n...truncated (byte limit)",
+         %{truncated: true, truncated_by: :bytes}}
+
+      line_count > @max_output_lines ->
+        kept = Enum.take(lines, @max_output_lines)
+
+        {Enum.join(kept, "\n") <> "\n...truncated #{line_count - @max_output_lines} lines",
+         %{truncated: true, truncated_by: :lines}}
+
+      true ->
+        {text, %{truncated: false}}
+    end
+  end
+
+  defp emit_stop(reason, start_mono) do
+    event = if reason == :ok, do: :stop, else: reason
+
+    :telemetry.execute(
+      [:octo_pi_coder, :bash, event],
+      %{duration: System.monotonic_time() - start_mono},
+      %{reason: reason}
+    )
+  end
+end

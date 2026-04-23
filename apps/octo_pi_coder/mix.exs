@@ -18,7 +18,7 @@ defmodule OctoPi.Coder.MixProject do
 
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :erlexec],
       mod: {OctoPi.Coder.Application, []}
     ]
   end
@@ -28,7 +28,8 @@ defmodule OctoPi.Coder.MixProject do
 
   defp deps do
     [
-      {:octo_pi_agent, in_umbrella: true}
+      {:octo_pi_agent, in_umbrella: true},
+      {:erlexec, "~> 2.3"}
     ]
   end
 end
