@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T22:44:55Z",
   "created": "2026-04-23T22:27:52Z",
   "description": "Three small fixes in the search tools:\n\n1. Neither `Grep.execute/4` nor `Find.execute/4` checks\n   `AbortRef.aborted?/1`. A slow `rg` over a huge repo or a deep\n   `Path.wildcard/2` scan blocks the loop task with no interrupt.\n   At minimum, check the abort flag before launching the shell /\n   wildcard. Ideally switch grep to `Port.open` + streaming so it\n   can be killed mid-flight.\n\n2. `System.find_executable(\"rg\")` runs on every grep call. Cache\n   in a `persistent_term` (set lazily on first call) or compute\n   once at app start.\n\n3. `Find` uses `Path.wildcard/2` with no guard against huge result\n   sets — we cap at 500 matches but only after the full wildcard\n   walk. Consider a streaming variant.\n\nTDD:\n- Abort flag flipped before execute → returns {:error, :aborted}\n  error result without shelling out.\n- rg caching: multiple calls only call find_executable once\n  (mock or assert via Process dict sentinel).\n\nMinor scope: skip the mid-flight Port.open abort for this ticket;\npre-call abort check is sufficient for the common case.",
   "id": "opi-dkl.4",
   "labels": [],
   "parent": "opi-dkl",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "grep/find: abort-responsive + cache rg availability",
   "type": "task",
-  "updated_at": "2026-04-23T22:41:38Z"
+  "updated_at": "2026-04-23T22:44:55Z"
 }
