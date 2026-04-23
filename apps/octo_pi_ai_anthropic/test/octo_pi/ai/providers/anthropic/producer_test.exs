@@ -289,5 +289,46 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], _meas, meta}
       assert meta.http_status == 500
     end
+
+    test "emits :aborted stop_reason when the caller dies mid-stream", %{telemetry_ref: tref} do
+      # Chunks with a sleep so the test has time to kill the caller while
+      # the producer is receiving. Then a message_delta that would
+      # normally yield :stop — but the caller's death should intercept.
+      chunks = [
+        Fake.sse("message_start", %{
+          "type" => "message_start",
+          "message" => %{"id" => "m", "usage" => %{"input_tokens" => 5}}
+        }),
+        {:sleep, 300},
+        Fake.sse("message_delta", %{
+          "type" => "message_delta",
+          "delta" => %{"stop_reason" => "end_turn"},
+          "usage" => %{}
+        })
+      ]
+
+      caller = spawn(fn -> Process.sleep(:infinity) end)
+      caller_mon = Process.monitor(caller)
+      ref = make_ref()
+
+      {:ok, _pid} =
+        Producer.start(%{
+          model: model(),
+          context: user_context(),
+          opts: %StreamOptions{},
+          caller: caller,
+          ref: ref,
+          req_overrides: [plug: Fake.serve(chunks)]
+        })
+
+      # Give the producer a moment to start the request.
+      Process.sleep(50)
+      Process.exit(caller, :kill)
+      assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
+
+      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], _meas,
+                      %{stop_reason: :aborted}},
+                     2_000
+    end
   end
 end

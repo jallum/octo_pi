@@ -107,10 +107,15 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
         state = drain_body(resp, state)
 
         state =
-          if resp.status in 200..299 do
-            emit_done_or_error(state)
-          else
-            emit_http_error(state, resp)
+          cond do
+            state.aborted? ->
+              emit_error(state, "aborted by caller", :aborted)
+
+            resp.status in 200..299 ->
+              emit_done_or_error(state)
+
+            true ->
+              emit_http_error(state, resp)
           end
 
         emit_request_stop(state, start_mono, http_status: resp.status)
