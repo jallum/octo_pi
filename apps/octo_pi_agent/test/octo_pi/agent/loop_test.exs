@@ -922,6 +922,44 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "parallel tool dispatch concurrency cap" do
+    test "a large batch runs all tools even when exceeding the cap" do
+      calls =
+        for i <- 1..20 do
+          %ToolCall{
+            id: "c#{i}",
+            name: "probe",
+            arguments: %{"label" => "r#{i}"}
+          }
+        end
+
+      tool_turn = assistant(calls, :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "batch of 20")
+      :ok = OctoPi.Agent.wait_for_idle(session, 5_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+      tool_results = Enum.filter(msgs, &match?(%OctoPi.AI.Message.ToolResult{}, &1))
+      assert length(tool_results) == 20
+      assert Enum.map(tool_results, & &1.tool_call_id) == Enum.map(1..20, &"c#{&1}")
+    end
+  end
+
   describe "defensive: truncated AI stream" do
     test "stream with no Done/Error synthesizes an error assistant" do
       FakeTransport.set_script([

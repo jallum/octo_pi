@@ -40,6 +40,13 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.ToolCall
 
+  # Upper bound on concurrent tool tasks for a single batch. A
+  # pathological model reply with dozens of parallel calls would
+  # otherwise spawn one task per call; the cap just protects the
+  # scheduler. Any batch larger than this still runs to completion,
+  # just in waves.
+  @max_tool_concurrency 16
+
   @type run_opts :: %{
           required(:session) => pid(),
           required(:session_state) => OctoPi.Agent.Session.State.t(),
@@ -234,7 +241,7 @@ defmodule OctoPi.Agent.Loop do
       tool_calls,
       fn call -> {call, execute_one_tool_call(session, state, call, abort_ref)} end,
       ordered: true,
-      max_concurrency: max(length(tool_calls), 1),
+      max_concurrency: min(max(length(tool_calls), 1), @max_tool_concurrency),
       timeout: :infinity
     )
     |> Enum.map(fn {:ok, {call, result}} -> build_tool_result_message(result, call) end)
