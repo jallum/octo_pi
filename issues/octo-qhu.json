@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-3gv"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:43:25.410555Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 7: octo_pi_mom — Slack bot app",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:25.410555Z"
+  "updated_at": "2026-04-23T16:43:56.376260Z"
 }
