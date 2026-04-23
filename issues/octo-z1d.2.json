@@ -6,14 +6,15 @@
   "blocks": [
     "octo-z1d.3"
   ],
+  "closed_at": "2026-04-23T20:48:59Z",
   "created": "2026-04-23T20:40:06Z",
   "description": "Session GenServer that owns a per-run conversation state. This\nticket wires the public API — prompt/continue/steer/follow_up/abort/\nsubscribe/state/wait_for_idle — but all they do at this point is\nmanage state transitions + enqueue. No LLM stream, no tool dispatch\nyet; those land in z1d.3.\n\nOctoPi.Agent.start_session(opts) :: {:ok, pid}\nOctoPi.Agent.prompt(pid, msg | msgs)\nOctoPi.Agent.continue(pid)\nOctoPi.Agent.steer(pid, msg)\nOctoPi.Agent.follow_up(pid, msg)\nOctoPi.Agent.abort(pid)\nOctoPi.Agent.subscribe(pid, listener_pid, mode :: :sync | :async) :: {:ok, unsubscribe_fn}\nOctoPi.Agent.state(pid) :: state_view()\nOctoPi.Agent.wait_for_idle(pid, timeout \\\\\\\\ 30_000) :: :ok | :timeout\n\nState transitions to get right now:\n- Idle → Running (on prompt/continue)\n- Running → Idle (when loop task exits; we'll stub that here)\n- Running → Aborting → Idle (on abort)\n\nTDD:\n- Subscribe returns unsubscribe closure; calling it removes listener.\n- Two listeners of same mode preserve registration order.\n- state/1 returns a struct snapshot (no live refs).\n- abort/1 on an idle session is a no-op.\n- steer/1 enqueues into the Session state.\n\nDepends on z1d.1.",
   "id": "octo-z1d.2",
   "labels": [],
   "parent": "octo-z1d",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Session GenServer: state + public API signatures (no loop yet)",
   "type": "task",
-  "updated_at": "2026-04-23T20:45:36Z"
+  "updated_at": "2026-04-23T20:48:59Z"
 }
