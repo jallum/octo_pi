@@ -6,9 +6,15 @@
   "description": "Three review agents (OTP conventions, code quality + efficiency, port fidelity + tests) flagged 5 blockers, ~10 warnings, and a bag of nits across the Phase 1 + OAuth + extraction + telemetry work. Knock them all out before Phase 2 (octo-z1d) so the agent kernel builds on clean bones — the Producer pattern in particular will compound through Session/Loop/Tools.\n\nTDD approach throughout:\n- Behavior tickets: write the failing test first, then implement.\n- Refactor tickets: ensure existing test coverage stays green; add regression tests for any invariant the refactor might break.\n\nDoD: mix check green across umbrella, `mix ai.demo` still works end-to-end against real Anthropic via Claude Code OAuth, all child tickets closed.",
   "id": "opi-hgb",
   "labels": [],
+  "comments": [
+    {
+      "text": "All 10 subtickets closed. 5 review blockers addressed (Producer refactor, :aborted stop reason, SSE finalize, ETS registry, parse_streaming doc), 4 warnings fixed (telemetry namespace + logger helper, dead fields, Event file collapse, scaffold cleanup), plus the test coverage gaps. Final: 192 tests, 2 excluded. mix check green. mix ai.demo live against real Anthropic verified (23 input / 77 output / stop :stop on the pong test). Ready for Phase 2 (octo-z1d).",
+      "timestamp": "2026-04-23T20:31:54Z"
+    }
+  ],
   "priority": 1,
   "status": "open",
   "title": "[EPIC] Post-review cleanup: OTP idiom, fidelity, test gaps",
   "type": "epic",
-  "updated_at": "2026-04-23T19:56:24Z"
+  "updated_at": "2026-04-23T20:31:54Z"
 }
