@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:57:58Z",
+  "description": "Our moduledoc claims pi-mono parity (\\\"any trailing incomplete event in the buffer is silently dropped, matching pi-mono's semantics\\\") — but pi-mono's iterateSseMessages (anthropic.ts:343-353) actually flushes any pending event/data on EOF. Latent false errors if a server closes without a trailing blank line.\n\nAdd \\`SSE.finalize/1 :: {[Event.t()], t()}\\` that:\n1. If the buffer still has non-empty content without a terminating newline, appends \\\\n and decodes one final line.\n2. Calls the existing \\`flush\\` logic to emit any pending event/data.\n3. Returns {events, state} with an empty buffer.\n\nProducer calls it after Req.post! returns cleanly, before emit_done_or_error.\n\nTDD:\n- RED: two failing SSE tests — (a) \\\"stream ending with 'data: payload\\\\n' (no blank line) emits the pending event\\\", (b) \\\"non-empty buffer at EOF without newline flushes after finalize\\\".\n- GREEN: implement finalize/1, call from Producer.\n- REGRESSION: also fix the moduledoc claim to reflect the new behavior.\n\nFiles: sse.ex, sse_test.exs, producer.ex, docs/port-map/anthropic.md (§3 needs updating).",
+  "id": "opi-hgb.3",
+  "labels": [],
+  "parent": "opi-hgb",
+  "priority": 1,
+  "status": "open",
+  "title": "SSE.finalize/1: flush pending event on clean EOF (pi-mono parity)",
+  "type": "task",
+  "updated_at": "2026-04-23T19:57:58Z"
+}
