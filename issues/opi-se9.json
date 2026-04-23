@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:14:59Z",
+  "description": "Anthropic streaming decoder appends content blocks via `++ [item]` and mutates the last block via `List.update_at(content, length-1, _)` on every text/thinking delta. Both walk the full spine — O(n²) cons-cell churn per response, plus O(n²) binary churn from `existing \u003c\u003e text` losing append-in-place optimization. This is the hottest list code in the system.\n\n## Fix\nStore the partial assistant message's content reverse-ordered (`content_rev`) so the open block lives at the head. Pattern-match `[head | rest] = content_rev` to apply deltas in O(1). Reverse once at finalize / before emitting Done.\n\n## File\n`apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/decoder.ex`\n\n## Sites to rewrite\n- L114 `state.message.content ++ [content_item]` (handle content_block_start) → prepend to `content_rev`.\n- L237 / L251 / L263 / L277 / L318 `List.update_at(content, position, _)` (apply_delta clauses for text_delta, thinking_delta, signature_delta, input_json_delta, citation_delta — verify exact set) → `[head | rest] = content_rev; …; %{message | content_rev: [block | rest]}`.\n- L291 `Enum.at(content, position)` → `hd(content_rev)` for the currently-open block.\n- `index_map` may stay as a safety check but is no longer the primary lookup.\n\n## Boundary\nPick one:\n- (a) **Recommended**: flip back to forward order at finalize / before emit. Internal field is `content_rev` until then, then becomes `content`.\n- (b) Keep `content_rev` internally and expose `Message.Assistant.content/1` accessor that reverses lazily.\n\n(a) is simpler and preserves the external Message struct shape; pick that unless something forces (b).\n\n## Tests\nAll scenarios in `apps/octo_pi_ai_anthropic/test/octo_pi/ai/providers/anthropic/decoder_test.exs` must pass. Add cases for:\n- Multi-block response with text + thinking + tool_use interleaved (verify final order forward-correct).\n- 50+ text deltas accumulated into one block (verify final concatenated string and block order).\n- Out-of-order content_block_start indices (sanity).\nAlso re-run `apps/octo_pi_ai_anthropic/test/octo_pi/ai_stream_test.exs`. `mix format` + umbrella-wide `mix test`.\n\n## Independence\nIndependent of MessageLog ticket — can land in either order.",
+  "id": "opi-se9",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Anthropic decoder: store content reverse-ordered for O(1) delta updates",
+  "type": "task",
+  "updated_at": "2026-04-23T22:14:59Z"
+}
