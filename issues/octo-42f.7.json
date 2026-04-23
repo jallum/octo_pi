@@ -1,19 +1,17 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "octo-42f.6"
   ],
   "blocks": [],
-  "comments": [],
   "created": "2026-04-23T16:42:38.759445Z",
   "description": "`mix ai.demo \"your prompt\"` — reads `ANTHROPIC_API_KEY`, calls `OctoPi.AI.stream/3` against claude-3-5-sonnet, prints text deltas inline as they arrive, prints a final usage summary.\n\nSecondary flag `--tool` to include a trivial `weather` tool and verify the tool_call event path.\n\nPurely to prove the stack end-to-end.",
   "id": "octo-42f.7",
   "labels": [],
   "parent": "octo-42f",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Demo Mix task: `mix ai.demo`",
   "type": "task",
-  "updated_at": "2026-04-23T16:42:38.759445Z"
+  "updated_at": "2026-04-23T18:55:10Z"
 }
