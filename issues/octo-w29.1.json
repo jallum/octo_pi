@@ -9,11 +9,13 @@
   "created": "2026-04-23T16:42:06.865304Z",
   "description": "Resolve RESEARCH.md §7 Q1. Decide between Mix umbrella (four child apps) vs single app with enforced module boundaries (e.g., via `boundary` or `mix xref`).\n\nDeliverable: a short decision note in RESEARCH.md §7 (or a new ADR file) with the call and rationale.\n\nDefault recommendation from research: lean umbrella. This spike is to validate and commit.",
   "id": "octo-w29.1",
-  "labels": [],
+  "labels": [
+    "spike"
+  ],
   "parent": "octo-w29",
   "priority": 2,
   "status": "open",
   "title": "Spike: umbrella vs single-app layout",
   "type": "task",
-  "updated_at": "2026-04-23T16:42:06.865304Z"
+  "updated_at": "2026-04-23T16:43:58.351093Z"
 }
