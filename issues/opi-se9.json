@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T22:14:59Z",
@@ -7,8 +7,8 @@
   "id": "opi-se9",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Anthropic decoder: store content reverse-ordered for O(1) delta updates",
   "type": "task",
-  "updated_at": "2026-04-23T22:14:59Z"
+  "updated_at": "2026-04-23T22:19:50Z"
 }
