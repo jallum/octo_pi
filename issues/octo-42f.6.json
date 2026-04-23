@@ -7,14 +7,15 @@
   "blocks": [
     "octo-42f.7"
   ],
+  "closed_at": "2026-04-23T18:54:45Z",
   "created": "2026-04-23T16:42:38.759445Z",
   "description": "Top-level `OctoPi.AI.stream(model, context, options) :: Enumerable.t()`.\n\nInternals:\n- Spawn an unnamed GenServer per call.\n- GenServer opens the provider's HTTP stream.\n- Decodes SSE → maps to canonical events → forwards events as messages to the caller.\n- Caller side: `Stream.resource/3` yielding the events.\n- Cancellation: shutting down the Stream kills the GenServer; GenServer closes the HTTP request.\n\nValidates the producer/consumer shape for the whole provider layer.",
   "id": "octo-42f.6",
   "labels": [],
   "parent": "octo-42f",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "OctoPi.AI.stream/3 public entry (process-based producer)",
   "type": "task",
-  "updated_at": "2026-04-23T18:44:28Z"
+  "updated_at": "2026-04-23T18:54:45Z"
 }
