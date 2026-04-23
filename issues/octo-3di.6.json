@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T23:36:59Z",
+  "description": "Port-map §6. Pre-diff composition of overlay components onto the\nbase screen.\n\n- OctoPi.Tui.Overlay struct: position (anchor + offset + %), size\n  (width/height + min + max + %), z-index, content lines, margin.\n- composite/3: take base_lines, overlays (sorted by z), width,\n  height → composite line list ready for diff.\n- compute_rect/3: resolve anchor + margin + offset + %/absolute\n  into concrete (row, col, w, h) — multi-head dispatch on anchor\n  atom, not if/case.\n- Width-overflow clipping via visible-width helper (§5).\n- OSC 8 hyperlink re-emission on overlay edges.\n\nTests: port-map §14.5 (overlay-options.test.ts, 538 lines) —\nlift the anchor/margin/offset/% matrix directly.\n\nTDD:\n- Every anchor: top-left, top-right, bottom-left, bottom-right,\n  top-center, etc.\n- Margin as number (uniform) and as map.\n- Negative margins clamped to zero.\n- Offset from anchor.\n- Row/col as percentages.\n- Absolute row/col overrides anchor.\n- maxHeight absolute + percent.\n- Stacked overlays (later on top).\n- Overlay hide pops the stack.\n- OSC 8 in base content doesn't crash.\n\nDepends on .5.",
+  "id": "octo-3di.6",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "Overlay compositor: z-ordering + clipping + composite",
+  "type": "task",
+  "updated_at": "2026-04-23T23:36:59Z"
+}
