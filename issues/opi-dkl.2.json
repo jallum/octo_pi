@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:27:23Z",
+  "description": "Currently all file tools (read/write/edit/ls/bash/grep/find)\naccept any absolute path the model chooses. A model can reach\noutside the session's working directory (~/.ssh/id_rsa,\n/etc/passwd, etc.). Phase 3 deferred cwd threading; this ticket\nlands it.\n\nDesign:\n- Tool factory functions take `cwd` arg: `Read.tool(cwd)` → `%Tool{}`\n  with a `prepare_arguments` closure that:\n  - Canonicalizes paths via `Path.expand(p, cwd)`\n  - Rejects paths that escape cwd via `..` after canonicalization\n  - For bash: rejects `cwd` arg that escapes session cwd\n- Print mode + RPC mode build the tool list with the session cwd\n  already bound.\n- Emit a clear error message when a tool call tries to escape:\n  \"path escapes session cwd: /etc/passwd\"\n\nSignatures change: `Tools.Read.tool()` → `Tools.Read.tool(cwd)`.\nCallers (print.ex, cli.ex, agent.demo if it uses them) update.\n\nTDD:\n- tools accept paths relative to cwd\n- absolute path within cwd works\n- `..` escape rejected with error tool-result\n- symlinks that resolve outside cwd rejected\n- bash cwd arg outside session cwd rejected",
+  "id": "opi-dkl.2",
+  "labels": [],
+  "parent": "opi-dkl",
+  "priority": 1,
+  "status": "open",
+  "title": "Enforce session cwd rooting for tool paths",
+  "type": "task",
+  "updated_at": "2026-04-23T22:27:23Z"
+}
