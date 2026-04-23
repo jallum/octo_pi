@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-42f"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:42:48.056412Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 2: octo_pi_agent — kernel (Session, loop, tools)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:42:48.056412Z"
+  "updated_at": "2026-04-23T16:43:51.770700Z"
 }
