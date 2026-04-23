@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T21:44:37Z",
   "created": "2026-04-23T21:30:57Z",
   "description": "`apps/octo_pi_agent/lib/mix/tasks/agent.demo.ex` uses\n`Process.put(:__agent_demo_printed, ...)` to track what's been\nwritten to stdout so each MessageUpdate delta is printed exactly\nonce. Works but leaks global state into the task process.\n\nFix: thread the printed-so-far string through `loop_until_end/1`'s\nrecursion instead. One extra parameter; no dict.",
   "id": "opi-06w.4",
   "labels": [],
   "parent": "opi-06w",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Remove Process dict hack from mix agent.demo",
   "type": "task",
-  "updated_at": "2026-04-23T21:44:08Z"
+  "updated_at": "2026-04-23T21:44:37Z"
 }
