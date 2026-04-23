@@ -1,0 +1,81 @@
+defmodule OctoPi.Agent.Session.State do
+  @moduledoc """
+  Per-session state held by the Session GenServer. Ported from
+  pi-agent-core's `Agent` class state (see `docs/port-map/agent.md`
+  §1). This ticket (`octo-z1d.1`) only pins the struct shape — the
+  Session GenServer that manipulates it lands in `octo-z1d.2`, and
+  the loop / queues / cancellation layers fill in behaviour in later
+  children.
+
+  Fields:
+    * `:system_prompt` — prefixed to every LLM call
+    * `:model` — the active provider model
+    * `:thinking_level` — reasoning-effort knob
+    * `:tools` — per-session list; can be mutated at runtime
+    * `:messages` — ordered transcript
+    * `:is_streaming?` — true while a run is in flight
+    * `:streaming_message` — partial assistant message during stream
+    * `:pending_tool_calls` — ids of tools currently executing
+    * `:error_message` — last failure reason from a run
+    * `:steering_queue` / `:follow_up_queue` — `PendingMessageQueue.t()`
+    * `:loop_task` — `Task.t()` of the running loop, or nil
+    * `:abort_ref` — `AbortRef.t()` for the current run, or nil
+    * `:before_tool_call` / `:after_tool_call` — optional hooks
+    * `:transport` — `OctoPi.Agent.Transport` impl module
+  """
+
+  alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Message
+  alias OctoPi.Agent.PendingMessageQueue
+  alias OctoPi.Agent.Tool
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Model
+
+  @type thinking_level :: :off | :minimal | :low | :medium | :high | :xhigh
+
+  @type before_tool_call ::
+          (map() ->
+             {:block, reason :: String.t()} | :allow)
+
+  @type after_tool_call ::
+          (map() -> {:patch, map()} | :unchanged)
+
+  @enforce_keys [:model, :transport]
+  @type t :: %__MODULE__{
+          system_prompt: String.t() | nil,
+          model: Model.t(),
+          thinking_level: thinking_level(),
+          tools: [Tool.t()],
+          messages: [Message.t()],
+          is_streaming?: boolean(),
+          streaming_message: Assistant.t() | nil,
+          pending_tool_calls: MapSet.t(),
+          error_message: String.t() | nil,
+          steering_queue: PendingMessageQueue.t(),
+          follow_up_queue: PendingMessageQueue.t(),
+          loop_task: Task.t() | nil,
+          abort_ref: AbortRef.t() | nil,
+          before_tool_call: before_tool_call() | nil,
+          after_tool_call: after_tool_call() | nil,
+          transport: module()
+        }
+
+  defstruct [
+    :system_prompt,
+    :model,
+    :streaming_message,
+    :error_message,
+    :loop_task,
+    :abort_ref,
+    :before_tool_call,
+    :after_tool_call,
+    :transport,
+    thinking_level: :off,
+    tools: [],
+    messages: [],
+    is_streaming?: false,
+    pending_tool_calls: MapSet.new(),
+    steering_queue: %PendingMessageQueue{items: :queue.new()},
+    follow_up_queue: %PendingMessageQueue{items: :queue.new()}
+  ]
+end

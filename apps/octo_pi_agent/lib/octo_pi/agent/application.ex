@@ -3,8 +3,18 @@ defmodule OctoPi.Agent.Application do
 
   use Application
 
+  alias OctoPi.Agent.AbortRef
+
   @impl true
   def start(_type, _args) do
-    Supervisor.start_link([], strategy: :one_for_one, name: OctoPi.Agent.Supervisor)
+    :ets.new(AbortRef.table_name(), [:named_table, :public, :set, read_concurrency: true])
+
+    children = [
+      {Task.Supervisor, name: OctoPi.Agent.LoopSupervisor},
+      {Task.Supervisor, name: OctoPi.Agent.ToolSupervisor},
+      {Registry, keys: :duplicate, name: OctoPi.Agent.Subscribers}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: __MODULE__)
   end
 end
