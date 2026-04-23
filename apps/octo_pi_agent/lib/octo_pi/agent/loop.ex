@@ -77,9 +77,7 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp continue_or_stop(session, state, updated, %{stop_reason: :tool_use} = assistant, ref, turn) do
-    tool_results =
-      execute_tool_calls_sequentially(session, state.tools, assistant.content, ref)
-
+    tool_results = execute_tool_calls(session, state.tools, assistant.content, ref)
     loop(session, state, updated ++ tool_results, ref, turn + 1)
   end
 
@@ -133,12 +131,61 @@ defmodule OctoPi.Agent.Loop do
 
   defp handle_ai_event(_session, _other, acc), do: acc
 
-  defp execute_tool_calls_sequentially(session, tools, content, abort_ref) do
+  # Dispatch tool calls from the assistant turn. Runs in parallel
+  # via `Task.Supervisor.async_stream_nolink` under the
+  # `OctoPi.Agent.ToolSupervisor` *unless* any tool in the batch is
+  # flagged `:sequential` — in which case the whole batch serializes
+  # (ape pi-mono L349). Results are returned in source order.
+  defp execute_tool_calls(session, tools, content, abort_ref) do
     tool_calls = Enum.filter(content, &match?(%ToolCall{}, &1))
 
+    if any_sequential?(tool_calls, tools) do
+      run_sequential(session, tools, tool_calls, abort_ref)
+    else
+      run_parallel(session, tools, tool_calls, abort_ref)
+    end
+  end
+
+  defp any_sequential?(tool_calls, tools) do
+    Enum.any?(tool_calls, fn call ->
+      case Enum.find(tools, &(&1.name == call.name)) do
+        %Tool{execution_mode: :sequential} -> true
+        _ -> false
+      end
+    end)
+  end
+
+  defp run_sequential(session, tools, tool_calls, abort_ref) do
     Enum.map(tool_calls, fn call ->
       execute_one_tool_call(session, tools, call, abort_ref)
       |> build_tool_result_message(call)
+    end)
+  end
+
+  defp run_parallel(session, tools, tool_calls, abort_ref) do
+    OctoPi.Agent.ToolSupervisor
+    |> Task.Supervisor.async_stream_nolink(
+      tool_calls,
+      fn call -> {call, execute_one_tool_call(session, tools, call, abort_ref)} end,
+      ordered: true,
+      max_concurrency: max(length(tool_calls), 1),
+      timeout: :infinity
+    )
+    |> Enum.map(fn
+      {:ok, {call, result}} ->
+        build_tool_result_message(result, call)
+
+      {:exit, reason} ->
+        # async_stream_nolink catches task crashes; shouldn't normally
+        # fire because execute_one_tool_call has its own rescue, but
+        # handle it for belt-and-braces.
+        %OctoPi.AI.Message.ToolResult{
+          tool_call_id: "",
+          tool_name: "",
+          content: [%OctoPi.AI.Content.Text{text: "tool task exited: #{inspect(reason)}"}],
+          is_error?: true,
+          timestamp: :os.system_time(:millisecond)
+        }
     end)
   end
 
