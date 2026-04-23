@@ -4,9 +4,12 @@ defmodule OctoPi.AI.SSE do
 
   Feed raw bytes into `decode/2` as they arrive from the HTTP client;
   the decoder buffers incomplete lines across calls and emits a list
-  of `Event.t()` for each fully-assembled event. State is opaque —
-  discard it when the stream ends (any trailing incomplete event in
-  the buffer is silently dropped, matching pi-mono's semantics).
+  of `Event.t()` for each fully-assembled event. When the stream ends
+  cleanly, call `finalize/1` to decode any trailing unterminated line
+  and flush a pending event that was built up but not yet delimited
+  by a blank line. Matches pi-mono's `iterateSseMessages` EOF
+  behaviour (`anthropic.ts` L343-353): a server that closes without
+  a trailing `\\n\\n` still delivers its last event.
 
   Line terminators `\\r`, `\\n`, and `\\r\\n` are all recognized.
   A lone `\\r` at the very end of the buffer is treated as incomplete
@@ -16,7 +19,7 @@ defmodule OctoPi.AI.SSE do
   observable behaviour, since Anthropic sends LF-only).
 
   Ported from `tmp/pi-mono/packages/ai/src/providers/anthropic.ts`
-  L217-298, minus the `raw` scratch buffer used for error reporting
+  L217-353, minus the `raw` scratch buffer used for error reporting
   upstream (YAGNI — add back if we ever surface parse errors).
 
   See `docs/port-map/anthropic.md` §3 for the porting spec.
@@ -47,6 +50,29 @@ defmodule OctoPi.AI.SSE do
   @spec decode(t(), binary()) :: {[Event.t()], t()}
   def decode(%__MODULE__{} = state, bytes) when is_binary(bytes) do
     drain(%{state | buffer: state.buffer <> bytes}, [])
+  end
+
+  @doc """
+  Decode any trailing unterminated line and flush any pending event
+  that didn't have a blank-line delimiter. Returns any events that
+  fall out, plus a reset state. Call at end-of-stream.
+
+  Idempotent on a clean state (no buffer, no pending event/data):
+  returns `{[], state}` unchanged-in-effect.
+  """
+  @spec finalize(t()) :: {[Event.t()], t()}
+  def finalize(%__MODULE__{buffer: <<>>} = state), do: finalize_pending(state, [])
+
+  def finalize(%__MODULE__{buffer: buffer} = state) do
+    {maybe_event, state} = process_line(buffer, %{state | buffer: <<>>})
+    acc = if maybe_event, do: [maybe_event], else: []
+    finalize_pending(state, acc)
+  end
+
+  defp finalize_pending(state, acc) do
+    {maybe_event, state} = flush(state)
+    acc = if maybe_event, do: acc ++ [maybe_event], else: acc
+    {acc, state}
   end
 
   @spec drain(t(), [Event.t()]) :: {[Event.t()], t()}

@@ -105,6 +105,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
       try do
         resp = Req.post!(req_opts)
         state = drain_body(resp, state)
+        state = flush_sse(state)
 
         state =
           cond do
@@ -163,13 +164,23 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   defp process_chunk(chunk, state) do
     {sse_events, sse} = SSE.decode(state.sse, chunk)
-
-    decoder =
-      Enum.reduce(sse_events, state.decoder, fn sse_ev, dstate ->
-        handle_sse_event(sse_ev, dstate, state.caller, state.ref)
-      end)
-
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
     %{state | sse: sse, decoder: decoder}
+  end
+
+  # Flush any trailing SSE event that the server closed the stream
+  # before delimiting (matches pi-mono's iterateSseMessages EOF
+  # behaviour; see SSE.finalize/1).
+  defp flush_sse(state) do
+    {sse_events, sse} = SSE.finalize(state.sse)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    %{state | sse: sse, decoder: decoder}
+  end
+
+  defp apply_sse_events(sse_events, decoder, caller, ref) do
+    Enum.reduce(sse_events, decoder, fn sse_ev, dstate ->
+      handle_sse_event(sse_ev, dstate, caller, ref)
+    end)
   end
 
   defp handle_sse_event(%SseEvent{event: "ping"}, dstate, _caller, _ref), do: dstate

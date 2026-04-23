@@ -169,4 +169,40 @@ defmodule OctoPi.AI.SSETest do
       assert [%Event{data: "🚀"}] = decode_all(chunks)
     end
   end
+
+  describe "finalize/1" do
+    test "flushes a pending event when the stream ended without a trailing blank line" do
+      {[], state} = SSE.decode(SSE.new(), "event: stop\ndata: payload\n")
+      {events, state} = SSE.finalize(state)
+
+      assert [%Event{event: "stop", data: "payload"}] = events
+      assert state.buffer == <<>>
+      assert state.event == nil
+      assert state.data == []
+    end
+
+    test "decodes a final line that's missing its terminating newline" do
+      # Stream ends mid-line (no \n after value). pi-mono's
+      # iterateSseMessages treats this as a complete line on EOF.
+      {[], state} = SSE.decode(SSE.new(), "event: ping\ndata: x")
+      {events, _state} = SSE.finalize(state)
+
+      assert [%Event{event: "ping", data: "x"}] = events
+    end
+
+    test "is a no-op on a clean state (nothing pending)" do
+      {[%Event{}], state} = SSE.decode(SSE.new(), "event: a\ndata: 1\n\n")
+      {events, _state} = SSE.finalize(state)
+
+      assert events == []
+    end
+
+    test "clears the buffer even when nothing is flushable (comment-only trailing line)" do
+      {[], state} = SSE.decode(SSE.new(), ": comment-only trailer")
+      {events, state} = SSE.finalize(state)
+
+      assert events == []
+      assert state.buffer == <<>>
+    end
+  end
 end

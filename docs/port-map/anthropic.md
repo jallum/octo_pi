@@ -167,8 +167,12 @@ Everything else → JSON-parse `data` via `parse_json_with_repair/1` (§4.1)
 → pass to decoder.
 
 ### 3.5 Stream end
-Final `TextDecoder` flush equivalent: if any incomplete UTF-8 remains in
-the buffer at EOF, drop it (mirrors the TS behavior[^final-flush]).
+Call `SSE.finalize/1` when the HTTP body ends. It decodes any trailing
+unterminated line and flushes a pending event that the server closed
+without a blank-line delimiter. This mirrors pi-mono's
+`iterateSseMessages` EOF handling[^final-flush] (it sends its last
+event even without trailing `\n\n`). Any genuinely incomplete UTF-8
+in the buffer after the final line-decode is dropped silently.
 
 ---
 
