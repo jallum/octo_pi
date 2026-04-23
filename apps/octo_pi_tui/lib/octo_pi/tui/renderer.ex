@@ -1,0 +1,155 @@
+defmodule OctoPi.TUI.Renderer do
+  @moduledoc """
+  Differential screen renderer. Holds the previous frame; on each
+  `render/2`, computes a line-level diff against it, emits cursor
+  repositioning + the changed range, and returns the bytes for
+  the caller (usually `OctoPi.TUI.Terminal`) to write.
+
+  Full-redraw triggers: first render, dimension change, line-count
+  change. Under Termux (detected via `TERMUX_VERSION`), height-only
+  changes suppress the clear-screen because Termux's console
+  doesn't reflow the scrollback the same way xterm does.
+
+  CSI 2026 (synchronized output) wrapping is opt-in via
+  `:csi_2026?` at start_link time; when enabled, diff output is
+  bracketed in `\\e[?2026h` and `\\e[?2026l` so the terminal
+  composites the whole frame before displaying it. Auto-detection
+  via DCS query is deferred to 4.1.
+  """
+
+  use GenServer
+
+  @clear_screen "\e[2J"
+  @cursor_home "\e[H"
+  @clear_to_eol "\e[K"
+  @sync_on "\e[?2026h"
+  @sync_off "\e[?2026l"
+
+  # --- public API ---
+
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+
+  @doc "Render a list of lines. Returns the bytes to write."
+  @spec render(GenServer.server(), [binary()]) :: {:ok, binary()}
+  def render(pid, lines) when is_list(lines), do: GenServer.call(pid, {:render, lines})
+
+  @doc "Update the terminal dimensions. Next render is a full redraw."
+  @spec resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
+  def resize(pid, width, height), do: GenServer.call(pid, {:resize, width, height})
+
+  @doc """
+  Pure function used by the diff path and exposed for unit tests.
+  Returns `{first_changed_index, last_changed_index}`. When nothing
+  changed, `first > last` (a convention callers can pattern-match
+  on).
+  """
+  @spec find_diff_range([binary()], [binary()]) :: {integer(), integer()}
+  def find_diff_range(new_lines, old_lines) do
+    first = find_first_diff(new_lines, old_lines, 0)
+    last = find_last_diff(new_lines, old_lines)
+    {first, last}
+  end
+
+  # --- GenServer callbacks ---
+
+  @impl true
+  def init(opts) do
+    state = %{
+      previous: nil,
+      width: Keyword.get(opts, :width, 80),
+      height: Keyword.get(opts, :height, 24),
+      csi_2026?: Keyword.get(opts, :csi_2026?, false),
+      termux?: termux?()
+    }
+
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_call({:render, lines}, _from, state) do
+    {bytes, new_state} = compute(lines, state)
+    {:reply, {:ok, bytes}, new_state}
+  end
+
+  def handle_call({:resize, w, h}, _from, state) do
+    # Termux suppresses clear-screen on height-only changes — but we
+    # still need to invalidate the previous frame so the diff path
+    # notices the new dimensions on the next render.
+    suppress? = state.termux? and w == state.width
+    new_prev = if suppress?, do: state.previous, else: nil
+    {:reply, :ok, %{state | width: w, height: h, previous: new_prev}}
+  end
+
+  # --- compute dispatch (multi-head on state shape) ---
+
+  # First render ever → full redraw.
+  defp compute(lines, %{previous: nil} = state), do: full_redraw(lines, state)
+
+  # Line count changed → full redraw (can't meaningfully diff).
+  defp compute(lines, %{previous: prev} = state) when length(lines) != length(prev),
+    do: full_redraw(lines, state)
+
+  # Same-shape frames → emit a diff.
+  defp compute(lines, state), do: diff(lines, state)
+
+  # --- full redraw ---
+
+  defp full_redraw(lines, state) do
+    body = [@clear_screen, @cursor_home, render_lines(lines, 0)]
+    bytes = IO.iodata_to_binary(wrap_sync(body, state))
+    {bytes, %{state | previous: lines}}
+  end
+
+  # --- diff ---
+
+  defp diff(lines, state) do
+    case find_diff_range(lines, state.previous) do
+      {first, last} when first > last ->
+        {"", %{state | previous: lines}}
+
+      {first, last} ->
+        body = [move_to_row(first), render_lines(Enum.slice(lines, first..last), first)]
+        bytes = IO.iodata_to_binary(wrap_sync(body, state))
+        {bytes, %{state | previous: lines}}
+    end
+  end
+
+  # Scan forward until the two lists disagree.
+  defp find_first_diff([same | a_rest], [same | b_rest], idx),
+    do: find_first_diff(a_rest, b_rest, idx + 1)
+
+  defp find_first_diff(_, _, idx), do: idx
+
+  # Scan from the tail.
+  defp find_last_diff(new_lines, old_lines) do
+    len = length(new_lines)
+    find_last_diff_rev(Enum.reverse(new_lines), Enum.reverse(old_lines), len - 1)
+  end
+
+  defp find_last_diff_rev([same | a_rest], [same | b_rest], idx),
+    do: find_last_diff_rev(a_rest, b_rest, idx - 1)
+
+  defp find_last_diff_rev(_, _, idx), do: idx
+
+  # --- output helpers ---
+
+  # Render lines starting at forward-order `start_idx`. Each line
+  # is followed by clear-to-eol to wipe leftover bytes from the
+  # previous frame's (longer) row. Rows are separated by CRLF so
+  # cursor positioning tracks line-by-line.
+  defp render_lines([], _idx), do: []
+
+  defp render_lines([line], _idx), do: [line, @clear_to_eol]
+
+  defp render_lines([line | rest], idx),
+    do: [line, @clear_to_eol, "\r\n" | render_lines(rest, idx + 1)]
+
+  # CSI cursor position is 1-indexed; column 1 for row start.
+  defp move_to_row(idx), do: "\e[#{idx + 1};1H"
+
+  defp wrap_sync(body, %{csi_2026?: true}), do: [@sync_on, body, @sync_off]
+  defp wrap_sync(body, %{csi_2026?: false}), do: body
+
+  defp termux?, do: System.get_env("TERMUX_VERSION") != nil
+end
