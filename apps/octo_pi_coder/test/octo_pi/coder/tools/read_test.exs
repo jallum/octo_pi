@@ -1,0 +1,75 @@
+defmodule OctoPi.Coder.Tools.ReadTest do
+  use ExUnit.Case, async: true
+
+  alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Tool.Result
+  alias OctoPi.AI.Content
+  alias OctoPi.Coder.Tools.Read
+
+  setup do
+    tmp = Path.join(System.tmp_dir!(), "read-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    ref = AbortRef.new()
+
+    on_exit(fn ->
+      File.rm_rf!(tmp)
+      AbortRef.forget(ref)
+    end)
+
+    {:ok, tmp: tmp, ref: ref}
+  end
+
+  defp exec(args, ref), do: Read.execute("call_1", args, ref, fn _ -> :ok end)
+
+  test "reads full file", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "hello.txt")
+    File.write!(path, "line1\nline2\nline3\n")
+
+    assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
+             exec(%{"path" => path}, ref)
+
+    assert text == "line1\nline2\nline3\n"
+  end
+
+  test "honors offset and limit", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "range.txt")
+    File.write!(path, Enum.map_join(1..10, "", &"line#{&1}\n"))
+
+    assert {:ok, %Result{content: [%Content.Text{text: text}]}} =
+             exec(%{"path" => path, "offset" => 3, "limit" => 2}, ref)
+
+    # Slice yields the two requested lines; trailing newline is
+    # dropped along with the empty element from String.split.
+    assert text == "line3\nline4"
+  end
+
+  test "truncates files over max line count", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "huge.txt")
+    File.write!(path, Enum.map_join(1..15_000, "", &"x#{&1}\n"))
+
+    assert {:ok, %Result{content: [%Content.Text{text: text}], details: details}} =
+             exec(%{"path" => path}, ref)
+
+    assert details.truncated == true
+    assert details.truncated_by == :lines
+    assert details.total_lines == 15_000
+    line_count = text |> String.split("\n", trim: true) |> length()
+    assert line_count <= 10_000
+  end
+
+  test "returns error tool-result for missing file", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "nope.txt")
+
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(%{"path" => path}, ref)
+
+    assert msg =~ "enoent" or msg =~ "no such file"
+  end
+
+  test "rejects directories", %{tmp: tmp, ref: ref} do
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(%{"path" => tmp}, ref)
+
+    assert msg =~ "directory"
+  end
+end
