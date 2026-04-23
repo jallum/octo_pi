@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T21:46:07Z",
   "created": "2026-04-23T21:30:57Z",
   "description": "Every turn + tool telemetry event currently carries `session: pid()`\nin its metadata. `OctoPi.Telemetry.Logger.handle_event/4` inspects\nthe full merged map to a single log line, so pid strings appear in\nevery line:\n\n    [telemetry] octo_pi_agent.turn.start %{session: #PID\u003c0.466.0\u003e,\n    system_time: ..., turn: 1}\n\nThe pid isn't useful in logs — sessions aren't correlated across\nevents that way today, and inspecting pids is noisy.\n\nOptions:\n1. Drop session from metadata (simplest; breaks nothing because no\n   handler uses it).\n2. Keep it but have Logger bridge filter pids out when rendering.\n\nPrefer option 1. If we ever want per-session correlation we'll add\na stable session id instead.",
   "id": "opi-06w.5",
   "labels": [],
   "parent": "opi-06w",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Trim session pid from telemetry metadata / filter in Logger bridge",
   "type": "task",
-  "updated_at": "2026-04-23T21:44:40Z"
+  "updated_at": "2026-04-23T21:46:07Z"
 }
