@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:55:09Z",
+  "description": "Port-map §3. Four tools registered on the Session, each wrapping\na pure file-operation and using FileMutex (.3) for writes/edits.\n\nModules under apps/octo_pi_coder/lib/octo_pi/coder/tools/:\n- read.ex — offset/limit, image detection (MIME), truncation\n  (10k lines / 512 KB), returns %OctoPi.Agent.Tool.Result with\n  details (totalLines, outputLines, truncatedBy)\n- write.ex — creates parent dirs, fails if content changed since\n  last read (compare-and-set pattern from upstream)\n- edit.ex — diff-based edit (old_string, new_string, replace_all);\n  wraps in FileMutex.with_lock\n- ls.ex — non-recursive directory listing with basic metadata\n\nAll four implement OctoPi.Agent.Tool.Handler. Each returns\nTool.Result with is_error?: true for permission/not-found/etc.\n\nPath resolution: relative paths resolved against session cwd (need\na way to thread cwd to the handler — likely via prepare_arguments\nclosure or session state injection).\n\nTDD (match upstream test coverage):\n- read: offset, limit, truncation, permission-denied, image\n- write: new file, overwrite, intermediate-dir creation, missing\n  permission\n- edit: old_string not found, not unique, replace_all, whitespace\n  preservation\n- ls: empty dir, dir with subdirs, stat metadata\n\nDepends on .3.",
+  "id": "octo-t58.4",
+  "labels": [],
+  "parent": "octo-t58",
+  "priority": 1,
+  "status": "open",
+  "title": "Core file tools: read, write, edit, ls",
+  "type": "task",
+  "updated_at": "2026-04-23T21:55:09Z"
+}
