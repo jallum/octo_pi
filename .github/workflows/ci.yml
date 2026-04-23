@@ -23,7 +23,7 @@ jobs:
     env:
       MIX_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Elixir/OTP
         uses: erlef/setup-beam@v1
@@ -32,7 +32,7 @@ jobs:
           otp-version: ${{ matrix.otp }}
 
       - name: Cache deps and _build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             deps
@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache PLT
         id: plt-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: _build/test/plt
           key: ${{ runner.os }}-plt-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
