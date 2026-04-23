@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-z1d.4"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-z1d.8"
+  ],
   "created": "2026-04-23T20:40:06Z",
   "description": "Three small concerns that share a commit (port-map §6, §7, telemetry\ncomment on octo-z1d epic):\n\n1. Hooks (§6):\n   - before_tool_call: (ctx -\u003e {:block, reason} | :allow)\n   - after_tool_call:  (ctx -\u003e {:patch, map()} | :unchanged)\n   Plumbed through session opts, invoked by tool_dispatch around\n   each tool. Exceptions caught → synthetic error result.\n\n2. Subscribers (§7):\n   OctoPi.Agent.Subscribers module using Registry.\n   - subscribe(session, pid, mode) :: {:ok, unsubscribe_fn}\n   - dispatch(session, event) iterates subscribers; :sync uses\n     GenServer.call with 5s timeout, :async uses send.\n   - A timeout on a :sync listener logs a warning + continues.\n\n3. Telemetry:\n   - Handler module OctoPi.Telemetry.AgentHandler in octo_pi_agent.\n   - Events (per opi-hgb.6 convention: first segment = emitting app):\n       [:octo_pi_agent, :session, :start]\n       [:octo_pi_agent, :session, :stop]\n       [:octo_pi_agent, :turn, :start]\n       [:octo_pi_agent, :turn, :stop]\n       [:octo_pi_agent, :turn, :exception]\n       [:octo_pi_agent, :tool, :start]\n       [:octo_pi_agent, :tool, :stop]\n       [:octo_pi_agent, :tool, :error]\n   - Uses OctoPi.Telemetry.Logger.attach/2 helper from opi-hgb.6.\n   - Emission sites in loop + tool_dispatch.\n\nTDD:\n- Hook block/patch semantics\n- Subscriber registration order; :sync barrier; :async fire-and-forget\n- Telemetry emissions with expected metadata\n\nDepends on z1d.3, z1d.4.",
   "id": "octo-z1d.7",
