@@ -65,14 +65,16 @@ defmodule OctoPi.AI.SSE do
 
   def finalize(%__MODULE__{buffer: buffer} = state) do
     {maybe_event, state} = process_line(buffer, %{state | buffer: <<>>})
+    # `acc` here is newest-first; `finalize_pending` keeps that
+    # invariant and reverses once at the end.
     acc = if maybe_event, do: [maybe_event], else: []
     finalize_pending(state, acc)
   end
 
-  defp finalize_pending(state, acc) do
+  defp finalize_pending(state, acc_rev) do
     {maybe_event, state} = flush(state)
-    acc = if maybe_event, do: acc ++ [maybe_event], else: acc
-    {acc, state}
+    acc_rev = if maybe_event, do: [maybe_event | acc_rev], else: acc_rev
+    {Enum.reverse(acc_rev), state}
   end
 
   @spec drain(t(), [Event.t()]) :: {[Event.t()], t()}

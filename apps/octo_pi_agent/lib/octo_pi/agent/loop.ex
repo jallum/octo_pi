@@ -32,6 +32,7 @@ defmodule OctoPi.Agent.Loop do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
@@ -72,7 +73,11 @@ defmodule OctoPi.Agent.Loop do
 
     {messages, reason} = loop(session, state, state.messages, abort_ref, 1)
 
-    dispatch(session, %Event.AgentEnd{reason: reason, messages: messages})
+    dispatch(session, %Event.AgentEnd{
+      reason: reason,
+      messages: MessageLog.to_list(messages)
+    })
+
     # Session owns the paired [:session, :stop] telemetry emission so
     # both the clean-exit (run_complete cast) and abnormal-exit
     # (:DOWN) paths flow through the same code.
@@ -100,7 +105,7 @@ defmodule OctoPi.Agent.Loop do
 
       dispatch(session, %Event.TurnStart{turn: turn})
       assistant = stream_turn(session, state, messages)
-      updated = messages ++ [assistant]
+      updated = MessageLog.push(messages, assistant)
       dispatch(session, %Event.TurnEnd{turn: turn})
 
       :telemetry.execute(
@@ -120,7 +125,7 @@ defmodule OctoPi.Agent.Loop do
 
   defp continue_or_stop(session, state, updated, %{stop_reason: :tool_use} = assistant, ref, turn) do
     tool_results = execute_tool_calls(session, state, assistant.content, ref)
-    loop(session, state, updated ++ tool_results, ref, turn + 1)
+    loop(session, state, MessageLog.append_many(updated, tool_results), ref, turn + 1)
   end
 
   # Terminal stop — drain the follow-up queue. If anything was
@@ -128,8 +133,11 @@ defmodule OctoPi.Agent.Loop do
   # stop reason.
   defp continue_or_stop(session, state, updated, %{stop_reason: reason}, abort_ref, turn) do
     case Session.drain_follow_up(session) do
-      [] -> {updated, reason}
-      followups -> loop(session, state, updated ++ followups, abort_ref, turn + 1)
+      [] ->
+        {updated, reason}
+
+      followups ->
+        loop(session, state, MessageLog.append_many(updated, followups), abort_ref, turn + 1)
     end
   end
 
@@ -138,7 +146,7 @@ defmodule OctoPi.Agent.Loop do
   defp drain_steering_after_first_turn(_session, messages, 1), do: messages
 
   defp drain_steering_after_first_turn(session, messages, _turn),
-    do: messages ++ Session.drain_steering(session)
+    do: MessageLog.append_many(messages, Session.drain_steering(session))
 
   # Stream one turn through the configured Transport; collect
   # MessageStart/Update/End events and return the finalized
@@ -148,7 +156,7 @@ defmodule OctoPi.Agent.Loop do
   defp stream_turn(session, state, messages) do
     context = %AIContext{
       system_prompt: state.system_prompt,
-      messages: messages,
+      messages: MessageLog.to_list(messages),
       tools: Enum.map(state.tools, &agent_tool_to_ai_tool/1)
     }
 
@@ -377,7 +385,7 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp aborted_messages(messages), do: messages ++ [Session.aborted_assistant()]
+  defp aborted_messages(messages), do: MessageLog.push(messages, Session.aborted_assistant())
 
   defp agent_tool_to_ai_tool(%Tool{} = t) do
     %OctoPi.AI.Tool{

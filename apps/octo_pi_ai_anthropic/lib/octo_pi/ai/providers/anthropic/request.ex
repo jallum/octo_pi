@@ -169,24 +169,32 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
 
   @spec convert_messages([Message.t()], boolean()) :: [map()]
   defp convert_messages(messages, oauth?) do
-    {acc, pending} =
-      Enum.reduce(messages, {[], []}, fn msg, {acc, pending} ->
+    # Build `acc` and `pending` newest-first via prepend; reverse once
+    # at the end. Avoids the O(n²) `acc ++ [item]` pattern from the
+    # original port.
+    {acc_rev, pending_rev} =
+      Enum.reduce(messages, {[], []}, fn msg, {acc_rev, pending_rev} ->
         case msg do
           %Message.ToolResult{} = tr ->
-            {acc, pending ++ [tool_result_block(tr)]}
+            {acc_rev, [tool_result_block(tr) | pending_rev]}
 
           other ->
-            acc = flush_pending(acc, pending)
-            {acc ++ [convert_non_tool_result(other, oauth?)], []}
+            acc_rev = flush_pending(acc_rev, pending_rev)
+            {[convert_non_tool_result(other, oauth?) | acc_rev], []}
         end
       end)
 
-    flush_pending(acc, pending)
+    acc_rev |> flush_pending(pending_rev) |> Enum.reverse()
   end
 
+  # `acc_rev` is newest-first; `pending_rev` is also newest-first.
+  # Reverse the pending block so its inner content is oldest-first
+  # again, then cons the wrapped user message onto `acc_rev`.
   @spec flush_pending([map()], [map()]) :: [map()]
-  defp flush_pending(acc, []), do: acc
-  defp flush_pending(acc, pending), do: acc ++ [%{"role" => "user", "content" => pending}]
+  defp flush_pending(acc_rev, []), do: acc_rev
+
+  defp flush_pending(acc_rev, pending_rev),
+    do: [%{"role" => "user", "content" => Enum.reverse(pending_rev)} | acc_rev]
 
   @spec convert_non_tool_result(Message.t(), boolean()) :: map()
   defp convert_non_tool_result(%Message.User{content: content}, _oauth?) do

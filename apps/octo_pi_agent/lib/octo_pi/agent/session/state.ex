@@ -12,7 +12,9 @@ defmodule OctoPi.Agent.Session.State do
     * `:model` — the active provider model
     * `:thinking_level` — reasoning-effort knob
     * `:tools` — per-session list; can be mutated at runtime
-    * `:messages` — ordered transcript
+    * `:messages` — ordered transcript, stored as a `MessageLog.t()`
+      (oldest-first semantics; convert to a plain list with
+      `MessageLog.to_list/1`)
     * `:is_streaming?` — true while a run is in flight
     * `:streaming_message` — partial assistant message during stream
     * `:pending_tool_calls` — ids of tools currently executing
@@ -26,7 +28,7 @@ defmodule OctoPi.Agent.Session.State do
   """
 
   alias OctoPi.Agent.AbortRef
-  alias OctoPi.Agent.Message
+  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Message.Assistant
@@ -47,7 +49,7 @@ defmodule OctoPi.Agent.Session.State do
           model: Model.t(),
           thinking_level: thinking_level(),
           tools: [Tool.t()],
-          messages: [Message.t()],
+          messages: MessageLog.t(),
           is_streaming?: boolean(),
           streaming_message: Assistant.t() | nil,
           pending_tool_calls: MapSet.t(),
@@ -75,7 +77,7 @@ defmodule OctoPi.Agent.Session.State do
     :transport,
     thinking_level: :off,
     tools: [],
-    messages: [],
+    messages: %MessageLog{},
     is_streaming?: false,
     pending_tool_calls: MapSet.new(),
     steering_queue: %PendingMessageQueue{items: :queue.new()},
