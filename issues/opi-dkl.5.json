@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:27:52Z",
+  "description": "`OctoPi.Coder.Tools.Bash` disabled `:kill_group` in Phase 3\nbecause enabling it crashed the erlexec `:exec` singleton with\n`{:exit_status, N}` on macOS. Without kill_group, `:exec.stop/1`\nonly signals the direct child — background jobs launched by the\ncommand leak on abort.\n\nInvestigation:\n- Reproduce the crash in isolation (minimal repo, erlexec only).\n- File an issue upstream (github.com/saleyn/erlexec) if confirmed.\n- Alternatives if unfixable:\n  - Use `Port.open` with a small C helper that setpgid's before\n    exec (custom port binary; ~50 LOC of C).\n  - Use `exec` directly as an `erl_interface` port without the\n    erlexec GenServer singleton.\n  - Shell out via `sh -c 'exec setsid -w \u003ccmd\u003e'` to get a fresh\n    session id; kill via `kill -TERM -\u003cpid\u003e`.\n\nAcceptance: `bash -c \"sleep 60 \u0026 sleep 60 \u0026 wait\"` fully dies on\nabort, verified by an integration test that greps `ps` for orphan\nsleeps.\n\nThis is a rabbit hole — timebox to 2-4 hours. If no clean fix\nemerges, document the workaround and defer to Phase 8.",
+  "id": "opi-dkl.5",
+  "labels": [],
+  "parent": "opi-dkl",
+  "priority": 2,
+  "status": "open",
+  "title": "Bash kill_group revisit — investigate + restore process-group kill",
+  "type": "task",
+  "updated_at": "2026-04-23T22:27:52Z"
+}
