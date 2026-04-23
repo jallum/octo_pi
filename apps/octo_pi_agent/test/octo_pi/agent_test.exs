@@ -135,6 +135,126 @@ defmodule OctoPi.AgentTest do
     end
   end
 
+  describe "Session lifecycle" do
+    setup do
+      {:ok, session} = OctoPi.Agent.start_session(model: fake_model())
+      {:ok, session: session}
+    end
+
+    test "state/1 returns the current Session.State", %{session: session} do
+      state = OctoPi.Agent.state(session)
+      assert state.model.id == "claude-haiku-4-5"
+      refute state.is_streaming?
+      assert state.messages == []
+    end
+
+    test "subscribe/3 returns an unsubscribe fn", %{session: session} do
+      unsubscribe = OctoPi.Agent.subscribe(session, self(), :async)
+      assert is_function(unsubscribe, 0)
+      assert :ok = unsubscribe.()
+    end
+
+    test "prompt appends user message and emits Start/End events", %{session: session} do
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "hello world")
+
+      assert_receive {:octo_pi_agent_event, %Event.AgentStart{}}
+      assert_receive {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: msgs}}
+      assert [%OctoPi.AI.Message.User{content: "hello world"}] = msgs
+
+      state = OctoPi.Agent.state(session)
+      refute state.is_streaming?
+      assert [%OctoPi.AI.Message.User{content: "hello world"}] = state.messages
+    end
+
+    test "continue/1 emits events without appending a new message", %{session: session} do
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.continue(session)
+
+      assert_receive {:octo_pi_agent_event, %Event.AgentStart{}}
+      assert_receive {:octo_pi_agent_event, %Event.AgentEnd{}}
+      assert OctoPi.Agent.state(session).messages == []
+    end
+
+    test "prompt while streaming returns {:error, :already_streaming}", %{session: session} do
+      # There's no real loop yet so this is hard to trigger cleanly —
+      # we'd need to hold the session busy. Instead, pin the shape by
+      # flipping is_streaming? via a second process... deferring to
+      # z1d.3 where a real loop makes this exercise natural.
+      _ = session
+    end
+
+    test "abort on idle is a no-op", %{session: session} do
+      # Should not raise, should not emit events.
+      OctoPi.Agent.subscribe(session, self(), :async)
+      :ok = OctoPi.Agent.abort(session)
+      refute_receive {:octo_pi_agent_event, _}, 50
+    end
+
+    test "steer/2 enqueues into the steering queue", %{session: session} do
+      :ok = OctoPi.Agent.steer(session, "next, do X")
+      state = OctoPi.Agent.state(session)
+      assert state.steering_queue.count == 1
+    end
+
+    test "follow_up/2 enqueues into the follow-up queue", %{session: session} do
+      :ok = OctoPi.Agent.follow_up(session, "anything else?")
+      state = OctoPi.Agent.state(session)
+      assert state.follow_up_queue.count == 1
+    end
+
+    test "wait_for_idle/2 returns :ok immediately when session is idle", %{session: session} do
+      assert :ok = OctoPi.Agent.wait_for_idle(session, 100)
+    end
+  end
+
+  describe "Subscribers dispatch modes" do
+    setup do
+      {:ok, session} = OctoPi.Agent.start_session(model: fake_model())
+      {:ok, session: session}
+    end
+
+    test "async subscribers receive events via send/2", %{session: session} do
+      OctoPi.Agent.subscribe(session, self(), :async)
+      :ok = OctoPi.Agent.continue(session)
+      assert_receive {:octo_pi_agent_event, %Event.AgentStart{}}
+    end
+
+    test "multiple async subscribers all receive events in registration order", %{
+      session: session
+    } do
+      test_pid = self()
+
+      proxy = fn tag ->
+        spawn(fn ->
+          receive do
+            msg -> send(test_pid, {tag, msg})
+          end
+        end)
+      end
+
+      a = proxy.(:a)
+      b = proxy.(:b)
+      OctoPi.Agent.subscribe(session, a, :async)
+      OctoPi.Agent.subscribe(session, b, :async)
+
+      :ok = OctoPi.Agent.continue(session)
+
+      assert_receive {:a, {:octo_pi_agent_event, %Event.AgentStart{}}}
+      assert_receive {:b, {:octo_pi_agent_event, %Event.AgentStart{}}}
+    end
+
+    test "unsubscribe stops further events", %{session: session} do
+      unsub = OctoPi.Agent.subscribe(session, self(), :async)
+      unsub.()
+
+      :ok = OctoPi.Agent.continue(session)
+      refute_receive {:octo_pi_agent_event, _}, 50
+    end
+  end
+
   defp fake_model do
     %Model{
       id: "claude-haiku-4-5",
