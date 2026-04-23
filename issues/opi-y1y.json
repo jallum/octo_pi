@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:02:05Z",
+  "description": "Don't require ANTHROPIC_API_KEY when Claude Code is already logged in or the user has an OAuth token available. Port pi-mono's OAuth machinery (anthropic.ts auth-path branch + utils/oauth/anthropic.ts + cli.ts) and adjacent tests (anthropic-tool-name-normalization.test.ts, anthropic-oauth.test.ts).\n\nPhase 2 concern, landing after octo-42f closed. Anthropic provider will be the first consumer; the pattern generalizes to other providers later.\n\nSee docs/port-map/anthropic.md §1.2 — OAuth was explicitly deferred from Phase 1.",
+  "id": "opi-y1y",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "[EPIC] Claude Code OAuth support for octo_pi_ai",
+  "type": "epic",
+  "updated_at": "2026-04-23T19:02:05Z"
+}
