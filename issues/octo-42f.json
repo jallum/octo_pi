@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-23T16:42:38.759445Z",
+  "description": "First port slice: a working `OctoPi.AI.stream/3` against real Anthropic Messages API, emitting the canonical event stream.\n\nScope:\n- HTTP client choice (Req vs Finch; cancellation semantics).\n- `OctoPi.AI.Provider` behaviour + canonical event types (matching pi-ai's AssistantMessageEvent).\n- Streaming JSON parser (port of pi-ai's `parseStreamingJson` / `partial-json` lib for tool-call argument deltas).\n- Incremental SSE decoder handling `\\r\\n` and `\\n` line terminators.\n- Anthropic provider: message/tool codec + `stream/3` implementation.\n- `OctoPi.AI.stream/3` public entry returning an Elixir `Stream` backed by a producer process.\n- Mix task: `mix ai.demo \"prompt\"` — reads `ANTHROPIC_API_KEY`, streams deltas to stdout.\n\nDefinition of done: demo task produces streaming text from claude-3-5-sonnet. Tool-call events parse correctly with a fake tool. No other providers yet.\n\nRef: RESEARCH.md §3.1, §4.1, §4.2, §6 Phase 1.",
+  "id": "octo-42f",
+  "labels": [],
+  "parent": "",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1: octo_pi_ai — Anthropic MVP",
+  "type": "epic",
+  "updated_at": "2026-04-23T16:42:38.759445Z"
+}

@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "octo-42f.5"
+  ],
+  "comments": [],
+  "created": "2026-04-23T16:42:38.759445Z",
+  "description": "Port the SSE parser from pi-ai (see anthropic.ts:300-348). Accept binary chunks, buffer incomplete lines, emit `%SSE.Event{event, data, id}` structs when a complete event is received. Handle both `\\r\\n` and `\\n` terminators.\n\nPure functional module: `SSE.decode/1` returns `{events, remainder}`. Unit tests.",
+  "id": "octo-42f.4",
+  "labels": [],
+  "parent": "octo-42f",
+  "priority": 2,
+  "status": "open",
+  "title": "Incremental SSE decoder",
+  "type": "task",
+  "updated_at": "2026-04-23T16:42:38.759445Z"
+}

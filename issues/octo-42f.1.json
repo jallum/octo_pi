@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "octo-42f.5"
+  ],
+  "comments": [],
+  "created": "2026-04-23T16:42:38.759445Z",
+  "description": "Resolve RESEARCH.md §7 Q2 + Q3.\n\nValidate:\n1. Can `Req` stream SSE chunks via `into: :self` (or similar) with backpressure reasonable for long responses?\n2. Can we cancel an in-flight streaming request cleanly mid-response? What does the cancel path look like (closing the request ref vs. killing the owning process)?\n3. If `Req` falls short, what's the Finch direct equivalent?\n\nDeliverable: a small Elixir module streaming Anthropic's `messages.stream` endpoint end-to-end, demonstrating cancel. Commit decision into RESEARCH.md §7.",
+  "id": "octo-42f.1",
+  "labels": [],
+  "parent": "octo-42f",
+  "priority": 2,
+  "status": "open",
+  "title": "Spike: Req vs Finch for streaming + cancellation",
+  "type": "task",
+  "updated_at": "2026-04-23T16:42:38.759445Z"
+}
