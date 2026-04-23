@@ -188,7 +188,7 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_cast({:run_complete, %MessageLog{} = messages, reason}, store) do
+  def handle_cast({:run_complete, messages, reason}, store) do
     emit_session_stop(store.session, reason, MessageLog.count(messages))
 
     session = %{
