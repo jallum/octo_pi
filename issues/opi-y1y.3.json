@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:02:45Z",
+  "description": "Port pi-mono utils/oauth/anthropic.ts (PKCE, callback server via Plug/Bandit, token exchange, refresh) + cli.ts (auth.json storage). Add `mix octo_pi.auth` that runs the flow and stores tokens.\n\nDeferred — only becomes necessary if the user wants to use octo_pi without having Claude Code installed. With opi-y1y.1 + .2 landing, the keychain-first path covers most users.\n\nTest reference: tmp/pi-mono/packages/ai/test/anthropic-oauth.test.ts.",
+  "id": "opi-y1y.3",
+  "labels": [],
+  "parent": "opi-y1y",
+  "priority": 3,
+  "status": "open",
+  "title": "Full OAuth login flow + refresh + storage + mix task",
+  "type": "task",
+  "updated_at": "2026-04-23T19:02:45Z"
+}
