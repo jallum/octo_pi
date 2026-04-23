@@ -8,6 +8,11 @@ defmodule OctoPi.AI.Application do
   @impl true
   def start(_type, _args) do
     CoreHandler.attach()
-    Supervisor.start_link([], strategy: :one_for_one, name: OctoPi.AI.Supervisor)
+
+    children = [
+      OctoPi.AI.ProviderRegistry
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: OctoPi.AI.Supervisor)
   end
 end
