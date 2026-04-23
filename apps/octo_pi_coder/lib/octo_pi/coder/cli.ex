@@ -145,10 +145,23 @@ defmodule OctoPi.Coder.CLI do
     end
   end
 
-  defp forward_events do
+  @doc false
+  # Event-forwarder loop: blocks on `{:octo_pi_agent_event, _}`
+  # messages (delivered by the agent's Subscribers registry),
+  # encodes each event via `Rpc.event_to_json/1`, and emits the
+  # JSON on stdout. Also handles a `{:drain, from}` marker that
+  # tests use to synchronize on "all prior events processed" —
+  # because BEAM mailboxes are FIFO per sender, any drain message
+  # sent after the agent events is guaranteed to be processed
+  # after all of them.
+  def forward_events do
     receive do
       {:octo_pi_agent_event, event} ->
         event |> Rpc.event_to_json() |> safe_emit()
+        forward_events()
+
+      {:drain, from} ->
+        send(from, :drained)
         forward_events()
     end
   end
