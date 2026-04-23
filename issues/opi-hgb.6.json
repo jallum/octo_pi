@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T20:17:38Z",
   "created": "2026-04-23T19:57:58Z",
   "description": "Two related cleanups:\n\n1. Telemetry convention (per :telemetry docs, Ecto, Phoenix) is that the first segment is the OTP app emitting the event. Our Anthropic events are [:octo_pi_ai, :anthropic, ...] — should be [:octo_pi_ai_anthropic, ...]. Core events stay [:octo_pi_ai, ...]. Downstream consumers can then filter by app prefix.\n\n2. CoreHandler and AnthropicHandler are near-duplicates — @events list + Logger.info formatter. Factor OctoPi.Telemetry.Logger.attach(handler_id, events) in octo_pi_ai. Both apps call it with their event list.\n\nTDD:\n- Existing telemetry tests already assert event names — update assertions to new names.\n- Existing tests stay green otherwise.\n- No new tests needed; this is a rename + factor.\n\nFiles: producer.ex, auth.ex, ai.ex (emission sites); core_handler.ex (→ logger helper); anthropic_handler.ex (→ delegates to helper); application.ex files.",
   "id": "opi-hgb.6",
   "labels": [],
   "parent": "opi-hgb",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Telemetry: move Anthropic events under :octo_pi_ai_anthropic + factor Logger helper",
   "type": "task",
-  "updated_at": "2026-04-23T20:15:21Z"
+  "updated_at": "2026-04-23T20:17:38Z"
 }
