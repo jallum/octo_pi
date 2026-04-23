@@ -132,7 +132,7 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
 
       :telemetry.attach(
         handler,
-        [:octo_pi_ai, :anthropic, :auth, :resolved],
+        [:octo_pi_ai_anthropic, :auth, :resolved],
         fn name, meas, meta, _ -> send(test_pid, {ref, name, meas, meta}) end,
         nil
       )
@@ -143,7 +143,7 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
 
     test "emits :resolved with source :opts on explicit api_key", %{ref: ref} do
       Auth.resolve(%StreamOptions{api_key: "ak-x"})
-      assert_receive {^ref, [:octo_pi_ai, :anthropic, :auth, :resolved], %{}, meta}
+      assert_receive {^ref, [:octo_pi_ai_anthropic, :auth, :resolved], %{}, meta}
       assert meta == %{type: :api_key, source: :opts}
     end
 

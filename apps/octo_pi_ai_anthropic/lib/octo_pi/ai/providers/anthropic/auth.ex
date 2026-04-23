@@ -59,7 +59,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
     type = if oauth?(token), do: :oauth, else: :api_key
 
     :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :auth, :resolved],
+      [:octo_pi_ai_anthropic, :auth, :resolved],
       %{},
       %{type: type, source: source}
     )

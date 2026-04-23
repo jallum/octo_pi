@@ -27,9 +27,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
       connection.
     - Caller dies mid-stream → our `Process.monitor/1` fires inside
       the receive loop; we halt, mark the state aborted, and emit
-      `Event.Error{reason: :aborted}`. (Aborted semantics land in
-      opi-hgb.2 — this module is wired to support them; currently
-      the `aborted?` flag is set but the error surfaces as `:error`.)
+      `Event.Error{reason: :aborted}`.
     - HTTP 4xx/5xx → `emit_http_error` + `request.stop` telemetry.
     - Known exceptions (Req.TransportError, Jason.DecodeError,
       RuntimeError) are caught, turned into `Event.Error`, telemetry
@@ -70,7 +68,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
     start_mono = System.monotonic_time()
 
     :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :request, :start],
+      [:octo_pi_ai_anthropic, :request, :start],
       %{system_time: System.system_time()},
       %{model: args.model.id, auth_type: auth.type}
     )
@@ -226,7 +224,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
     usage = state.decoder.message.usage
 
     :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :request, :stop],
+      [:octo_pi_ai_anthropic, :request, :stop],
       %{
         duration: System.monotonic_time() - start_mono,
         input_tokens: usage.input,
@@ -242,7 +240,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   defp emit_request_exception(state, start_mono, kind, reason) do
     :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :request, :exception],
+      [:octo_pi_ai_anthropic, :request, :exception],
       %{duration: System.monotonic_time() - start_mono},
       %{model: state.model.id, kind: kind, reason: reason}
     )

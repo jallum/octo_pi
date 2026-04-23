@@ -237,9 +237,9 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       handler = "producer-telemetry-#{inspect(ref)}"
 
       events = [
-        [:octo_pi_ai, :anthropic, :request, :start],
-        [:octo_pi_ai, :anthropic, :request, :stop],
-        [:octo_pi_ai, :anthropic, :request, :exception]
+        [:octo_pi_ai_anthropic, :request, :start],
+        [:octo_pi_ai_anthropic, :request, :stop],
+        [:octo_pi_ai_anthropic, :request, :exception]
       ]
 
       :telemetry.attach_many(
@@ -269,12 +269,12 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       {_pid, ref} = start_producer(chunks)
       _events = collect_events(ref)
 
-      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :start], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :start], meas, meta}
       assert is_integer(meas.system_time)
       assert meta.model == "claude-haiku-4-5"
       assert meta.auth_type == :api_key
 
-      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], meas, meta}
       assert is_integer(meas.duration) and meas.duration > 0
       assert meas.input_tokens == 5
       assert meas.output_tokens == 2
@@ -286,7 +286,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       {_pid, ref} = start_producer(["{\"error\":\"boom\"}"], 500)
       _events = collect_events(ref)
 
-      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], _meas, meta}
+      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas, meta}
       assert meta.http_status == 500
     end
 
@@ -326,7 +326,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       Process.exit(caller, :kill)
       assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
 
-      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], _meas,
+      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas,
                       %{stop_reason: :aborted}},
                      2_000
     end
