@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T22:27:23Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-dkl",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "read.ex: fix line count for no-trailing-newline + stream refactor",
   "type": "task",
-  "updated_at": "2026-04-23T22:27:23Z"
+  "updated_at": "2026-04-23T22:39:21Z"
 }
