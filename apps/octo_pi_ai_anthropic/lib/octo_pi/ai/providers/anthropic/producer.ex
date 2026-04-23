@@ -71,6 +71,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   @impl true
   def handle_continue(:run, state) do
     auth = Auth.resolve(state.opts)
+    start_mono = System.monotonic_time()
+
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :request, :start],
+      %{system_time: System.system_time()},
+      %{model: state.model.id, auth_type: auth.type}
+    )
 
     {start_event, decoder_state} =
       Decoder.new(state.model, oauth?: auth.type == :oauth, tools: state.context.tools)
@@ -100,23 +107,57 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
         state = Process.get(:octo_pi_state)
 
-        if resp.status in 200..299 do
-          emit_done_or_error(state)
-        else
-          emit_http_error(state, resp)
-        end
+        state =
+          if resp.status in 200..299 do
+            emit_done_or_error(state)
+          else
+            emit_http_error(state, resp)
+          end
+
+        emit_request_stop(state, start_mono, http_status: resp.status)
+        state
       rescue
         e ->
           state = Process.get(:octo_pi_state)
-          emit_error(state, Exception.message(e), :error)
+          state = emit_error(state, Exception.message(e), :error)
+          emit_request_exception(state, start_mono, :error, Exception.message(e))
+          state
       catch
         :exit, reason ->
           state = Process.get(:octo_pi_state)
-          emit_error(state, "process exit: #{inspect(reason)}", :error)
+          state = emit_error(state, "process exit: #{inspect(reason)}", :error)
+          emit_request_exception(state, start_mono, :exit, inspect(reason))
+          state
       end
 
     send(state.caller, {state.ref, :done})
     {:stop, :normal, state}
+  end
+
+  defp emit_request_stop(state, start_mono, extras) do
+    usage = state.decoder.message.usage
+
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :request, :stop],
+      %{
+        duration: System.monotonic_time() - start_mono,
+        input_tokens: usage.input,
+        output_tokens: usage.output,
+        total_tokens: usage.total_tokens
+      },
+      Map.merge(
+        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
+        Map.new(extras)
+      )
+    )
+  end
+
+  defp emit_request_exception(state, start_mono, kind, reason) do
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :request, :exception],
+      %{duration: System.monotonic_time() - start_mono},
+      %{model: state.model.id, kind: kind, reason: reason}
+    )
   end
 
   # --- chunk callback (runs inside handle_continue, same process) ---

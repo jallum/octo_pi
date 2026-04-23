@@ -34,17 +34,17 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   def resolve(nil), do: resolve(%StreamOptions{})
 
   def resolve(%StreamOptions{api_key: key}) when is_binary(key) and key != "",
-    do: classify(key)
+    do: classify(key, :opts)
 
   def resolve(%StreamOptions{}) do
-    with {:env, nil} <- {:env, get_env("ANTHROPIC_OAUTH_TOKEN")},
-         {:env, nil} <- {:env, get_env("ANTHROPIC_API_KEY")},
-         {:kc, nil} <- {:kc, KeychainReader.read(keychain_reader())} do
+    with {:env_oauth, nil} <- {:env_oauth, get_env("ANTHROPIC_OAUTH_TOKEN")},
+         {:env_api_key, nil} <- {:env_api_key, get_env("ANTHROPIC_API_KEY")},
+         {:keychain, nil} <- {:keychain, KeychainReader.read(keychain_reader())} do
       raise RuntimeError,
             "Anthropic credentials not available. Pass :api_key in StreamOptions, " <>
               "export ANTHROPIC_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."
     else
-      {_, token} -> classify(token)
+      {source, token} -> classify(token, source)
     end
   end
 
@@ -52,9 +52,18 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   @spec oauth?(binary()) :: boolean()
   def oauth?(token) when is_binary(token), do: String.contains?(token, "sk-ant-oat")
 
-  @spec classify(binary()) :: Credentials.t()
-  defp classify(token) do
+  @type source :: :opts | :env_oauth | :env_api_key | :keychain
+
+  @spec classify(binary(), source()) :: Credentials.t()
+  defp classify(token, source) do
     type = if oauth?(token), do: :oauth, else: :api_key
+
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :auth, :resolved],
+      %{},
+      %{type: type, source: source}
+    )
+
     %Credentials{type: type, token: token}
   end
 

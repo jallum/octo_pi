@@ -1,20 +1,13 @@
 defmodule OctoPi.AI.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
 
+  alias OctoPi.Telemetry.CoreHandler
+
   @impl true
   def start(_type, _args) do
-    children = [
-      # Starts a worker by calling: OctoPi.AI.Worker.start_link(arg)
-      # {OctoPi.AI.Worker, arg}
-    ]
-
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: OctoPi.AI.Supervisor]
-    Supervisor.start_link(children, opts)
+    CoreHandler.attach()
+    Supervisor.start_link([], strategy: :one_for_one, name: OctoPi.AI.Supervisor)
   end
 end

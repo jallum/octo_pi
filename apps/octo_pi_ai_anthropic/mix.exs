@@ -31,6 +31,7 @@ defmodule OctoPi.AI.Providers.Anthropic.MixProject do
       {:octo_pi_ai, in_umbrella: true},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
+      {:telemetry, "~> 1.4"},
       {:plug, "~> 1.19", only: [:test]}
     ]
   end

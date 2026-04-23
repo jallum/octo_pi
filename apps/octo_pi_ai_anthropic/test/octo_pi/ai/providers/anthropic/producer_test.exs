@@ -229,4 +229,65 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       assert reason in [:normal, :noproc]
     end
   end
+
+  describe "telemetry" do
+    setup do
+      test_pid = self()
+      ref = make_ref()
+      handler = "producer-telemetry-#{inspect(ref)}"
+
+      events = [
+        [:octo_pi_ai, :anthropic, :request, :start],
+        [:octo_pi_ai, :anthropic, :request, :stop],
+        [:octo_pi_ai, :anthropic, :request, :exception]
+      ]
+
+      :telemetry.attach_many(
+        handler,
+        events,
+        fn name, meas, meta, _ -> send(test_pid, {ref, name, meas, meta}) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      {:ok, telemetry_ref: ref}
+    end
+
+    test "emits start then stop on a successful request", %{telemetry_ref: tref} do
+      chunks = [
+        Fake.sse("message_start", %{
+          "type" => "message_start",
+          "message" => %{"id" => "m", "usage" => %{"input_tokens" => 5}}
+        }),
+        Fake.sse("message_delta", %{
+          "type" => "message_delta",
+          "delta" => %{"stop_reason" => "end_turn"},
+          "usage" => %{"output_tokens" => 2}
+        })
+      ]
+
+      {_pid, ref} = start_producer(chunks)
+      _events = collect_events(ref)
+
+      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :start], meas, meta}
+      assert is_integer(meas.system_time)
+      assert meta.model == "claude-haiku-4-5"
+      assert meta.auth_type == :api_key
+
+      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], meas, meta}
+      assert is_integer(meas.duration) and meas.duration > 0
+      assert meas.input_tokens == 5
+      assert meas.output_tokens == 2
+      assert meta.stop_reason == :stop
+      assert meta.http_status == 200
+    end
+
+    test "emits stop with http_status on non-2xx response", %{telemetry_ref: tref} do
+      {_pid, ref} = start_producer(["{\"error\":\"boom\"}"], 500)
+      _events = collect_events(ref)
+
+      assert_receive {^tref, [:octo_pi_ai, :anthropic, :request, :stop], _meas, meta}
+      assert meta.http_status == 500
+    end
+  end
 end

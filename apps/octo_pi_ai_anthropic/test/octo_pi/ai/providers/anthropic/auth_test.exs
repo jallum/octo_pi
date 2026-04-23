@@ -123,4 +123,48 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
       refute Auth.oauth?("")
     end
   end
+
+  describe "telemetry" do
+    setup do
+      test_pid = self()
+      ref = make_ref()
+      handler = "auth-telemetry-#{inspect(ref)}"
+
+      :telemetry.attach(
+        handler,
+        [:octo_pi_ai, :anthropic, :auth, :resolved],
+        fn name, meas, meta, _ -> send(test_pid, {ref, name, meas, meta}) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      {:ok, ref: ref}
+    end
+
+    test "emits :resolved with source :opts on explicit api_key", %{ref: ref} do
+      Auth.resolve(%StreamOptions{api_key: "ak-x"})
+      assert_receive {^ref, [:octo_pi_ai, :anthropic, :auth, :resolved], %{}, meta}
+      assert meta == %{type: :api_key, source: :opts}
+    end
+
+    test "emits :resolved with source :env_oauth", %{ref: ref} do
+      System.put_env("ANTHROPIC_OAUTH_TOKEN", "sk-ant-oat-abc")
+      Auth.resolve()
+      assert_receive {^ref, _, %{}, %{type: :oauth, source: :env_oauth}}
+    end
+
+    test "emits :resolved with source :env_api_key", %{ref: ref} do
+      System.put_env("ANTHROPIC_API_KEY", "ak-abc")
+      Auth.resolve()
+      assert_receive {^ref, _, %{}, %{type: :api_key, source: :env_api_key}}
+    end
+
+    test "emits :resolved with source :keychain", %{ref: ref} do
+      Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, FakeKeychain)
+      Process.put(:fake_keychain_token, "sk-ant-oat-kc")
+
+      Auth.resolve()
+      assert_receive {^ref, _, %{}, %{type: :oauth, source: :keychain}}
+    end
+  end
 end

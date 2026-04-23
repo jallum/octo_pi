@@ -3,9 +3,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Application do
 
   use Application
 
+  alias OctoPi.Telemetry.AnthropicHandler
+
   @impl true
   def start(_type, _args) do
     register_provider()
+    AnthropicHandler.attach()
     Supervisor.start_link([], strategy: :one_for_one, name: __MODULE__)
   end
 

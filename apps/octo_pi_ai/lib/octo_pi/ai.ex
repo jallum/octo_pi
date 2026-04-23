@@ -28,7 +28,9 @@ defmodule OctoPi.AI do
   """
   @spec stream(Model.t(), Context.t(), StreamOptions.t() | nil) :: Enumerable.t()
   def stream(%Model{} = model, %Context{} = context, opts \\ nil) do
-    provider_module(model.api).stream(model, context, opts || %StreamOptions{})
+    provider = provider_module(model.api)
+    emit_stream_open(model, provider, :stream)
+    provider.stream(model, context, opts || %StreamOptions{})
   end
 
   @doc """
@@ -38,7 +40,17 @@ defmodule OctoPi.AI do
   """
   @spec stream_simple(Model.t(), Context.t(), StreamOptions.t() | nil) :: Enumerable.t()
   def stream_simple(%Model{} = model, %Context{} = context, opts \\ nil) do
-    provider_module(model.api).stream_simple(model, context, opts || %StreamOptions{})
+    provider = provider_module(model.api)
+    emit_stream_open(model, provider, :stream_simple)
+    provider.stream_simple(model, context, opts || %StreamOptions{})
+  end
+
+  defp emit_stream_open(%Model{} = model, provider, entry) do
+    :telemetry.execute(
+      [:octo_pi_ai, :stream, :open],
+      %{system_time: System.system_time()},
+      %{api: model.api, model: model.id, provider: provider, entry: entry}
+    )
   end
 
   @doc """
