@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:27:52Z",
+  "description": "`Rpc.event_to_json/1` currently loses data:\n\n- `AgentEnd` collapses messages to `message_count: length(msgs)` —\n  a client can't see the transcript.\n- `MessageUpdate` emits empty `data` — can't reconstruct stream.\n- `ToolExecutionEnd` collapses result content to `is_error` only.\n\nDecide the target contract, then implement:\n\nOption A: full structural JSON with a `Jason.Encoder` protocol\n  impl on each relevant struct. Event consumers see the raw\n  message/result shape.\n\nOption B: a minimal \"useful\" contract — for MessageUpdate include\n  the current delta text; for AgentEnd include the assistant\n  stop_reason + text; for ToolExecutionEnd include the text\n  content and details.\n\nPrefer Option B — matches what upstream `pi` RPC clients need\n(progress rendering + final answer) without the full struct\noverhead.\n\nTDD:\n- For each event type: assert the JSON contains the fields a\n  progress UI would need.\n- Round-trip: encode event → decode JSON → assertions on shape.",
+  "id": "opi-dkl.6",
+  "labels": [],
+  "parent": "opi-dkl",
+  "priority": 2,
+  "status": "open",
+  "title": "RPC event serialization: richer, round-trip-capable payloads",
+  "type": "task",
+  "updated_at": "2026-04-23T22:27:52Z"
+}
