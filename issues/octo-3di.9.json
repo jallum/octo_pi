@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T23:37:35Z",
+  "description": "Port-map §9. Tie everything together + wire into the coder CLI.\n\n- OctoPi.Tui.Interactive: main loop. Starts Terminal, StdinFSM,\n  Renderer. Subscribes to Agent session events. Renders session\n  transcript via a stack of components: Text (history) +\n  SelectList (slash menu, if active) + Input/Editor (prompt).\n  Routes keys through KeyParser to the focused component.\n- OctoPi.Coder.CLI.run/1: add :mode → :interactive branch. When\n  no --print and no --mode rpc, dispatch to Interactive.\n- Graceful exit on Ctrl+C (double-press within 1s to confirm),\n  Ctrl+D at empty input, /exit slash command.\n\nDefinition of done: `mix pi` opens an interactive TUI that\nstream-renders assistant turns with flicker-free updates and a\nworking editor input against FakeTransport. `mix pi` against live\nAnthropic (opt-in integration test) runs a prompt turn to\ncompletion with no terminal corruption on exit.\n\nTDD:\n- `CLI.parse_args([])` now yields :mode → :interactive (was an\n  error in Phase 3).\n- Integration test (@tag :integration) driving FakeTransport\n  through Interactive; assert final rendered frame contains the\n  assistant text.\n- Terminal restoration on crash: spawn Interactive in a task,\n  kill it, verify RawMode.exit was called (monitor + telemetry).\n\nDepends on .2, .3, .4, .5, .7. (Does not strictly require .6\noverlay or .8 editor; start with just Input from .7.)",
+  "id": "octo-3di.9",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 1,
+  "status": "open",
+  "title": "Interactive mode glue + CLI dispatch + E2E smoke",
+  "type": "task",
+  "updated_at": "2026-04-23T23:37:35Z"
+}
