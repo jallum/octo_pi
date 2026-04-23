@@ -10,10 +10,14 @@ defmodule OctoPi.AI.MixProject do
       deps_path: "../../deps",
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -25,7 +29,9 @@ defmodule OctoPi.AI.MixProject do
 
   defp deps do
     [
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:req, "~> 0.5"},
+      {:plug, "~> 1.19", only: [:test]}
     ]
   end
 end
