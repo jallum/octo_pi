@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:54:43Z",
+  "description": "Port-map §2. One `OctoPi.Coder.FileMutex.Worker` GenServer per\nabsolute path, started lazily via DynamicSupervisor, looked up\nthrough `Registry.via_tuple({:file_mutex, path})`.\n\nAPI:\n- FileMutex.with_lock(path, fun) — acquires, runs fun, releases\n- Reads + writes both serialize through the same lock (simplest\n  semantics; upstream does too per file-mutation-queue.ts)\n\nWorkers terminate when idle (after a short timeout, e.g. 5s) so\nwe don't pile up GenServers for every file ever touched.\n\nTDD:\n- Two tasks writing the same file → serialized (assert order via\n  test process messages).\n- Different paths → concurrent (no serialization).\n- Worker self-terminates after idle timeout.\n- Lock survives an exception in the locked fun (ref released).\n\nDepends on .1.",
+  "id": "octo-t58.3",
+  "labels": [],
+  "parent": "octo-t58",
+  "priority": 1,
+  "status": "open",
+  "title": "File mutex Registry (per-path GenServer locks)",
+  "type": "task",
+  "updated_at": "2026-04-23T21:54:43Z"
+}
