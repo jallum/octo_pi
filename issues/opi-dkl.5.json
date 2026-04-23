@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T22:27:52Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-dkl",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Bash kill_group revisit — investigate + restore process-group kill",
   "type": "task",
-  "updated_at": "2026-04-23T22:27:52Z"
+  "updated_at": "2026-04-23T22:44:59Z"
 }
