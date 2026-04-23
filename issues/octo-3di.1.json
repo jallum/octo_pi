@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "octo-3di.2"
+  ],
   "created": "2026-04-23T23:36:23Z",
   "description": "First Phase 4 child. Bring `apps/octo_pi_tui/` up from empty to\nboot-ready.\n\n- mix.exs: app :octo_pi_tui, deps on octo_pi_coder (in_umbrella).\n- lib/octo_pi/tui.ex: public facade (empty body for now).\n- lib/octo_pi/tui/application.ex: supervision tree stubs for:\n    - OctoPi.Tui.Terminal (raw mode + SIGWINCH owner) — not started\n      until interactive mode kicks in, so an empty children list\n      is fine for now; comment out the eventual child spec.\n    - OctoPi.Tui.Events (Registry for resize/etc broadcast).\n- lib/octo_pi/tui/raw_mode.ex: thin wrapper around\n  `:shell.start_interactive({:noshell, :raw | :cooked})`.\n- test/test_helper.exs + test/octo_pi/tui_test.exs with a trivial\n  contract test (module exists, Registry boots).\n\nNo Terminal GenServer yet — that lands in .2.\n\nTDD:\n- `OctoPi.Tui` module is defined.\n- `OctoPi.Tui.Events` Registry is started at app boot.\n- `RawMode.enter/0` + `RawMode.exit/0` compile.",
   "id": "octo-3di.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Scaffold octo_pi_tui app + supervision tree",
   "type": "task",
-  "updated_at": "2026-04-23T23:36:23Z"
+  "updated_at": "2026-04-23T23:37:43Z"
 }
