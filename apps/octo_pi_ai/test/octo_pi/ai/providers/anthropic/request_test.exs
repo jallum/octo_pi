@@ -68,10 +68,10 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       assert {"x-api-key", "oauth-token"} in r.headers
     end
 
-    test "raises when no API key is available" do
+    test "raises when no credentials are available" do
       System.delete_env("ANTHROPIC_API_KEY")
 
-      assert_raise RuntimeError, ~r/Anthropic API key not set/, fn ->
+      assert_raise RuntimeError, ~r/credentials not available/, fn ->
         Request.build(model(), user_context(), %StreamOptions{})
       end
     end
@@ -350,6 +350,104 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
                "properties" => %{},
                "required" => []
              }
+    end
+  end
+
+  describe "OAuth path" do
+    @oauth_token "sk-ant-oat01-foobar"
+
+    test "uses Authorization: Bearer, drops x-api-key, adds claude-cli headers" do
+      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+
+      assert {"authorization", "Bearer " <> @oauth_token} in r.headers
+      refute Enum.any?(r.headers, fn {k, _} -> k == "x-api-key" end)
+      assert {"user-agent", "claude-cli/2.1.75"} in r.headers
+      assert {"x-app", "cli"} in r.headers
+
+      assert {"anthropic-beta", "claude-code-20250219,oauth-2025-04-20"} in r.headers
+    end
+
+    test "returns resolved credentials on the built request" do
+      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+      assert r.auth.type == :oauth
+      assert r.auth.token == @oauth_token
+    end
+
+    test "prepends the Claude Code identity prompt when no user system prompt is set" do
+      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+
+      assert [%{"type" => "text", "text" => "You are Claude Code," <> _}] = r.body["system"]
+    end
+
+    test "prepends identity prompt BEFORE user's system prompt" do
+      r =
+        Request.build(
+          model(),
+          user_context(system_prompt: "be terse"),
+          %StreamOptions{api_key: @oauth_token}
+        )
+
+      assert [
+               %{"type" => "text", "text" => "You are Claude Code," <> _},
+               %{"type" => "text", "text" => "be terse"}
+             ] = r.body["system"]
+    end
+
+    test "tool names on outbound tool defs get Claude Code casing" do
+      tool = %Tool{name: "todowrite", description: "", parameters: %{}}
+
+      r =
+        Request.build(
+          model(),
+          %Context{messages: [], tools: [tool]},
+          %StreamOptions{api_key: @oauth_token}
+        )
+
+      assert [%{"name" => "TodoWrite"}] = r.body["tools"]
+    end
+
+    test "tool names on assistant history tool_use blocks also get Claude Code casing" do
+      assistant = %Message.Assistant{
+        api: :anthropic_messages,
+        provider: :anthropic,
+        model: "claude-haiku-4-5",
+        timestamp: 0,
+        content: [%ToolCall{id: "id_1", name: "read", arguments: %{"path" => "x"}}]
+      }
+
+      r =
+        Request.build(
+          model(),
+          %Context{messages: [assistant]},
+          %StreamOptions{api_key: @oauth_token}
+        )
+
+      [msg] = r.body["messages"]
+      [block] = msg["content"]
+      assert block["type"] == "tool_use"
+      assert block["name"] == "Read"
+    end
+
+    test "tool names that don't match any CC tool pass through" do
+      tool = %Tool{name: "my_custom_tool", description: "", parameters: %{}}
+
+      r =
+        Request.build(
+          model(),
+          %Context{messages: [], tools: [tool]},
+          %StreamOptions{api_key: @oauth_token}
+        )
+
+      assert [%{"name" => "my_custom_tool"}] = r.body["tools"]
+    end
+
+    test "API-key path still omits OAuth-only headers and identity prompt" do
+      r = Request.build(model(), user_context(system_prompt: "hi"), %StreamOptions{})
+
+      refute Enum.any?(r.headers, fn {k, _} -> k == "authorization" end)
+      refute Enum.any?(r.headers, fn {k, _} -> k == "user-agent" end)
+      refute Enum.any?(r.headers, fn {k, _} -> k == "x-app" end)
+      assert r.body["system"] == [%{"type" => "text", "text" => "hi"}]
     end
   end
 end

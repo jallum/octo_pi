@@ -45,8 +45,9 @@ defmodule Mix.Tasks.Ai.Demo do
   end
 
   defp run_demo(prompt, opts) do
-    ensure_api_key!()
-
+    # Credentials are resolved lazily by Request.build (OAuth or API key,
+    # via env / keychain — see OctoPi.AI.Providers.Anthropic.Auth).
+    # Any failure surfaces there as a descriptive error.
     model = model_for(opts[:model] || @default_model)
 
     context = %Context{
@@ -155,12 +156,6 @@ defmodule Mix.Tasks.Ai.Demo do
 
   # --- plumbing ---
 
-  defp ensure_api_key! do
-    if System.get_env("ANTHROPIC_API_KEY") in [nil, ""] do
-      exit_with("error: ANTHROPIC_API_KEY is not set.\n" <> usage_text())
-    end
-  end
-
   defp print_usage, do: Mix.shell().info(usage_text())
 
   defp usage_text do
@@ -169,8 +164,11 @@ defmodule Mix.Tasks.Ai.Demo do
     Usage:
       mix ai.demo "your prompt" [--model <id>] [--tool]
 
-    Environment:
-      ANTHROPIC_API_KEY   required
+    Credentials (checked in order):
+      StreamOptions.api_key    (not exposed on this CLI)
+      ANTHROPIC_OAUTH_TOKEN    env var
+      ANTHROPIC_API_KEY        env var
+      Claude Code keychain     (macOS only, if logged in)
 
     Flags:
       --model, -m   Anthropic model id (default: #{@default_model})

@@ -30,7 +30,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   use GenServer
 
   alias OctoPi.AI.{PartialJson, SSE}
-  alias OctoPi.AI.Providers.Anthropic.{Decoder, Request}
+  alias OctoPi.AI.Providers.Anthropic.{Auth, Decoder, Request}
   alias OctoPi.AI.SSE.Event, as: SseEvent
 
   @type start_arg :: %{
@@ -70,11 +70,15 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   @impl true
   def handle_continue(:run, state) do
-    {start_event, decoder_state} = Decoder.new(state.model)
+    auth = Auth.resolve(state.opts)
+
+    {start_event, decoder_state} =
+      Decoder.new(state.model, oauth?: auth.type == :oauth, tools: state.context.tools)
+
     send(state.caller, {state.ref, :event, start_event})
     state = %{state | decoder: decoder_state}
 
-    req_spec = Request.build(state.model, state.context, state.opts)
+    req_spec = Request.build(state.model, state.context, state.opts, auth)
 
     # Stash mutable state in the process dictionary so the Req
     # callback — which only sees (chunk, {req, resp}) — can share

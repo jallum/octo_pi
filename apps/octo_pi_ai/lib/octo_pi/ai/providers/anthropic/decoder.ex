@@ -20,32 +20,53 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
     Message,
     Model,
     PartialJson,
+    Tool,
     ToolCall,
     Usage
   }
 
+  alias OctoPi.AI.Providers.Anthropic.ToolNames
+
   defmodule State do
     @moduledoc "Opaque decoder state — do not pattern-match externally."
 
-    alias OctoPi.AI.{Message, Model}
+    alias OctoPi.AI.{Message, Model, Tool}
 
     @type t :: %__MODULE__{
             model: Model.t(),
             message: Message.Assistant.t(),
             index_map: %{non_neg_integer() => non_neg_integer()},
-            partial_json: %{non_neg_integer() => binary()}
+            partial_json: %{non_neg_integer() => binary()},
+            oauth?: boolean(),
+            tools: [Tool.t()]
           }
 
-    defstruct [:model, :message, index_map: %{}, partial_json: %{}]
+    defstruct [
+      :model,
+      :message,
+      index_map: %{},
+      partial_json: %{},
+      oauth?: false,
+      tools: []
+    ]
   end
+
+  @type new_opt :: {:oauth?, boolean()} | {:tools, [Tool.t()]}
 
   @doc """
   Initialize a decoder for a fresh Anthropic stream. Returns the
   `:start` canonical event (which carries an empty partial message)
   and the initial state.
+
+  `opts`:
+    * `:oauth?` — `true` when the request used OAuth credentials, so
+      inbound tool-call names get reverse-normalized via
+      `ToolNames.from_claude_code/2`. Default `false`.
+    * `:tools` — the caller's tool list, required to resolve the
+      original casing during reverse-normalization. Default `[]`.
   """
-  @spec new(Model.t()) :: {Event.Start.t(), State.t()}
-  def new(%Model{} = model) do
+  @spec new(Model.t(), [new_opt()]) :: {Event.Start.t(), State.t()}
+  def new(%Model{} = model, opts \\ []) do
     message = %Message.Assistant{
       api: model.api,
       provider: model.provider,
@@ -54,7 +75,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
       usage: %Usage{}
     }
 
-    state = %State{model: model, message: message}
+    state = %State{
+      model: model,
+      message: message,
+      oauth?: Keyword.get(opts, :oauth?, false),
+      tools: Keyword.get(opts, :tools, [])
+    }
+
     {%Event.Start{partial: message}, state}
   end
 
@@ -82,7 +109,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
           "content_block" => block
         }
       ) do
-    content_item = build_content_item(block)
+    content_item = build_content_item(block, state)
     position = length(state.message.content)
     message = %{state.message | content: state.message.content ++ [content_item]}
     new_state = %{state | message: message, index_map: Map.put(state.index_map, idx, position)}
@@ -174,14 +201,14 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
     }
   end
 
-  @spec build_content_item(map()) ::
+  @spec build_content_item(map(), State.t()) ::
           Content.Text.t() | Content.Thinking.t() | ToolCall.t()
-  defp build_content_item(%{"type" => "text"}), do: %Content.Text{text: ""}
+  defp build_content_item(%{"type" => "text"}, _state), do: %Content.Text{text: ""}
 
-  defp build_content_item(%{"type" => "thinking"}),
+  defp build_content_item(%{"type" => "thinking"}, _state),
     do: %Content.Thinking{thinking: "", signature: ""}
 
-  defp build_content_item(%{"type" => "redacted_thinking"} = block) do
+  defp build_content_item(%{"type" => "redacted_thinking"} = block, _state) do
     %Content.Thinking{
       thinking: "[Reasoning redacted]",
       signature: block["data"] || "",
@@ -189,10 +216,10 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
     }
   end
 
-  defp build_content_item(%{"type" => "tool_use"} = block) do
+  defp build_content_item(%{"type" => "tool_use"} = block, state) do
     %ToolCall{
       id: block["id"],
-      name: block["name"],
+      name: rename_from_wire(block["name"], state),
       arguments: block["input"] || %{}
     }
   end
@@ -323,6 +350,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
 
   defp map_stop_reason(other),
     do: raise(ArgumentError, "unknown Anthropic stop_reason: #{inspect(other)}")
+
+  @spec rename_from_wire(String.t(), State.t()) :: String.t()
+  defp rename_from_wire(name, %State{oauth?: false}), do: name
+
+  defp rename_from_wire(name, %State{oauth?: true, tools: tools}),
+    do: ToolNames.from_claude_code(name, tools)
 
   @spec merge_usage(Message.Assistant.t(), map()) :: Message.Assistant.t()
   defp merge_usage(message, usage) do

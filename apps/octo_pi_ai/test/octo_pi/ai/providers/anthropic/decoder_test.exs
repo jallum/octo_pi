@@ -519,4 +519,65 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
       assert args == %{"path" => "A\\H", "text" => "col1\tcol2"}
     end
   end
+
+  describe "OAuth inbound tool-name reverse normalization" do
+    alias OctoPi.AI.Tool
+
+    test "without oauth?, names pass through unchanged" do
+      {_, state} =
+        Decoder.new(model(), tools: [%Tool{name: "todowrite", description: "", parameters: %{}}])
+
+      {events, _} =
+        Decoder.handle(state, %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "t1",
+            "name" => "TodoWrite",
+            "input" => %{}
+          }
+        })
+
+      assert [%Event.ToolCallStart{partial: partial}] = events
+      assert [%ToolCall{name: "TodoWrite"}] = partial.content
+    end
+
+    test "with oauth?, CC-cased name restores caller's original casing" do
+      caller_tools = [%Tool{name: "todowrite", description: "", parameters: %{}}]
+      {_, state} = Decoder.new(model(), oauth?: true, tools: caller_tools)
+
+      {_events, state} =
+        Decoder.handle(state, %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "t1",
+            "name" => "TodoWrite",
+            "input" => %{}
+          }
+        })
+
+      assert [%ToolCall{name: "todowrite"}] = state.message.content
+    end
+
+    test "with oauth?, unmatched name passes through unchanged" do
+      {_, state} = Decoder.new(model(), oauth?: true, tools: [])
+
+      {_events, state} =
+        Decoder.handle(state, %{
+          "type" => "content_block_start",
+          "index" => 0,
+          "content_block" => %{
+            "type" => "tool_use",
+            "id" => "t1",
+            "name" => "Glob",
+            "input" => %{}
+          }
+        })
+
+      assert [%ToolCall{name: "Glob"}] = state.message.content
+    end
+  end
 end
