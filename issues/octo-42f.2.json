@@ -1,20 +1,18 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "octo-42f.5",
     "octo-42f.6"
   ],
-  "comments": [],
   "created": "2026-04-23T16:42:38.759445Z",
   "description": "Port pi-ai's event union (types.ts:248-260) to Elixir structs:\n- `%OctoPi.AI.Event.Start{partial}`\n- `%OctoPi.AI.Event.TextDelta{content_index, delta, partial}`\n- `%OctoPi.AI.Event.ThinkingDelta{...}`\n- `%OctoPi.AI.Event.ToolCallDelta{...}`, `ToolCallEnd{tool_call, ...}`\n- `%OctoPi.AI.Event.Done{reason, message}`\n- `%OctoPi.AI.Event.Error{reason, error}`\n\nAlso: `OctoPi.AI.Provider` behaviour with `stream/3` and `stream_simple/3`. `%OctoPi.AI.Context{system_prompt, messages, tools}`, `%OctoPi.AI.StreamOptions{...}`.\n\nNo implementation yet — just the contract.",
   "id": "octo-42f.2",
   "labels": [],
   "parent": "octo-42f",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Define OctoPi.AI.Provider behaviour + canonical event types",
   "type": "task",
-  "updated_at": "2026-04-23T16:42:38.759445Z"
+  "updated_at": "2026-04-23T18:07:40Z"
 }
