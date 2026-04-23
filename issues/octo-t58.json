@@ -4,7 +4,9 @@
   "blocked_by": [
     "octo-z1d"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-3di"
+  ],
   "comments": [],
   "created": "2026-04-23T16:42:55.809309Z",
   "description": "Port pi-coding-agent's non-TUI parts — enough to run a coding agent in Print and RPC modes.\n\nScope (children to be created when we approach this phase):\n- JSONL session store + migrations (byte-compatible with upstream v3 — RESEARCH.md §4.4).\n- File mutex Registry (one lock GenServer per absolute path).\n- Core file tools: read, write, edit, ls.\n- Bash tool (Port-based, streaming, pgid termination on abort).\n- Search tools: grep (rg shell-out + fallback), find (glob).\n- Print mode.\n- RPC mode (JSON-lines stdin/stdout).\n- CLI entry, arg parsing, cwd resolution, mode dispatch.\n\nDefinition of done: `mix pi --print \"write hello world to foo.txt and cat it back\"` works end-to-end and produces a session file readable by upstream `pi`. `mix pi --mode rpc` passes a JSON round-trip integration test.\n\nRef: RESEARCH.md §3.3, §4.4, §6 Phase 3.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Phase 3: octo_pi_coder — core (sessions, tools, Print/RPC)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:52.689116Z"
+  "updated_at": "2026-04-23T16:43:53.704415Z"
 }
