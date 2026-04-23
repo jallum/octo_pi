@@ -34,4 +34,60 @@ defmodule OctoPi.Coder.CLITest do
       assert {:error, _} = CLI.parse_args([])
     end
   end
+
+  describe "safe_emit/1" do
+    test "emits the JSON-encoded map on stdout" do
+      output = ExUnit.CaptureIO.capture_io(fn -> CLI.safe_emit(%{"a" => 1}) end)
+      assert output == ~s|{"a":1}| <> "\n"
+    end
+
+    test "survives a non-encodable value and emits an error fallback" do
+      bad = %{"pid" => self()}
+
+      output = ExUnit.CaptureIO.capture_io(fn -> CLI.safe_emit(bad) end)
+
+      decoded = Jason.decode!(String.trim(output))
+      assert decoded["error"]["message"] =~ "encoding failed"
+    end
+  end
+
+  describe "response_for/2" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Model
+
+    defp model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    test "dispatches a valid request through Rpc" do
+      {:ok, session} =
+        OctoPi.Agent.start_session(model: model(), transport: FakeTransport, tools: [])
+
+      response = CLI.response_for(~s|{"id":"r1","method":"abort","params":{}}|, session)
+      assert response["id"] == "r1"
+      assert response["result"] == "ok"
+    end
+
+    test "returns a parse error for malformed JSON" do
+      {:ok, session} =
+        OctoPi.Agent.start_session(model: model(), transport: FakeTransport, tools: [])
+
+      response = CLI.response_for("not json\n", session)
+      assert response["id"] == nil
+      assert response["error"]["message"] =~ "parse error"
+    end
+  end
 end

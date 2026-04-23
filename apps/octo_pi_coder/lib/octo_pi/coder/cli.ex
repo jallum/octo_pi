@@ -9,6 +9,7 @@ defmodule OctoPi.Coder.CLI do
 
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Modes.{Print, Rpc}
+  alias OctoPi.Coder.Tools
 
   @default_model "claude-haiku-4-5"
 
@@ -95,18 +96,17 @@ defmodule OctoPi.Coder.CLI do
         tools: default_tools()
       )
 
-    # Forward all agent events as JSON lines on stdout.
-    OctoPi.Agent.subscribe(session, self(), :async)
-    event_forwarder = spawn_link(fn -> forward_events(self()) end)
-    send(event_forwarder, {:owner, self()})
+    # Spawn a dedicated forwarder process and subscribe *it* — not
+    # the main CLI process, which is about to block in IO.read on
+    # stdin and would never drain its mailbox.
+    event_forwarder = spawn_link(fn -> forward_events() end)
+    OctoPi.Agent.subscribe(session, event_forwarder, :async)
 
     rpc_loop(session)
     0
   end
 
   defp default_tools do
-    alias OctoPi.Coder.Tools
-
     [
       Tools.Read.tool(),
       Tools.Write.tool(),
@@ -128,30 +128,43 @@ defmodule OctoPi.Coder.CLI do
         :ok
 
       line when is_binary(line) ->
-        handle_line(session, line)
+        line
+        |> response_for(session)
+        |> safe_emit()
+
         rpc_loop(session)
     end
   end
 
-  defp handle_line(session, line) do
-    response =
-      case Rpc.parse_line(line) do
-        {:ok, req} -> Rpc.handle_request(session, req)
-        {:error, err} -> %{"id" => nil, "error" => %{"message" => "parse error: #{inspect(err)}"}}
-      end
-
-    IO.puts(Jason.encode!(response))
+  @doc false
+  @spec response_for(String.t(), pid()) :: map()
+  def response_for(line, session) do
+    case Rpc.parse_line(line) do
+      {:ok, req} -> Rpc.handle_request(session, req)
+      {:error, err} -> %{"id" => nil, "error" => %{"message" => "parse error: #{inspect(err)}"}}
+    end
   end
 
-  defp forward_events(_owner) do
+  defp forward_events do
     receive do
       {:octo_pi_agent_event, event} ->
-        IO.puts(Jason.encode!(Rpc.event_to_json(event)))
-        forward_events(nil)
-
-      _ ->
-        forward_events(nil)
+        event |> Rpc.event_to_json() |> safe_emit()
+        forward_events()
     end
+  end
+
+  # Jason.encode! raises on non-encodable values (pids, funs,
+  # certain binaries). A crash here would take down the forwarder
+  # or rpc_loop and silently kill the RPC session. Emit a generic
+  # error line instead so the client still sees something.
+  @doc false
+  @spec safe_emit(map()) :: :ok
+  def safe_emit(map) do
+    IO.puts(Jason.encode!(map))
+  rescue
+    error ->
+      fallback = %{"error" => %{"message" => "encoding failed: #{Exception.message(error)}"}}
+      IO.puts(Jason.encode!(fallback))
   end
 
   defp resolve_model(id) do
