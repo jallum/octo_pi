@@ -9,7 +9,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Application do
   def start(_type, _args) do
     register_provider()
     AnthropicHandler.attach()
-    Supervisor.start_link([], strategy: :one_for_one, name: __MODULE__)
+
+    children = [
+      {Task.Supervisor, name: OctoPi.AI.Providers.Anthropic.TaskSup}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: __MODULE__)
   end
 
   # Register this provider in the core `octo_pi_ai` app's registry so

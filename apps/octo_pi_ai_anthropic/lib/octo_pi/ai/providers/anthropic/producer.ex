@@ -1,33 +1,41 @@
 defmodule OctoPi.AI.Providers.Anthropic.Producer do
   @moduledoc """
-  GenServer that drives a single Anthropic streaming request.
+  Per-call Anthropic streaming worker.
 
-  One producer per `stream/3` call. The producer:
-    1. Emits the `:start` event immediately.
-    2. Runs `Req.post` with a streaming callback that feeds each
-       chunk through `OctoPi.AI.SSE` → JSON parse → `Decoder.handle`
-       and sends each canonical event as a message to the caller.
-    3. Emits `Event.Done` or `Event.Error` when the HTTP body ends
-       (or raises).
-    4. Sends a final `:done` sentinel and exits with `:normal`.
+  Runs as a supervised Task under `OctoPi.AI.Providers.Anthropic.TaskSup`.
+  The task:
 
-  Started unlinked via `GenServer.start/3`; the caller monitors the
-  pid. Process lifecycle:
+    1. Emits the `:start` event immediately so the caller sees signs
+       of life before any bytes arrive.
+    2. Opens the HTTP request with `Req.post!(into: :self)`, receiving
+       chunks as messages via `Req.parse_message/2`.
+    3. Feeds each chunk through `OctoPi.AI.SSE` → JSON repair →
+       `Decoder.handle` and `send/2`s each canonical event to the
+       caller.
+    4. Emits `Event.Done` or `Event.Error` when the body ends (or a
+       known exception surfaces).
+    5. Sends a final `:done` sentinel and exits `:normal`.
 
-    - Caller halts the stream → `Stream.resource/3` `after` fun
-      does `Process.exit(pid, :shutdown)`. Producer dies immediately;
-      Finch releases the HTTP connection.
-    - Caller dies mid-stream → Producer's `Process.monitor/1` fires
-      inside the chunk callback; Req is halted, producer exits
-      cleanly.
-    - HTTP / SSE error → catch, emit `Event.Error`, send `:done`,
-      exit `:normal`.
+  State flows as a plain function argument through the `receive_loop`,
+  so the rescue path naturally captures the latest in-flight state
+  (unlike the previous `Process.put/get` version).
 
-  All events reach the caller via `send/2` using the ref passed at
-  init, so callers only need one `receive` clause per message shape.
+  Lifecycle:
+
+    - Caller halts the stream → `Stream.resource/3`'s `after` fun
+      does `Process.exit(pid, :shutdown)`. Task dies; Finch drops the
+      connection.
+    - Caller dies mid-stream → our `Process.monitor/1` fires inside
+      the receive loop; we halt, mark the state aborted, and emit
+      `Event.Error{reason: :aborted}`. (Aborted semantics land in
+      opi-hgb.2 — this module is wired to support them; currently
+      the `aborted?` flag is set but the error surfaces as `:error`.)
+    - HTTP 4xx/5xx → `emit_http_error` + `request.stop` telemetry.
+    - Known exceptions (Req.TransportError, Jason.DecodeError,
+      RuntimeError) are caught, turned into `Event.Error`, telemetry
+      fires, and the task exits `:normal`. Everything else bubbles
+      to the Task.Supervisor.
   """
-
-  use GenServer
 
   alias OctoPi.AI.{PartialJson, SSE}
   alias OctoPi.AI.Providers.Anthropic.{Auth, Decoder, Request}
@@ -42,55 +50,47 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
           optional(:req_overrides) => keyword()
         }
 
+  @doc """
+  Start a producer task under `OctoPi.AI.Providers.Anthropic.TaskSup`.
+  Returns the task pid so the caller can monitor / halt it.
+  """
   @spec start(start_arg()) :: {:ok, pid()} | {:error, term()}
   def start(%{} = args) do
-    GenServer.start(__MODULE__, args)
+    Task.Supervisor.start_child(
+      OctoPi.AI.Providers.Anthropic.TaskSup,
+      fn -> run(args) end,
+      restart: :temporary
+    )
   end
 
-  # --- GenServer callbacks ---
-
-  @impl true
-  def init(args) do
+  @spec run(start_arg()) :: :ok
+  def run(%{} = args) do
     caller_mon = Process.monitor(args.caller)
-
-    state = %{
-      model: args.model,
-      context: args.context,
-      opts: args.opts,
-      caller: args.caller,
-      ref: args.ref,
-      caller_mon: caller_mon,
-      req_overrides: Map.get(args, :req_overrides, []),
-      sse: SSE.new(),
-      decoder: nil
-    }
-
-    {:ok, state, {:continue, :run}}
-  end
-
-  @impl true
-  def handle_continue(:run, state) do
-    auth = Auth.resolve(state.opts)
+    auth = Auth.resolve(args.opts)
     start_mono = System.monotonic_time()
 
     :telemetry.execute(
       [:octo_pi_ai, :anthropic, :request, :start],
       %{system_time: System.system_time()},
-      %{model: state.model.id, auth_type: auth.type}
+      %{model: args.model.id, auth_type: auth.type}
     )
 
     {start_event, decoder_state} =
-      Decoder.new(state.model, oauth?: auth.type == :oauth, tools: state.context.tools)
+      Decoder.new(args.model, oauth?: auth.type == :oauth, tools: args.context.tools)
 
-    send(state.caller, {state.ref, :event, start_event})
-    state = %{state | decoder: decoder_state}
+    send(args.caller, {args.ref, :event, start_event})
 
-    req_spec = Request.build(state.model, state.context, state.opts, auth)
+    state = %{
+      caller: args.caller,
+      ref: args.ref,
+      caller_mon: caller_mon,
+      model: args.model,
+      sse: SSE.new(),
+      decoder: decoder_state,
+      aborted?: false
+    }
 
-    # Stash mutable state in the process dictionary so the Req
-    # callback — which only sees (chunk, {req, resp}) — can share
-    # state with the GenServer loop.
-    Process.put(:octo_pi_state, state)
+    req_spec = Request.build(args.model, args.context, args.opts, auth)
 
     req_opts =
       [
@@ -98,14 +98,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
         headers: req_spec.headers,
         json: req_spec.body,
         receive_timeout: :infinity,
-        into: &handle_chunk/2
-      ] ++ state.req_overrides
+        into: :self
+      ] ++ Map.get(args, :req_overrides, [])
 
     state =
       try do
         resp = Req.post!(req_opts)
-
-        state = Process.get(:octo_pi_state)
+        state = drain_body(resp, state)
 
         state =
           if resp.status in 200..299 do
@@ -117,66 +116,47 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
         emit_request_stop(state, start_mono, http_status: resp.status)
         state
       rescue
-        e ->
-          state = Process.get(:octo_pi_state)
+        e in [Req.TransportError, Jason.DecodeError, RuntimeError] ->
           state = emit_error(state, Exception.message(e), :error)
           emit_request_exception(state, start_mono, :error, Exception.message(e))
-          state
-      catch
-        :exit, reason ->
-          state = Process.get(:octo_pi_state)
-          state = emit_error(state, "process exit: #{inspect(reason)}", :error)
-          emit_request_exception(state, start_mono, :exit, inspect(reason))
           state
       end
 
     send(state.caller, {state.ref, :done})
-    {:stop, :normal, state}
+    :ok
   end
 
-  defp emit_request_stop(state, start_mono, extras) do
-    usage = state.decoder.message.usage
+  # --- body drain: receive chunks via Req.parse_message/2 ---
 
-    :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :request, :stop],
-      %{
-        duration: System.monotonic_time() - start_mono,
-        input_tokens: usage.input,
-        output_tokens: usage.output,
-        total_tokens: usage.total_tokens
-      },
-      Map.merge(
-        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
-        Map.new(extras)
-      )
-    )
-  end
-
-  defp emit_request_exception(state, start_mono, kind, reason) do
-    :telemetry.execute(
-      [:octo_pi_ai, :anthropic, :request, :exception],
-      %{duration: System.monotonic_time() - start_mono},
-      %{model: state.model.id, kind: kind, reason: reason}
-    )
-  end
-
-  # --- chunk callback (runs inside handle_continue, same process) ---
-
-  defp handle_chunk({:data, chunk}, acc) do
-    state = Process.get(:octo_pi_state)
-
-    # Peek for caller-death; if present, halt Req so the connection
-    # closes promptly.
+  defp drain_body(resp, state) do
     receive do
       {:DOWN, mon, :process, _, _} when mon == state.caller_mon ->
-        {:halt, acc}
-    after
-      0 ->
-        process_chunk(chunk, state, acc)
+        %{state | aborted?: true}
+
+      message ->
+        case Req.parse_message(resp, message) do
+          {:ok, parts} ->
+            state = process_parts(parts, state)
+            if Enum.member?(parts, :done), do: state, else: drain_body(resp, state)
+
+          :unknown ->
+            drain_body(resp, state)
+
+          {:error, reason} ->
+            raise "Req stream error: #{inspect(reason)}"
+        end
     end
   end
 
-  defp process_chunk(chunk, state, acc) do
+  defp process_parts(parts, state) do
+    Enum.reduce(parts, state, fn
+      {:data, chunk}, st -> process_chunk(chunk, st)
+      :done, st -> st
+      _other, st -> st
+    end)
+  end
+
+  defp process_chunk(chunk, state) do
     {sse_events, sse} = SSE.decode(state.sse, chunk)
 
     decoder =
@@ -184,8 +164,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
         handle_sse_event(sse_ev, dstate, state.caller, state.ref)
       end)
 
-    Process.put(:octo_pi_state, %{state | sse: sse, decoder: decoder})
-    {:cont, acc}
+    %{state | sse: sse, decoder: decoder}
   end
 
   defp handle_sse_event(%SseEvent{event: "ping"}, dstate, _caller, _ref), do: dstate
@@ -223,5 +202,33 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
     {error_ev, decoder} = Decoder.error(state.decoder, message, reason)
     send(state.caller, {state.ref, :event, error_ev})
     %{state | decoder: decoder}
+  end
+
+  # --- telemetry ---
+
+  defp emit_request_stop(state, start_mono, extras) do
+    usage = state.decoder.message.usage
+
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :request, :stop],
+      %{
+        duration: System.monotonic_time() - start_mono,
+        input_tokens: usage.input,
+        output_tokens: usage.output,
+        total_tokens: usage.total_tokens
+      },
+      Map.merge(
+        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
+        Map.new(extras)
+      )
+    )
+  end
+
+  defp emit_request_exception(state, start_mono, kind, reason) do
+    :telemetry.execute(
+      [:octo_pi_ai, :anthropic, :request, :exception],
+      %{duration: System.monotonic_time() - start_mono},
+      %{model: state.model.id, kind: kind, reason: reason}
+    )
   end
 end
