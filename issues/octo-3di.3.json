@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-3di.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-3di.9"
+  ],
   "created": "2026-04-23T23:36:23Z",
   "description": "Port-map §3. Pure-ish state machine that accumulates bytes from\nTerminal (.2) and emits complete escape sequences + plain chars.\n\n- OctoPi.Tui.StdinFSM GenServer.\n- handle_call({:process, chunk}, _, state):\n    new_buffer = state.buffer \u003c\u003e chunk\n    {seqs, remainder} = extract_complete_sequences(new_buffer)\n    broadcast seqs via OctoPi.Tui.Events\n    timeout = if remainder == \"\", do: :infinity, else: @flush_ms\n    {:reply, :ok, %{state | buffer: remainder}, timeout}\n- handle_info(:timeout, %{buffer: \"\"}) → no-op\n- handle_info(:timeout, %{buffer: buf}) → flush buf as-is\n\nSequence detection (multi-head pattern matching, not cond/case\nat the top of one function):\n- CSI: \"\\e[...\" ends on byte 0x40-0x7E\n- OSC: \"\\e]...\" ends on BEL or ST (\"\\e\\\\\")\n- Meta: \"\\e\u003cchar\u003e\" (single char after ESC)\n- Bracketed paste: \"\\e[200~\" ... \"\\e[201~\"\n- SS3: \"\\eO\u003cchar\u003e\"\n- Plain char: anything not starting with ESC\n\nMirrors upstream stdin-buffer.test.ts (port-map §14.1) — 422\nlines of cases: split-across-chunks, timeout-flush, SGR mouse,\nold X11 mouse, arrows, function keys, Kitty press/release,\nbracketed paste, flush/destroy.\n\nTDD: lift the whole case list from §14.1.\n\nDepends on .1. Can be built independently of .2 (tested directly\nwith `:process` calls).",
   "id": "octo-3di.3",
