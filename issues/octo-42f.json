@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-w29"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:42:38.759445Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 1: octo_pi_ai — Anthropic MVP",
   "type": "epic",
-  "updated_at": "2026-04-23T16:42:38.759445Z"
+  "updated_at": "2026-04-23T16:43:50.647639Z"
 }
