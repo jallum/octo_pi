@@ -7,14 +7,15 @@
     "octo-w29.3",
     "octo-w29.4"
   ],
+  "closed_at": "2026-04-23T17:33:08Z",
   "created": "2026-04-23T16:42:06.865304Z",
   "description": "Create the umbrella layout (assuming umbrella per spike result):\n- `mix new octo_pi --umbrella`\n- Under `apps/`: `octo_pi_ai`, `octo_pi_agent`, `octo_pi_coder`, `octo_pi_tui`\n- Set up `.formatter.exs`, `.tool-versions` (OTP + Elixir), `.iex.exs`\n- Shared dev deps at root: `credo`, `dialyxir`, `ex_doc`\n\nEach app should compile standalone. No behavior yet.",
   "id": "octo-w29.2",
   "labels": [],
   "parent": "octo-w29",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Scaffold umbrella project with four apps",
   "type": "task",
-  "updated_at": "2026-04-23T17:32:58Z"
+  "updated_at": "2026-04-23T17:33:08Z"
 }
