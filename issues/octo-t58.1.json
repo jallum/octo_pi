@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "octo-t58.2"
+    "octo-t58.2",
+    "octo-t58.3"
   ],
   "created": "2026-04-23T21:54:43Z",
   "description": "New umbrella app `apps/octo_pi_coder/` depending on `octo_pi_agent`.\n\n- mix.exs: app name :octo_pi_coder, deps on octo_pi_agent (in_umbrella)\n  + erlexec (for bash tool later; add now to keep deps stable).\n- lib/octo_pi/coder/application.ex with supervision tree:\n    - OctoPi.Coder.SessionStore.Supervisor (per-session stores)\n    - OctoPi.Coder.FileMutex (Registry for per-path locks)\n    - OctoPi.Coder.FileMutex.Supervisor (DynamicSupervisor for\n      per-path GenServers)\n- Module skeletons (lib/octo_pi/coder.ex public facade, empty body).\n- test/test_helper.exs, test/octo_pi/coder_test.exs basic \"module\n  exists\" check.\n\nDepends on: none (first child).\n\nTDD:\n- Trivial compilation test: `OctoPi.Coder` module exists.\n- Application starts cleanly (supervisor tree boots).",
