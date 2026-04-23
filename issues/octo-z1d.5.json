@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "octo-z1d.3"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "octo-z1d",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Steering + follow-up queues wired into loop drainage points",
   "type": "task",
-  "updated_at": "2026-04-23T20:40:17Z"
+  "updated_at": "2026-04-23T21:01:19Z"
 }
