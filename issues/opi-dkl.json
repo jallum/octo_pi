@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:26:53Z",
+  "description": "Addresses findings from the /review on the Phase 3 coder branch\n(review/octo-t58, commits 8bea0e8..f6d6951). The RPC event-\nforwarding bug is a correctness issue worth fixing before the\ncoder layer gets used; the rest are polish + hardening.\n\nChildren cover:\n  - RPC event forwarding wiring bug (events silently dropped\n    because subscribe target was the CLI main pid, not the\n    forwarder process)\n  - Session cwd enforcement for tool paths (tools currently\n    accept any absolute path; cwd rooting deferred in Phase 3)\n  - read.ex off-by-one for files without trailing newline +\n    streaming refactor\n  - grep/find abort-responsiveness + rg availability cache\n  - Bash :kill_group revisit (orphan process group leaks on abort)\n  - RPC event serialization richness (current shape is lossy)\n  - Integration + end-to-end test coverage gaps (`mix pi --print`\n    against live Anthropic, RPC request+events flow)\n  - Style/docs cleanup grab-bag",
+  "id": "opi-dkl",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "[EPIC] Phase 3 review cleanup (octo-t58 review findings)",
+  "type": "task",
+  "updated_at": "2026-04-23T22:26:53Z"
+}
