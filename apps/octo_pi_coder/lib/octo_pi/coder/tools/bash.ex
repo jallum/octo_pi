@@ -3,10 +3,15 @@ defmodule OctoPi.Coder.Tools.Bash do
   `bash` built-in tool. Runs a shell command under `erlexec` with
   streaming stdout/stderr, a deadline, and cooperative abort.
 
-  On timeout or abort, `:exec.stop/1` signals the direct child.
-  Process-group kill (`:kill_group` on erlexec) proved unstable on
-  macOS; orphaned grand-children from background jobs are a known
-  limitation to revisit.
+  On timeout or abort, `:exec.stop/1` signals the direct child only;
+  background jobs launched by the command (e.g. `bash -c "x & wait"`)
+  can leak. We investigated enabling erlexec's `:kill_group` flag —
+  it works for single invocations but destabilizes the `:exec`
+  singleton when multiple commands run back-to-back in the same VM,
+  crashing with `{:exit_status, N}`. Tracked as a known limitation;
+  a proper fix needs either an upstream erlexec patch or a switch
+  to a custom setpgid'ing port helper. See the discussion in
+  `opi-dkl.5` for the reproduction.
   """
 
   @behaviour OctoPi.Agent.Tool.Handler
@@ -73,18 +78,12 @@ defmodule OctoPi.Coder.Tools.Bash do
       %{cmd: cmd, cwd: cwd}
     )
 
-    # NOTE: `:kill_group` would give us robust termination of
-    # process trees launched by the command, but empirically it
-    # crashes the erlexec singleton GenServer on macOS. Without it,
-    # `:exec.stop/1` still signals the direct child — sufficient for
-    # typical tool commands (ls, grep, builds). Background jobs
-    # launched by the command may leak; revisit when we port
-    # upstream's full bash-executor semantics.
     exec_opts = [
       :monitor,
       {:stdout, self()},
       {:stderr, self()},
       {:cd, to_charlist(cwd)}
+      # `:kill_group` is omitted intentionally — see moduledoc.
     ]
 
     # `run/2` (no link) + `:monitor` — child exits propagate as
