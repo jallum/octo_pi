@@ -5,7 +5,8 @@
     "octo-z1d"
   ],
   "blocks": [
-    "octo-3di"
+    "octo-3di",
+    "octo-3gv"
   ],
   "comments": [],
   "created": "2026-04-23T16:42:55.809309Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Phase 3: octo_pi_coder — core (sessions, tools, Print/RPC)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:53.704415Z"
+  "updated_at": "2026-04-23T16:43:55.581055Z"
 }
