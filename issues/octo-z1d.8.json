@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T20:40:06Z",
+  "description": "Wrap everything up and prove it.\n\n1. @behaviour OctoPi.Agent.Transport:\n     @callback stream(Model.t(), Context.t(), StreamOptions.t()) :: Enumerable.t(Event.t())\n   Default impl OctoPi.Agent.Transport.Direct delegates to\n   OctoPi.AI.stream/3 from Phase 1. Session opts accept\n   :transport (module) with Direct as default. Proxy impl deferred.\n\n2. Port the critical tests from pi-mono/packages/agent/test/:\n   - agent-loop.test.ts: event order, exit conditions, tool-result\n     append order, sequential mode honored, hook block/patch\n   - agent.test.ts: state setter copy semantics, subscribe\n     unsubscribe closure, :sync listener ordering, abort mid-stream\n     surfaces :aborted, steer injection, follow_up idle behaviour\n\n3. Live integration test (gated :integration tag):\n   - Register an Echo tool\n   - OctoPi.Agent.start_session + prompt \"repeat 'hello' via echo tool\"\n   - Watch events flow until agent_end with :stop\n   - Verify messages list contains user → assistant(tool_use) →\n     tool_result(echo) → assistant(stop)\n\n4. mix agent.demo task (optional but nice): like ai.demo but at the\n   agent layer — register Echo tool, run a prompt, print events.\n\nDepends on z1d.4, z1d.5, z1d.6, z1d.7.",
+  "id": "octo-z1d.8",
+  "labels": [],
+  "parent": "octo-z1d",
+  "priority": 1,
+  "status": "open",
+  "title": "Transport behaviour + live integration + port pi-mono tests",
+  "type": "task",
+  "updated_at": "2026-04-23T20:40:06Z"
+}
