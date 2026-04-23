@@ -22,12 +22,12 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
     # All env vars cleared at the start of each test.
     System.delete_env("ANTHROPIC_API_KEY")
     System.delete_env("ANTHROPIC_OAUTH_TOKEN")
-    Application.put_env(:octo_pi_ai, :anthropic_keychain_reader, NoopKeychain)
+    Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, NoopKeychain)
 
     on_exit(fn ->
       System.delete_env("ANTHROPIC_API_KEY")
       System.delete_env("ANTHROPIC_OAUTH_TOKEN")
-      Application.delete_env(:octo_pi_ai, :anthropic_keychain_reader)
+      Application.delete_env(:octo_pi_ai_anthropic, :keychain_reader)
       Process.delete(:fake_keychain_token)
     end)
 
@@ -79,14 +79,14 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
 
   describe "resolve/1 — keychain fallback" do
     test "keychain returns a token when env is empty" do
-      Application.put_env(:octo_pi_ai, :anthropic_keychain_reader, FakeKeychain)
+      Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, FakeKeychain)
       Process.put(:fake_keychain_token, "sk-ant-oat-keychain")
 
       assert %Credentials{type: :oauth, token: "sk-ant-oat-keychain"} = Auth.resolve()
     end
 
     test "keychain used only after env vars" do
-      Application.put_env(:octo_pi_ai, :anthropic_keychain_reader, FakeKeychain)
+      Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, FakeKeychain)
       Process.put(:fake_keychain_token, "sk-ant-oat-keychain")
       System.put_env("ANTHROPIC_API_KEY", "ak-env")
 
@@ -95,7 +95,7 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
     end
 
     test "raising keychain reader does not blow up — treated as nil" do
-      Application.put_env(:octo_pi_ai, :anthropic_keychain_reader, RaisingKeychain)
+      Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, RaisingKeychain)
 
       assert_raise RuntimeError, ~r/credentials not available/, fn ->
         Auth.resolve()

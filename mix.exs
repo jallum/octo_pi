@@ -40,6 +40,7 @@ defmodule OctoPi.MixProject do
       octo_pi: [
         applications: [
           octo_pi_ai: :permanent,
+          octo_pi_ai_anthropic: :permanent,
           octo_pi_agent: :permanent,
           octo_pi_coder: :permanent,
           octo_pi_tui: :permanent

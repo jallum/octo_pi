@@ -10,9 +10,12 @@ defmodule OctoPi.AI do
 
   The canonical types (`Context`, `Model`, `Message`, `Event`, …) and
   the `Provider` behaviour live in `OctoPi.AI.*` submodules. Provider
-  implementations live in `OctoPi.AI.Providers.*`.
+  implementations ship as sibling umbrella apps (e.g.
+  `octo_pi_ai_anthropic`) and register themselves in the providers
+  registry under application env `{:octo_pi_ai, :providers}` on
+  startup.
 
-  See `docs/port-map/anthropic.md` for the port reference.
+  See `docs/port-map/anthropic.md` for the Anthropic reference port.
   """
 
   alias OctoPi.AI.{Context, Model, StreamOptions}
@@ -38,9 +41,25 @@ defmodule OctoPi.AI do
     provider_module(model.api).stream_simple(model, context, opts || %StreamOptions{})
   end
 
+  @doc """
+  Return the registered provider module for a given `api` atom, or
+  raise if nothing is registered. Providers self-register on their
+  `Application.start/2`.
+  """
   @spec provider_module(atom()) :: module()
-  defp provider_module(:anthropic_messages), do: OctoPi.AI.Providers.Anthropic
+  def provider_module(api) when is_atom(api) do
+    :octo_pi_ai
+    |> Application.get_env(:providers, %{})
+    |> Map.get(api)
+    |> case do
+      nil ->
+        raise ArgumentError,
+              "no provider registered for api: #{inspect(api)}. " <>
+                "Ensure the matching provider app is listed as a dependency " <>
+                "and started (e.g. :octo_pi_ai_anthropic for :anthropic_messages)."
 
-  defp provider_module(api),
-    do: raise(ArgumentError, "no provider registered for api: #{inspect(api)}")
+      module when is_atom(module) ->
+        module
+    end
+  end
 end

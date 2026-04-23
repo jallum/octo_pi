@@ -68,6 +68,6 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
 
   @spec keychain_reader() :: module()
   defp keychain_reader do
-    Application.get_env(:octo_pi_ai, :anthropic_keychain_reader, @noop_reader)
+    Application.get_env(:octo_pi_ai_anthropic, :keychain_reader, @noop_reader)
   end
 end

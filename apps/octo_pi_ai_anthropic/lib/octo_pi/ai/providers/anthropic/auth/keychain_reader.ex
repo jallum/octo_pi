@@ -7,7 +7,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth.KeychainReader do
   credential is available. They must not raise — an unsupported
   platform or missing entry is `nil`, not an error.
 
-  Installed via `Application.put_env(:octo_pi_ai, :anthropic_keychain_reader, MyModule)`.
+  Installed via `Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, MyModule)`.
   Default implementation: `OctoPi.AI.Providers.Anthropic.Auth.NoopKeychain` (always nil).
   """
 

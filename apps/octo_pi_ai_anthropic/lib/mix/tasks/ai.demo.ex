@@ -33,7 +33,10 @@ defmodule Mix.Tasks.Ai.Demo do
   @impl Mix.Task
   def run(argv) do
     Mix.Task.run("app.config")
-    Application.ensure_all_started(:octo_pi_ai)
+    # Start the Anthropic app so its Application callback registers
+    # the provider in core's dispatch table. This also brings up
+    # :octo_pi_ai transitively as a declared dep.
+    Application.ensure_all_started(:octo_pi_ai_anthropic)
 
     {opts, positional, _} = OptionParser.parse(argv, switches: @switches, aliases: @aliases)
 

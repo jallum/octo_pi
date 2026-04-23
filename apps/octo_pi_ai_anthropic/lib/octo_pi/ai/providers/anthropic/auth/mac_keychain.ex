@@ -26,7 +26,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth.MacKeychain do
       import Config
       if :os.type() == {:unix, :darwin} do
         config :octo_pi_ai,
-          anthropic_keychain_reader:
+          keychain_reader:
             OctoPi.AI.Providers.Anthropic.Auth.MacKeychain
       end
 
