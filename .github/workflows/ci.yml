@@ -18,8 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - elixir: "1.19.4"
-            otp: "28.0"
+          - elixir: "1.19.5"
+            otp: "28.3"
     env:
       MIX_ENV: test
     steps:
