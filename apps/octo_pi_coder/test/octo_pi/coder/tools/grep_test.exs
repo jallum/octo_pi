@@ -47,4 +47,13 @@ defmodule OctoPi.Coder.Tools.GrepTest do
 
     assert text =~ "no matches" or text == ""
   end
+
+  test "aborted ref short-circuits before shelling out", %{tmp: tmp, ref: ref} do
+    AbortRef.abort(ref)
+
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(%{"pattern" => "beta", "path" => tmp}, ref, tmp)
+
+    assert msg =~ "aborted"
+  end
 end

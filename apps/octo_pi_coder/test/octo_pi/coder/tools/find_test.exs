@@ -41,4 +41,13 @@ defmodule OctoPi.Coder.Tools.FindTest do
 
     assert text =~ "no matches" or text == ""
   end
+
+  test "aborted ref short-circuits before walking", %{tmp: tmp, ref: ref} do
+    AbortRef.abort(ref)
+
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(%{"pattern" => "**/*", "path" => tmp}, ref, tmp)
+
+    assert msg =~ "aborted"
+  end
 end

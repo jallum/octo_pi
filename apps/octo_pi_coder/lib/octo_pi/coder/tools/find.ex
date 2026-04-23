@@ -7,6 +7,7 @@ defmodule OctoPi.Coder.Tools.Find do
 
   @behaviour OctoPi.Agent.Tool.Handler
 
+  alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
@@ -38,19 +39,27 @@ defmodule OctoPi.Coder.Tools.Find do
   end
 
   @impl true
-  def execute(_id, %{"pattern" => pattern} = args, _abort_ref, _on_update) do
+  def execute(_id, %{"pattern" => pattern} = args, abort_ref, _on_update) do
     cwd = Map.fetch!(args, "_cwd")
     requested_base = Map.get(args, "path", cwd)
 
+    if AbortRef.aborted?(abort_ref) do
+      {:ok,
+       %Result{is_error?: true, content: [%Content.Text{text: "find aborted before execution"}]}}
+    else
+      do_find(requested_base, cwd, pattern)
+    end
+  end
+
+  defp do_find(requested_base, cwd, pattern) do
     case PathGuard.resolve_or_error(requested_base, cwd) do
       {:error, %Result{} = r} ->
         {:ok, r}
 
       {:ok, base} ->
-        full_pattern = Path.join(base, pattern)
-
         matches =
-          full_pattern
+          base
+          |> Path.join(pattern)
           |> Path.wildcard(match_dot: true)
           |> Enum.take(@max_matches)
 
