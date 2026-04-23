@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-hgb.2"
+  ],
   "blocks": [],
   "created": "2026-04-23T19:57:58Z",
   "description": "Fidelity reviewer called out these specific gaps:\n\n1. PartialJson: parse_streaming with escaped quote inside unterminated string (real tool-call scenario):\n   assert parse_streaming(~s({\\\"regex\\\": \\\"a\\\\\\\\\\\"b)) == %{\\\"regex\\\" =\u003e \\\"a\\\\\\\"b\\\"}\n\n2. Decoder: text block followed by tool_use in one stream (Claude's \\\"Let me look... \u003ctool_use\u003e\\\" pattern).\n\n3. Decoder: out-of-order content_block_start indices (index:1 before index:0). We handle it via the index_map but it's not tested.\n\n4. SSE+Producer: UTF-8 multi-byte char sliced across two HTTP chunks inside a text_delta (currently only tested at the SSE layer).\n\n5. Request: parameterized tool-call ID sanitization — empty string, all-invalid chars, pathological-that-becomes-empty, OpenAI-style pipe ID, Google-style dot ID.\n\n6. Producer: caller-dies-mid-stream test (ties to opi-hgb.2 — once :aborted exists, test it).\n\n7. Regression test for the \\\"partialJson not persisted on final tool-call\\\" invariant (structurally enforced by our design but worth pinning).\n\nTDD: these are \\\"add test, verify it passes (or catches a bug)\\\" — pure test additions. If any fail on current code, open a separate ticket for the fix.\n\nDepends on opi-hgb.2 for #6 (need :aborted to test for it).\n\nFiles: partial_json_test.exs, decoder_test.exs, producer_test.exs, request_test.exs, ai_stream_test.exs (moved; it's anthropic_stream_test.exs now? wait, it's ai_stream_test.exs in the anthropic app).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Add missing test coverage per fidelity review",
   "type": "task",
-  "updated_at": "2026-04-23T19:57:58Z"
+  "updated_at": "2026-04-23T19:58:06Z"
 }

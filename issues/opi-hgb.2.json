@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-hgb.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-hgb.10"
+  ],
   "created": "2026-04-23T19:57:58Z",
   "description": "Port-map §6.7 + §7.2 promise \\`:aborted\\` vs \\`:error\\` distinction; we currently produce \\`:error\\` in both cases. Detect caller death via the existing DOWN monitor in handle_chunk and thread an \\`aborted?: true\\` flag into the terminal Event.Error.\n\nTDD:\n- RED: write a test that starts a producer, receives Event.Start, kills the caller pid, and (via a listener proxy) asserts a separate observer sees Event.Error{reason: :aborted}.\n- GREEN: in handle_chunk when the DOWN fires, set state.aborted? = true before returning {:halt, acc}. Then emit_done_or_error/emit_http_error branch on state.aborted? and call Decoder.error(state, \"aborted by caller\", :aborted).\n\nDepends on opi-hgb.1 (cleaner state flow makes this easier).\n\nFiles: producer.ex, producer_test.exs, decoder.ex (if error/3 needs adjustment).",
   "id": "opi-hgb.2",
