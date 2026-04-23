@@ -388,12 +388,17 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
       end
     end
 
-    test "emits Error when no stop_reason ever arrived" do
+    test "raises ArgumentError when no stop_reason ever arrived" do
+      # Before opi-hgb.9 we silently synthesized an :error event on nil.
+      # Now we raise so a protocol-violating stream (or a new Anthropic
+      # event ordering we haven't handled) surfaces loudly. The
+      # Producer's rescue catches this and surfaces it as Event.Error —
+      # separately tested in producer_test.exs.
       {_, state} = Decoder.new(model())
 
-      assert %Event.Error{reason: :error, message: msg} = Decoder.finalize(state)
-      assert msg.stop_reason == :error
-      assert msg.error_message =~ "stream ended"
+      assert_raise ArgumentError, ~r/stream ended without stop_reason/, fn ->
+        Decoder.finalize(state)
+      end
     end
   end
 

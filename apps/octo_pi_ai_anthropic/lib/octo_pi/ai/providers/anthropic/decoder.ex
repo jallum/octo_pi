@@ -148,8 +148,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   @doc """
   Produce the terminal event for a stream that ended cleanly.
   Returns `Event.Done` for a successful stop reason, or `Event.Error`
-  if the message ended in error/aborted or never received a stop
-  reason at all.
+  if the message ended in error/aborted.
+
+  Raises `ArgumentError` if `stop_reason` is `nil` — that means
+  Anthropic ended the stream without sending a `message_delta`, which
+  is either a protocol violation or us missing a new event shape.
+  The producer catches and funnels into `error/3`.
   """
   @spec finalize(State.t()) :: Event.Done.t() | Event.Error.t()
   def finalize(state) do
@@ -161,13 +165,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
         %Event.Error{reason: reason, message: state.message}
 
       nil ->
-        msg = %{
-          state.message
-          | stop_reason: :error,
-            error_message: "stream ended without stop_reason"
-        }
-
-        %Event.Error{reason: :error, message: msg}
+        raise ArgumentError, "stream ended without stop_reason"
     end
   end
 

@@ -1,18 +1,6 @@
 defmodule OctoPi.Coder do
   @moduledoc """
-  Documentation for `OctoPi.Coder`.
+  Phase 3 landing pad — coding-agent core (sessions, built-in tools,
+  Print / RPC modes). Empty until `octo-t58` starts.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> OctoPi.Coder.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end

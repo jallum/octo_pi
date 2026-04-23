@@ -21,7 +21,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   `anthropic.ts` L723-725 uses the same substring check.
   """
 
-  alias OctoPi.AI.Providers.Anthropic.Auth.{Credentials, KeychainReader}
+  alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
   alias OctoPi.AI.StreamOptions
 
   @noop_reader OctoPi.AI.Providers.Anthropic.Auth.NoopKeychain
@@ -39,7 +39,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   def resolve(%StreamOptions{}) do
     with {:env_oauth, nil} <- {:env_oauth, get_env("ANTHROPIC_OAUTH_TOKEN")},
          {:env_api_key, nil} <- {:env_api_key, get_env("ANTHROPIC_API_KEY")},
-         {:keychain, nil} <- {:keychain, KeychainReader.read(keychain_reader())} do
+         {:keychain, nil} <- {:keychain, keychain_reader().read()} do
       raise RuntimeError,
             "Anthropic credentials not available. Pass :api_key in StreamOptions, " <>
               "export ANTHROPIC_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."

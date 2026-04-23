@@ -12,12 +12,6 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
     def read, do: Process.get(:fake_keychain_token)
   end
 
-  defmodule RaisingKeychain do
-    @behaviour OctoPi.AI.Providers.Anthropic.Auth.KeychainReader
-    @impl true
-    def read, do: raise("keychain unavailable")
-  end
-
   setup do
     # All env vars cleared at the start of each test.
     System.delete_env("ANTHROPIC_API_KEY")
@@ -92,14 +86,6 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
 
       # Env wins.
       assert %Credentials{token: "ak-env"} = Auth.resolve()
-    end
-
-    test "raising keychain reader does not blow up — treated as nil" do
-      Application.put_env(:octo_pi_ai_anthropic, :keychain_reader, RaisingKeychain)
-
-      assert_raise RuntimeError, ~r/credentials not available/, fn ->
-        Auth.resolve()
-      end
     end
   end
 

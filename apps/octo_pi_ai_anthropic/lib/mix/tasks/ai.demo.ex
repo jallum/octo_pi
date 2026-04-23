@@ -69,7 +69,7 @@ defmodule Mix.Tasks.Ai.Demo do
       tools: tools
     }
 
-    Mix.shell().info("→ #{model.id}  (#{length(tools)} tools)\n")
+    Mix.shell().info("-> #{model.id}  (#{length(tools)} tools)\n")
 
     stream_turns(model, context, 1)
   end
@@ -78,7 +78,7 @@ defmodule Mix.Tasks.Ai.Demo do
   # results back until the assistant stops without requesting more
   # tools. Guards against runaway loops with @max_turns.
   defp stream_turns(_model, _context, turn) when turn > @max_turns do
-    Mix.shell().error("\n✗ exceeded #{@max_turns} tool-loop turns — stopping")
+    Mix.shell().error("\n[error] exceeded #{@max_turns} tool-loop turns — stopping")
     exit({:shutdown, 1})
   end
 
@@ -117,7 +117,7 @@ defmodule Mix.Tasks.Ai.Demo do
 
   defp handle_event(%Event.ToolCallStart{partial: msg}, _) do
     call = msg.content |> Enum.reverse() |> Enum.find(&match?(%ToolCall{}, &1))
-    IO.write("\n[tool_use » #{call.name}] ")
+    IO.write("\n[tool_use: #{call.name}] ")
     nil
   end
 
@@ -169,8 +169,8 @@ defmodule Mix.Tasks.Ai.Demo do
 
   defp print_tool_result(%Message.ToolResult{tool_name: name, content: content, is_error?: err?}) do
     text = content |> Enum.map_join("", fn %Content.Text{text: t} -> t end)
-    marker = if err?, do: "✗", else: "←"
-    IO.puts("#{marker} [tool_result » #{name}] #{text}\n")
+    marker = if err?, do: "[error]", else: "<-"
+    IO.puts("#{marker} [tool_result: #{name}] #{text}\n")
   end
 
   # --- summary ---
@@ -180,13 +180,13 @@ defmodule Mix.Tasks.Ai.Demo do
 
     Mix.shell().info("""
 
-    ─ stop: #{reason}
+    -- stop: #{reason}
       input: #{usage.input}  output: #{usage.output}  cache_r/w: #{usage.cache_read}/#{usage.cache_write}  total: #{usage.total_tokens}
     """)
   end
 
   defp exit_with_error(%Event.Error{reason: reason, message: msg}) do
-    Mix.shell().error("\n✗ #{reason}: #{msg.error_message}")
+    Mix.shell().error("\n[error] #{reason}: #{msg.error_message}")
     exit({:shutdown, 1})
   end
 

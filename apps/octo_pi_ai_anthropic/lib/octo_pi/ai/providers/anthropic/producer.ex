@@ -120,7 +120,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
         emit_request_stop(state, start_mono, http_status: resp.status)
         state
       rescue
-        e in [Req.TransportError, Jason.DecodeError, RuntimeError] ->
+        e in [Req.TransportError, Jason.DecodeError, RuntimeError, ArgumentError] ->
           state = emit_error(state, Exception.message(e), :error)
           emit_request_exception(state, start_mono, :error, Exception.message(e))
           state

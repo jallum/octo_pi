@@ -13,8 +13,9 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
     tool names rewritten to Claude Code canonical casing via
     `ToolNames.to_claude_code/1`.
 
-  Deferred: prompt caching, adaptive / budget thinking shapes, OAuth
-  login flow (see `opi-y1y.3`).
+  Deferred: prompt caching, adaptive / budget thinking shapes, the
+  interactive OAuth login-then-refresh flow (env / keychain OAuth
+  tokens are supported already).
 
   See `docs/port-map/anthropic.md` §1.
   """
@@ -67,11 +68,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   # --- URL / headers ---
 
   @spec url(Model.t()) :: binary()
-  defp url(%Model{base_url: base}), do: trim_trailing_slash(base) <> "/messages"
-
-  defp trim_trailing_slash(url) do
-    if String.ends_with?(url, "/"), do: String.slice(url, 0..-2//1), else: url
-  end
+  defp url(%Model{base_url: base}), do: String.trim_trailing(base, "/") <> "/messages"
 
   @spec headers(Credentials.t(), StreamOptions.t()) :: [{binary(), binary()}]
   defp headers(%Credentials{type: :api_key, token: token}, opts) do

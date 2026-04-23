@@ -1,18 +1,5 @@
 defmodule OctoPi.TUI do
   @moduledoc """
-  Documentation for `OctoPi.TUI`.
+  Phase 4 landing pad — terminal UI. Empty until `octo-3di` starts.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> OctoPi.TUI.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end

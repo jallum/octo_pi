@@ -1,8 +1,3 @@
 defmodule OctoPi.AgentTest do
-  use ExUnit.Case
-  doctest OctoPi.Agent
-
-  test "greets the world" do
-    assert OctoPi.Agent.hello() == :world
-  end
+  use ExUnit.Case, async: true
 end

@@ -1,18 +1,6 @@
 defmodule OctoPi.Agent do
   @moduledoc """
-  Documentation for `OctoPi.Agent`.
+  Phase 2 landing pad — the stateful agent kernel (Session, loop,
+  tools). Empty until `octo-z1d` starts.
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> OctoPi.Agent.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
