@@ -73,7 +73,7 @@ defmodule OctoPi.Agent.Loop do
     if AbortRef.aborted?(abort_ref) do
       {aborted_messages(messages), :aborted}
     else
-      messages = messages ++ Session.drain_steering(session)
+      messages = drain_steering_after_first_turn(session, messages, turn)
       start_mono = System.monotonic_time()
 
       :telemetry.execute(
@@ -117,9 +117,18 @@ defmodule OctoPi.Agent.Loop do
     end
   end
 
+  # Turn 1's messages are the initial transcript — no steering to
+  # drain yet. Skipping the round-trip avoids a no-op GenServer.call.
+  defp drain_steering_after_first_turn(_session, messages, 1), do: messages
+
+  defp drain_steering_after_first_turn(session, messages, _turn),
+    do: messages ++ Session.drain_steering(session)
+
   # Stream one turn through the configured Transport; collect
   # MessageStart/Update/End events and return the finalized
-  # assistant message.
+  # assistant message. If the stream terminates without emitting
+  # Done or Error, synthesize an error assistant rather than folding
+  # `nil` into the transcript.
   defp stream_turn(session, state, messages) do
     context = %AIContext{
       system_prompt: state.system_prompt,
@@ -128,7 +137,23 @@ defmodule OctoPi.Agent.Loop do
     }
 
     stream = state.transport.stream(state.model, context, %StreamOptions{})
-    Enum.reduce(stream, nil, &handle_ai_event(session, &1, &2))
+
+    case Enum.reduce(stream, nil, &handle_ai_event(session, &1, &2)) do
+      %{stop_reason: reason} = assistant when not is_nil(reason) -> assistant
+      _partial_or_nil -> truncated_stream_assistant(state)
+    end
+  end
+
+  defp truncated_stream_assistant(state) do
+    %OctoPi.AI.Message.Assistant{
+      api: state.model.api,
+      provider: state.model.provider,
+      model: state.model.id,
+      timestamp: :os.system_time(:millisecond),
+      content: [],
+      stop_reason: :error,
+      error_message: "stream ended with no terminal event"
+    }
   end
 
   defp handle_ai_event(session, %AIEvent.Start{partial: p}, _acc) do

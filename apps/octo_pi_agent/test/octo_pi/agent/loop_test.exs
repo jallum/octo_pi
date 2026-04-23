@@ -923,6 +923,60 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "defensive: truncated AI stream" do
+    test "stream with no Done/Error synthesizes an error assistant" do
+      FakeTransport.set_script([
+        # No terminal event — just a Start, then the stream ends.
+        [%AIEvent.Start{partial: assistant([], nil)}]
+      ])
+
+      session = start_session()
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "truncated")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :error, messages: msgs}}
+      last = List.last(msgs)
+      assert %Assistant{stop_reason: :error, error_message: msg} = last
+      assert msg =~ "no terminal"
+    end
+  end
+
+  describe "defensive: double-abort" do
+    test "rapid double abort does not crash the session" do
+      call = %ToolCall{
+        id: "rapid",
+        name: "probe",
+        arguments: %{"sleep_ms" => 1_000, "label" => "x"}
+      }
+
+      tool_turn = assistant([call], :tool_use)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
+
+      :ok = OctoPi.Agent.prompt(session, "x")
+      assert_receive {:tool_started, "rapid"}, 2_000
+
+      # Fire two aborts back-to-back without yielding — the second
+      # must not blow up on a dead loop pid.
+      :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.abort(session)
+
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      assert Process.alive?(session)
+    end
+  end
+
   describe "error stop_reason exits the loop" do
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)

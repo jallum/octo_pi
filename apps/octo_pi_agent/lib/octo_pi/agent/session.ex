@@ -151,11 +151,15 @@ defmodule OctoPi.Agent.Session do
   def handle_call(:abort, _from, store) do
     if store.session.is_streaming? do
       # Flip the ETS flag (cooperative backstop) and brutal-kill the
-      # loop task. Tool tasks started under `ToolSupervisor` are
-      # linked to the loop, so they die with it. Cleanup (AgentEnd +
-      # idle transition) happens in `handle_info({:DOWN, ...})`.
+      # loop task *if still alive*. Tool tasks started under
+      # `ToolSupervisor` are linked to the loop, so they die with it.
+      # Cleanup (AgentEnd + idle transition) happens in
+      # `handle_info({:DOWN, ...})`.
       if store.session.abort_ref, do: AbortRef.abort(store.session.abort_ref)
-      if store.session.loop_task, do: Process.exit(store.session.loop_task, :kill)
+
+      if is_pid(store.session.loop_task) and Process.alive?(store.session.loop_task) do
+        Process.exit(store.session.loop_task, :kill)
+      end
     end
 
     {:reply, :ok, store}
