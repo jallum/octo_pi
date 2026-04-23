@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T22:56:28Z",
   "created": "2026-04-23T22:28:12Z",
   "description": "Low-risk polish from the review:\n\n1. `cli.ex:108` — move `alias OctoPi.Coder.Tools` from inside\n   `default_tools/0` to the module's alias block at top.\n\n2. `session_store.ex:close/1` — the GenServer replies :ok then\n   stops, so subsequent calls to the same pid crash. Add a\n   moduledoc line noting that close is terminal.\n\n3. `bash.ex:finalize/4` — the `is_error?` heuristic\n   `reason != :exit or (is_integer(code) and code != 0)` is\n   harder to read than a `case reason` + explicit status check.\n   Small refactor.\n\n4. `session_store.ex:encode_cwd/1` — document the `/a/b` vs\n   `/a-b` collision (upstream has the same quirk; we preserve\n   for compatibility).\n\n5. Consider: is there anywhere else the Phase 3 code has stale\n   \"deferred in .N\" comments now that the epic is closed? Scan\n   and refresh.\n\nNo tests required — these are doc / refactor changes covered by\nthe existing suite.",
   "id": "opi-dkl.8",
   "labels": [],
   "parent": "opi-dkl",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Style + docs cleanup grab-bag",
   "type": "task",
-  "updated_at": "2026-04-23T22:55:18Z"
+  "updated_at": "2026-04-23T22:56:28Z"
 }
