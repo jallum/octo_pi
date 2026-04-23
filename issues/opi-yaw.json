@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T19:16:25Z",
@@ -7,8 +7,8 @@
   "id": "opi-yaw",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Extract Anthropic provider into its own umbrella app (octo_pi_anthropic)",
   "type": "task",
-  "updated_at": "2026-04-23T19:16:25Z"
+  "updated_at": "2026-04-23T19:16:29Z"
 }
