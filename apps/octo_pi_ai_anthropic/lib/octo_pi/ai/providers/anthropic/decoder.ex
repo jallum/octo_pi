@@ -10,6 +10,21 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   more canonical events. At end-of-stream call `finalize/1` to get
   the terminal `:done` or `:error` event.
 
+  ## Internal storage of `state.message.content`
+
+  During streaming, `state.message.content` is held in **reverse
+  order** so the currently-open block sits at the head of the list.
+  This lets every `content_block_delta` mutate the open block via
+  `[head | rest]` pattern in O(1), instead of `List.update_at(content,
+  length(content) - 1, _)` which walks and copies the whole spine
+  per delta.
+
+  External consumers always observe `content` in forward (arrival)
+  order: every event emitted out of the decoder carries a
+  forward-order copy in its `partial:` (or `message:`) field, and
+  `finalize/1` flips the state's content back to forward order
+  before handing the assembled message to callers.
+
   Ported from `tmp/pi-mono/packages/ai/src/providers/anthropic.ts`
   L451-633. See `docs/port-map/anthropic.md` §6.
   """
@@ -36,6 +51,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
             model: Model.t(),
             message: Message.Assistant.t(),
             index_map: %{non_neg_integer() => non_neg_integer()},
+            content_count: non_neg_integer(),
             partial_json: %{non_neg_integer() => binary()},
             oauth?: boolean(),
             tools: [Tool.t()]
@@ -45,6 +61,14 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
       :model,
       :message,
       index_map: %{},
+      # Forward-order count of content blocks opened so far.
+      # `content_count - 1` is the forward-order index of the open
+      # block (the one at the head of `message.content` in its
+      # reverse-ordered storage). Tracking this explicitly keeps the
+      # hot-path check in `update_block/3` / `fetch_block/3` /
+      # `replace_block/3` at O(1) — otherwise each delta would walk
+      # the spine for `length(content)`.
+      content_count: 0,
       partial_json: %{},
       oauth?: false,
       tools: []
@@ -82,6 +106,8 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
       tools: Keyword.get(opts, :tools, [])
     }
 
+    # Empty content reverses to itself; the Start event sees the same
+    # empty list either way.
     {%Event.Start{partial: message}, state}
   end
 
@@ -110,10 +136,21 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
         }
       ) do
     content_item = build_content_item(block, state)
-    position = length(state.message.content)
-    message = %{state.message | content: state.message.content ++ [content_item]}
-    new_state = %{state | message: message, index_map: Map.put(state.index_map, idx, position)}
-    {[start_event_for(block["type"], position, message)], new_state}
+    # `content` is reverse-ordered during streaming: prepend in O(1).
+    # `position` is the forward-order index of the new block, which
+    # equals the count of blocks that came before it (tracked in
+    # `state.content_count`).
+    position = state.content_count
+    message = %{state.message | content: [content_item | state.message.content]}
+
+    new_state = %{
+      state
+      | message: message,
+        index_map: Map.put(state.index_map, idx, position),
+        content_count: state.content_count + 1
+    }
+
+    {[start_event_for(block["type"], position, present(message))], new_state}
   end
 
   def handle(state, %{"type" => "content_block_delta", "index" => idx, "delta" => delta}) do
@@ -157,17 +194,29 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   """
   @spec finalize(State.t()) :: Event.Done.t() | Event.Error.t()
   def finalize(state) do
-    case state.message.stop_reason do
+    final = present(state.message)
+
+    case final.stop_reason do
       reason when reason in [:stop, :length, :tool_use] ->
-        %Event.Done{reason: reason, message: state.message}
+        %Event.Done{reason: reason, message: final}
 
       reason when reason in [:error, :aborted] ->
-        %Event.Error{reason: reason, message: state.message}
+        %Event.Error{reason: reason, message: final}
 
       nil ->
         raise ArgumentError, "stream ended without stop_reason"
     end
   end
+
+  @doc """
+  Return the partial assistant message in forward (arrival) order.
+  Internally `state.message.content` is reverse-ordered during
+  streaming for O(1) delta updates; this helper surfaces it for
+  callers (and tests) that want to inspect the in-flight message
+  without going through `finalize/1`.
+  """
+  @spec message(State.t()) :: Message.Assistant.t()
+  def message(%State{message: message}), do: present(message)
 
   @doc """
   Convenience for surfacing a transport-layer failure as a canonical
@@ -178,10 +227,18 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   def error(state, reason_message, reason \\ :error)
       when reason in [:error, :aborted] and is_binary(reason_message) do
     message = %{state.message | stop_reason: reason, error_message: reason_message}
-    {%Event.Error{reason: reason, message: message}, %{state | message: message}}
+    {%Event.Error{reason: reason, message: present(message)}, %{state | message: message}}
   end
 
   # --- helpers ---
+
+  # Flip the internally reverse-ordered `content` list to forward
+  # (arrival) order for external consumption. State always stores
+  # reverse; every emitted partial / final message goes through this.
+  @spec present(Message.Assistant.t()) :: Message.Assistant.t()
+  defp present(%Message.Assistant{content: rev} = message) do
+    %{message | content: :lists.reverse(rev)}
+  end
 
   @spec extract_usage(map()) :: Usage.t()
   defp extract_usage(usage) do
@@ -233,68 +290,104 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   defp start_event_for("tool_use", pos, partial),
     do: %Event.ToolCallStart{content_index: pos, partial: partial}
 
+  # --- delta application ---
+  #
+  # The open block is at the head of the reverse-ordered list; deltas
+  # to other blocks (rare, only on out-of-order streaming) fall back
+  # to position-based update via `List.update_at`. The `position`
+  # forwarded by `handle/2` is the FORWARD-order index, and
+  # `state.content_count - 1` is the forward-order index of the open
+  # block — both O(1) lookups so the hot-path check itself is O(1).
+
   @spec apply_delta(map(), non_neg_integer(), State.t()) :: {[Event.t()], State.t()}
   defp apply_delta(%{"type" => "text_delta", "text" => text}, position, state) do
-    content =
-      List.update_at(state.message.content, position, fn %Content.Text{text: existing} = block ->
+    state =
+      update_block(state, position, fn %Content.Text{text: existing} = block ->
         %{block | text: existing <> text}
       end)
 
-    message = %{state.message | content: content}
-
-    {[%Event.TextDelta{content_index: position, delta: text, partial: message}],
-     %{state | message: message}}
+    {[%Event.TextDelta{content_index: position, delta: text, partial: present(state.message)}],
+     state}
   end
 
   defp apply_delta(%{"type" => "thinking_delta", "thinking" => chunk}, position, state) do
-    content =
-      List.update_at(state.message.content, position, fn
+    state =
+      update_block(state, position, fn
         %Content.Thinking{thinking: existing} = block ->
           %{block | thinking: existing <> chunk}
       end)
 
-    message = %{state.message | content: content}
-
-    {[%Event.ThinkingDelta{content_index: position, delta: chunk, partial: message}],
-     %{state | message: message}}
+    {[
+       %Event.ThinkingDelta{
+         content_index: position,
+         delta: chunk,
+         partial: present(state.message)
+       }
+     ], state}
   end
 
   defp apply_delta(%{"type" => "signature_delta", "signature" => sig}, position, state) do
-    content =
-      List.update_at(state.message.content, position, fn
+    state =
+      update_block(state, position, fn
         %Content.Thinking{signature: existing} = block ->
           %{block | signature: (existing || "") <> sig}
       end)
 
-    {[], %{state | message: %{state.message | content: content}}}
+    {[], state}
   end
 
   defp apply_delta(%{"type" => "input_json_delta", "partial_json" => fragment}, position, state) do
     accumulated = Map.get(state.partial_json, position, "") <> fragment
     arguments = PartialJson.parse_streaming(accumulated)
 
-    content =
-      List.update_at(state.message.content, position, fn %ToolCall{} = block ->
+    state =
+      update_block(state, position, fn %ToolCall{} = block ->
         %{block | arguments: arguments}
       end)
 
-    message = %{state.message | content: content}
-
-    {[%Event.ToolCallDelta{content_index: position, delta: fragment, partial: message}],
-     %{state | message: message, partial_json: Map.put(state.partial_json, position, accumulated)}}
+    {[
+       %Event.ToolCallDelta{
+         content_index: position,
+         delta: fragment,
+         partial: present(state.message)
+       }
+     ], %{state | partial_json: Map.put(state.partial_json, position, accumulated)}}
   end
 
   defp apply_delta(_other, _position, state), do: {[], state}
 
+  # Update the block at `position` (forward-order index) inside the
+  # state's reverse-ordered content list. Hot path — when `position`
+  # is the most recently opened block — pattern-matches the head in
+  # O(1) and skips both the spine walk and the spine copy.
+  @spec update_block(State.t(), non_neg_integer(), (term() -> term())) :: State.t()
+  defp update_block(%State{message: message, content_count: count} = state, position, fun) do
+    open_index = count - 1
+    content_rev = message.content
+
+    new_content_rev =
+      if position == open_index do
+        [head | rest] = content_rev
+        [fun.(head) | rest]
+      else
+        # Cold path (out-of-order block updates): translate forward
+        # position to reverse position and use update_at.
+        rev_index = open_index - position
+        List.update_at(content_rev, rev_index, fun)
+      end
+
+    %{state | message: %{message | content: new_content_rev}}
+  end
+
   @spec emit_end(non_neg_integer(), State.t()) :: {[Event.t()], State.t()}
   defp emit_end(position, state) do
-    case Enum.at(state.message.content, position) do
+    case fetch_block(state, position) do
       %Content.Text{} = block ->
         {[
            %Event.TextEnd{
              content_index: position,
              content: block.text,
-             partial: state.message
+             partial: present(state.message)
            }
          ], state}
 
@@ -303,7 +396,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
            %Event.ThinkingEnd{
              content_index: position,
              content: block.thinking,
-             partial: state.message
+             partial: present(state.message)
            }
          ], state}
 
@@ -315,20 +408,55 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
             do: block,
             else: %{block | arguments: PartialJson.parse_streaming(partial_json)}
 
-        content = List.replace_at(state.message.content, position, finalized)
-        message = %{state.message | content: content}
+        state = replace_block(state, position, finalized)
 
         {[
            %Event.ToolCallEnd{
              content_index: position,
              tool_call: finalized,
-             partial: message
+             partial: present(state.message)
            }
-         ], %{state | message: message, partial_json: Map.delete(state.partial_json, position)}}
+         ], %{state | partial_json: Map.delete(state.partial_json, position)}}
 
       nil ->
         {[], state}
     end
+  end
+
+  # Read the block at `position` (forward-order index) from the
+  # state's reverse-ordered content list. Hot path: the open block is
+  # at the head, so we can return it directly in O(1).
+  @spec fetch_block(State.t(), non_neg_integer()) :: term() | nil
+  defp fetch_block(%State{message: %Message.Assistant{content: []}}, _position), do: nil
+
+  defp fetch_block(%State{message: message, content_count: count}, position) do
+    open_index = count - 1
+
+    if position == open_index do
+      hd(message.content)
+    else
+      Enum.at(message.content, open_index - position)
+    end
+  end
+
+  # Replace the block at `position` (forward-order index) in the
+  # state's reverse-ordered content list. Mirrors `update_block/3`
+  # but uses `List.replace_at` for the cold path.
+  @spec replace_block(State.t(), non_neg_integer(), term()) :: State.t()
+  defp replace_block(%State{message: message, content_count: count} = state, position, block) do
+    open_index = count - 1
+    content_rev = message.content
+
+    new_content_rev =
+      if position == open_index do
+        [_head | rest] = content_rev
+        [block | rest]
+      else
+        rev_index = open_index - position
+        List.replace_at(content_rev, rev_index, block)
+      end
+
+    %{state | message: %{message | content: new_content_rev}}
   end
 
   @spec maybe_set_stop_reason(Message.Assistant.t(), binary() | nil) :: Message.Assistant.t()
