@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-t58.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-t58.7"
+  ],
   "created": "2026-04-23T21:55:09Z",
   "description": "Port-map §5. Two tools:\n\n- grep.ex — prefers ripgrep (`rg`) via `System.cmd` for speed;\n  falls back to a pure-Elixir scan if rg isn't on PATH.\n- find.ex — glob/path patterns via `Path.wildcard/2` or `fd` if\n  available.\n\nBoth respect session cwd. Honor .gitignore when using rg.\nOutput truncation: cap results at N matches with a truncation\nmarker.\n\nTDD:\n- grep: finds pattern, multiple matches, regex, case-insensitive,\n  .gitignore skipped, rg-not-on-PATH fallback\n- find: glob pattern, recursive, exclude .git\n\nDepends on .1.",
   "id": "octo-t58.6",
