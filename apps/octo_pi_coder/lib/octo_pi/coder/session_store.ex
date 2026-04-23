@@ -1,0 +1,134 @@
+defmodule OctoPi.Coder.SessionStore do
+  @moduledoc """
+  Per-session JSONL writer. Opens a file at
+
+      <root>/sessions/--<encoded-cwd>--/<id>.jsonl
+
+  writes a v3 `SessionHeader` as the first line, then appends typed
+  entries via `append/2`. One GenServer per session id, supervised
+  under `OctoPi.Coder.SessionStore.Supervisor`.
+
+  File handle stays open for the lifetime of the store to avoid
+  re-opening on every append. `close/1` flushes and terminates
+  the GenServer cleanly.
+
+  ## Byte-compatibility with upstream `pi`
+
+  The emitted JSON preserves key insertion order so header lines
+  match upstream v3 byte-for-byte. Entries passed to `append/2`
+  are encoded with their given key order (callers that care about
+  cross-tool readability should pass a keyword list).
+  """
+
+  use GenServer, restart: :temporary
+
+  @type open_opt ::
+          {:id, String.t()}
+          | {:cwd, String.t()}
+          | {:root, String.t()}
+          | {:parent_session, String.t() | nil}
+
+  @default_root Path.expand("~/.pi/agent")
+
+  @doc """
+  Start a session store and write its header. Opts:
+
+    * `:id` (required) — session id (typically a UUID)
+    * `:cwd` (required) — absolute working directory
+    * `:root` — base dir (default `~/.pi/agent`)
+    * `:parent_session` — optional parent session id
+  """
+  @spec open([open_opt()]) :: {:ok, pid()}
+  def open(opts) do
+    DynamicSupervisor.start_child(
+      OctoPi.Coder.SessionStore.Supervisor,
+      {__MODULE__, opts}
+    )
+  end
+
+  @doc "Full path to the session file."
+  @spec path(pid()) :: String.t()
+  def path(pid), do: GenServer.call(pid, :path)
+
+  @doc "Append a typed entry as a JSON line."
+  @spec append(pid(), map() | keyword()) :: :ok
+  def append(pid, entry), do: GenServer.call(pid, {:append, entry})
+
+  @doc "Flush and shut down."
+  @spec close(pid()) :: :ok
+  def close(pid), do: GenServer.call(pid, :close)
+
+  @doc false
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
+
+  @impl true
+  def init(opts) do
+    id = Keyword.fetch!(opts, :id)
+    cwd = Keyword.fetch!(opts, :cwd)
+    root = Keyword.get(opts, :root, @default_root)
+    parent = Keyword.get(opts, :parent_session)
+
+    path = build_path(root, cwd, id)
+    File.mkdir_p!(Path.dirname(path))
+    io = File.open!(path, [:write, :utf8])
+    write_header(io, id, cwd, parent)
+
+    {:ok, %{id: id, path: path, io: io}}
+  end
+
+  @impl true
+  def handle_call(:path, _from, state), do: {:reply, state.path, state}
+
+  def handle_call({:append, entry}, _from, state) do
+    IO.write(state.io, encode_line(entry))
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:close, _from, state) do
+    File.close(state.io)
+    {:stop, :normal, :ok, state}
+  end
+
+  # -- helpers --
+
+  defp build_path(root, cwd, id) do
+    encoded = encode_cwd(cwd)
+    Path.join([root, "sessions", "--" <> encoded <> "--", id <> ".jsonl"])
+  end
+
+  # Upstream encodes absolute paths by replacing `/` with `-`.
+  # `/home/alice/proj` → `home-alice-proj`.
+  defp encode_cwd("/" <> rest), do: String.replace(rest, "/", "-")
+  defp encode_cwd(cwd), do: String.replace(cwd, "/", "-")
+
+  defp write_header(io, id, cwd, parent) do
+    header = [
+      {"type", "session"},
+      {"version", 3},
+      {"id", id},
+      {"timestamp", iso8601_now()},
+      {"cwd", cwd},
+      {"parentSession", parent}
+    ]
+
+    IO.write(io, encode_line(header))
+  end
+
+  # Keyword-list-shaped input (string or atom key, value) emits as
+  # a JSON object with keys in list order — byte-compat with
+  # upstream. Map-shaped input goes through Jason's normal encoder
+  # which is hash-ordered; callers that care about key order should
+  # pass an ordered list of pairs.
+  defp encode_line(entry) when is_list(entry) do
+    inner =
+      Enum.map_join(entry, ",", fn {k, v} ->
+        Jason.encode!(to_string(k)) <> ":" <> Jason.encode!(v)
+      end)
+
+    "{" <> inner <> "}\n"
+  end
+
+  defp encode_line(entry) when is_map(entry), do: Jason.encode!(entry) <> "\n"
+
+  defp iso8601_now, do: DateTime.utc_now() |> DateTime.to_iso8601()
+end
