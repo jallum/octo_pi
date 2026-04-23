@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "octo-z1d.2"
+  ],
   "created": "2026-04-23T20:40:06Z",
   "description": "Ground-floor for Phase 2. New umbrella app \\`octo_pi_agent\\` with:\n\n- mix.exs: depends on \\`{:octo_pi_ai, in_umbrella: true}\\`; telemetry.\n- OctoPi.Agent.Application: Supervisor that starts Task.Supervisor\n  (loop tasks), Task.Supervisor (tool exec), Registry (subscribers),\n  and the per-app telemetry handler.\n- Contract types (no logic, just structs + @types):\n  - %OctoPi.Agent.Session.State{} — fields per port-map §1\n  - AgentMessage union (User/Assistant/ToolResult/Custom)\n  - AgentEvent union (AgentStart/End, TurnStart/End, MessageStart/Update/End, ToolExecutionStart/Update/End)\n  - %OctoPi.Agent.Tool{} + %OctoPi.Agent.Tool.Result{}\n  - %OctoPi.Agent.PendingMessageQueue{} — just the struct; implementation in opi-hgb... actually z1d.5\n  - Abort ref type\n- @behaviour OctoPi.Agent.Tool.Handler (the execute callback)\n- @behaviour OctoPi.Agent.Transport (stream/3 signature)\n- A toy Echo tool module in test/support/ that implements the handler\n  and returns its input as content — useful throughout subsequent tickets.\n\nTDD: just construct the structs in tests, assert shapes. No runtime\nbehaviour.\n\nFiles:\n- apps/octo_pi_agent/{mix.exs, .formatter.exs, .gitignore}\n- apps/octo_pi_agent/lib/octo_pi/agent/{application.ex, message.ex, event.ex, tool.ex, session/state.ex, transport.ex, abort_ref.ex}\n- apps/octo_pi_agent/test/support/echo_tool.ex\n\nSee docs/port-map/agent.md §1, §3, §8 for specifics.",
   "id": "octo-z1d.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Scaffold octo_pi_agent app + contract types + Tool behaviour + Echo sample",
   "type": "task",
-  "updated_at": "2026-04-23T20:40:06Z"
+  "updated_at": "2026-04-23T20:40:17Z"
 }
