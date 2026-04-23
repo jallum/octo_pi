@@ -4,10 +4,13 @@ defmodule OctoPi.Agent.Application do
   use Application
 
   alias OctoPi.Agent.AbortRef
+  alias OctoPi.Telemetry.AgentHandler
 
   @impl true
   def start(_type, _args) do
     :ets.new(AbortRef.table_name(), [:named_table, :public, :set, read_concurrency: true])
+
+    AgentHandler.attach()
 
     children = [
       {Task.Supervisor, name: OctoPi.Agent.LoopSupervisor},

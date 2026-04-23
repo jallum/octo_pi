@@ -12,6 +12,8 @@ defmodule OctoPi.Agent.Subscribers do
   barrier for anyone who needs it.
   """
 
+  require Logger
+
   @registry OctoPi.Agent.Subscribers
 
   @type mode :: :sync | :async
@@ -51,8 +53,11 @@ defmodule OctoPi.Agent.Subscribers do
       try do
         GenServer.call(listener, {:octo_pi_agent_event, event}, 5_000)
       catch
-        :exit, _reason ->
-          :ok
+        :exit, reason ->
+          Logger.warning(
+            "[OctoPi.Agent.Subscribers] sync listener #{inspect(listener)} " <>
+              "exited during dispatch: #{inspect(reason)}"
+          )
       end
     end)
 

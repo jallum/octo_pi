@@ -47,11 +47,24 @@ defmodule OctoPi.Agent.Loop do
   """
   @spec run(run_opts()) :: :ok
   def run(%{session: session, session_state: state, abort_ref: abort_ref}) do
+    :telemetry.execute(
+      [:octo_pi_agent, :session, :start],
+      %{system_time: System.system_time()},
+      %{session: session, model: state.model.id}
+    )
+
+    start_mono = System.monotonic_time()
     dispatch(session, %Event.AgentStart{})
 
     {messages, reason} = loop(session, state, state.messages, abort_ref, 1)
 
     dispatch(session, %Event.AgentEnd{reason: reason, messages: messages})
+
+    :telemetry.execute(
+      [:octo_pi_agent, :session, :stop],
+      %{duration: System.monotonic_time() - start_mono},
+      %{session: session, reason: reason, turn_count: length(messages)}
+    )
 
     GenServer.cast(session, {:run_complete, messages, reason})
 
@@ -67,10 +80,24 @@ defmodule OctoPi.Agent.Loop do
       {aborted_messages(messages), :aborted}
     else
       messages = messages ++ Session.drain_steering(session)
+      start_mono = System.monotonic_time()
+
+      :telemetry.execute(
+        [:octo_pi_agent, :turn, :start],
+        %{system_time: System.system_time()},
+        %{session: session, turn: turn}
+      )
+
       dispatch(session, %Event.TurnStart{turn: turn})
       assistant = stream_turn(session, state, messages)
       updated = messages ++ [assistant]
       dispatch(session, %Event.TurnEnd{turn: turn})
+
+      :telemetry.execute(
+        [:octo_pi_agent, :turn, :stop],
+        %{duration: System.monotonic_time() - start_mono},
+        %{session: session, turn: turn, stop_reason: assistant.stop_reason}
+      )
 
       continue_or_stop(session, state, updated, assistant, abort_ref, turn)
     end
@@ -82,7 +109,7 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp continue_or_stop(session, state, updated, %{stop_reason: :tool_use} = assistant, ref, turn) do
-    tool_results = execute_tool_calls(session, state.tools, assistant.content, ref)
+    tool_results = execute_tool_calls(session, state, assistant.content, ref)
     loop(session, state, updated ++ tool_results, ref, turn + 1)
   end
 
@@ -143,17 +170,17 @@ defmodule OctoPi.Agent.Loop do
   defp handle_ai_event(_session, _other, acc), do: acc
 
   # Dispatch tool calls from the assistant turn. Runs in parallel
-  # via `Task.Supervisor.async_stream_nolink` under the
+  # via `Task.Supervisor.async_stream` (linked) under the
   # `OctoPi.Agent.ToolSupervisor` *unless* any tool in the batch is
   # flagged `:sequential` — in which case the whole batch serializes
   # (ape pi-mono L349). Results are returned in source order.
-  defp execute_tool_calls(session, tools, content, abort_ref) do
+  defp execute_tool_calls(session, state, content, abort_ref) do
     tool_calls = Enum.filter(content, &match?(%ToolCall{}, &1))
 
-    if any_sequential?(tool_calls, tools) do
-      run_sequential(session, tools, tool_calls, abort_ref)
+    if any_sequential?(tool_calls, state.tools) do
+      run_sequential(session, state, tool_calls, abort_ref)
     else
-      run_parallel(session, tools, tool_calls, abort_ref)
+      run_parallel(session, state, tool_calls, abort_ref)
     end
   end
 
@@ -166,21 +193,18 @@ defmodule OctoPi.Agent.Loop do
     end)
   end
 
-  defp run_sequential(session, tools, tool_calls, abort_ref) do
+  defp run_sequential(session, state, tool_calls, abort_ref) do
     Enum.map(tool_calls, fn call ->
-      execute_one_tool_call(session, tools, call, abort_ref)
+      execute_one_tool_call(session, state, call, abort_ref)
       |> build_tool_result_message(call)
     end)
   end
 
-  # Uses `async_stream` (linked) rather than `_nolink` so that when
-  # the loop task is brutally killed on abort, these child tool
-  # tasks receive the linked exit and die with it.
-  defp run_parallel(session, tools, tool_calls, abort_ref) do
+  defp run_parallel(session, state, tool_calls, abort_ref) do
     OctoPi.Agent.ToolSupervisor
     |> Task.Supervisor.async_stream(
       tool_calls,
-      fn call -> {call, execute_one_tool_call(session, tools, call, abort_ref)} end,
+      fn call -> {call, execute_one_tool_call(session, state, call, abort_ref)} end,
       ordered: true,
       max_concurrency: max(length(tool_calls), 1),
       timeout: :infinity
@@ -188,14 +212,10 @@ defmodule OctoPi.Agent.Loop do
     |> Enum.map(fn {:ok, {call, result}} -> build_tool_result_message(result, call) end)
   end
 
-  defp execute_one_tool_call(session, tools, %ToolCall{} = call, abort_ref) do
-    case Enum.find(tools, &(&1.name == call.name)) do
+  defp execute_one_tool_call(session, state, %ToolCall{} = call, abort_ref) do
+    case Enum.find(state.tools, &(&1.name == call.name)) do
       nil ->
-        result = %Tool.Result{
-          content: [%OctoPi.AI.Content.Text{text: "tool not registered: #{call.name}"}],
-          is_error?: true
-        }
-
+        result = error_result("tool not registered: #{call.name}")
         dispatch_tool(session, call, result)
         result
 
@@ -205,28 +225,90 @@ defmodule OctoPi.Agent.Loop do
           tool_name: call.name
         })
 
-        params = prepare_params(tool, call.arguments)
+        start_mono = System.monotonic_time()
 
-        on_update = fn partial ->
-          dispatch(session, %Event.ToolExecutionUpdate{
-            tool_call_id: call.id,
-            partial: partial
-          })
-        end
+        :telemetry.execute(
+          [:octo_pi_agent, :tool, :start],
+          %{system_time: System.system_time()},
+          %{session: session, tool_call_id: call.id, tool_name: call.name}
+        )
 
-        result =
-          try do
-            case tool.handler.execute(call.id, params, abort_ref, on_update) do
-              {:ok, %Tool.Result{} = r} -> r
-              {:error, reason} -> error_result("handler returned {:error, #{inspect(reason)}}")
-            end
-          rescue
-            e -> error_result(Exception.message(e))
-          end
-
+        result = dispatch_with_hooks(session, state, tool, call, abort_ref)
         dispatch_tool(session, call, result)
+        emit_tool_stop(session, call, result, start_mono)
         result
     end
+  end
+
+  # Run the before-hook (may block), execute the tool on `:allow`,
+  # then run the after-hook (may patch). All exceptions from hooks
+  # or the handler are caught and folded into an error result so the
+  # loop keeps running.
+  defp dispatch_with_hooks(session, state, tool, call, abort_ref) do
+    case run_before_hook(state.before_tool_call, call) do
+      {:block, reason} ->
+        error_result("blocked by before_tool_call: #{reason}")
+
+      :allow ->
+        result = run_tool_handler(session, tool, call, abort_ref)
+        run_after_hook(state.after_tool_call, call, result)
+    end
+  end
+
+  defp run_tool_handler(session, tool, call, abort_ref) do
+    on_update = fn partial ->
+      dispatch(session, %Event.ToolExecutionUpdate{
+        tool_call_id: call.id,
+        partial: partial
+      })
+    end
+
+    params = prepare_params(tool, call.arguments)
+
+    try do
+      case tool.handler.execute(call.id, params, abort_ref, on_update) do
+        {:ok, %Tool.Result{} = r} -> r
+        {:error, reason} -> error_result("handler returned {:error, #{inspect(reason)}}")
+      end
+    rescue
+      e -> error_result(Exception.message(e))
+    end
+  end
+
+  defp run_before_hook(nil, _call), do: :allow
+
+  defp run_before_hook(fun, call) when is_function(fun, 1) do
+    case fun.(%{id: call.id, name: call.name, arguments: call.arguments}) do
+      :allow -> :allow
+      {:block, reason} -> {:block, to_string(reason)}
+      other -> {:block, "before_tool_call returned #{inspect(other)}"}
+    end
+  rescue
+    e -> {:block, "before_tool_call raised: #{Exception.message(e)}"}
+  end
+
+  defp run_after_hook(nil, _call, result), do: result
+
+  defp run_after_hook(fun, call, result) when is_function(fun, 1) do
+    ctx = %{id: call.id, name: call.name, arguments: call.arguments, result: result}
+
+    case fun.(ctx) do
+      :unchanged -> result
+      {:patch, patch} when is_map(patch) -> struct(result, patch)
+      other -> error_result("after_tool_call returned #{inspect(other)}")
+    end
+  rescue
+    e -> error_result("after_tool_call raised: #{Exception.message(e)}")
+  end
+
+  defp emit_tool_stop(session, call, %Tool.Result{is_error?: is_error?}, start_mono) do
+    event = if is_error?, do: :error, else: :stop
+
+    :telemetry.execute(
+      [:octo_pi_agent, :tool, event],
+      %{duration: System.monotonic_time() - start_mono},
+      %{session: session, tool_call_id: call.id, tool_name: call.name, is_error?: is_error?}
+    )
   end
 
   defp dispatch_tool(session, %ToolCall{} = call, result) do

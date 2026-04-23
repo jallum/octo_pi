@@ -553,6 +553,274 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "before_tool_call hook" do
+    test ":allow runs the tool normally" do
+      tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "ran"}}
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session =
+        start_session(
+          tools: [ProbeTool.tool()],
+          before_tool_call: fn _ctx -> :allow end
+        )
+
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "allow")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.ToolExecutionEnd{
+                         result: %OctoPi.Agent.Tool.Result{
+                           content: [%OctoPi.AI.Content.Text{text: "ran"}],
+                           is_error?: false
+                         }
+                       }}
+    end
+
+    test "{:block, reason} prevents execution and yields an error result" do
+      tool_call = %ToolCall{
+        id: "c",
+        name: "probe",
+        arguments: %{"label" => "forbidden", "sleep_ms" => 500}
+      }
+
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "handled"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session =
+        start_session(
+          tools: [ProbeTool.tool()],
+          before_tool_call: fn _ctx -> {:block, "not today"} end
+        )
+
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      {elapsed_us, :ok} =
+        :timer.tc(fn ->
+          :ok = OctoPi.Agent.prompt(session, "deny me")
+          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+        end)
+
+      # Tool would sleep 500ms if allowed — the block prevents it.
+      assert elapsed_us < 300_000
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.ToolExecutionEnd{
+                         result: %OctoPi.Agent.Tool.Result{
+                           is_error?: true,
+                           content: [%OctoPi.AI.Content.Text{text: msg}]
+                         }
+                       }}
+
+      assert msg =~ "not today"
+    end
+  end
+
+  describe "after_tool_call hook" do
+    test "{:patch, map} merges into the tool result" do
+      tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "raw"}}
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      patch_fn = fn _ctx ->
+        {:patch, %{content: [%OctoPi.AI.Content.Text{text: "patched"}], details: %{tag: :after}}}
+      end
+
+      session =
+        start_session(
+          tools: [ProbeTool.tool()],
+          after_tool_call: patch_fn
+        )
+
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "patch me")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.ToolExecutionEnd{
+                         result: %OctoPi.Agent.Tool.Result{
+                           content: [%OctoPi.AI.Content.Text{text: "patched"}],
+                           details: %{tag: :after}
+                         }
+                       }}
+    end
+
+    test "exception in after hook becomes an error result, loop continues" do
+      tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "x"}}
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "recovered"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session =
+        start_session(
+          tools: [ProbeTool.tool()],
+          after_tool_call: fn _ctx -> raise "hook boom" end
+        )
+
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "x")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.ToolExecutionEnd{
+                         result: %OctoPi.Agent.Tool.Result{
+                           is_error?: true,
+                           content: [%OctoPi.AI.Content.Text{text: msg}]
+                         }
+                       }}
+
+      assert msg =~ "hook boom"
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop}}
+    end
+  end
+
+  describe "telemetry emissions" do
+    test "session + turn + tool events fire with expected metadata" do
+      tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "ok"}}
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      handler_id = "telemetry-test-#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      events = [
+        [:octo_pi_agent, :session, :start],
+        [:octo_pi_agent, :session, :stop],
+        [:octo_pi_agent, :turn, :start],
+        [:octo_pi_agent, :turn, :stop],
+        [:octo_pi_agent, :tool, :start],
+        [:octo_pi_agent, :tool, :stop]
+      ]
+
+      :telemetry.attach_many(
+        handler_id,
+        events,
+        fn event, measurements, metadata, _ ->
+          send(test_pid, {:telemetry, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      session = start_session(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.prompt(session, "hi")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:telemetry, [:octo_pi_agent, :session, :start], _,
+                       %{session: ^session, model: "fake-model"}}
+
+      assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 1}}
+      assert_received {:telemetry, [:octo_pi_agent, :turn, :stop], %{duration: _}, %{turn: 1}}
+
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :start], _,
+                       %{tool_name: "probe", tool_call_id: "c"}}
+
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :stop], %{duration: _},
+                       %{is_error?: false}}
+
+      assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 2}}
+
+      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _},
+                       %{reason: :stop}}
+    end
+
+    test "tool :error event fires for error results" do
+      tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"raise" => "boom"}}
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      handler_id = "telemetry-error-#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      :telemetry.attach(
+        handler_id,
+        [:octo_pi_agent, :tool, :error],
+        fn event, measurements, metadata, _ ->
+          send(test_pid, {:telemetry, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      session = start_session(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.prompt(session, "fail")
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :error], _, %{is_error?: true}}
+    end
+  end
+
   describe "error stop_reason exits the loop" do
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)
