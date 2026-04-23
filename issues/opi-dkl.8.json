@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T22:28:12Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-dkl",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Style + docs cleanup grab-bag",
   "type": "task",
-  "updated_at": "2026-04-23T22:28:12Z"
+  "updated_at": "2026-04-23T22:55:18Z"
 }
