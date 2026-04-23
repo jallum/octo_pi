@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T19:57:58Z",
+  "description": "12 nearly-identical struct files (~15 LOC each) for the canonical event union. Maintenance burden: adding a new event type means 3 file creates.\n\nConsolidate into apps/octo_pi_ai/lib/octo_pi/ai/event.ex:\n\n    defmodule OctoPi.AI.Event do\n      # @type t :: Start.t() | TextStart.t() | ...\n      defmodule Start do ... end\n      defmodule TextStart do ... end\n      ...\n      defmodule Error do ... end\n    end\n\nConsider a tiny macro for the three-field shape (content_index, partial) that 7 of the 12 share — but only if it reads cleaner than inline defstruct. Explicit-over-clever is fine here.\n\nTDD:\n- Existing event struct tests stay green (they construct %Event.Start{}, etc — no change in public API).\n- mix check stays green.\n\nFiles: delete 12 files under lib/octo_pi/ai/event/*.ex, rewrite event.ex.",
+  "id": "opi-hgb.8",
+  "labels": [],
+  "parent": "opi-hgb",
+  "priority": 3,
+  "status": "open",
+  "title": "Collapse 12 Event.* files into one event.ex",
+  "type": "task",
+  "updated_at": "2026-04-23T19:57:58Z"
+}
