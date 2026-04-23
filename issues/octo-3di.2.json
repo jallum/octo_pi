@@ -3,7 +3,9 @@
   "blocked_by": [
     "octo-3di.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-3di.9"
+  ],
   "created": "2026-04-23T23:36:23Z",
   "description": "Port-map §1 + §2. Owns the terminal surface.\n\n- OctoPi.Tui.Terminal GenServer.\n- init: RawMode.enter/0 → enable paste + focus + hidden cursor →\n  :os.set_signal(:sigwinch, :handle) → spawn_link a reader loop\n  that calls :io.get_chars(\"\", 256) and sends {:stdin_chunk, bin}\n  back to the GenServer.\n- handle_info({:signal, :sigwinch}, _): broadcast {:resize, rows,\n  cols} via OctoPi.Tui.Events; update cached dims.\n- handle_info({:stdin_chunk, bin}, _): forward to StdinFSM (.3)\n  once that exists; for now, broadcast {:stdin_chunk, bin} via\n  Events so .3 can pick it up later without a direct dep.\n- terminate/2: restore cursor + paste + focus + RawMode.exit/0.\n- Telemetry: [:octo_pi_tui, :terminal, :start | :stop | :resize].\n\nTDD:\n- start_link + terminate cleanly flips raw on + off (use a mock\n  RawMode module injectable via config so tests don't actually\n  flip the test-runner's tty).\n- SIGWINCH delivery → {:resize, _, _} observed on Events.\n- stdin reader forwards chunks (mock :io.get_chars/2 or inject a\n  reader fn).\n- :io.columns/0 fallback to 80 when :enotsup.\n\nDepends on .1.",
   "id": "octo-3di.2",
