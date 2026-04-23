@@ -790,8 +790,7 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.prompt(session, "hi")
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :start], _,
-                       %{session: ^session, model: "fake-model"}}
+      assert_received {:telemetry, [:octo_pi_agent, :session, :start], _, %{model: "fake-model"}}
 
       assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 1}}
       assert_received {:telemetry, [:octo_pi_agent, :turn, :stop], %{duration: _}, %{turn: 1}}

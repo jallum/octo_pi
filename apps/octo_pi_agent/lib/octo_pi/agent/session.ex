@@ -290,7 +290,7 @@ defmodule OctoPi.Agent.Session do
     :telemetry.execute(
       [:octo_pi_agent, :session, :stop],
       %{duration: System.monotonic_time() - state.run_started_at_mono},
-      %{session: self(), reason: reason, turn_count: turn_count}
+      %{reason: reason, turn_count: turn_count}
     )
   end
 

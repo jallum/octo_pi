@@ -58,7 +58,7 @@ defmodule OctoPi.Agent.Loop do
     :telemetry.execute(
       [:octo_pi_agent, :session, :start],
       %{system_time: System.system_time()},
-      %{session: session, model: state.model.id}
+      %{model: state.model.id}
     )
 
     dispatch(session, %Event.AgentStart{})
@@ -88,7 +88,7 @@ defmodule OctoPi.Agent.Loop do
       :telemetry.execute(
         [:octo_pi_agent, :turn, :start],
         %{system_time: System.system_time()},
-        %{session: session, turn: turn}
+        %{turn: turn}
       )
 
       dispatch(session, %Event.TurnStart{turn: turn})
@@ -99,7 +99,7 @@ defmodule OctoPi.Agent.Loop do
       :telemetry.execute(
         [:octo_pi_agent, :turn, :stop],
         %{duration: System.monotonic_time() - start_mono},
-        %{session: session, turn: turn, stop_reason: assistant.stop_reason}
+        %{turn: turn, stop_reason: assistant.stop_reason}
       )
 
       continue_or_stop(session, state, updated, assistant, abort_ref, turn)
@@ -258,12 +258,12 @@ defmodule OctoPi.Agent.Loop do
         :telemetry.execute(
           [:octo_pi_agent, :tool, :start],
           %{system_time: System.system_time()},
-          %{session: session, tool_call_id: call.id, tool_name: call.name}
+          %{tool_call_id: call.id, tool_name: call.name}
         )
 
         result = dispatch_with_hooks(session, state, tool, call, abort_ref)
         dispatch_tool(session, call, result)
-        emit_tool_stop(session, call, result, start_mono)
+        emit_tool_stop(call, result, start_mono)
         result
     end
   end
@@ -329,13 +329,13 @@ defmodule OctoPi.Agent.Loop do
     e -> error_result("after_tool_call raised: #{Exception.message(e)}")
   end
 
-  defp emit_tool_stop(session, call, %Tool.Result{is_error?: is_error?}, start_mono) do
+  defp emit_tool_stop(call, %Tool.Result{is_error?: is_error?}, start_mono) do
     event = if is_error?, do: :error, else: :stop
 
     :telemetry.execute(
       [:octo_pi_agent, :tool, event],
       %{duration: System.monotonic_time() - start_mono},
-      %{session: session, tool_call_id: call.id, tool_name: call.name, is_error?: is_error?}
+      %{tool_call_id: call.id, tool_name: call.name, is_error?: is_error?}
     )
   end
 
