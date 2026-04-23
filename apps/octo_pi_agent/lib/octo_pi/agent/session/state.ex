@@ -20,6 +20,7 @@ defmodule OctoPi.Agent.Session.State do
     * `:steering_queue` / `:follow_up_queue` — `PendingMessageQueue.t()`
     * `:loop_task` — `Task.t()` of the running loop, or nil
     * `:abort_ref` — `AbortRef.t()` for the current run, or nil
+    * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
     * `:transport` — `OctoPi.Agent.Transport` impl module
   """
@@ -55,6 +56,7 @@ defmodule OctoPi.Agent.Session.State do
           follow_up_queue: PendingMessageQueue.t(),
           loop_task: pid() | nil,
           abort_ref: AbortRef.t() | nil,
+          run_started_at_mono: integer() | nil,
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
           transport: module()
@@ -67,6 +69,7 @@ defmodule OctoPi.Agent.Session.State do
     :error_message,
     :loop_task,
     :abort_ref,
+    :run_started_at_mono,
     :before_tool_call,
     :after_tool_call,
     :transport,

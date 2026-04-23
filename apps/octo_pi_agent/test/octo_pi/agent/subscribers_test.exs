@@ -38,8 +38,8 @@ defmodule OctoPi.Agent.SubscribersTest do
     test "logs and continues when a sync listener exits mid-dispatch", %{session: session} do
       # Bare dead pid → GenServer.call will :exit. Subscribers should
       # log a warning and still deliver to the second live listener.
-      dead = spawn(fn -> :ok end)
-      Process.sleep(10)
+      {dead, ref} = spawn_monitor(fn -> :ok end)
+      assert_receive {:DOWN, ^ref, :process, ^dead, _}, 100
       refute Process.alive?(dead)
 
       {:ok, live} = RecordingListener.start_link({self(), :live})

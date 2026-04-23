@@ -42,6 +42,27 @@ defmodule OctoPi.Agent.LoopTest do
     pid
   end
 
+  # Attaches a telemetry handler that forwards each `[:tool, :start]`
+  # event to the calling test as `{:tool_started, tool_call_id}`. Use
+  # `assert_receive {:tool_started, _}` to synchronize mid-run events
+  # deterministically instead of sleeping.
+  defp attach_tool_start_signal do
+    test_pid = self()
+    handler_id = "await-tool-start-#{System.unique_integer([:positive])}"
+
+    :telemetry.attach(
+      handler_id,
+      [:octo_pi_agent, :tool, :start],
+      fn _event, _measurements, metadata, _ ->
+        send(test_pid, {:tool_started, metadata.tool_call_id})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
   describe "single-turn text response" do
     test "emits Agent/Turn/Message events in order and exits with :stop" do
       final =
@@ -347,10 +368,12 @@ defmodule OctoPi.Agent.LoopTest do
 
       session = start_session(tools: [ProbeTool.tool()])
       OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
 
       :ok = OctoPi.Agent.prompt(session, "go")
-      # Steer while the probe tool is sleeping.
-      Process.sleep(20)
+      # Sync on the tool actually starting, then steer while the
+      # probe is still inside its 80ms sleep.
+      assert_receive {:tool_started, "c1"}, 2_000
       :ok = OctoPi.Agent.steer(session, "midway note")
 
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
@@ -492,10 +515,11 @@ defmodule OctoPi.Agent.LoopTest do
 
       session = start_session(tools: [ProbeTool.tool()])
       OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
 
       :ok = OctoPi.Agent.prompt(session, "long task")
-      # Give the loop time to reach the tool's Process.sleep.
-      Process.sleep(50)
+      # Sync on the tool actually entering its sleep before we abort.
+      assert_receive {:tool_started, "long"}, 2_000
 
       {elapsed_us, :ok} =
         :timer.tc(fn ->
@@ -540,9 +564,10 @@ defmodule OctoPi.Agent.LoopTest do
 
       session = start_session(tools: [ProbeTool.tool()])
       OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
 
       :ok = OctoPi.Agent.prompt(session, "x")
-      Process.sleep(50)
+      assert_receive {:tool_started, "c"}, 2_000
 
       assert :ok = OctoPi.Agent.abort(session)
       assert :ok = OctoPi.Agent.abort(session)
@@ -818,6 +843,83 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
       assert_received {:telemetry, [:octo_pi_agent, :tool, :error], _, %{is_error?: true}}
+    end
+  end
+
+  describe "hard abort telemetry + synthesized transcript" do
+    # Verify the abnormal on_loop_down path fires :session :stop
+    # so run-duration meters don't silently drop aborted runs.
+    test "hard abort emits [:octo_pi_agent, :session, :stop] with reason :aborted" do
+      call = %ToolCall{
+        id: "c",
+        name: "probe",
+        arguments: %{"sleep_ms" => 1_000, "label" => "never"}
+      }
+
+      tool_turn = assistant([call], :tool_use)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ]
+      ])
+
+      handler_id = "abort-telemetry-#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      :telemetry.attach(
+        handler_id,
+        [:octo_pi_agent, :session, :stop],
+        fn event, measurements, metadata, _ ->
+          send(test_pid, {:telemetry, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      session = start_session(tools: [ProbeTool.tool()])
+      attach_tool_start_signal()
+
+      :ok = OctoPi.Agent.prompt(session, "go")
+      assert_receive {:tool_started, "c"}, 2_000
+      :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _},
+                       %{reason: :aborted}}
+    end
+
+    test "synthesized aborted Assistant carries error_message on both paths" do
+      # Hard abort path — verified via the AgentEnd messages.
+      call = %ToolCall{
+        id: "c",
+        name: "probe",
+        arguments: %{"sleep_ms" => 500, "label" => "x"}
+      }
+
+      tool_turn = assistant([call], :tool_use)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
+
+      :ok = OctoPi.Agent.prompt(session, "abort soon")
+      assert_receive {:tool_started, "c"}, 2_000
+      :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted, messages: msgs}}
+      synth = List.last(msgs)
+      assert %Assistant{stop_reason: :aborted, error_message: "aborted by caller"} = synth
     end
   end
 

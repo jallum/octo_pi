@@ -28,7 +28,6 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Event, as: AIEvent
-  alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.ToolCall
 
@@ -53,19 +52,14 @@ defmodule OctoPi.Agent.Loop do
       %{session: session, model: state.model.id}
     )
 
-    start_mono = System.monotonic_time()
     dispatch(session, %Event.AgentStart{})
 
     {messages, reason} = loop(session, state, state.messages, abort_ref, 1)
 
     dispatch(session, %Event.AgentEnd{reason: reason, messages: messages})
-
-    :telemetry.execute(
-      [:octo_pi_agent, :session, :stop],
-      %{duration: System.monotonic_time() - start_mono},
-      %{session: session, reason: reason, turn_count: length(messages)}
-    )
-
+    # Session owns the paired [:session, :stop] telemetry emission so
+    # both the clean-exit (run_complete cast) and abnormal-exit
+    # (:DOWN) paths flow through the same code.
     GenServer.cast(session, {:run_complete, messages, reason})
 
     :ok
@@ -342,20 +336,7 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp aborted_messages(messages) do
-    messages ++
-      [
-        %Assistant{
-          api: :octo_pi_agent,
-          provider: :octo_pi_agent,
-          model: "",
-          timestamp: :os.system_time(:millisecond),
-          content: [],
-          stop_reason: :aborted,
-          error_message: "aborted by caller"
-        }
-      ]
-  end
+  defp aborted_messages(messages), do: messages ++ [Session.aborted_assistant()]
 
   defp agent_tool_to_ai_tool(%Tool{} = t) do
     %OctoPi.AI.Tool{

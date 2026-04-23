@@ -172,12 +172,15 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_cast({:run_complete, messages, _reason}, store) do
+  def handle_cast({:run_complete, messages, reason}, store) do
+    emit_session_stop(store.session, reason, length(messages))
+
     session = %{
       store.session
       | messages: messages,
         abort_ref: maybe_forget_ref(store.session.abort_ref),
-        loop_task: nil
+        loop_task: nil,
+        run_started_at_mono: nil
     }
 
     {:noreply, idle(%{store | session: session})}
@@ -209,7 +212,8 @@ defmodule OctoPi.Agent.Session do
       store.session
       | is_streaming?: true,
         error_message: nil,
-        abort_ref: abort_ref
+        abort_ref: abort_ref,
+        run_started_at_mono: System.monotonic_time()
     }
 
     {:ok, pid} =
@@ -231,18 +235,40 @@ defmodule OctoPi.Agent.Session do
 
   defp on_loop_down(store, :normal) do
     # Normal completion: run_complete handled (or will be) the
-    # transcript update. Just release the abort ref + flip idle.
+    # transcript update + session:stop emission. Just release the
+    # abort ref + flip idle.
     session = %{
       store.session
       | abort_ref: maybe_forget_ref(store.session.abort_ref),
-        loop_task: nil
+        loop_task: nil,
+        run_started_at_mono: nil
     }
 
     idle(%{store | session: session})
   end
 
   defp on_loop_down(store, _reason) do
-    synthesized = %Assistant{
+    messages = store.session.messages ++ [aborted_assistant()]
+
+    Subscribers.dispatch(self(), %Event.AgentEnd{reason: :aborted, messages: messages})
+    emit_session_stop(store.session, :aborted, length(messages))
+
+    session = %{
+      store.session
+      | messages: messages,
+        error_message: "aborted by caller",
+        abort_ref: maybe_forget_ref(store.session.abort_ref),
+        loop_task: nil,
+        run_started_at_mono: nil
+    }
+
+    idle(%{store | session: session})
+  end
+
+  @doc false
+  @spec aborted_assistant() :: Assistant.t()
+  def aborted_assistant do
+    %Assistant{
       api: :octo_pi_agent,
       provider: :octo_pi_agent,
       model: "",
@@ -251,20 +277,16 @@ defmodule OctoPi.Agent.Session do
       stop_reason: :aborted,
       error_message: "aborted by caller"
     }
+  end
 
-    messages = store.session.messages ++ [synthesized]
+  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _turn_count), do: :ok
 
-    Subscribers.dispatch(self(), %Event.AgentEnd{reason: :aborted, messages: messages})
-
-    session = %{
-      store.session
-      | messages: messages,
-        error_message: "aborted by caller",
-        abort_ref: maybe_forget_ref(store.session.abort_ref),
-        loop_task: nil
-    }
-
-    idle(%{store | session: session})
+  defp emit_session_stop(%Session.State{} = state, reason, turn_count) do
+    :telemetry.execute(
+      [:octo_pi_agent, :session, :stop],
+      %{duration: System.monotonic_time() - state.run_started_at_mono},
+      %{session: self(), reason: reason, turn_count: turn_count}
+    )
   end
 
   defp idle(store) do
