@@ -1,6 +1,5 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "octo-42f.1",
     "octo-42f.2",
@@ -10,15 +9,14 @@
   "blocks": [
     "octo-42f.6"
   ],
-  "comments": [],
   "created": "2026-04-23T16:42:38.759445Z",
   "description": "Implement `OctoPi.AI.Providers.Anthropic`:\n- Request builder: convert `%OctoPi.AI.Context{}` to Anthropic's Messages API payload (messages, tools, system prompt, cache markers).\n- Tool-call ID normalization (Anthropic regex `^[a-zA-Z0-9_-]+$`).\n- Response parser: consume SSE events, map to canonical `OctoPi.AI.Event` structs.\n- API key: env var lookup (`ANTHROPIC_API_KEY`).\n\nBehaviour impl. Tests via a recorded fixture + live smoke test gated on env.",
   "id": "octo-42f.5",
   "labels": [],
   "parent": "octo-42f",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Anthropic provider implementation",
   "type": "task",
-  "updated_at": "2026-04-23T16:42:38.759445Z"
+  "updated_at": "2026-04-23T18:30:59Z"
 }
