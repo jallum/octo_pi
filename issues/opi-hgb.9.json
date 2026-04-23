@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T20:28:15Z",
   "created": "2026-04-23T19:57:58Z",
   "description": "Grab bag of small nits, all safe to land in one commit:\n\n1. Remove mix new scaffold leftovers: OctoPi.Agent.hello/0, OctoPi.Coder.hello/0, OctoPi.TUI.hello/0 (+ their doctests + the boilerplate comments in each Application module).\n\n2. Strip stale ticket IDs from moduledocs (opi-y1y.2, opi-y1y.3 refs in noop_keychain and request.ex — cited by the fidelity reviewer).\n\n3. Replace emoji arrows in mix ai.demo (→, ←, ✗) with ASCII equivalents per house style.\n\n4. URL trimming idiom: Request.trim_trailing_slash/1 uses String.slice(url, 0..-2//1); replace with String.trim_trailing(url, \\\"/\\\").\n\n5. Mark Decoder.State and SSE.t() as @opaque (docstring already says \\\"do not pattern-match externally\\\").\n\n6. KeychainReader.read/1 wrapper rescue drops all errors silently — drop the wrapper, call module.read() directly. The behaviour's documented contract already says implementations must not raise; trust it.\n\n7. Provider @callback: change Enumerable.t() → Enumerable.t(Event.t()); mark stream_simple/3 as @optional_callbacks (Phase 1 aliases it to stream/3).\n\n8. Decoder.finalize/1 on nil stop_reason: raise ArgumentError instead of silently synthesizing :error. A real bug in Anthropic's event order should surface loudly.\n\nTDD for each:\n- Most are safe refactors: existing tests stay green.\n- For #8, RED: update the existing test that asserts \\\"stream ended without stop_reason\\\" message → asserts ArgumentError raised.\n\nFiles: various — see review output.",
   "id": "opi-hgb.9",
   "labels": [],
   "parent": "opi-hgb",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Scaffold + idiom cleanup: hello/0 stubs, template comments, ticket IDs, emojis, trim_trailing",
   "type": "task",
-  "updated_at": "2026-04-23T20:20:29Z"
+  "updated_at": "2026-04-23T20:28:15Z"
 }
