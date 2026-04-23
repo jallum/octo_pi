@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-t58"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:43:30.125160Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 8: polish — OAuth, cost tracking, compaction",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:30.125160Z"
+  "updated_at": "2026-04-23T16:43:57.483464Z"
 }
