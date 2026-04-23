@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-y1y.2"
+  ],
   "blocks": [],
   "created": "2026-04-23T19:02:45Z",
   "description": "Make OctoPi.AI.Providers.Anthropic.Request detect and use an OAuth token (starts with sk-ant-oat). When OAuth:\n- Header `authorization: Bearer \u003ctoken\u003e` (no x-api-key)\n- Extra beta headers: `claude-code-20250219,oauth-2025-04-20` (+ optional interleaved-thinking)\n- `user-agent: claude-cli/\u003cversion\u003e`, `x-app: cli`\n- Prepend identity system prompt: \"You are Claude Code, Anthropic's official CLI for Claude.\"\n- Tool names normalized to Claude Code canonical casing on outbound (to\\ClaudeCodeName); reverse-normalized on inbound (fromClaudeCodeName via case-insensitive lookup in context.tools)\n\nNew module: OctoPi.AI.Providers.Anthropic.Auth — source precedence: explicit opts.api_key → ANTHROPIC_OAUTH_TOKEN → ANTHROPIC_API_KEY → keychain (opi-y1y.2) → raise.\n\nPort the unit-testable parts of pi-mono/packages/ai/test/anthropic-tool-name-normalization.test.ts (the normalization round-trip semantics) as pure tests.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "OAuth use: auth resolution, request-shape variant, tool-name normalization",
   "type": "task",
-  "updated_at": "2026-04-23T19:02:45Z"
+  "updated_at": "2026-04-23T19:02:51Z"
 }
