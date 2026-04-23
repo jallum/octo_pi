@@ -85,18 +85,28 @@ defmodule OctoPi.Agent.Session do
 
   @impl true
   def init(opts) do
-    state = %Session.State{
-      model: Keyword.fetch!(opts, :model),
-      system_prompt: Keyword.get(opts, :system_prompt),
-      tools: Keyword.get(opts, :tools, []),
-      thinking_level: Keyword.get(opts, :thinking_level, :off),
-      transport: Keyword.get(opts, :transport, Transport.Direct),
-      before_tool_call: Keyword.get(opts, :before_tool_call),
-      after_tool_call: Keyword.get(opts, :after_tool_call),
-      messages: Keyword.get(opts, :messages, [])
-    }
+    state =
+      %Session.State{
+        model: Keyword.fetch!(opts, :model),
+        system_prompt: Keyword.get(opts, :system_prompt),
+        tools: Keyword.get(opts, :tools, []),
+        thinking_level: Keyword.get(opts, :thinking_level, :off),
+        transport: Keyword.get(opts, :transport, Transport.Direct),
+        before_tool_call: Keyword.get(opts, :before_tool_call),
+        after_tool_call: Keyword.get(opts, :after_tool_call),
+        messages: Keyword.get(opts, :messages, [])
+      }
+      |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
+      |> maybe_override_queue(:follow_up_queue, opts[:follow_up_queue_bound])
 
     {:ok, %{session: state, idle_waiters: []}}
+  end
+
+  defp maybe_override_queue(state, _field, nil), do: state
+
+  defp maybe_override_queue(state, field, bound) do
+    mode = Map.fetch!(state, field).mode
+    Map.put(state, field, PendingMessageQueue.new(mode, bound))
   end
 
   @impl true

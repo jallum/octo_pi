@@ -1014,6 +1014,91 @@ defmodule OctoPi.Agent.LoopTest do
     end
   end
 
+  describe "queue-full at facade" do
+    test "steer/2 returns {:error, :full} when the steering queue is at bound" do
+      session = start_session(steering_queue_bound: 1)
+      assert :ok = OctoPi.Agent.steer(session, "first")
+      assert {:error, :full} = OctoPi.Agent.steer(session, "second")
+    end
+
+    test "follow_up/2 returns {:error, :full} when the follow-up queue is at bound" do
+      session = start_session(follow_up_queue_bound: 1)
+      assert :ok = OctoPi.Agent.follow_up(session, "first")
+      assert {:error, :full} = OctoPi.Agent.follow_up(session, "second")
+    end
+  end
+
+  describe "steering queue :all mode" do
+    test "set_queue_mode(:steering, :all) drains multiple steers in one pass" do
+      tool_call = %ToolCall{
+        id: "c1",
+        name: "probe",
+        arguments: %{"sleep_ms" => 80, "label" => "ok"}
+      }
+
+      tool_turn = assistant([tool_call], :tool_use)
+      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :tool_use, message: tool_turn}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final_turn}
+        ]
+      ])
+
+      session = start_session(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.set_queue_mode(session, :steering, :all)
+      OctoPi.Agent.subscribe(session, self(), :async)
+      attach_tool_start_signal()
+
+      :ok = OctoPi.Agent.prompt(session, "go")
+      assert_receive {:tool_started, "c1"}, 2_000
+      :ok = OctoPi.Agent.steer(session, "note a")
+      :ok = OctoPi.Agent.steer(session, "note b")
+
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      assert Enum.map(users, & &1.content) == ["go", "note a", "note b"]
+    end
+  end
+
+  describe "abort during LLM stream" do
+    alias OctoPi.Agent.TestSupport.BlockingTransport
+
+    test "brutal-kill unblocks a stuck stream, AgentEnd :aborted fires" do
+      handler_id = "turn-start-sync-#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      :telemetry.attach(
+        handler_id,
+        [:octo_pi_agent, :turn, :start],
+        fn _e, _m, metadata, _ -> send(test_pid, {:turn_started, metadata.turn}) end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+
+      {:ok, session} =
+        OctoPi.Agent.start_session(model: model(), transport: BlockingTransport)
+
+      OctoPi.Agent.subscribe(session, self(), :async)
+
+      :ok = OctoPi.Agent.prompt(session, "stuck")
+      assert_receive {:turn_started, 1}, 2_000
+
+      :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted}}
+    end
+  end
+
   describe "error stop_reason exits the loop" do
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)
