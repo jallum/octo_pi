@@ -4,14 +4,15 @@
     "octo-w29.2"
   ],
   "blocks": [],
+  "closed_at": "2026-04-23T17:34:02Z",
   "created": "2026-04-23T16:42:06.865304Z",
   "description": "Resolve RESEARCH.md §7 Q6.\n\n- Add MIT LICENSE at repo root\n- Add CREDITS.md: credit `badlogic/pi-mono` (MIT) — this project is a ground-up Elixir/OTP port inspired by and architecturally modeled on pi-mono. Include upstream URL and the version studied during research (v0.69.0).\n- Mention `badlogic/pi-mono` in top-level `README.md` (to be created later).",
   "id": "octo-w29.4",
   "labels": [],
   "parent": "octo-w29",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "LICENSE (MIT) + CREDITS.md attributing upstream",
   "type": "task",
-  "updated_at": "2026-04-23T17:33:29Z"
+  "updated_at": "2026-04-23T17:34:02Z"
 }
