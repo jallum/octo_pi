@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T22:27:23Z",
+  "description": "Three coupled bugs in `OctoPi.Coder.CLI.run_rpc/1`:\n\n1. `OctoPi.Agent.subscribe(session, self(), :async)` subscribes the\n   CLI main pid, but rpc_loop blocks on `IO.read(:stdio, :line)` so\n   events never drain. Events silently accumulate in its mailbox\n   and the spawned forwarder process receives nothing.\n\n2. `send(event_forwarder, {:owner, self()})` is dead — forward_events\n   has no matching clause. Refactor artifact.\n\n3. `IO.puts(Jason.encode!(response))` raises if the response map\n   contains a non-encodable value (pid, fun, weird binary). Crashes\n   the rpc_loop and the whole session dies silently.\n\nFix:\n- Subscribe the forwarder pid, not CLI main:\n  `OctoPi.Agent.subscribe(session, event_forwarder, :async)`.\n- Drop the {:owner, self()} send.\n- Wrap `Jason.encode!` in try/rescue; on failure emit a generic\n  `{\"id\": id, \"error\": {\"message\": \"encoding failed\"}}` so the\n  client still gets a response and the loop continues.\n\nTDD:\n- E2E test: start an RPC session with FakeTransport, send a\n  `{\"method\": \"prompt\", ...}` request, assert a request response\n  AND event JSON lines arrive on captured stdout in order.\n- Jason.encode failure test: inject an un-encodable value, assert\n  the loop survives and emits an error response.",
+  "id": "opi-dkl.1",
+  "labels": [],
+  "parent": "opi-dkl",
+  "priority": 1,
+  "status": "open",
+  "title": "Fix RPC event forwarding + robust JSON encoding",
+  "type": "task",
+  "updated_at": "2026-04-23T22:27:23Z"
+}
