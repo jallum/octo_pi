@@ -6,7 +6,9 @@
     "octo-t58.5",
     "octo-t58.6"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-t58.9"
+  ],
   "created": "2026-04-23T21:55:34Z",
   "description": "Port-map §6. Non-interactive single-shot:\n\nFlow:\n1. Parse --print/-p flag + prompt string from argv (.9 does full\n   parsing; .7 just exercises the function)\n2. Register core tools (read/write/edit/ls/bash/grep/find)\n3. Start session via OctoPi.Agent.start_session with cwd + model\n4. Subscribe to events; render MessageUpdate text deltas to stdout,\n   tool calls with a prefixed marker, AgentEnd flush\n5. Wait for idle; exit code 0 on :stop, non-zero on :error/:aborted\n\nModule: OctoPi.Coder.Modes.Print. Function `run(opts)` takes\n%{prompt, cwd, model, tools, session_store?, text_output: bool}.\n\nTDD:\n- End-to-end with FakeTransport: prompt → script → stdout contains\n  expected text\n- Tool call produces `[tool_use: name]` markers in stdout\n- :error stop → non-zero exit code\n- Session file is written (integration-lite: stub store or real?)\n\nDepends on .2, .4, .5, .6.",
   "id": "octo-t58.7",

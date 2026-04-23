@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-t58.7"
+  ],
   "blocks": [],
   "created": "2026-04-23T21:55:34Z",
   "description": "Port-map §8. Tie everything together with `mix pi` (escript\ndeferred; mix task is fine for now).\n\nScope:\n- Mix.Tasks.Pi — parses argv (OptionParser), resolves cwd,\n  resolves model, dispatches to Print or RPC mode.\n- Flags: --print/-p \u003cprompt\u003e, --mode rpc, --model \u003cid\u003e,\n  --cwd \u003cpath\u003e, --help.\n- Model resolution: hardcoded claude-haiku-4-5 default; full\n  config profile support deferred to Phase 8.\n\nDefinition of done:\n  `mix pi --print \"write hello world to foo.txt and cat it back\"`\n  runs end-to-end against live Anthropic, produces a session file\n  readable by upstream pi.\n  `mix pi --mode rpc` passes a JSON-in/JSON-out round-trip test.\n\nTDD:\n- Argv parsing unit tests (default mode is :print if no --mode)\n- `mix pi --help` prints usage\n- Smoke test (@tag :integration) that runs print mode with a\n  trivial prompt against FakeTransport\n\nDepends on .7, .8.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "CLI entry + mode dispatch + end-to-end smoke",
   "type": "task",
-  "updated_at": "2026-04-23T21:55:34Z"
+  "updated_at": "2026-04-23T21:55:40Z"
 }
