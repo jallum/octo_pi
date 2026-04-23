@@ -93,7 +93,7 @@ defmodule OctoPi.Coder.CLI do
     {:ok, session} =
       OctoPi.Agent.start_session(
         model: opts.model,
-        tools: default_tools()
+        tools: default_tools(opts.cwd)
       )
 
     # Spawn a dedicated forwarder process and subscribe *it* — not
@@ -106,15 +106,15 @@ defmodule OctoPi.Coder.CLI do
     0
   end
 
-  defp default_tools do
+  defp default_tools(cwd) do
     [
-      Tools.Read.tool(),
-      Tools.Write.tool(),
-      Tools.Edit.tool(),
-      Tools.Ls.tool(),
-      Tools.Bash.tool(),
-      Tools.Grep.tool(),
-      Tools.Find.tool()
+      Tools.Read.tool(cwd),
+      Tools.Write.tool(cwd),
+      Tools.Edit.tool(cwd),
+      Tools.Ls.tool(cwd),
+      Tools.Bash.tool(cwd),
+      Tools.Grep.tool(cwd),
+      Tools.Find.tool(cwd)
     ]
   end
 

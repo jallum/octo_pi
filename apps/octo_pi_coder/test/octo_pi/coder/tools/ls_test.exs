@@ -19,14 +19,15 @@ defmodule OctoPi.Coder.Tools.LsTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref), do: Ls.execute("call_1", args, ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd),
+    do: Ls.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "lists files and dirs in a directory", %{tmp: tmp, ref: ref} do
     File.write!(Path.join(tmp, "a.txt"), "hi")
     File.mkdir_p!(Path.join(tmp, "sub"))
 
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"path" => tmp}, ref)
+             exec(%{"path" => tmp}, ref, tmp)
 
     assert text =~ "a.txt"
     assert text =~ "sub"
@@ -34,14 +35,14 @@ defmodule OctoPi.Coder.Tools.LsTest do
 
   test "empty directory returns a note", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"path" => tmp}, ref)
+             exec(%{"path" => tmp}, ref, tmp)
 
     assert text =~ "empty" or text == ""
   end
 
   test "non-existent path yields an error", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{is_error?: true}} =
-             exec(%{"path" => Path.join(tmp, "nope")}, ref)
+             exec(%{"path" => Path.join(tmp, "nope")}, ref, tmp)
   end
 
   test "path that is a file (not a dir) yields an error", %{tmp: tmp, ref: ref} do
@@ -49,7 +50,7 @@ defmodule OctoPi.Coder.Tools.LsTest do
     File.write!(path, "x")
 
     assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => path}, ref)
+             exec(%{"path" => path}, ref, tmp)
 
     assert msg =~ "directory" or msg =~ "not a dir"
   end

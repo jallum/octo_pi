@@ -23,11 +23,12 @@ defmodule OctoPi.Coder.Tools.FindTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref), do: Find.execute("id", args, ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd),
+    do: Find.execute("id", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "glob matches files recursively", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"pattern" => "**/*.txt", "path" => tmp}, ref)
+             exec(%{"pattern" => "**/*.txt", "path" => tmp}, ref, tmp)
 
     assert text =~ "a.txt"
     assert text =~ "c.txt"
@@ -36,7 +37,7 @@ defmodule OctoPi.Coder.Tools.FindTest do
 
   test "no matches yields a note", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"pattern" => "**/*.zzz", "path" => tmp}, ref)
+             exec(%{"pattern" => "**/*.zzz", "path" => tmp}, ref, tmp)
 
     assert text =~ "no matches" or text == ""
   end

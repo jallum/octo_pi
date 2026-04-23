@@ -10,12 +10,13 @@ defmodule OctoPi.Coder.Tools.Find do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
+  alias OctoPi.Coder.Tools.PathGuard
 
   @max_matches 500
 
-  @doc "Build a `%Tool{}` registered under the agent."
-  @spec tool() :: Tool.t()
-  def tool do
+  @doc "Build a `%Tool{}` rooted at `cwd` — path defaults to cwd and must stay inside it."
+  @spec tool(String.t()) :: Tool.t()
+  def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "find",
       label: "Find",
@@ -24,25 +25,37 @@ defmodule OctoPi.Coder.Tools.Find do
         "type" => "object",
         "properties" => %{
           "pattern" => %{"type" => "string", "description" => "Glob pattern, e.g. '**/*.ex'"},
-          "path" => %{"type" => "string", "description" => "Base directory (default: cwd)."}
+          "path" => %{
+            "type" => "string",
+            "description" => "Base directory (defaults to session cwd)."
+          }
         },
         "required" => ["pattern"]
       },
+      prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
     }
   end
 
   @impl true
   def execute(_id, %{"pattern" => pattern} = args, _abort_ref, _on_update) do
-    base = Map.get(args, "path", File.cwd!())
-    full_pattern = Path.join(base, pattern)
+    cwd = Map.fetch!(args, "_cwd")
+    requested_base = Map.get(args, "path", cwd)
 
-    matches =
-      full_pattern
-      |> Path.wildcard(match_dot: true)
-      |> Enum.take(@max_matches)
+    case PathGuard.resolve_or_error(requested_base, cwd) do
+      {:error, %Result{} = r} ->
+        {:ok, r}
 
-    finalize(matches)
+      {:ok, base} ->
+        full_pattern = Path.join(base, pattern)
+
+        matches =
+          full_pattern
+          |> Path.wildcard(match_dot: true)
+          |> Enum.take(@max_matches)
+
+        finalize(matches)
+    end
   end
 
   defp finalize([]) do

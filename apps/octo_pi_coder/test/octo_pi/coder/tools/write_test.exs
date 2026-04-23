@@ -19,13 +19,14 @@ defmodule OctoPi.Coder.Tools.WriteTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref), do: Write.execute("call_1", args, ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd),
+    do: Write.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "writes a new file", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "new.txt")
 
     assert {:ok, %Result{content: [%Content.Text{text: msg}], is_error?: false}} =
-             exec(%{"path" => path, "content" => "hello world"}, ref)
+             exec(%{"path" => path, "content" => "hello world"}, ref, tmp)
 
     assert msg =~ "wrote"
     assert File.read!(path) == "hello world"
@@ -35,7 +36,7 @@ defmodule OctoPi.Coder.Tools.WriteTest do
     path = Path.join([tmp, "a", "b", "c.txt"])
 
     assert {:ok, %Result{is_error?: false}} =
-             exec(%{"path" => path, "content" => "nested"}, ref)
+             exec(%{"path" => path, "content" => "nested"}, ref, tmp)
 
     assert File.read!(path) == "nested"
   end
@@ -45,7 +46,7 @@ defmodule OctoPi.Coder.Tools.WriteTest do
     File.write!(path, "original")
 
     assert {:ok, %Result{is_error?: false}} =
-             exec(%{"path" => path, "content" => "replaced"}, ref)
+             exec(%{"path" => path, "content" => "replaced"}, ref, tmp)
 
     assert File.read!(path) == "replaced"
   end

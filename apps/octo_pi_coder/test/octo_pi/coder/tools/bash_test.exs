@@ -15,21 +15,30 @@ defmodule OctoPi.Coder.Tools.BashTest do
   describe "basic execution" do
     test "captures stdout from a simple command", %{ref: ref} do
       assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-               Bash.execute("id", %{"cmd" => "echo hi"}, ref, fn _ -> :ok end)
+               Bash.execute("id", %{"_cwd" => File.cwd!(), "cmd" => "echo hi"}, ref, fn _ ->
+                 :ok
+               end)
 
       assert text =~ "hi"
     end
 
     test "captures stderr too", %{ref: ref} do
       assert {:ok, %Result{content: [%Content.Text{text: text}]}} =
-               Bash.execute("id", %{"cmd" => "echo errmsg 1>&2"}, ref, fn _ -> :ok end)
+               Bash.execute(
+                 "id",
+                 %{"_cwd" => File.cwd!(), "cmd" => "echo errmsg 1>&2"},
+                 ref,
+                 fn _ -> :ok end
+               )
 
       assert text =~ "errmsg"
     end
 
     test "non-zero exit sets is_error?", %{ref: ref} do
       assert {:ok, %Result{is_error?: true, details: %{exit_status: status}}} =
-               Bash.execute("id", %{"cmd" => "exit 7"}, ref, fn _ -> :ok end)
+               Bash.execute("id", %{"_cwd" => File.cwd!(), "cmd" => "exit 7"}, ref, fn _ ->
+                 :ok
+               end)
 
       assert status == 7
     end
@@ -42,7 +51,8 @@ defmodule OctoPi.Coder.Tools.BashTest do
 
       cmd = "for i in 1 2 3; do echo line$i; sleep 0.05; done"
 
-      assert {:ok, %Result{}} = Bash.execute("id", %{"cmd" => cmd}, ref, on_update)
+      assert {:ok, %Result{}} =
+               Bash.execute("id", %{"_cwd" => File.cwd!(), "cmd" => cmd}, ref, on_update)
 
       # At least two partial updates (streaming, not just one big
       # flush at the end).
@@ -64,12 +74,35 @@ defmodule OctoPi.Coder.Tools.BashTest do
     test "commands that exceed timeout_ms are killed", %{ref: ref} do
       {elapsed_us, {:ok, result}} =
         :timer.tc(fn ->
-          Bash.execute("id", %{"cmd" => "sleep 10", "timeout_ms" => 200}, ref, fn _ -> :ok end)
+          Bash.execute(
+            "id",
+            %{"_cwd" => File.cwd!(), "cmd" => "sleep 10", "timeout_ms" => 200},
+            ref,
+            fn _ -> :ok end
+          )
         end)
 
       assert %Result{is_error?: true, details: %{reason: :timeout}} = result
       # Should be under 1s (was 10s sleep).
       assert elapsed_us < 1_500_000
+    end
+  end
+
+  describe "cwd enforcement" do
+    test "rejects a cwd arg that escapes the session cwd", %{ref: ref} do
+      tmp = Path.join(System.tmp_dir!(), "bash-cwd-#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      on_exit(fn -> File.rm_rf!(tmp) end)
+
+      assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+               Bash.execute(
+                 "id",
+                 %{"_cwd" => tmp, "cmd" => "echo hi", "cwd" => "/etc"},
+                 ref,
+                 fn _ -> :ok end
+               )
+
+      assert msg =~ "escapes session cwd"
     end
   end
 
@@ -79,7 +112,7 @@ defmodule OctoPi.Coder.Tools.BashTest do
 
       task =
         Task.async(fn ->
-          Bash.execute("id", %{"cmd" => "sleep 30"}, ref, fn p ->
+          Bash.execute("id", %{"_cwd" => File.cwd!(), "cmd" => "sleep 30"}, ref, fn p ->
             send(test_pid, {:started, p})
           end)
         end)

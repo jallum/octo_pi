@@ -14,10 +14,11 @@ defmodule OctoPi.Coder.Tools.Edit do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
   alias OctoPi.Coder.FileMutex
+  alias OctoPi.Coder.Tools.PathGuard
 
-  @doc "Build a `%Tool{}` registered under the agent."
-  @spec tool() :: Tool.t()
-  def tool do
+  @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
+  @spec tool(String.t()) :: Tool.t()
+  def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "edit",
       label: "Edit file",
@@ -25,24 +26,32 @@ defmodule OctoPi.Coder.Tools.Edit do
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "path" => %{"type" => "string", "description" => "Absolute path to the file."},
+          "path" => %{"type" => "string", "description" => "Path (resolved against session cwd)."},
           "old_string" => %{"type" => "string"},
           "new_string" => %{"type" => "string"},
           "replace_all" => %{"type" => "boolean"}
         },
         "required" => ["path", "old_string", "new_string"]
       },
+      prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
     }
   end
 
   @impl true
   def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
+    cwd = Map.fetch!(args, "_cwd")
     old = Map.fetch!(args, "old_string")
     new = Map.fetch!(args, "new_string")
     replace_all? = Map.get(args, "replace_all", false)
 
-    FileMutex.with_lock(path, fn -> do_edit(path, old, new, replace_all?) end)
+    case PathGuard.resolve_or_error(path, cwd) do
+      {:error, %Result{} = r} ->
+        {:ok, r}
+
+      {:ok, abs_path} ->
+        FileMutex.with_lock(abs_path, fn -> do_edit(abs_path, old, new, replace_all?) end)
+    end
   end
 
   defp do_edit(path, old, new, replace_all?) do

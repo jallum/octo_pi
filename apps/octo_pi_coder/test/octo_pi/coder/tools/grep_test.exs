@@ -22,11 +22,12 @@ defmodule OctoPi.Coder.Tools.GrepTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref), do: Grep.execute("id", args, ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd),
+    do: Grep.execute("id", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "finds a literal pattern", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"pattern" => "beta", "path" => tmp}, ref)
+             exec(%{"pattern" => "beta", "path" => tmp}, ref, tmp)
 
     assert text =~ "a.txt"
     assert text =~ "beta"
@@ -34,7 +35,7 @@ defmodule OctoPi.Coder.Tools.GrepTest do
 
   test "case-insensitive search catches both cases", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}]}} =
-             exec(%{"pattern" => "beta", "path" => tmp, "case_insensitive" => true}, ref)
+             exec(%{"pattern" => "beta", "path" => tmp, "case_insensitive" => true}, ref, tmp)
 
     assert text =~ "a.txt"
     assert text =~ "b.txt"
@@ -42,7 +43,7 @@ defmodule OctoPi.Coder.Tools.GrepTest do
 
   test "no matches yields a note, not an error", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"pattern" => "nothing_here", "path" => tmp}, ref)
+             exec(%{"pattern" => "nothing_here", "path" => tmp}, ref, tmp)
 
     assert text =~ "no matches" or text == ""
   end

@@ -15,15 +15,16 @@ defmodule OctoPi.Coder.Tools.Bash do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
+  alias OctoPi.Coder.Tools.PathGuard
 
   @default_timeout_ms 120_000
   @abort_poll_ms 50
   @max_output_bytes 32 * 1024
   @max_output_lines 100
 
-  @doc "Build a `%Tool{}` registered under the agent."
-  @spec tool() :: Tool.t()
-  def tool do
+  @doc "Build a `%Tool{}` rooted at `cwd` — the bash `cwd` arg is resolved against it."
+  @spec tool(String.t()) :: Tool.t()
+  def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "bash",
       label: "Bash",
@@ -32,19 +33,38 @@ defmodule OctoPi.Coder.Tools.Bash do
         "type" => "object",
         "properties" => %{
           "cmd" => %{"type" => "string", "description" => "The shell command line."},
-          "cwd" => %{"type" => "string", "description" => "Working directory (optional)."},
+          "cwd" => %{
+            "type" => "string",
+            "description" => "Working directory (must be within session cwd)."
+          },
           "timeout_ms" => %{"type" => "integer", "description" => "Kill after this many ms."}
         },
         "required" => ["cmd"]
       },
+      prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
     }
   end
 
   @impl true
   def execute(_id, %{"cmd" => cmd} = args, abort_ref, on_update) do
-    cwd = Map.get(args, "cwd", File.cwd!())
+    session_cwd = Map.fetch!(args, "_cwd")
     timeout_ms = Map.get(args, "timeout_ms", @default_timeout_ms)
+
+    case resolve_cwd(args, session_cwd) do
+      {:error, %Result{} = r} -> {:ok, r}
+      {:ok, cwd} -> run_with_cwd(cmd, cwd, timeout_ms, abort_ref, on_update)
+    end
+  end
+
+  defp resolve_cwd(args, session_cwd) do
+    case Map.get(args, "cwd") do
+      nil -> {:ok, session_cwd}
+      requested -> PathGuard.resolve_or_error(requested, session_cwd)
+    end
+  end
+
+  defp run_with_cwd(cmd, cwd, timeout_ms, abort_ref, on_update) do
     start_mono = System.monotonic_time()
 
     :telemetry.execute(

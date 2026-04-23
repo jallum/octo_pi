@@ -10,10 +10,11 @@ defmodule OctoPi.Coder.Tools.Ls do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
+  alias OctoPi.Coder.Tools.PathGuard
 
-  @doc "Build a `%Tool{}` registered under the agent."
-  @spec tool() :: Tool.t()
-  def tool do
+  @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
+  @spec tool(String.t()) :: Tool.t()
+  def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "ls",
       label: "List directory",
@@ -21,17 +22,21 @@ defmodule OctoPi.Coder.Tools.Ls do
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "path" => %{"type" => "string", "description" => "Absolute path to a directory."}
+          "path" => %{"type" => "string", "description" => "Path (resolved against session cwd)."}
         },
         "required" => ["path"]
       },
+      prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
     }
   end
 
   @impl true
-  def execute(_id, %{"path" => path}, _abort_ref, _on_update) do
-    with {:ok, %File.Stat{type: :directory}} <- File.stat(path),
+  def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
+    cwd = Map.fetch!(args, "_cwd")
+
+    with {:ok, path} <- PathGuard.resolve_or_error(path, cwd),
+         {:ok, %File.Stat{type: :directory}} <- File.stat(path),
          {:ok, entries} <- File.ls(path) do
       text = render(path, entries)
 
@@ -41,6 +46,9 @@ defmodule OctoPi.Coder.Tools.Ls do
          details: %{path: path, count: length(entries)}
        }}
     else
+      {:error, %Result{} = guard_result} ->
+        {:ok, guard_result}
+
       {:ok, %File.Stat{type: type}} ->
         {:ok,
          %Result{

@@ -10,12 +10,13 @@ defmodule OctoPi.Coder.Tools.Grep do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
+  alias OctoPi.Coder.Tools.PathGuard
 
   @max_matches 200
 
-  @doc "Build a `%Tool{}` registered under the agent."
-  @spec tool() :: Tool.t()
-  def tool do
+  @doc "Build a `%Tool{}` rooted at `cwd` — path defaults to cwd and must stay inside it."
+  @spec tool(String.t()) :: Tool.t()
+  def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "grep",
       label: "Grep",
@@ -24,27 +25,38 @@ defmodule OctoPi.Coder.Tools.Grep do
         "type" => "object",
         "properties" => %{
           "pattern" => %{"type" => "string"},
-          "path" => %{"type" => "string", "description" => "Directory or file."},
+          "path" => %{
+            "type" => "string",
+            "description" => "Directory or file (defaults to session cwd)."
+          },
           "case_insensitive" => %{"type" => "boolean"}
         },
         "required" => ["pattern"]
       },
+      prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
     }
   end
 
   @impl true
   def execute(_id, %{"pattern" => pattern} = args, _abort_ref, _on_update) do
-    path = Map.get(args, "path", File.cwd!())
+    cwd = Map.fetch!(args, "_cwd")
+    requested_path = Map.get(args, "path", cwd)
     case_insensitive? = Map.get(args, "case_insensitive", false)
 
-    matches =
-      case rg_available?() do
-        true -> rg_search(pattern, path, case_insensitive?)
-        false -> fallback_search(pattern, path, case_insensitive?)
-      end
+    case PathGuard.resolve_or_error(requested_path, cwd) do
+      {:error, %Result{} = r} ->
+        {:ok, r}
 
-    finalize(matches)
+      {:ok, path} ->
+        matches =
+          case rg_available?() do
+            true -> rg_search(pattern, path, case_insensitive?)
+            false -> fallback_search(pattern, path, case_insensitive?)
+          end
+
+        finalize(matches)
+    end
   end
 
   defp rg_available?, do: System.find_executable("rg") != nil

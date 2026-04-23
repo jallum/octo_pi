@@ -19,14 +19,15 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref), do: Read.execute("call_1", args, ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd),
+    do: Read.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "reads full file", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "hello.txt")
     File.write!(path, "line1\nline2\nline3\n")
 
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =
-             exec(%{"path" => path}, ref)
+             exec(%{"path" => path}, ref, tmp)
 
     assert text == "line1\nline2\nline3\n"
   end
@@ -36,7 +37,7 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     File.write!(path, Enum.map_join(1..10, "", &"line#{&1}\n"))
 
     assert {:ok, %Result{content: [%Content.Text{text: text}]}} =
-             exec(%{"path" => path, "offset" => 3, "limit" => 2}, ref)
+             exec(%{"path" => path, "offset" => 3, "limit" => 2}, ref, tmp)
 
     # Slice yields the two requested lines; trailing newline is
     # dropped along with the empty element from String.split.
@@ -48,7 +49,7 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     File.write!(path, Enum.map_join(1..15_000, "", &"x#{&1}\n"))
 
     assert {:ok, %Result{content: [%Content.Text{text: text}], details: details}} =
-             exec(%{"path" => path}, ref)
+             exec(%{"path" => path}, ref, tmp)
 
     assert details.truncated == true
     assert details.truncated_by == :lines
@@ -61,15 +62,22 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     path = Path.join(tmp, "nope.txt")
 
     assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => path}, ref)
+             exec(%{"path" => path}, ref, tmp)
 
     assert msg =~ "enoent" or msg =~ "no such file"
   end
 
   test "rejects directories", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => tmp}, ref)
+             exec(%{"path" => tmp}, ref, tmp)
 
     assert msg =~ "directory"
+  end
+
+  test "rejects paths that escape session cwd", %{tmp: tmp, ref: ref} do
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(%{"path" => "/etc/passwd"}, ref, tmp)
+
+    assert msg =~ "escapes session cwd"
   end
 end
