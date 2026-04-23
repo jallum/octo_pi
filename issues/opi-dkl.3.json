@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-23T22:41:34Z",
   "created": "2026-04-23T22:27:23Z",
   "description": "`Read.slice_and_truncate/3`:\n\n1. `total = length(lines) - 1` assumes `String.split/2` produced a\n   trailing empty element (i.e. the file ends with `\\n`). For a\n   file like `\"a\\nb\"` (no final newline), total reports 1 instead\n   of 2.\n\n2. The full file body is read into a single binary then split into\n   a list. For a 512KB file under the truncation limit, that's a\n   list of every line's binary slice in RAM. Better to use\n   `File.stream!(path, :line)` + `Enum.drop` + `Enum.take` so we\n   stop reading once we hit the limit.\n\nFix (1) first with a targeted test, then the refactor.\n\nTDD:\n- File without trailing newline: `total_lines` matches reality\n- File with trailing newline: unchanged behavior\n- Large file \u003e truncation: still truncates correctly\n- Streaming doesn't read past the limit (measure bytes read via\n  a FakeFile IO module or file size assertion — optional)",
   "id": "opi-dkl.3",
   "labels": [],
   "parent": "opi-dkl",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "read.ex: fix line count for no-trailing-newline + stream refactor",
   "type": "task",
-  "updated_at": "2026-04-23T22:39:21Z"
+  "updated_at": "2026-04-23T22:41:34Z"
 }
