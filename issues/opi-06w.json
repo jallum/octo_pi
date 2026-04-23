@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "octo-t58"
+  ],
   "created": "2026-04-23T21:30:04Z",
   "description": "Addresses findings from the /review on the Phase 2 kernel branch\n(review/octo-z1d, commits 20d3e4c..fbd7ca0). Each child ticket is\nscoped to a focused fix or small bundle; all are non-blocking polish\nbut we want them landed before Phase 3 (octo-t58) builds on the\nkernel.\n\nChildren cover:\n  - Correctness gaps in the abort path (duplicate aborted-assistant\n    synthesis, missing session:stop telemetry on abnormal exit)\n  - Small defensive hardening (nil stream accumulator, dead-pid\n    guard, redundant drain_steering round-trip)\n  - Doc refresh (stale moduledoc scope references in Session/Loop)\n  - agent.demo Process-dict cleanup\n  - Telemetry metadata noise reduction\n  - Tool dispatch max_concurrency cap\n  - Test coverage gaps (queue-full at facade, set_queue_mode\n    steering, abort-during-LLM-stream)",
   "id": "opi-06w",
