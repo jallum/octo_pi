@@ -1,19 +1,17 @@
 {
-  "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "octo-t58"
+    "octo-t58",
+    "opi-dkl"
   ],
   "blocks": [],
-  "comments": [],
   "created": "2026-04-23T16:43:30.125160Z",
   "description": "Mostly mechanical once the skeleton is proven. Grouped because individually these are too small to be epics.\n\nScope (children to be created when we approach this phase):\n- OAuth flows (Anthropic first; GitHub Copilot, Gemini CLI, OpenAI Codex to follow).\n- Cost tracking (per-provider pricing table; accumulate usage per session).\n- Context compaction (`session_before_compact` hook + summarization logic).\n- Retry + rate-limit handling across providers.\n- Permission-prompt polish for risky tools (bash commands, file writes outside cwd).\n\nRef: RESEARCH.md §3.1 (OAuth), §6 Phase 8.",
   "id": "octo-4x7",
   "labels": [],
-  "parent": "",
   "priority": 2,
   "status": "open",
   "title": "Phase 8: polish — OAuth, cost tracking, compaction",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:57.483464Z"
+  "updated_at": "2026-04-23T22:28:21Z"
 }
