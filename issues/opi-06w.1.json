@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:30:32Z",
+  "description": "Two coupled findings in the abort path:\n\n1. `loop.ex:345` (aborted_messages/1) and `session.ex:244`\n   (on_loop_down abnormal branch) each synthesize an aborted\n   Assistant independently. They differ: only Session's version\n   sets `error_message`. A cooperative abort (flag flipped between\n   turns) goes through the loop's path and produces an inconsistent\n   transcript vs. a hard abort.\n\n2. `loop.ex:63` emits `[:octo_pi_agent, :session, :stop]` only on\n   the clean-exit path. Hard-aborted runs never fire a :stop event,\n   so run duration metering silently drops them.\n\nFix:\n- Extract a single aborted-Assistant helper (e.g.\n  `OctoPi.Agent.Event.aborted_assistant/0` or a Session private\n  helper used by both paths).\n- Make on_loop_down abnormal branch emit session:stop with\n  `reason: :aborted` and a duration (start_mono tracked on the\n  store / session state, or reconstructed from abort_ref creation\n  timestamp).\n\nTDD:\n- Test: cooperative abort transcript has error_message set.\n- Test: hard abort emits [:octo_pi_agent, :session, :stop] with\n  reason :aborted.",
+  "id": "opi-06w.1",
+  "labels": [],
+  "parent": "opi-06w",
+  "priority": 1,
+  "status": "open",
+  "title": "Unify aborted-assistant + emit session:stop telemetry on abnormal exit",
+  "type": "task",
+  "updated_at": "2026-04-23T21:30:32Z"
+}
