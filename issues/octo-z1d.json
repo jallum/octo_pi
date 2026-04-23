@@ -4,7 +4,9 @@
   "blocked_by": [
     "octo-42f"
   ],
-  "blocks": [],
+  "blocks": [
+    "octo-t58"
+  ],
   "comments": [],
   "created": "2026-04-23T16:42:48.056412Z",
   "description": "Port pi-agent-core — the stateful agent loop.\n\nScope (children to be created when we approach this phase):\n- Session GenServer + state struct (messages, tools, model, streaming flag, queues).\n- Tool behaviour + registry.\n- Loop Task (outer + inner loops matching agent-loop.ts runLoop:155-234).\n- Parallel tool execution via Task.async_stream; sequential mode honored.\n- Cancellation: Task.shutdown + cooperative AbortRef checked by tools/LLM stream.\n- Steer + follow-up queues with \"all\"/\"one-at-a-time\" mode.\n- Config hooks: `:before_tool_call`, `:after_tool_call` (mutation/block).\n- Subscriber model: sync barrier subscribers + async PubSub.\n- Transport pluggability via behaviour (direct vs proxy).\n\nDefinition of done: a test driver can register a trivial Echo tool and run the full inner/outer loop against Anthropic; abort mid-tool works; steer and followUp fire at the right boundaries.\n\nRef: RESEARCH.md §3.2, §4.5, §8.1, §6 Phase 2.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Phase 2: octo_pi_agent — kernel (Session, loop, tools)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:51.770700Z"
+  "updated_at": "2026-04-23T16:43:52.689116Z"
 }

@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-z1d"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:42:55.809309Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 3: octo_pi_coder — core (sessions, tools, Print/RPC)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:42:55.809309Z"
+  "updated_at": "2026-04-23T16:43:52.689116Z"
 }
