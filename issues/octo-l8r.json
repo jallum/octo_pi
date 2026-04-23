@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-42f"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-23T16:43:11.635138Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 5: additional providers (OpenAI, Google, Bedrock)",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:11.635138Z"
+  "updated_at": "2026-04-23T16:43:54.532974Z"
 }
