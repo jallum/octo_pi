@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-23T21:30:32Z",
+  "description": "`apps/octo_pi_agent/lib/octo_pi/agent/session.ex` still claims to\nbe the z1d.2 stub: 'prompt/continue stub out the run by immediately\nemitting AgentStart then AgentEnd{reason: :stop} without doing any\nwork.' False since z1d.3.\n\n`apps/octo_pi_agent/lib/octo_pi/agent/loop.ex` moduledoc has a\n'Scope for octo-z1d.3' section listing 'parallel lands in z1d.4',\n'steering/follow-up drainage in z1d.5', 'hard abort via\nTask.shutdown in z1d.6', etc. — all landed.\n\nRewrite both to describe the landed state. Keep the invariants and\nresponsibilities; drop the ticket breadcrumbs.",
+  "id": "opi-06w.3",
+  "labels": [],
+  "parent": "opi-06w",
+  "priority": 3,
+  "status": "open",
+  "title": "Refresh stale moduledocs in Session and Loop",
+  "type": "task",
+  "updated_at": "2026-04-23T21:30:32Z"
+}
