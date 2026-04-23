@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-3di.1"
+  ],
   "blocks": [],
   "created": "2026-04-23T23:37:35Z",
   "description": "Port-map §7. The contract for all UI pieces.\n\n- OctoPi.Tui.Component @behaviour:\n    @callback render(state :: struct(), width :: pos_integer()) ::\n              [Line.t()]\n    @callback handle_key(state, %Key{}) :: state | {state, [Event.t()]}\n- Struct-state, immutable. No lifecycle hooks in MVP (mount/unmount\n  defer to 4.1).\n\nThree starter components:\n- OctoPi.Tui.Components.Text — wraps a pre-formatted string into\n  width, preserves ANSI styling. Pure render/2.\n- OctoPi.Tui.Components.SelectList — multi-column list with\n  alignment, fuzzy-filter hook, custom truncation callback.\n  Tests mirror §14.4 (select-list.test.ts, 116 lines).\n- OctoPi.Tui.Components.Input — single-line value + cursor +\n  focused; handle_key dispatched via multi-head pattern match on\n  the key binary (\"\\r\", \"\\e[D\", \"\\e[C\", fallback). Kill ring +\n  undo are deferred to the Editor (.8).\n\nTDD:\n- Text: wraps + truncates at width, preserves ANSI codes.\n- SelectList: alignment across items, ellipsis with alignment\n  preserved, fuzzy-filter scoring (port fuzzy.test.ts §14.4).\n- Input: Enter submits, left/right moves cursor, chars append at\n  cursor.\n\nDepends on .1.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Component behaviour + Text/SelectList/Input minimal",
   "type": "task",
-  "updated_at": "2026-04-23T23:37:35Z"
+  "updated_at": "2026-04-23T23:37:43Z"
 }
