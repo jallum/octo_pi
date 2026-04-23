@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "octo-z1d.2"
+  ],
   "blocks": [],
   "created": "2026-04-23T20:40:06Z",
   "description": "The loop itself (per port-map §2). Runs inside a Task under\nOctoPi.Agent.LoopSupervisor, linked to the Session GenServer (die\ntogether).\n\nScope for this ticket:\n- Emit agent_start / agent_end events.\n- Per-turn: turn_start → LLM stream → message_start/update/end →\n  sequential tool dispatch → tool_execution_* events → turn_end.\n- Loop exit conditions: stop_reason in [:error, :aborted] OR no\n  tool calls + empty queues.\n- **Sequential tool dispatch only** for this ticket. Parallel in z1d.4.\n- No steering / follow-up drainage yet (stubbed empty queues).\n- No hooks yet (stubbed).\n\nTDD fixtures use a fake transport that yields canned Anthropic-style\nevents. Mirrors anthropic/producer_test.exs patterns.\n\nTests to land:\n- agent_start/agent_end fire with correct messages\n- turn_start/end wraps the LLM stream\n- assistant message appended to state.messages\n- tool_use stop_reason triggers tool dispatch\n- tool results appended in source order\n- stop with reason :stop exits the loop cleanly\n- error event from LLM exits and appends synthetic error message\n\nDepends on z1d.2.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Core loop: inner + outer + LLM stream + sequential tool dispatch",
   "type": "task",
-  "updated_at": "2026-04-23T20:40:06Z"
+  "updated_at": "2026-04-23T20:40:17Z"
 }
