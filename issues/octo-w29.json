@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-23T16:42:06.865304Z",
+  "description": "Foundation for the octo_pi port. No upstream behavior ported yet — just a working Elixir project ready for phase 1.\n\nScope:\n- Resolve umbrella-vs-single-app decision (RESEARCH.md §7 Q1).\n- Scaffold four apps: `octo_pi_ai`, `octo_pi_agent`, `octo_pi_coder`, `octo_pi_tui`.\n- CI pipeline: `mix format --check`, `credo`, `dialyzer`, `mix test`.\n- LICENSE (MIT) + `CREDITS.md` attributing `badlogic/pi-mono` (MIT) upstream.\n\nDefinition of done: `mix compile` clean, `mix check` green in CI, LICENSE + CREDITS in place.\n\nRef: RESEARCH.md §6 Phase 0, §7.",
+  "id": "octo-w29",
+  "labels": [],
+  "parent": "",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 0: Umbrella scaffold + CI + attribution",
+  "type": "epic",
+  "updated_at": "2026-04-23T16:42:06.865304Z"
+}
