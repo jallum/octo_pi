@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T19:57:58Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-hgb",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "SSE.finalize/1: flush pending event on clean EOF (pi-mono parity)",
   "type": "task",
-  "updated_at": "2026-04-23T19:57:58Z"
+  "updated_at": "2026-04-23T20:07:53Z"
 }
