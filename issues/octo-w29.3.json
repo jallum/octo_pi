@@ -4,14 +4,15 @@
     "octo-w29.2"
   ],
   "blocks": [],
+  "closed_at": "2026-04-23T17:42:03Z",
   "created": "2026-04-23T16:42:06.865304Z",
   "description": "GitHub Actions workflow:\n- matrix on OTP/Elixir versions from `.tool-versions`\n- cache `_build` + `deps` + PLTs\n- run: `mix format --check-formatted`, `mix credo --strict`, `mix dialyzer`, `mix test`\n\nOn PRs: require green before merge.",
   "id": "octo-w29.3",
   "labels": [],
   "parent": "octo-w29",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "CI pipeline (format, credo, dialyzer, test)",
   "type": "task",
-  "updated_at": "2026-04-23T17:40:22Z"
+  "updated_at": "2026-04-23T17:42:03Z"
 }
