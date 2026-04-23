@@ -453,61 +453,75 @@ Two protocols:
 
 ```elixir
 defmodule OctoPi.Tui.KeyParser do
-  # Main entry point
-  def parse(sequence) when is_binary(sequence) do
-    cond do
-      kitty_csi_u?(sequence) -> parse_kitty_csi_u(sequence)
-      legacy_sequence?(sequence) -> parse_legacy(sequence)
-      simple_char?(sequence) -> {:char, sequence}
-      true -> :unknown
+  # Head order matters: check the Kitty CSI-u shape before the legacy
+  # table, and fall through to single-char handling. No top-level
+  # `cond` — each clause owns its shape.
+
+  # Kitty CSI-u: "\e[<code>[;<mod>[:<event>]]u"
+  def parse(<<"\e[", rest::binary>> = seq) do
+    case String.last(rest) do
+      "u" -> parse_kitty_csi_u(rest)
+      _   -> parse_legacy(seq)
     end
   end
 
-  # CSI-u: \x1b[<code>;<mod>:<event>u
-  defp parse_kitty_csi_u(sequence) do
-    case sequence do
-      <<"\x1b[", code::binary>> ->
-        case parse_csi_u_parts(code) do
-          {:ok, codepoint, modifier, event_type} ->
-            {:key, normalize_key(codepoint, modifier), event_type}
-          :error ->
-            :unknown
-        end
+  # Bare ESC + letter = legacy Alt-prefix
+  def parse(<<"\e", _::binary>> = seq), do: parse_legacy(seq)
+
+  # Single printable ASCII
+  def parse(<<char::8>>) when char >= 32 and char < 127, do: {:char, <<char>>}
+
+  # Single printable Unicode (non-ASCII printable range)
+  def parse(<<char::utf8, _::binary>> = bin) when char >= 160, do: {:char, bin}
+
+  def parse(_), do: :unknown
+
+  # --- Kitty CSI-u ---
+
+  # Strip the trailing 'u' and split on ';' (modifiers) / ':' (fields).
+  defp parse_kitty_csi_u(rest) do
+    body = binary_part(rest, 0, byte_size(rest) - 1)
+
+    with {:ok, code, mod, event} <- parse_csi_u_parts(body),
+         %Key{} = key <- normalize_key(code, mod, event) do
+      {:key, key}
+    else
       _ -> :unknown
     end
   end
 
-  defp parse_csi_u_parts(code) do
-    # Extract: <codepoint>:<shifted>:<base>;<modifier>:<event>u
-    case Integer.parse(code) do
-      {cp, rest} ->
-        case parse_modifiers_and_event(rest) do
-          {:ok, mod, event} -> {:ok, cp, mod, event}
-          :error -> :error
-        end
-      :error -> :error
+  defp parse_csi_u_parts(body) do
+    case Integer.parse(body) do
+      {cp, rest}    -> parse_modifiers_and_event(rest, cp)
+      :error        -> :error
     end
   end
 
-  # Legacy: \x1b[A, \x1b[11~, \x1bOA, etc.
-  defp parse_legacy(sequence) do
-    case LEGACY_SEQUENCES[sequence] do
-      {:key, key_name} -> {:key, key_name, "press"}
-      {:key, key_name, mods} -> {:key, {key_name, mods}, "press"}
-      nil -> :unknown
+  defp parse_modifiers_and_event("", cp),                  do: {:ok, cp, 0, :press}
+  defp parse_modifiers_and_event(";" <> mod_and_evt, cp),  do: split_mod_event(mod_and_evt, cp)
+  defp parse_modifiers_and_event(_, _),                    do: :error
+
+  defp split_mod_event(str, cp) do
+    case String.split(str, ":", parts: 2) do
+      [mod]           -> {:ok, cp, parse_int!(mod) - 1, :press}
+      [mod, evt]      -> {:ok, cp, parse_int!(mod) - 1, event_type(parse_int!(evt))}
     end
   end
 
-  defp simple_char?(<<char::8>>) when char >= 32 and char < 127, do: true
-  defp simple_char?(<<char::utf8, _::binary>>) when char >= 160, do: true
-  defp simple_char?(_), do: false
+  defp event_type(1), do: :press
+  defp event_type(2), do: :repeat
+  defp event_type(3), do: :release
+  defp event_type(_), do: :press
 
-  defp kitty_csi_u?(<<"\\x1b[", _::binary>>), do: true
-  defp kitty_csi_u?(_), do: false
+  # --- Legacy table lookup ---
 
-  defp legacy_sequence?(seq) do
-    Map.has_key?(LEGACY_SEQUENCES, seq)
-  end
+  defp parse_legacy(seq),                                  do: decode_legacy(Map.get(@legacy_sequences, seq))
+
+  defp decode_legacy(nil),                                 do: :unknown
+  defp decode_legacy({:key, key_name}),                    do: {:key, %Key{key: key_name}}
+  defp decode_legacy({:key, key_name, mods}),              do: {:key, %Key{key: key_name, modifiers: mods}}
+  defp decode_legacy(:paste_start),                        do: :paste_start
+  defp decode_legacy(:paste_end),                          do: :paste_end
 end
 
 # Legacy sequence table (matching keys.ts L368-481)
@@ -545,18 +559,11 @@ defmodule OctoPi.Tui.Key do
     event_type: :press  # :press, :repeat, :release (Kitty flag 2)
   ]
 
-  def id(%__MODULE__{key: k, modifiers: mods}) do
-    mod_str = mods |> Enum.sort() |> Enum.join("+")
-    if mod_str == "" do
-      Atom.to_string(k)
-    else
-      "#{mod_str}+#{k}"
-    end
-  end
+  def id(%__MODULE__{key: k, modifiers: []}),   do: Atom.to_string(k)
+  def id(%__MODULE__{key: k, modifiers: mods}), do: "#{mods |> Enum.sort() |> Enum.join("+")}+#{k}"
 
-  def matches?(%__MODULE__{key: k, modifiers: mods}, target_id) when is_binary(target_id) do
-    id(%__MODULE__{key: k, modifiers: mods}) == target_id
-  end
+  def matches?(%__MODULE__{} = key, target_id) when is_binary(target_id),
+    do: id(key) == target_id
 end
 ```
 
@@ -669,20 +676,24 @@ defmodule OctoPi.Tui.Renderer do
   end
 
   defp diff_output(lines, prev_lines, width, height) do
-    {first_changed, last_changed} = find_diff_range(lines, prev_lines)
+    lines
+    |> find_diff_range(prev_lines)
+    |> emit_diff(lines)
+  end
 
-    if first_changed > last_changed do
-      # No changes
-      []
-    else
-      # Move cursor and rewrite changed lines
-      [
-        move_cursor_csi(first_changed, 0),
-        Enum.slice(lines, first_changed..last_changed)
-          |> Enum.map(&colorize_line/1)
-          |> Enum.intersperse("\r\n")
-      ]
-    end
+  # `find_diff_range/2` returns {first, last}; if first > last the
+  # previous render matches and we emit nothing. Dispatch on the
+  # shape instead of `if first_changed > last_changed`.
+  defp emit_diff({first, last}, _lines) when first > last, do: []
+
+  defp emit_diff({first, last}, lines) do
+    [
+      move_cursor_csi(first, 0),
+      lines
+      |> Enum.slice(first..last)
+      |> Enum.map(&colorize_line/1)
+      |> Enum.intersperse("\r\n")
+    ]
   end
 
   defp full_redraw_output(lines, width, height) do
@@ -973,20 +984,31 @@ defmodule OctoPi.Tui.Components.Input do
     :on_submit
   ]
 
-  def render(%__MODULE__{value: v, cursor: c, focused: f}, width) do
-    # Render input field with optional cursor marker
-    cursor_marker = if f, do: "\x1b_pi:c\x07", else: ""
-    # ... construct line
+  def render(%__MODULE__{value: v, cursor: c, focused: true}, width),
+    do: render_line(v, c, "\e_pi:c\a", width)
+
+  def render(%__MODULE__{value: v, cursor: c, focused: false}, width),
+    do: render_line(v, c, "", width)
+
+  # Multi-head dispatch on the raw byte shape — no `case data do` at
+  # the top. Each clause documents one key the Input cares about.
+
+  def handle_input(%__MODULE__{} = comp, "\r") do
+    comp.on_submit.(comp.value)
+    comp
   end
 
-  def handle_input(%__MODULE__{} = comp, data) do
-    case data do
-      "\r" -> comp.on_submit.(comp.value); comp
-      "\x1b[D" -> %{comp | cursor: max(0, comp.cursor - 1)}  # left
-      # ... other keys
-      char -> %{comp | value: comp.value <> char, cursor: comp.cursor + 1}
-    end
-  end
+  def handle_input(%__MODULE__{} = comp, "\e[D"),
+    do: %{comp | cursor: max(0, comp.cursor - 1)}
+
+  def handle_input(%__MODULE__{} = comp, "\e[C"),
+    do: %{comp | cursor: min(String.length(comp.value), comp.cursor + 1)}
+
+  # ... other recognized keys ...
+
+  # Fallback: treat anything else as a literal char insertion.
+  def handle_input(%__MODULE__{} = comp, char),
+    do: %{comp | value: comp.value <> char, cursor: comp.cursor + 1}
 end
 ```
 
