@@ -4,7 +4,9 @@
     "octo-t58",
     "opi-dkl"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-k98"
+  ],
   "created": "2026-04-23T16:43:05.837373Z",
   "description": "Port pi-tui natively to Elixir/OTP and wire Interactive mode into octo_pi_coder. Completes the pi-equivalent CLI on BEAM.\n\nScope (children to be created when we approach this phase):\n- Raw-mode strategy decision (RESEARCH.md §7 Q5: stty vs /dev/tty Port vs termios NIF).\n- Terminal port: raw mode in + SIGWINCH handling.\n- Stdin buffer FSM: CSI/OSC/DCS/APC/SS3/meta detection, bracketed paste, 10ms timeout flush, Kitty query interception.\n- Key parser: binary pattern matching for Kitty CSI u + legacy sequences.\n- Differential renderer: line diff (O(n)), CSI 2026 atomic writes, overlay composite pre-diff, four full-redraw branches.\n- Component behaviour + minimal Text/SelectList/Input.\n- Editor component: kill ring, undo stack, slash/file autocomplete, wide-char aware wrap.\n- Interactive mode glue in octo_pi_coder.\n\nDefinition of done: `mix pi` opens an interactive TUI, stream-rendering assistant turns with flicker-free updates and a working editor input.\n\nRef: RESEARCH.md §3.4, §8.2, §7 Q5, §6 Phase 4.",
   "id": "octo-3di",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Phase 4: octo_pi_tui + Interactive mode",
   "type": "epic",
-  "updated_at": "2026-04-23T22:28:21Z"
+  "updated_at": "2026-04-23T23:50:26Z"
 }
