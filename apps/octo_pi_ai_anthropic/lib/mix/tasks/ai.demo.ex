@@ -6,12 +6,19 @@ defmodule Mix.Tasks.Ai.Demo do
   Messages API. Proves that `octo_pi_ai`'s HTTP → SSE → decoder →
   stream pipeline runs green on live traffic.
 
+  With `--tool`, registers a toy `get_weather` tool and runs a minimal
+  tool-execution loop: when the assistant stops with `:tool_use`, the
+  demo fakes a weather response, appends it to the context, and
+  re-streams until the assistant reaches `:stop` (or we hit
+  `@max_turns` to guard against runaway loops). Previews the fuller
+  agent loop landing in Phase 2.
+
   ## Usage
 
       ANTHROPIC_API_KEY=sk-... mix ai.demo "why is the sky blue?"
 
-      # With a toy weather tool to exercise the tool-call event path:
-      ANTHROPIC_API_KEY=sk-... mix ai.demo "what's the weather in NYC?" --tool
+      # Toy weather tool + tool loop:
+      ANTHROPIC_API_KEY=sk-... mix ai.demo "poem about Seattle weather" --tool
 
       # Override the default model (claude-haiku-4-5):
       ANTHROPIC_API_KEY=sk-... mix ai.demo "hi" --model claude-sonnet-4-5
@@ -23,9 +30,10 @@ defmodule Mix.Tasks.Ai.Demo do
 
   use Mix.Task
 
-  alias OctoPi.AI.{Context, Event, Message, Model, StreamOptions, Tool}
+  alias OctoPi.AI.{Content, Context, Event, Message, Model, StreamOptions, Tool, ToolCall}
 
   @default_model "claude-haiku-4-5"
+  @max_turns 5
 
   @switches [model: :string, tool: :boolean, help: :boolean]
   @aliases [m: :model, t: :tool, h: :help]
@@ -52,17 +60,30 @@ defmodule Mix.Tasks.Ai.Demo do
     # via env / keychain — see OctoPi.AI.Providers.Anthropic.Auth).
     # Any failure surfaces there as a descriptive error.
     model = model_for(opts[:model] || @default_model)
+    tools = if(opts[:tool], do: [weather_tool()], else: [])
 
     context = %Context{
       messages: [
         %Message.User{content: prompt, timestamp: :os.system_time(:millisecond)}
       ],
-      tools: if(opts[:tool], do: [weather_tool()], else: [])
+      tools: tools
     }
 
-    stream_opts = %StreamOptions{max_tokens: 512, temperature: 0.2}
+    Mix.shell().info("→ #{model.id}  (#{length(tools)} tools)\n")
 
-    Mix.shell().info("→ #{model.id}  (#{length(context.tools)} tools)\n")
+    stream_turns(model, context, 1)
+  end
+
+  # Recursively stream a turn, executing tool calls and feeding their
+  # results back until the assistant stops without requesting more
+  # tools. Guards against runaway loops with @max_turns.
+  defp stream_turns(_model, _context, turn) when turn > @max_turns do
+    Mix.shell().error("\n✗ exceeded #{@max_turns} tool-loop turns — stopping")
+    exit({:shutdown, 1})
+  end
+
+  defp stream_turns(model, context, turn) do
+    stream_opts = %StreamOptions{max_tokens: 512, temperature: 0.2}
 
     final =
       model
@@ -72,9 +93,20 @@ defmodule Mix.Tasks.Ai.Demo do
     IO.write("\n")
 
     case final do
-      %Event.Done{} = done -> print_summary(done)
-      %Event.Error{} = err -> exit_with_error(err)
-      nil -> exit_with("stream produced no terminal event (this shouldn't happen)\n")
+      %Event.Error{} = err ->
+        exit_with_error(err)
+
+      nil ->
+        exit_with("stream produced no terminal event (this shouldn't happen)\n")
+
+      %Event.Done{reason: :tool_use, message: assistant_msg} ->
+        tool_results = execute_tool_calls(assistant_msg.content)
+        for tr <- tool_results, do: print_tool_result(tr)
+        new_messages = context.messages ++ [assistant_msg | tool_results]
+        stream_turns(model, %{context | messages: new_messages}, turn + 1)
+
+      %Event.Done{} = done ->
+        print_summary(done)
     end
   end
 
@@ -84,7 +116,7 @@ defmodule Mix.Tasks.Ai.Demo do
   defp handle_event(%Event.TextDelta{delta: d}, _), do: IO.write(d)
 
   defp handle_event(%Event.ToolCallStart{partial: msg}, _) do
-    call = Enum.find(msg.content, &match?(%OctoPi.AI.ToolCall{}, &1))
+    call = msg.content |> Enum.reverse() |> Enum.find(&match?(%ToolCall{}, &1))
     IO.write("\n[tool_use » #{call.name}] ")
     nil
   end
@@ -103,6 +135,43 @@ defmodule Mix.Tasks.Ai.Demo do
   defp handle_event(%Event.Done{} = done, _), do: done
   defp handle_event(%Event.Error{} = err, _), do: err
   defp handle_event(_, acc), do: acc
+
+  # --- tool execution (toy) ---
+
+  defp execute_tool_calls(content) do
+    now = :os.system_time(:millisecond)
+
+    content
+    |> Enum.filter(&match?(%ToolCall{}, &1))
+    |> Enum.map(fn %ToolCall{id: id, name: name, arguments: args} ->
+      {text, is_error?} = run_tool(name, args)
+
+      %Message.ToolResult{
+        tool_call_id: id,
+        tool_name: name,
+        content: [%Content.Text{text: text}],
+        is_error?: is_error?,
+        timestamp: now
+      }
+    end)
+  end
+
+  defp run_tool("get_weather", %{"city" => city} = args) do
+    units = Map.get(args, "units", "fahrenheit")
+    unit_letter = units |> String.first() |> String.upcase()
+    temp = :rand.uniform(30) + 50
+    {"#{temp}°#{unit_letter}, overcast with a chance of drizzle in #{city}", false}
+  end
+
+  defp run_tool(name, _args) do
+    {"tool '#{name}' is not implemented in this demo", true}
+  end
+
+  defp print_tool_result(%Message.ToolResult{tool_name: name, content: content, is_error?: err?}) do
+    text = content |> Enum.map_join("", fn %Content.Text{text: t} -> t end)
+    marker = if err?, do: "✗", else: "←"
+    IO.puts("#{marker} [tool_result » #{name}] #{text}\n")
+  end
 
   # --- summary ---
 
@@ -175,7 +244,9 @@ defmodule Mix.Tasks.Ai.Demo do
 
     Flags:
       --model, -m   Anthropic model id (default: #{@default_model})
-      --tool,  -t   include a toy weather tool in the context
+      --tool,  -t   include a toy weather tool in the context; when
+                    the model calls it, the demo fakes a response and
+                    re-streams so the final answer actually lands
       --help,  -h   show this message
     """
   end
