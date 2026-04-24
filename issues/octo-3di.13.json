@@ -4,14 +4,15 @@
   "blocks": [
     "octo-3di.12"
   ],
+  "closed_at": "2026-04-24T02:58:18Z",
   "created": "2026-04-24T02:37:45Z",
   "description": "Port the upstream FooterDataProvider from footer-data-provider.ts. Supplies live data to the Footer component without coupling it to OTP plumbing.\n\n**Git branch detection:**\n- Watch `.git/HEAD` for changes (filesystem polling or :fs inotify)\n- Parse `ref: refs/heads/{branch}` for branch name, detached HEAD shows short SHA\n- Cache result, invalidate on file change\n- Graceful fallback: nil when not in a git repo\n\n**Extension status store:**\n- Map of `{extension_id, status_text}` pairs\n- Extensions register/update their status line via a public API\n- Footer reads the current snapshot on each render\n\n**Implementation:**\n- New GenServer `OctoPi.TUI.FooterData`\n- `start_link(cwd: path)` — starts git watcher for the given directory\n- `get_git_branch(pid) :: String.t() | nil`\n- `get_extension_statuses(pid) :: %{String.t() =\u003e String.t()}`\n- `set_extension_status(pid, key, text)` / `clear_extension_status(pid, key)`\n- Wire into Interactive.do_run: start FooterData, pass to Footer component\n\n**Upstream ref:** `footer-data-provider.ts`",
   "id": "octo-3di.13",
   "labels": [],
   "parent": "octo-3di",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Footer data provider: git branch watcher + extension status store",
   "type": "task",
-  "updated_at": "2026-04-24T02:57:28Z"
+  "updated_at": "2026-04-24T02:58:18Z"
 }
