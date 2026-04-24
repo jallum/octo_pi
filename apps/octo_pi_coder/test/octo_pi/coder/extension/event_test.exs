@@ -4,7 +4,7 @@ defmodule OctoPi.Coder.Extension.EventTest do
   alias OctoPi.Coder.Extension.Event
 
   describe "event_types/0" do
-    test "returns all 26 event types" do
+    test "returns all 28 event types" do
       types = Event.event_types()
       assert length(types) == 28
       assert :session_start in types
