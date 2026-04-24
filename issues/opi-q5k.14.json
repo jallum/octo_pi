@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-q5k.2"
+  ],
   "created": "2026-04-24T21:28:15Z",
   "description": "# Check: upstream regression-regional-indicator-width.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/regression-regional-indicator-width.test.ts\n\n## Subject\nRegional-indicator grapheme width handling for flag emoji during streaming.\n\n## Upstream test count (approx)\n5\n\n## Behaviors asserted upstream\n- treats partial flag grapheme as full-width to avoid streaming render drift\n- wraps intermediate partial-flag list line before overflow\n- treats all regional-indicator singleton graphemes as width 2\n- keeps full flag pairs at width 2\n- keeps common streaming emoji intermediates at stable width\n\n## Upstream dependencies\nvisibleWidth, wrapTextWithAnsi from ../src/utils.js\n\n## Upstream notes\nRegression fix for streaming render drift when \"🇨🇳\" appears as \"🇨\" first. Partial flag graphemes (U+1F1E6–U+1F1FF) are measured as width 2 to match terminal rendering. Prevents stale characters on screen during streaming.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/wrap_ansi_test.exs\n- possibly a dedicated grapheme/width test\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.14",
