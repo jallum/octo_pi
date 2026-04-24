@@ -12,8 +12,12 @@ defmodule OctoPi.TUI.FuzzyTest do
       assert %{matches: false} = Fuzzy.match("abcdefg", "abc")
     end
 
-    test "exact match" do
-      assert %{matches: true} = Fuzzy.match("hello", "hello")
+    test "exact match has a strictly negative score" do
+      # Upstream invariant (pi-mono fuzzy.test.ts): exact/consecutive
+      # matches accumulate a negative score via consecutive bonuses.
+      result = Fuzzy.match("test", "test")
+      assert result.matches
+      assert result.score < 0.0
     end
 
     test "case insensitive by default" do
