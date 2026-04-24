@@ -1,0 +1,5 @@
+#!/bin/sh
+# +Bc suppresses the BEAM break handler so Ctrl+C (0x03) reaches
+# the TUI's raw-mode stdin reader instead of triggering the Erlang
+# shell's "User switch command" menu.
+exec elixir --erl "+Bc" -S mix pi "$@"

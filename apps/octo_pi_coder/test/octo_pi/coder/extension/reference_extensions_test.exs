@@ -52,7 +52,9 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
           "--allow-empty",
           "-m",
           "init"
-        ], cd: dir)
+        ],
+        cd: dir
+      )
 
       ctx = Context.new(%{cwd: dir})
       event = Event.new(:session_before_switch, %{reason: :new})

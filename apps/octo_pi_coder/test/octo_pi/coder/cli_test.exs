@@ -91,6 +91,26 @@ defmodule OctoPi.Coder.CLITest do
     end
   end
 
+  describe "bin/pi wrapper" do
+    @wrapper_path Path.join(Mix.Project.deps_path() |> Path.dirname(), "bin/pi")
+
+    test "wrapper script exists and is executable" do
+      assert File.exists?(@wrapper_path)
+      %{access: access} = File.stat!(@wrapper_path)
+      assert access in [:read_write, :read]
+    end
+
+    test "wrapper passes +Bc erl flag" do
+      contents = File.read!(@wrapper_path)
+      assert contents =~ "+Bc"
+    end
+
+    test "wrapper invokes mix pi" do
+      contents = File.read!(@wrapper_path)
+      assert contents =~ "mix pi"
+    end
+  end
+
   describe "RPC event forwarder" do
     alias OctoPi.Agent.Event
 
