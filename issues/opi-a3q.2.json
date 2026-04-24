@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T10:19:36Z",
   "created": "2026-04-24T10:13:13Z",
   "description": "event_test.exs:7 — test name says 'returns all 26 event types' but the assertion correctly checks 28. Update the test name to match.",
   "id": "opi-a3q.2",
   "labels": [],
   "parent": "opi-a3q",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Fix stale test name '26 event types' → '28 event types'",
   "type": "bug",
-  "updated_at": "2026-04-24T10:19:16Z"
+  "updated_at": "2026-04-24T10:19:36Z"
 }
