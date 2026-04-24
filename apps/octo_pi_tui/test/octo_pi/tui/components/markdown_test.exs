@@ -355,6 +355,25 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Spacing after dividers ──────────
+
+  describe "spacing after dividers (upstream parity)" do
+    test "one blank line between divider and following paragraph" do
+      md = "hello world\n\n---\n\nagain, hello world"
+      plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      divider_idx = Enum.find_index(plain, &String.contains?(&1, "─"))
+      assert is_integer(divider_idx)
+      after_div = Enum.drop(plain, divider_idx + 1)
+      empty_count = Enum.find_index(after_div, &(&1 != ""))
+      assert empty_count == 1
+    end
+
+    test "no trailing blank line when divider is the last rendered block" do
+      plain = "---" |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      refute List.last(plain) == ""
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
