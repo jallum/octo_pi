@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:03:47Z",
+  "description": "Finish what octo-3di.9 stubbed. Replace\n`OctoPi.TUI.Interactive.run/1`'s \"not implemented\" message with\nthe real message pump:\n\n1. Start Session (agent) with model/tools from opts.\n2. Start Terminal (accept `:name` opt so tests can avoid the\n   named-process conflict; production uses the default name).\n3. Start StdinFSM subscribed to self().\n4. Start Renderer with current dimensions + csi_2026 support.\n5. Subscribe to `:stdin_chunk` and `:resize` on Events, and to\n   agent events via `OctoPi.Agent.subscribe/3`.\n6. Initial render.\n7. Main loop (receive):\n   - `{:stdin_chunk, bin}` → StdinFSM.process\n   - `{:stdin_event, seq}` → KeyParser.parse → handle_event →\n     re-render if state changed → exit if `state.exit`\n   - `{:resize, w, h}` → Renderer.resize + handle_event + re-render\n   - `{:octo_pi_agent_event, _}` → handle_event + re-render\n8. On exit: stop Renderer, StdinFSM, Terminal (which triggers\n   RawMode.exit via terminate/2) — return :ok.\n\nOther touches:\n- Terminal.write/2 helper that emits bytes via the configured\n  write_fn (default IO.write, override-able for tests).\n- Interactive.run/1 accepts `:write_fn` so tests capture output.\n\nTDD:\n- E2E: start Interactive with FakeTransport, write_fn captures\n  bytes. Feed \"hi\\\\r\" + wait for agent response + feed Ctrl+C.\n  Assert the captured output contains \"hi\" and the assistant\n  text; assert run/1 returned :ok.\n- Resize handling: feed a simulated resize event, assert\n  Renderer.resize was called + the state width/height updated.\n- Ctrl+C during agent work: abort + clean exit.",
+  "id": "octo-3di.10",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 1,
+  "status": "open",
+  "title": "Interactive main loop: wire Terminal+FSM+Renderer end-to-end",
+  "type": "task",
+  "updated_at": "2026-04-24T00:03:47Z"
+}
