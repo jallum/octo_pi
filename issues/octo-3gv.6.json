@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T03:14:16Z",
+  "description": "Port 2 reference extensions to prove the system works end-to-end.\n\n**1. dirty-repo-guard** (cancel-on-result pattern)\n- Subscribes to: session_before_switch\n- Checks if git working tree is dirty (uncommitted changes)\n- If dirty: returns {:cancel, \"uncommitted changes in repo\"}\n- Prevents session switch when there's unsaved work\n- Tests: guard blocks on dirty, allows on clean, handles non-git dirs\n\n**2. input-transform** (reduce-chain pattern)\n- Subscribes to: input\n- Example: expands shorthand like \"fix\" → \"fix the failing test\"\n- Or: strips dangerous patterns from user input\n- Returns {:transform, new_text, images} or :continue\n- Tests: transforms matching input, passes through non-matching\n\nThese prove:\n- Extension discovery and loading works\n- Handler registration via api.on() works\n- cancel-on-result dispatch works (dirty-repo-guard)\n- reduce-chain dispatch works (input-transform)\n- Telemetry fires for both success and error cases\n- Error in one extension doesn't crash others\n\n**Definition of done from epic:** \"a custom extension can register a\ntool_call handler that sanitizes bash commands and a session_before_switch\nhandler that blocks on a dirty repo\"\n\n**Upstream ref:** Various built-in extensions in coding-agent",
+  "id": "octo-3gv.6",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 2,
+  "status": "open",
+  "title": "Reference extensions: dirty-repo-guard + input-transform",
+  "type": "task",
+  "updated_at": "2026-04-24T03:14:16Z"
+}
