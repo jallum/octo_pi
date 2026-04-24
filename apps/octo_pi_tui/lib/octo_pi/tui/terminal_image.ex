@@ -1,5 +1,30 @@
 defmodule OctoPi.TUI.TerminalImage do
-  @moduledoc false
+  @moduledoc """
+  Terminal image protocol helpers: Kitty/iTerm2 encoding, capability
+  detection, OSC 8 hyperlinks, and `image_line?/1` detection.
+
+  ## Divergence from upstream: no startup cell-size query
+
+  Upstream pi-mono's TUI emits `\\e[16t` at startup on image-capable
+  terminals and parses the `\\e[6;H;Wt` reply into cached pixel
+  dimensions used to size images in rows. We deliberately decline
+  that mechanism:
+
+  * Our image rendering path is not wired through an interactive TUI
+    with a startup handshake — images appear via `encode_kitty/2` /
+    `encode_iterm2/2` called from tool renderers.
+  * `calculate_image_rows/3` accepts `cell_dims` as a pure-function
+    parameter defaulting to `%{width_px: 9, height_px: 18}`. Callers
+    that need real dimensions pass them explicitly.
+  * Consuming the reply requires a stdin parser that recognises
+    `\\e[6;H;Wt`, caches state, and does not forward the reply to
+    focused components. That belongs to a TUI runtime we have not
+    built; paying the complexity without the runtime is premature.
+
+  Upstream's tui-cell-size-input.test.ts (audit opi-q5k.20) asserts
+  two behaviours of that runtime. Both are N/A for us by this
+  decision; no Elixir tests are ported.
+  """
 
   @kitty_prefix "\e_G"
   @iterm2_prefix "\e]1337;File="
