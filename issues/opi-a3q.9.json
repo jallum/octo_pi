@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:13:32Z",
+  "description": "input_transform.ex — handle_input/2 pattern matches %{text: text} = _event but only uses text. Remove the = _event binding. Cosmetic nit.",
+  "id": "opi-a3q.9",
+  "labels": [],
+  "parent": "opi-a3q",
+  "priority": 4,
+  "status": "open",
+  "title": "Remove unnecessary _event binding in InputTransform.handle_input/2",
+  "type": "task",
+  "updated_at": "2026-04-24T10:13:32Z"
+}
