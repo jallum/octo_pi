@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.3",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Upstream tests 3 editor-level integration cases with Kitty CSI-u events. In our architecture the parsing happens in OctoPi.TUI.StdinFSM (stdin_fsm_test.exs describe 'Kitty keyboard protocol' — 9 tests) and OctoPi.TUI.KeyParser (key_parser_test.exs describes 'Kitty CSI-u' and 'Kitty CSI-u — alternate layouts' — 30+ tests). Input receives normalized Key structs, so editor-level Kitty integration is transitively covered. No new tests required.",
+      "timestamp": "2026-04-24T22:46:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Kitty CSI-u handling (3 upstream tests)",
