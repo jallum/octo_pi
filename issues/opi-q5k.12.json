@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:46:09Z",
   "created": "2026-04-24T21:28:14Z",
   "description": "# Check: upstream overlay-options.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/overlay-options.test.ts\n\n## Subject\nTUI overlay positioning, sizing, and rendering options.\n\n## Upstream test count (approx)\n32\n\n## Behaviors asserted upstream\n- truncates overlay lines exceeding declared width\n- handles complex ANSI sequences without crashing\n- overlay composited on styled base content\n- handles wide characters at overlay boundary\n- positioned at terminal edge\n- overlay on base content with OSC sequences\n- renders overlay at percentage of terminal width\n- respects minWidth when widthPercent results in smaller width\n- positions: top-left, bottom-right, top-center\n- clamps negative margins to zero\n- margin as number; margin object with individual sides\n- offsetX and offsetY from anchor position\n- rowPercent and colPercent positioning; rowPercent 0 → top; rowPercent 100 → bottom\n- truncates to maxHeight and maxHeightPercent\n- row and col override anchor\n- multiple overlays with later ones on top\n- overlays at different positions without interference\n- proper hiding in stack order\n\n## Upstream dependencies\nComponent, TUI, VirtualTerminal\n\n## Upstream notes\nOptions: width (number or \"%\" string), anchor (top-left, bottom-right, top-center, center), margin (number or object {top,left,right,bottom}), offsetX/offsetY, row/col, minWidth, maxHeight, maxHeightPercent. Percentages computed. Negative margins clamped to 0. Overlays render in creation order by default; focused overlays render on top.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.12",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream overlay-options.test.ts",
   "type": "task",
   "updated_at": "2026-04-24T21:46:09Z"
