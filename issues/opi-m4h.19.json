@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:59Z",
+  "description": "Port settings-list.ts (~250 LOC). Specialized list for configuration UIs.\n\nImplement:\n- Radio group (single selection from options)\n- Checkbox list (multiple selection)\n- Toggle items (on/off)\n- Keyboard navigation (arrows, space to toggle, enter to confirm)\n- Visual indicators (●/○ for radio, ☑/☐ for checkbox)\n\nUpstream: packages/tui/src/components/settings-list.ts\nDepends on: theme",
+  "id": "opi-m4h.19",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "SettingsList component: radio, checkbox, toggle controls",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:59Z"
+}
