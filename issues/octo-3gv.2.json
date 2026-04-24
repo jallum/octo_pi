@@ -4,6 +4,7 @@
     "octo-3gv.1"
   ],
   "blocks": [
+    "octo-3gv.5",
     "octo-3gv.6"
   ],
   "created": "2026-04-24T03:13:19Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Event dispatcher: six emission patterns",
   "type": "task",
-  "updated_at": "2026-04-24T03:14:22Z"
+  "updated_at": "2026-04-24T03:14:23Z"
 }
