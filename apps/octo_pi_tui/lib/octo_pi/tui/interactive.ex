@@ -15,7 +15,7 @@ defmodule OctoPi.TUI.Interactive do
   `handle_event/2`.
   """
 
-  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, StdinFSM, Terminal}
+  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, StdinFSM, Terminal, Viewport, WrapAnsi}
 
   @type transcript_entry ::
           {:user, String.t()}
@@ -346,19 +346,17 @@ defmodule OctoPi.TUI.Interactive do
 
   @doc """
   Render the current state into a list of lines ready for the
-  renderer. Transcript lines come first, then a blank, then the
-  Input component.
+  renderer. Transcript entries are word-wrapped at `width`, then
+  the whole frame is windowed to `height` via the Viewport.
   """
   @spec render(t()) :: [binary()]
-  def render(%{transcript: transcript, input: input, width: width}) do
+  def render(%{transcript: transcript, input: input, width: width, height: height}) do
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-
-    transcript_lines ++ [""] ++ Components.Input.render(input, width)
+    input_lines = Components.Input.render(input, width)
+    all = transcript_lines ++ [""] ++ input_lines
+    Viewport.window(all, height)
   end
 
-  defp render_entry({:user, text}, width), do: wrap_line("> #{text}", width)
-
-  defp render_entry({:assistant, text, _}, width), do: wrap_line(text, width)
-
-  defp wrap_line(line, _width) when is_binary(line), do: String.split(line, "\n")
+  defp render_entry({:user, text}, width), do: WrapAnsi.wrap("> #{text}", width)
+  defp render_entry({:assistant, text, _}, width), do: WrapAnsi.wrap(text, width)
 end
