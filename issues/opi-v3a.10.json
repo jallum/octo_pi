@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T00:55:25Z",
   "created": "2026-04-24T00:33:28Z",
   "description": "Single biggest UX lever from the review. Upstream pi-mono ships\na meaty system prompt (see\n`tmp/pi-mono/packages/coding-agent/src/core/system-prompt.ts`\nand referenced prompt files under `prompts/`) that primes the\nmodel on:\n\n  * the tool surface (what each tool does, when to use it)\n  * expected output conventions (don't mention tools by name,\n    don't ask permission, be proactive)\n  * file-handling etiquette (read before edit, don't fabricate\n    paths)\n  * abort / cancel handling\n  * code style guidelines (match existing, minimal diffs)\n\nThe real-world test runs with our Sonnet/Opus defaults show\nthe model is tool-*aware* but tentative without this prompt —\nsays things like \"I can help you with Bash commands\" instead\nof just running `ls`.\n\nScope:\n- Port `system-prompt.ts` as an Elixir module\n  `OctoPi.Coder.SystemPrompt` that takes `{cwd, tools, ...}` and\n  returns the rendered string.\n- Mirror the prompt templates under `prompts/` as @external_\n  resource bindings or a compile-time build step.\n- Print / RPC / Interactive modes all default `:system_prompt`\n  to this rendered string (unless explicitly overridden).\n\nTDD:\n- `SystemPrompt.render/1` with default opts produces a known-\n  shape prompt (snapshot test — check specific substrings).\n- Cwd interpolation works.\n- Tool list interpolation works.\n- An end-to-end Interactive run against FakeTransport verifies\n  the system_prompt reaches the agent context.\n\nUpstream test: check if there's a prompt snapshot test in\n`tmp/pi-mono/packages/coding-agent/test/`. If yes, mirror it.",
   "id": "opi-v3a.10",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port upstream system prompt for the coding agent",
   "type": "task",
-  "updated_at": "2026-04-24T00:52:38Z"
+  "updated_at": "2026-04-24T00:55:25Z"
 }
