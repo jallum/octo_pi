@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-m4h.10",
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-m4h",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Wire footer + footer_data into Interactive render pipeline",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:16Z"
+  "updated_at": "2026-04-24T11:03:03Z"
 }
