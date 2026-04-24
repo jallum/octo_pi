@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:36:23Z",
   "created": "2026-04-24T21:28:14Z",
   "description": "# Check: upstream overlay-short-content.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/overlay-short-content.test.ts\n\n## Subject\nTUI overlay rendering when content is shorter than the terminal.\n\n## Upstream test count (approx)\n1\n\n## Behaviors asserted upstream\n- renders overlay when content is shorter than terminal height (regression — 24-row terminal, 3-line content, overlay should center around row 10)\n\n## Upstream dependencies\nComponent, TUI, VirtualTerminal\n\n## Upstream notes\nRegression test for overlay visibility with short content.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list the missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.13",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream overlay-short-content.test.ts",
   "type": "task",
   "updated_at": "2026-04-24T21:36:23Z"
