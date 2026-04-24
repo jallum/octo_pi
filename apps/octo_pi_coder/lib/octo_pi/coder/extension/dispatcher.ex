@@ -124,6 +124,70 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     |> Enum.reverse()
   end
 
+  # --- introspection ---
+
+  @spec get_extension_paths([Extension.t()]) :: [String.t()]
+  def get_extension_paths(extensions), do: Enum.map(extensions, & &1.path)
+
+  @spec get_all_tools([Extension.t()]) :: [map()]
+  def get_all_tools(extensions) do
+    extensions
+    |> Enum.flat_map(fn ext -> Map.values(ext.tools) end)
+    |> Enum.uniq_by(& &1.name)
+  end
+
+  @spec get_tool_definition([Extension.t()], String.t()) :: map() | nil
+  def get_tool_definition(extensions, name) do
+    Enum.find_value(extensions, fn ext -> Map.get(ext.tools, name) end)
+  end
+
+  @spec get_all_commands([Extension.t()]) :: [{String.t(), map(), String.t()}]
+  def get_all_commands(extensions) do
+    seen = MapSet.new()
+
+    {cmds, _} =
+      Enum.reduce(extensions, {[], seen}, fn ext, {acc, seen} ->
+        Enum.reduce(ext.commands, {acc, seen}, fn {name, cmd}, {acc, seen} ->
+          if MapSet.member?(seen, name) do
+            {acc, seen}
+          else
+            {acc ++ [{name, cmd, ext.id}], MapSet.put(seen, name)}
+          end
+        end)
+      end)
+
+    cmds
+  end
+
+  @spec get_command([Extension.t()], String.t()) :: {map(), String.t()} | nil
+  def get_command(extensions, name) do
+    Enum.find_value(extensions, fn ext ->
+      case Map.get(ext.commands, name) do
+        nil -> nil
+        cmd -> {cmd, ext.id}
+      end
+    end)
+  end
+
+  @spec get_message_renderer([Extension.t()], String.t()) :: Extension.message_renderer() | nil
+  def get_message_renderer(extensions, type) do
+    Enum.find_value(extensions, fn ext -> Map.get(ext.message_renderers, type) end)
+  end
+
+  @spec has_handlers?([Extension.t()], Event.event_type()) :: boolean()
+  def has_handlers?(extensions, event_type) do
+    Enum.any?(extensions, fn ext -> Extension.get_handlers(ext, event_type) != [] end)
+  end
+
+  @spec get_command_diagnostics([Extension.t()]) :: [%{name: String.t(), extensions: [String.t()]}]
+  def get_command_diagnostics(extensions) do
+    extensions
+    |> Enum.flat_map(fn ext -> Enum.map(ext.commands, fn {name, _} -> {name, ext.id} end) end)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Enum.filter(fn {_name, ext_ids} -> length(ext_ids) > 1 end)
+    |> Enum.map(fn {name, ext_ids} -> %{name: name, extensions: ext_ids} end)
+  end
+
   # --- internal ---
 
   defp all_handlers(extensions, event_type) do

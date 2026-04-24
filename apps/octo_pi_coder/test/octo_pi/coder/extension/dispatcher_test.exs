@@ -376,4 +376,117 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
       assert [%{skill_paths: ["/x"]}] = Dispatcher.emit([e], event, ctx())
     end
   end
+
+  # --- introspection ---
+
+  describe "get_extension_paths/1" do
+    test "returns all extension paths" do
+      e1 = Extension.new("a", "/ext/a")
+      e2 = Extension.new("b", "/ext/b")
+      assert ["/ext/a", "/ext/b"] = Dispatcher.get_extension_paths([e1, e2])
+    end
+  end
+
+  describe "get_all_tools/1" do
+    test "returns deduplicated tools across extensions" do
+      e1 = Extension.new("a", "/a") |> Extension.add_tool(%{name: "t1", description: "d"})
+      e2 = Extension.new("b", "/b") |> Extension.add_tool(%{name: "t2", description: "d"})
+
+      tools = Dispatcher.get_all_tools([e1, e2])
+      assert length(tools) == 2
+      assert Enum.map(tools, & &1.name) == ["t1", "t2"]
+    end
+
+    test "first extension wins on name conflict" do
+      e1 = Extension.new("a", "/a") |> Extension.add_tool(%{name: "t", description: "from a"})
+      e2 = Extension.new("b", "/b") |> Extension.add_tool(%{name: "t", description: "from b"})
+
+      tools = Dispatcher.get_all_tools([e1, e2])
+      assert length(tools) == 1
+      assert hd(tools).description == "from a"
+    end
+  end
+
+  describe "get_tool_definition/2" do
+    test "finds tool by name" do
+      e = Extension.new("a", "/a") |> Extension.add_tool(%{name: "mytool", description: "d"})
+      assert %{name: "mytool"} = Dispatcher.get_tool_definition([e], "mytool")
+    end
+
+    test "returns nil for unknown tool" do
+      assert nil == Dispatcher.get_tool_definition([Extension.new("a", "/a")], "nope")
+    end
+  end
+
+  describe "get_all_commands/1" do
+    test "returns deduplicated commands with extension id" do
+      e1 = Extension.new("a", "/a") |> Extension.add_command("cmd1", %{description: "d1"})
+      e2 = Extension.new("b", "/b") |> Extension.add_command("cmd2", %{description: "d2"})
+
+      cmds = Dispatcher.get_all_commands([e1, e2])
+      assert length(cmds) == 2
+      assert {"cmd1", %{description: "d1"}, "a"} in cmds
+    end
+
+    test "first extension wins on name conflict" do
+      e1 = Extension.new("a", "/a") |> Extension.add_command("dup", %{description: "a's"})
+      e2 = Extension.new("b", "/b") |> Extension.add_command("dup", %{description: "b's"})
+
+      cmds = Dispatcher.get_all_commands([e1, e2])
+      assert length(cmds) == 1
+      assert {"dup", %{description: "a's"}, "a"} in cmds
+    end
+  end
+
+  describe "get_command/2" do
+    test "finds command by name" do
+      e = Extension.new("a", "/a") |> Extension.add_command("run", %{description: "run it"})
+      assert {%{description: "run it"}, "a"} = Dispatcher.get_command([e], "run")
+    end
+
+    test "returns nil for unknown command" do
+      assert nil == Dispatcher.get_command([Extension.new("a", "/a")], "nope")
+    end
+  end
+
+  describe "get_message_renderer/2" do
+    test "finds renderer by type" do
+      renderer = fn _type, _data -> "rendered" end
+      e = Extension.new("a", "/a") |> Extension.add_message_renderer("custom", renderer)
+      assert ^renderer = Dispatcher.get_message_renderer([e], "custom")
+    end
+
+    test "returns nil for unknown type" do
+      assert nil == Dispatcher.get_message_renderer([Extension.new("a", "/a")], "nope")
+    end
+  end
+
+  describe "has_handlers?/2" do
+    test "true when handlers registered" do
+      e = ext("a", session_start: fn _, _ -> nil end)
+      assert Dispatcher.has_handlers?([e], :session_start)
+    end
+
+    test "false when no handlers" do
+      e = Extension.new("a", "/a")
+      refute Dispatcher.has_handlers?([e], :session_start)
+    end
+  end
+
+  describe "get_command_diagnostics/1" do
+    test "reports conflicts" do
+      e1 = Extension.new("a", "/a") |> Extension.add_command("dup", %{})
+      e2 = Extension.new("b", "/b") |> Extension.add_command("dup", %{})
+
+      diags = Dispatcher.get_command_diagnostics([e1, e2])
+      assert [%{name: "dup", extensions: ["a", "b"]}] = diags
+    end
+
+    test "no conflicts returns empty" do
+      e1 = Extension.new("a", "/a") |> Extension.add_command("c1", %{})
+      e2 = Extension.new("b", "/b") |> Extension.add_command("c2", %{})
+
+      assert [] = Dispatcher.get_command_diagnostics([e1, e2])
+    end
+  end
 end
