@@ -7,9 +7,15 @@
   "id": "opi-q5k.40.4",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Unicode / CJK editing invariants covered by existing input_test.exs describes: 'insert/2' (CJK grapheme advance), 'handle_key/2 — editing' (backspace handles CJK correctly), 'cursor_rc/2' (CJK chars are two display columns), 'grapheme-aware wrapping render' (emoji + CJK + fullwidth), plus the q5k.38 CJK overflow sweep (width invariant across 4 wide-text samples at 3 cursor positions). Semantic parity with upstream editor Unicode tests achieved by a different test layout. No new tests required.",
+      "timestamp": "2026-04-24T22:46:18Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Unicode text editing behavior (10 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:46:17Z"
+  "updated_at": "2026-04-24T22:46:18Z"
 }
