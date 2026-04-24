@@ -9,9 +9,15 @@
   "id": "opi-q5k.37",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. Path B (document divergence) chosen. StdinFSM moduledoc records the rationale for keeping paste markers as data events. Added empty-input and lifecycle cleanup tests. Upstream paste-event tests are intentionally N/A.",
+      "timestamp": "2026-04-24T22:20:34Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port stdin-buffer.test.ts gaps: empty-input, destroy cleanup, decide paste event API",
   "type": "task",
-  "updated_at": "2026-04-24T22:19:45Z"
+  "updated_at": "2026-04-24T22:20:34Z"
 }
