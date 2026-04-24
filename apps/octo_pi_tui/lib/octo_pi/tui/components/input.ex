@@ -8,24 +8,34 @@ defmodule OctoPi.TUI.Components.Input do
 
   alias OctoPi.TUI.{Key, WrapAnsi}
 
+  @page_size 10
+
   @type t :: %__MODULE__{
           value: String.t(),
           cursor: non_neg_integer(),
+          width: pos_integer(),
           kill_ring: [String.t()],
           last_action: :kill | :yank | :type_word | nil,
-          undo_stack: [{String.t(), non_neg_integer()}]
+          undo_stack: [{String.t(), non_neg_integer()}],
+          preferred_col: non_neg_integer() | nil
         }
 
   defstruct value: "",
             cursor: 0,
+            width: 80,
             kill_ring: [],
             last_action: nil,
-            undo_stack: []
+            undo_stack: [],
+            preferred_col: nil
 
   # --- render ---
 
   @impl true
-  def render(%__MODULE__{value: value}, width), do: wrap_input(value, width)
+  def render(%__MODULE__{value: value}, width) do
+    value
+    |> String.split("\n")
+    |> Enum.flat_map(&wrap_input(&1, width))
+  end
 
   @doc "Cursor position within the wrapped output as `{row, col}` (0-indexed, display-width columns)."
   @spec cursor_rc(t(), pos_integer()) :: {non_neg_integer(), non_neg_integer()}
@@ -34,15 +44,7 @@ defmodule OctoPi.TUI.Components.Input do
       value
       |> String.graphemes()
       |> Enum.take(cursor)
-      |> Enum.reduce({0, 0}, fn g, {row, col} ->
-        w = WrapAnsi.grapheme_width(g)
-
-        if col > 0 and col + w > width do
-          {row + 1, w}
-        else
-          {row, col + w}
-        end
-      end)
+      |> Enum.reduce({0, 0}, &advance_rc(&1, &2, width))
 
     if col >= width, do: {row + 1, 0}, else: {row, col}
   end
@@ -73,9 +75,8 @@ defmodule OctoPi.TUI.Components.Input do
   def paste(%__MODULE__{value: v, cursor: c} = s, text) do
     clean =
       text
-      |> String.replace("\r\n", "")
-      |> String.replace("\r", "")
-      |> String.replace("\n", "")
+      |> String.replace("\r\n", "\n")
+      |> String.replace("\r", "\n")
       |> String.replace("\t", "    ")
 
     s = push_undo(s)
@@ -93,6 +94,8 @@ defmodule OctoPi.TUI.Components.Input do
 
   @impl true
   def handle_key(%__MODULE__{} = s, %Key{key: ?-, modifiers: [:ctrl]}), do: undo(s)
+
+  def handle_key(%__MODULE__{} = s, %Key{key: :enter, modifiers: [:shift]}), do: insert(s, "\n")
 
   def handle_key(%__MODULE__{} = s, %Key{key: :enter}), do: {s, [{:submit, s.value}]}
 
@@ -121,10 +124,10 @@ defmodule OctoPi.TUI.Components.Input do
   def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}),
     do: delete_word_backward(s)
 
-  def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: ?u, modifiers: [:ctrl]}), do: s
-
-  def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}),
-    do: delete_to_line_start(s)
+  def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}) do
+    line_start = logical_line_start(s.value, s.cursor)
+    if s.cursor == line_start, do: s, else: delete_to_line_start(s)
+  end
 
   def handle_key(%__MODULE__{} = s, %Key{key: ?k, modifiers: [:ctrl]}), do: delete_to_line_end(s)
 
@@ -140,22 +143,27 @@ defmodule OctoPi.TUI.Components.Input do
     do: %{s | cursor: word_boundary_forward(v, c), last_action: nil}
 
   def handle_key(%__MODULE__{cursor: c} = s, %Key{key: :left}),
-    do: %{s | cursor: max(c - 1, 0), last_action: nil}
+    do: %{s | cursor: max(c - 1, 0), last_action: nil, preferred_col: nil}
 
   def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :right}),
-    do: %{s | cursor: min(c + 1, String.length(v)), last_action: nil}
+    do: %{s | cursor: min(c + 1, String.length(v)), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{} = s, %Key{key: :home}),
-    do: %{s | cursor: 0, last_action: nil}
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :home}),
+    do: %{s | cursor: logical_line_start(v, c), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?a, modifiers: [:ctrl]}),
-    do: %{s | cursor: 0, last_action: nil}
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?a, modifiers: [:ctrl]}),
+    do: %{s | cursor: logical_line_start(v, c), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{value: v} = s, %Key{key: :end}),
-    do: %{s | cursor: String.length(v), last_action: nil}
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :end}),
+    do: %{s | cursor: logical_line_end(v, c), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{value: v} = s, %Key{key: ?e, modifiers: [:ctrl]}),
-    do: %{s | cursor: String.length(v), last_action: nil}
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?e, modifiers: [:ctrl]}),
+    do: %{s | cursor: logical_line_end(v, c), last_action: nil, preferred_col: nil}
+
+  def handle_key(%__MODULE__{} = s, %Key{key: :up}), do: move_vertical(s, -1)
+  def handle_key(%__MODULE__{} = s, %Key{key: :down}), do: move_vertical(s, 1)
+  def handle_key(%__MODULE__{} = s, %Key{key: :page_up}), do: move_vertical(s, -@page_size)
+  def handle_key(%__MODULE__{} = s, %Key{key: :page_down}), do: move_vertical(s, @page_size)
 
   def handle_key(%__MODULE__{} = s, %Key{key: :escape}), do: {s, [:cancel]}
 
@@ -190,24 +198,38 @@ defmodule OctoPi.TUI.Components.Input do
   end
 
   defp delete_to_line_start(%__MODULE__{value: v, cursor: c} = s) do
+    line_start = logical_line_start(v, c)
     was_kill = s.last_action == :kill
     s = push_undo(s)
-    deleted = String.slice(v, 0, c)
+    deleted = String.slice(v, line_start, c - line_start)
+    {before, _} = split_at_grapheme(v, line_start)
     {_, after_cursor} = split_at_grapheme(v, c)
     s = kill_push(s, deleted, true, was_kill)
-    %{s | value: after_cursor, cursor: 0, last_action: :kill}
+    %{s | value: before <> after_cursor, cursor: line_start, last_action: :kill}
   end
 
   defp delete_to_line_end(%__MODULE__{value: v, cursor: c} = s) do
-    if c >= String.length(v) do
-      s
+    line_end = logical_line_end(v, c)
+
+    if c >= line_end do
+      if c >= String.length(v) do
+        s
+      else
+        was_kill = s.last_action == :kill
+        s = push_undo(s)
+        {before, _} = split_at_grapheme(v, c)
+        {_, after_nl} = split_at_grapheme(v, c + 1)
+        s = kill_push(s, "\n", false, was_kill)
+        %{s | value: before <> after_nl, cursor: c, last_action: :kill}
+      end
     else
       was_kill = s.last_action == :kill
       s = push_undo(s)
-      deleted = String.slice(v, c, String.length(v) - c)
+      deleted = String.slice(v, c, line_end - c)
       {before, _} = split_at_grapheme(v, c)
+      {_, after_end} = split_at_grapheme(v, line_end)
       s = kill_push(s, deleted, false, was_kill)
-      %{s | value: before, cursor: c, last_action: :kill}
+      %{s | value: before <> after_end, cursor: c, last_action: :kill}
     end
   end
 
@@ -334,7 +356,107 @@ defmodule OctoPi.TUI.Components.Input do
   defp punctuation?(g), do: String.match?(g, ~r/^[\p{P}\p{S}]$/u)
   defp word_char?(g), do: not whitespace?(g) and not punctuation?(g)
 
+  # --- vertical navigation ---
+
+  defp move_vertical(%__MODULE__{value: value, width: width} = s, delta) do
+    {cur_row, cur_col} = cursor_rc(s, width)
+    target_col = s.preferred_col || cur_col
+    target_row = cur_row + delta
+    total_rows = count_visual_rows(value, width)
+
+    cond do
+      target_row < 0 ->
+        %{s | last_action: nil}
+
+      target_row >= total_rows ->
+        %{s | last_action: nil}
+
+      true ->
+        new_cursor = cursor_from_visual(value, width, target_row, target_col)
+        %{s | cursor: new_cursor, last_action: nil, preferred_col: target_col}
+    end
+  end
+
+  defp count_visual_rows(value, width) do
+    value
+    |> String.split("\n")
+    |> Enum.map(&length(wrap_input(&1, width)))
+    |> Enum.sum()
+  end
+
+  defp cursor_from_visual(value, width, target_row, target_col) do
+    graphemes = String.graphemes(value)
+    do_cursor_from_visual(graphemes, width, target_row, target_col, 0, 0, 0)
+  end
+
+  defp do_cursor_from_visual([], _width, target_row, _target_col, row, _col, pos) do
+    if row == target_row, do: pos, else: pos
+  end
+
+  defp do_cursor_from_visual(["\n" | _rest], _width, target_row, _target_col, row, _col, pos)
+       when row == target_row,
+       do: pos
+
+  defp do_cursor_from_visual(["\n" | rest], width, target_row, target_col, _row, _col, pos) do
+    do_cursor_from_visual(rest, width, target_row, target_col, _row + 1, 0, pos + 1)
+  end
+
+  defp do_cursor_from_visual([g | rest], width, target_row, target_col, row, col, pos) do
+    {new_row, new_col} = advance_rc(g, {row, col}, width)
+
+    cond do
+      new_row > target_row ->
+        pos
+
+      new_row == target_row and new_col > target_col and col <= target_col ->
+        pos
+
+      true ->
+        do_cursor_from_visual(rest, width, target_row, target_col, new_row, new_col, pos + 1)
+    end
+  end
+
+  # --- logical line boundaries ---
+
+  defp logical_line_start(value, cursor) do
+    before = value |> String.graphemes() |> Enum.take(cursor) |> Enum.join()
+
+    case String.split(before, "\n") |> List.last() do
+      nil -> 0
+      last_segment -> cursor - String.length(last_segment)
+    end
+  end
+
+  defp logical_line_end(value, cursor) do
+    after_cursor = value |> String.graphemes() |> Enum.drop(cursor) |> Enum.join()
+
+    case :binary.match(after_cursor, "\n") do
+      {pos, _} -> cursor + pos
+      :nomatch -> String.length(value)
+    end
+  end
+
+  @doc "Compute scroll offset to keep cursor visible within viewport_height."
+  @spec scroll_offset(t(), pos_integer(), pos_integer()) :: non_neg_integer()
+  def scroll_offset(%__MODULE__{} = s, width, viewport_height) do
+    {cursor_row, _} = cursor_rc(s, width)
+    total_rows = count_visual_rows(s.value, width)
+
+    cond do
+      total_rows <= viewport_height -> 0
+      cursor_row < viewport_height -> 0
+      true -> min(cursor_row - viewport_height + 1, total_rows - viewport_height)
+    end
+  end
+
   # --- helpers ---
+
+  defp advance_rc("\n", {row, _col}, _width), do: {row + 1, 0}
+
+  defp advance_rc(g, {row, col}, width) do
+    w = WrapAnsi.grapheme_width(g)
+    if col > 0 and col + w > width, do: {row + 1, w}, else: {row, col + w}
+  end
 
   defp split_at_grapheme(str, n) do
     graphemes = String.graphemes(str)

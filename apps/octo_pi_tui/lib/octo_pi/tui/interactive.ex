@@ -120,6 +120,7 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %__MODULE__{
       session: session,
+      input: %Components.Input{width: w},
       width: w,
       height: h,
       theme: theme,
@@ -345,7 +346,8 @@ defmodule OctoPi.TUI.Interactive do
     }
   end
 
-  def handle_event(state, {:resize, w, h}), do: %{state | width: w, height: h}
+  def handle_event(state, {:resize, w, h}),
+    do: %{state | width: w, height: h, input: %{state.input | width: w}}
 
   def handle_event(state, _), do: state
 

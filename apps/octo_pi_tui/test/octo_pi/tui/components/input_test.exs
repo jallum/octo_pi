@@ -22,6 +22,7 @@ defmodule OctoPi.TUI.Components.InputTest do
     end
   end
 
+  defp shift_enter, do: %Key{key: :enter, modifiers: [:shift]}
   defp move_right(input, n), do: Enum.reduce(1..n, input, fn _, s -> press(s, key(:right)) end)
 
   # --- tests ---
@@ -604,6 +605,188 @@ defmodule OctoPi.TUI.Components.InputTest do
 
       input = press(input, undo_key())
       assert input.value == ""
+    end
+  end
+
+  # ── Multiline editing ─────────────────────────────────────────
+
+  describe "Shift+Enter — newline insertion" do
+    test "inserts newline at cursor" do
+      input = type(%Input{}, "hello") |> press(shift_enter())
+      assert input.value == "hello\n"
+      assert input.cursor == 6
+    end
+
+    test "inserts newline in middle of text" do
+      input =
+        type(%Input{}, "helloworld") |> press(ctrl(?a)) |> move_right(5) |> press(shift_enter())
+
+      assert input.value == "hello\nworld"
+      assert input.cursor == 6
+    end
+  end
+
+  describe "multiline render/2" do
+    test "splits on newlines and renders each logical line" do
+      lines = Input.render(%Input{value: "hello\nworld"}, 80)
+      assert lines == ["hello", "world"]
+    end
+
+    test "wraps each logical line separately" do
+      lines = Input.render(%Input{value: "abcde\nfg"}, 3)
+      assert lines == ["abc", "de", "fg"]
+    end
+
+    test "empty lines preserved" do
+      lines = Input.render(%Input{value: "a\n\nb"}, 80)
+      assert lines == ["a", "", "b"]
+    end
+  end
+
+  describe "multiline cursor_rc/2" do
+    test "cursor on second logical line" do
+      assert {1, 2} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 8}, 80)
+    end
+
+    test "cursor at start of second line" do
+      assert {1, 0} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 6}, 80)
+    end
+
+    test "cursor on newline character itself" do
+      assert {0, 5} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 5}, 80)
+    end
+
+    test "cursor after wrapping + newline" do
+      # "abcde\nfg" at width 3: "abc" "de" "fg"
+      # cursor at 'f' = grapheme 6, should be row 2 col 0
+      assert {2, 0} = Input.cursor_rc(%Input{value: "abcde\nfg", cursor: 6}, 3)
+    end
+  end
+
+  describe "vertical navigation — Up/Down" do
+    test "down arrow moves to next visual line" do
+      input = %Input{value: "hello\nworld", cursor: 2}
+      input = press(input, key(:down))
+      assert input.cursor == 8
+    end
+
+    test "up arrow moves to previous visual line" do
+      input = %Input{value: "hello\nworld", cursor: 8}
+      input = press(input, key(:up))
+      assert input.cursor == 2
+    end
+
+    test "down clamps to shorter line" do
+      input = %Input{value: "hello\nab", cursor: 4}
+      input = press(input, key(:down))
+      assert input.cursor == 8
+    end
+
+    test "up at first visual line is no-op" do
+      input = %Input{value: "hello\nworld", cursor: 2}
+      input = press(input, key(:up))
+      assert input.cursor == 2
+    end
+
+    test "down at last visual line is no-op" do
+      input = %Input{value: "hello\nworld", cursor: 8}
+      input = press(input, key(:down))
+      assert input.cursor == 8
+    end
+
+    test "down navigates through wrapped lines" do
+      # "abcde" at width 3: "abc" "de"
+      input = %Input{value: "abcde", cursor: 1, width: 3}
+      input = press(input, key(:down))
+      assert input.cursor == 4
+    end
+  end
+
+  describe "page navigation" do
+    test "Page Down moves down by page size" do
+      lines = Enum.map_join(1..20, "\n", &"line#{&1}")
+      input = %Input{value: lines, cursor: 0}
+      input = press(input, key(:page_down))
+      assert input.cursor > 0
+    end
+
+    test "Page Up moves up by page size" do
+      lines = Enum.map_join(1..20, "\n", &"line#{&1}")
+      input = %Input{value: lines, cursor: String.length(lines)}
+      input = press(input, key(:page_up))
+      assert input.cursor < String.length(lines)
+    end
+  end
+
+  describe "line-aware kill operations" do
+    test "Ctrl+K kills to end of current logical line, not end of all text" do
+      input = %Input{value: "hello\nworld", cursor: 2} |> press(ctrl(?k))
+      assert input.value == "he\nworld"
+    end
+
+    test "Ctrl+K at end of line kills the newline" do
+      input = %Input{value: "hello\nworld", cursor: 5} |> press(ctrl(?k))
+      assert input.value == "helloworld"
+    end
+
+    test "Ctrl+U kills to start of current logical line" do
+      input = %Input{value: "hello\nworld", cursor: 8} |> press(ctrl(?u))
+      assert input.value == "hello\nrld"
+    end
+
+    test "Ctrl+A moves to start of current logical line" do
+      input = %Input{value: "hello\nworld", cursor: 8} |> press(ctrl(?a))
+      assert input.cursor == 6
+    end
+
+    test "Ctrl+E moves to end of current logical line" do
+      input = %Input{value: "hello\nworld", cursor: 6} |> press(ctrl(?e))
+      assert input.cursor == 11
+    end
+
+    test "Home moves to start of current logical line" do
+      input = %Input{value: "hello\nworld", cursor: 8} |> press(key(:home))
+      assert input.cursor == 6
+    end
+
+    test "End moves to end of current logical line" do
+      input = %Input{value: "hello\nworld", cursor: 6} |> press(key(:end))
+      assert input.cursor == 11
+    end
+  end
+
+  describe "backspace at line boundary" do
+    test "backspace at start of second line merges lines" do
+      input = %Input{value: "hello\nworld", cursor: 6} |> press(key(:backspace))
+      assert input.value == "helloworld"
+      assert input.cursor == 5
+    end
+  end
+
+  describe "multiline paste" do
+    test "paste preserves newlines" do
+      input = %Input{} |> Input.paste("hello\nworld")
+      assert input.value == "hello\nworld"
+      assert input.cursor == 11
+    end
+
+    test "paste normalizes \\r\\n to \\n" do
+      input = %Input{} |> Input.paste("hello\r\nworld")
+      assert input.value == "hello\nworld"
+    end
+  end
+
+  describe "scroll_offset/2" do
+    test "returns 0 when content fits" do
+      input = %Input{value: "hello\nworld", cursor: 0}
+      assert Input.scroll_offset(input, 80, 10) == 0
+    end
+
+    test "scrolls to keep cursor visible" do
+      lines = Enum.map_join(1..20, "\n", &"line#{&1}")
+      input = %Input{value: lines, cursor: String.length(lines)}
+      offset = Input.scroll_offset(input, 80, 5)
+      assert offset > 0
     end
   end
 end
