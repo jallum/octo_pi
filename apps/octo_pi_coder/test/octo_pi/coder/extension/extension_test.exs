@@ -66,4 +66,31 @@ defmodule OctoPi.Coder.ExtensionTest do
       assert ext.commands["do-stuff"] == cmd
     end
   end
+
+  describe "add_message_renderer/3" do
+    test "registers a renderer by type" do
+      renderer = fn _type, _data -> "rendered" end
+      ext = Extension.new("x", "/x") |> Extension.add_message_renderer("custom_msg", renderer)
+
+      assert ext.message_renderers["custom_msg"] == renderer
+    end
+  end
+
+  describe "add_flag/3" do
+    test "registers a flag" do
+      spec = %{name: "verbose", description: "Enable verbose", default: false}
+      ext = Extension.new("x", "/x") |> Extension.add_flag("verbose", spec)
+
+      assert ext.flags["verbose"] == spec
+    end
+  end
+
+  describe "add_shortcut/3" do
+    test "registers a shortcut" do
+      spec = %{key: "ctrl+shift+p", description: "Command palette", handler: fn _ -> :ok end}
+      ext = Extension.new("x", "/x") |> Extension.add_shortcut("ctrl+shift+p", spec)
+
+      assert ext.shortcuts["ctrl+shift+p"] == spec
+    end
+  end
 end

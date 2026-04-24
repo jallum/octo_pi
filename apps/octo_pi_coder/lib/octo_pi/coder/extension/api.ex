@@ -50,6 +50,9 @@ defmodule OctoPi.Coder.Extension.API do
     registered_handlers: [],
     registered_tools: [],
     registered_commands: [],
+    registered_renderers: [],
+    registered_flags: [],
+    registered_shortcuts: [],
     pending_providers: [],
     bound?: false
   ] ++ Enum.map(@action_fields, &{&1, nil})
@@ -83,6 +86,21 @@ defmodule OctoPi.Coder.Extension.API do
     {:ok, %{api | registered_commands: api.registered_commands ++ [{name, command}]}}
   end
 
+  @spec register_message_renderer(t(), String.t(), Extension.message_renderer()) :: {:ok, t()}
+  def register_message_renderer(%__MODULE__{} = api, type, renderer) when is_binary(type) and is_function(renderer, 2) do
+    {:ok, %{api | registered_renderers: api.registered_renderers ++ [{type, renderer}]}}
+  end
+
+  @spec register_flag(t(), String.t(), Extension.flag_spec()) :: {:ok, t()}
+  def register_flag(%__MODULE__{} = api, name, spec) when is_binary(name) do
+    {:ok, %{api | registered_flags: api.registered_flags ++ [{name, spec}]}}
+  end
+
+  @spec register_shortcut(t(), String.t(), Extension.shortcut_spec()) :: {:ok, t()}
+  def register_shortcut(%__MODULE__{} = api, key, spec) when is_binary(key) do
+    {:ok, %{api | registered_shortcuts: api.registered_shortcuts ++ [{key, spec}]}}
+  end
+
   @spec register_provider(t(), ProviderConfig.t()) :: {:ok, t()}
   def register_provider(%__MODULE__{bound?: false} = api, %ProviderConfig{} = config) do
     {:ok, %{api | pending_providers: api.pending_providers ++ [{:register, config}]}}
@@ -114,8 +132,23 @@ defmodule OctoPi.Coder.Extension.API do
         Extension.add_tool(ext, tool)
       end)
 
-    Enum.reduce(api.registered_commands, ext, fn {name, cmd}, ext ->
-      Extension.add_command(ext, name, cmd)
+    ext =
+      Enum.reduce(api.registered_commands, ext, fn {name, cmd}, ext ->
+        Extension.add_command(ext, name, cmd)
+      end)
+
+    ext =
+      Enum.reduce(api.registered_renderers, ext, fn {type, renderer}, ext ->
+        Extension.add_message_renderer(ext, type, renderer)
+      end)
+
+    ext =
+      Enum.reduce(api.registered_flags, ext, fn {name, spec}, ext ->
+        Extension.add_flag(ext, name, spec)
+      end)
+
+    Enum.reduce(api.registered_shortcuts, ext, fn {key, spec}, ext ->
+      Extension.add_shortcut(ext, key, spec)
     end)
   end
 
