@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "octo-3di.13",
     "octo-3di.6"
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "octo-3di",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Footer component: pwd/branch + token stats + model name",
   "type": "task",
-  "updated_at": "2026-04-24T02:37:54Z"
+  "updated_at": "2026-04-24T02:59:25Z"
 }
