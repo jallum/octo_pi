@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T12:00:39Z",
   "created": "2026-04-24T10:37:09Z",
   "description": "Port diff.ts (~147 LOC). Renders file diffs with:\n- +/- line coloring (green additions, red deletions)\n- File header with path\n- Hunk headers (@@ ... @@)\n- Line number gutter (optional)\n\nUpstream: interactive/components/diff.ts\nDepends on: container, theme",
   "id": "opi-m4h.9",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "DiffComponent: git diff display with syntax coloring",
   "type": "task",
-  "updated_at": "2026-04-24T11:57:50Z"
+  "updated_at": "2026-04-24T12:00:39Z"
 }
