@@ -9,9 +9,15 @@
   "id": "opi-q5k.35",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. 9 integration tests added via Overlay.composite. Hide-stack-order deliberately deferred to opi-q5k.36 (overlay focus subsystem) since our Overlay is a stateless compositing function, not a stateful lifecycle manager.",
+      "timestamp": "2026-04-24T22:30:58Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port overlay-options.test.ts gaps: width overflow, edges, stacked overlays, row extremes",
   "type": "task",
-  "updated_at": "2026-04-24T22:30:14Z"
+  "updated_at": "2026-04-24T22:30:58Z"
 }
