@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-m4h.12"
+  ],
   "created": "2026-04-24T10:37:38Z",
   "description": "Port the autocomplete infrastructure from interactive-mode.ts (lines 400-550) and autocomplete.ts.\n\nImplement:\n- AutocompleteProvider behaviour: complete(prefix) → [%Suggestion{label, value, description}]\n- SlashCommandProvider: parses /command prefix, returns matching commands\n- CombinedProvider: chains multiple providers, deduplicates\n- Built-in commands: /help, /clear, /model, /theme, /compact, /cost, /config\n- Extension command integration (pull from Dispatcher.get_all_commands)\n\nDoes NOT include the dropdown UI (that's the next ticket).\nUpstream: interactive-mode.ts autocomplete setup, packages/tui/src/autocomplete.ts",
   "id": "opi-m4h.11",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Autocomplete provider API + slash-command framework",
   "type": "task",
-  "updated_at": "2026-04-24T10:37:38Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }

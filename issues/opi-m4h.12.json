@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.11"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:37:38Z",
   "description": "Wire autocomplete suggestions into a visual dropdown below/above the input cursor.\n\nImplement:\n- Trigger autocomplete on / prefix or configurable triggers\n- Render suggestion list as overlay near cursor position\n- Up/Down to navigate, Tab/Enter to accept, Escape to dismiss\n- Fuzzy filtering as user types\n- Show description next to label\n- Max visible items with scroll indicator\n\nUpstream: packages/tui/src/components/input.ts (autocomplete integration), select-list.ts\nDepends on: autocomplete provider API, overlay system (already built), select_list component",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Autocomplete dropdown UI in Input component",
   "type": "task",
-  "updated_at": "2026-04-24T10:37:38Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
