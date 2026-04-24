@@ -14,7 +14,8 @@
     "opi-q5k.33",
     "opi-q5k.34",
     "opi-q5k.35",
-    "opi-q5k.36"
+    "opi-q5k.36",
+    "opi-q5k.37"
   ],
   "blocks": [],
   "created": "2026-04-24T21:25:07Z",
@@ -26,5 +27,5 @@
   "status": "open",
   "title": "Acceptance gate: 100% upstream TUI test parity achieved",
   "type": "task",
-  "updated_at": "2026-04-24T21:47:06Z"
+  "updated_at": "2026-04-24T21:48:25Z"
 }
