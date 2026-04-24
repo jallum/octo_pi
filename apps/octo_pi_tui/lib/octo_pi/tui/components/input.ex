@@ -397,8 +397,8 @@ defmodule OctoPi.TUI.Components.Input do
        when row == target_row,
        do: pos
 
-  defp do_cursor_from_visual(["\n" | rest], width, target_row, target_col, _row, _col, pos) do
-    do_cursor_from_visual(rest, width, target_row, target_col, _row + 1, 0, pos + 1)
+  defp do_cursor_from_visual(["\n" | rest], width, target_row, target_col, row, _col, pos) do
+    do_cursor_from_visual(rest, width, target_row, target_col, row + 1, 0, pos + 1)
   end
 
   defp do_cursor_from_visual([g | rest], width, target_row, target_col, row, col, pos) do
