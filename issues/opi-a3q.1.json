@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T10:16:28Z",
   "created": "2026-04-24T10:13:11Z",
   "description": "extension.ex:12 — handler_fn type uses named parameters in a way that Elixir parses as a single-arg function taking a tuple, not a two-arg function. Change to: @type handler_fn :: (map(), OctoPi.Coder.Extension.Context.t() -\u003e term()). Not a runtime bug but would produce confusing Dialyzer results.",
   "id": "opi-a3q.1",
   "labels": [],
   "parent": "opi-a3q",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Fix handler_fn type parenthesization in Extension",
   "type": "bug",
-  "updated_at": "2026-04-24T10:16:01Z"
+  "updated_at": "2026-04-24T10:16:28Z"
 }
