@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.13",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Intentional divergence, previously recorded in opi-q5k.5 audit. We use Shift+Enter for newline and plain Enter for submit, matching our Input component's existing behavior; backslash+Enter is not interpreted as a newline workaround. No tests ported.",
+      "timestamp": "2026-04-24T22:45:54Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Backslash+Enter newline workaround (5 upstream tests)",
