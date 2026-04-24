@@ -5,7 +5,9 @@
     "opi-m4h.3",
     "opi-m4h.4"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-m4h.10"
+  ],
   "created": "2026-04-24T10:37:09Z",
   "description": "Port assistant-message.ts (~150 LOC). Renders assistant responses with:\n- Markdown-rendered text content\n- Collapsible thinking blocks (dimmed/italic, hidden by default)\n- Error/abort message styling\n- OSC 133 command zones (optional, for shell integration)\n\nReplace the current plain-text transcript rendering in Interactive with proper AssistantMessage components.\n\nUpstream: interactive/components/assistant-message.ts\nDepends on: markdown renderer, container component, theme",
   "id": "opi-m4h.5",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "AssistantMessage component: text + thinking blocks",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:15Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
