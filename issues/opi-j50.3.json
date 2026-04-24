@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T14:48:23Z",
+  "description": "pi-mono's Input component hardcodes a '\u003e ' prefix before user text. Add this to OctoPi.TUI.Components.Input: render/2 must prepend '\u003e ' to the first display line (subsequent wrapped lines get 2-space indent for alignment). cursor_rc/2 must add +2 to the column offset so the hardware cursor lands after the prefix. The prefix should use the theme's text color (not dimmed). Update interactive.ex cursor_position/3 if it does its own col offset math.",
+  "id": "opi-j50.3",
+  "labels": [],
+  "parent": "opi-j50",
+  "priority": 2,
+  "status": "open",
+  "title": "Add prompt prefix to Input component",
+  "type": "task",
+  "updated_at": "2026-04-24T14:48:23Z"
+}
