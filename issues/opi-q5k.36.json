@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-q5k.1"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-q5k",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Implement overlay focus + capturing model, port overlay-non-capturing.test.ts (24 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T21:47:06Z"
+  "updated_at": "2026-04-24T22:34:26Z"
 }
