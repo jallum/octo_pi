@@ -9,9 +9,15 @@
   "id": "opi-q5k.29",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. Renderer now exposes full_redraws/1, and grow-vs-shrink are distinguished. Added 5 tests: redraw counter invariant, Termux height-resize suppression, SGR isolation across lines, strict shrink with viewport equality, and strict append-after-shrink no-full-redraw. 1002 tests pass.",
+      "timestamp": "2026-04-24T22:25:05Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port tui-render.test.ts gaps: Termux path, redraw counter, SGR reset, strict shrink/append",
   "type": "task",
-  "updated_at": "2026-04-24T22:23:04Z"
+  "updated_at": "2026-04-24T22:25:05Z"
 }
