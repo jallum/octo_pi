@@ -8,11 +8,7 @@ defmodule OctoPi.TUI.Components.Input do
 
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.Suggestion
-  alias OctoPi.TUI.{Key, WrapAnsi}
-
-  @prefix "> "
-  @prefix_width 2
-  @indent String.duplicate(" ", @prefix_width)
+  alias OctoPi.TUI.{Key, Theme, WrapAnsi}
 
   @page_size 10
 
@@ -22,6 +18,9 @@ defmodule OctoPi.TUI.Components.Input do
           value: String.t(),
           cursor: non_neg_integer(),
           width: pos_integer(),
+          height: pos_integer(),
+          padding_x: non_neg_integer(),
+          theme: Theme.t() | nil,
           kill_ring: [String.t()],
           last_action: :kill | :yank | :type_word | nil,
           undo_stack: [{String.t(), non_neg_integer()}],
@@ -30,6 +29,7 @@ defmodule OctoPi.TUI.Components.Input do
           autocomplete_suggestions: [Suggestion.t()],
           autocomplete_selected: non_neg_integer(),
           autocomplete_active: boolean(),
+          scroll_offset: non_neg_integer(),
           history: [String.t()],
           history_index: non_neg_integer() | nil,
           saved_input: String.t() | nil
@@ -38,6 +38,9 @@ defmodule OctoPi.TUI.Components.Input do
   defstruct value: "",
             cursor: 0,
             width: 80,
+            height: 24,
+            padding_x: 0,
+            theme: nil,
             kill_ring: [],
             last_action: nil,
             undo_stack: [],
@@ -46,36 +49,104 @@ defmodule OctoPi.TUI.Components.Input do
             autocomplete_suggestions: [],
             autocomplete_selected: 0,
             autocomplete_active: false,
+            scroll_offset: 0,
             history: [],
             history_index: nil,
             saved_input: nil
 
+  @min_visible_lines 5
+
+  defp layout_width(width, padding_x) do
+    max_padding = max(0, div(width - 1, 2))
+    px = min(padding_x, max_padding)
+    content_w = max(1, width - px * 2)
+    lw = if px > 0, do: content_w, else: max(1, content_w - 1)
+    {px, content_w, lw}
+  end
+
+  @doc "Update scroll_offset to keep cursor visible within the viewport."
+  @spec update_scroll(t(), pos_integer()) :: t()
+  def update_scroll(%__MODULE__{height: height, padding_x: px} = input, width) do
+    {_, _, lw} = layout_width(width, px)
+    max_visible = max(@min_visible_lines, div(height * 3, 10))
+    all_lines = layout_lines(input.value, lw)
+    total = length(all_lines)
+    {cursor_row, _} = content_rc(input, lw)
+    new_offset = scroll_for_cursor(input.scroll_offset, cursor_row, max_visible, total)
+    %{input | scroll_offset: new_offset}
+  end
+
   # --- render ---
 
   @impl true
-  def render(%__MODULE__{value: value}, width) do
-    content_width = max(width - @prefix_width, 1)
+  def render(%__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input, width) do
+    {effective_px, content_w, lw} = layout_width(width, px)
+    all_lines = layout_lines(value, lw)
 
-    value
-    |> String.split("\n")
-    |> Enum.flat_map(&wrap_input(&1, content_width))
-    |> prepend_prefix()
+    padded = pad_content_lines(all_lines, effective_px, content_w)
+
+    max_visible = max(@min_visible_lines, div(height * 3, 10))
+    total = length(padded)
+
+    if total <= max_visible do
+      [border_line(theme, width) | padded] ++ [border_line(theme, width)]
+    else
+      {cursor_row, _} = content_rc(input, lw)
+      offset = scroll_for_cursor(input.scroll_offset, cursor_row, max_visible, total)
+      visible = Enum.slice(padded, offset, max_visible)
+      lines_above = offset
+      lines_below = total - offset - length(visible)
+
+      top = scroll_border(theme, width, :up, lines_above)
+      bottom = scroll_border(theme, width, :down, lines_below)
+      [top | visible] ++ [bottom]
+    end
   end
 
-  @doc "Cursor position within the wrapped output as `{row, col}` (0-indexed, display-width columns). Column includes the prompt prefix offset."
+  @doc "Cursor position within the rendered output as `{row, col}` (0-indexed, display-width columns). Row includes the top border line."
   @spec cursor_rc(t(), pos_integer()) :: {non_neg_integer(), non_neg_integer()}
-  def cursor_rc(%__MODULE__{value: value, cursor: cursor}, width) do
-    content_width = max(width - @prefix_width, 1)
+  def cursor_rc(%__MODULE__{height: height, padding_x: px} = input, width) do
+    {effective_px, _, lw} = layout_width(width, px)
+    {row, col} = content_rc(input, lw)
+    max_visible = max(@min_visible_lines, div(height * 3, 10))
+    all_lines = layout_lines(input.value, lw)
+    total = length(all_lines)
 
-    {row, col} =
-      value
-      |> String.graphemes()
-      |> Enum.take(cursor)
-      |> Enum.reduce({0, 0}, &advance_rc(&1, &2, content_width))
+    offset_row =
+      if total <= max_visible do
+        row + 1
+      else
+        offset = scroll_for_cursor(input.scroll_offset, row, max_visible, total)
+        row - offset + 1
+      end
 
-    if col >= content_width,
-      do: {row + 1, @prefix_width},
-      else: {row, col + @prefix_width}
+    {offset_row, col + effective_px}
+  end
+
+  defp content_rc(%__MODULE__{value: value, cursor: cursor}, lw) do
+    value
+    |> String.graphemes()
+    |> Enum.take(cursor)
+    |> Enum.reduce({0, 0}, &advance_rc(&1, &2, lw))
+    |> then(fn {row, col} ->
+      if col >= lw, do: {row + 1, 0}, else: {row, col}
+    end)
+  end
+
+  defp layout_lines(value, lw) do
+    value |> String.split("\n") |> Enum.flat_map(&wrap_input(&1, lw))
+  end
+
+  defp pad_content_lines(lines, 0, _content_w), do: lines
+
+  defp pad_content_lines(lines, px, content_w) do
+    pad = String.duplicate(" ", px)
+
+    Enum.map(lines, fn line ->
+      line_w = WrapAnsi.visible_width(line)
+      right_fill = String.duplicate(" ", max(0, content_w - line_w))
+      pad <> line <> right_fill <> pad
+    end)
   end
 
   # --- public API ---
@@ -404,11 +475,12 @@ defmodule OctoPi.TUI.Components.Input do
 
   # --- vertical navigation ---
 
-  defp move_vertical(%__MODULE__{value: value, width: width} = s, delta) do
-    {cur_row, cur_col} = cursor_rc(s, width)
+  defp move_vertical(%__MODULE__{value: value, width: width, padding_x: px} = s, delta) do
+    {_, _, lw} = layout_width(width, px)
+    {cur_row, cur_col} = content_rc(s, lw)
     target_col = s.preferred_col || cur_col
     target_row = cur_row + delta
-    total_rows = count_visual_rows(value, width)
+    total_rows = count_visual_rows(value, lw)
 
     cond do
       target_row < 0 ->
@@ -418,25 +490,21 @@ defmodule OctoPi.TUI.Components.Input do
         history_down(s)
 
       true ->
-        new_cursor = cursor_from_visual(value, width, target_row, target_col)
+        new_cursor = cursor_from_visual(value, lw, target_row, target_col)
         %{s | cursor: new_cursor, last_action: nil, preferred_col: target_col}
     end
   end
 
   defp count_visual_rows(value, width) do
-    content_width = max(width - @prefix_width, 1)
-
     value
     |> String.split("\n")
-    |> Enum.map(&length(wrap_input(&1, content_width)))
+    |> Enum.map(&length(wrap_input(&1, width)))
     |> Enum.sum()
   end
 
   defp cursor_from_visual(value, width, target_row, target_col) do
-    content_width = max(width - @prefix_width, 1)
-    content_col = max(target_col - @prefix_width, 0)
     graphemes = String.graphemes(value)
-    do_cursor_from_visual(graphemes, content_width, target_row, content_col, 0, 0, 0)
+    do_cursor_from_visual(graphemes, width, target_row, target_col, 0, 0, 0)
   end
 
   defp do_cursor_from_visual([], _width, target_row, _target_col, row, _col, pos) do
@@ -488,15 +556,11 @@ defmodule OctoPi.TUI.Components.Input do
 
   @doc "Compute scroll offset to keep cursor visible within viewport_height."
   @spec scroll_offset(t(), pos_integer(), pos_integer()) :: non_neg_integer()
-  def scroll_offset(%__MODULE__{} = s, width, viewport_height) do
-    {cursor_row, _} = cursor_rc(s, width)
-    total_rows = count_visual_rows(s.value, width)
-
-    cond do
-      total_rows <= viewport_height -> 0
-      cursor_row < viewport_height -> 0
-      true -> min(cursor_row - viewport_height + 1, total_rows - viewport_height)
-    end
+  def scroll_offset(%__MODULE__{padding_x: px} = s, width, viewport_height) do
+    {_, _, lw} = layout_width(width, px)
+    {cursor_row, _} = content_rc(s, lw)
+    total_rows = count_visual_rows(s.value, lw)
+    scroll_for_cursor(s.scroll_offset, cursor_row, viewport_height, total_rows)
   end
 
   # --- helpers ---
@@ -583,14 +647,11 @@ defmodule OctoPi.TUI.Components.Input do
         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel},
         width
       ) do
-    prefix = "> "
-    pad = String.duplicate(" ", String.length(prefix))
-
     suggestions
     |> Enum.with_index()
     |> Enum.map(fn {%Suggestion{label: label, description: desc}, idx} ->
-      text = format_suggestion(label, desc, width - String.length(prefix))
-      if idx == sel, do: "\e[7m#{prefix}#{text}\e[27m", else: "#{pad}#{text}"
+      text = format_suggestion(label, desc, width)
+      if idx == sel, do: "\e[7m#{text}\e[27m", else: "  #{text}"
     end)
   end
 
@@ -649,11 +710,39 @@ defmodule OctoPi.TUI.Components.Input do
     %{s | autocomplete_active: false, autocomplete_suggestions: [], autocomplete_selected: 0}
   end
 
-  defp prepend_prefix([first | rest]) do
-    [@prefix <> first | Enum.map(rest, &(@indent <> &1))]
+  defp scroll_for_cursor(current_offset, cursor_row, max_visible, total) do
+    offset =
+      cond do
+        total <= max_visible -> 0
+        cursor_row < current_offset -> cursor_row
+        cursor_row >= current_offset + max_visible -> cursor_row - max_visible + 1
+        true -> current_offset
+      end
+
+    max_offset = max(0, total - max_visible)
+    min(offset, max_offset)
   end
 
-  defp prepend_prefix([]), do: [@prefix]
+  defp border_line(nil, width), do: String.duplicate("─", width)
+
+  defp border_line(theme, width) do
+    Theme.fg(theme, :border_muted, String.duplicate("─", width))
+  end
+
+  defp scroll_border(theme, width, _direction, 0), do: border_line(theme, width)
+
+  defp scroll_border(theme, width, direction, count) do
+    arrow = if direction == :up, do: "↑", else: "↓"
+    indicator = "─── #{arrow} #{count} more "
+    indicator_width = WrapAnsi.visible_width(indicator)
+    remaining = max(0, width - indicator_width)
+    line = indicator <> String.duplicate("─", remaining)
+
+    case theme do
+      nil -> line
+      _ -> Theme.fg(theme, :border_muted, line)
+    end
+  end
 
   defp wrap_input(value, width) do
     value

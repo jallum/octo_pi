@@ -27,7 +27,6 @@ defmodule OctoPi.TUI.Interactive do
     StdinFSM,
     Terminal,
     Theme,
-    Viewport,
     WrapAnsi
   }
 
@@ -309,7 +308,7 @@ defmodule OctoPi.TUI.Interactive do
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
-    {:ok, renderer} = Renderer.start_link(width: w, height: h)
+    {:ok, renderer} = Renderer.start_link(width: w, height: h, csi_2026?: true)
     {:ok, footer_data} = FooterData.start_link(cwd: cwd)
 
     {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
@@ -327,7 +326,7 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %__MODULE__{
       session: session,
-      input: %Components.Input{width: w},
+      input: %Components.Input{width: w, height: h, theme: theme},
       width: w,
       height: h,
       theme: theme,
@@ -336,7 +335,7 @@ defmodule OctoPi.TUI.Interactive do
       footer_data: footer_data
     }
 
-    render_frame(state, renderer, terminal)
+    state = render_frame(state, renderer, terminal)
 
     loop(state, fsm, renderer, terminal)
 
@@ -451,24 +450,20 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp advance(new_state, fsm, renderer, terminal) do
-    render_frame(new_state, renderer, terminal)
+    new_state = render_frame(new_state, renderer, terminal)
     loop(new_state, fsm, renderer, terminal)
   end
 
   defp render_frame(state, renderer, terminal) do
-    input_lines = Components.Input.render(state.input, state.width)
+    input = Components.Input.update_scroll(state.input, state.width)
+    state = %{state | input: input}
+    input_lines = Components.Input.render(input, state.width)
     lines = render(state, input_lines)
-    {:ok, bytes} = Renderer.render(renderer, lines)
     cursor_seq = cursor_position(state, input_lines, lines)
+    {:ok, bytes} = Renderer.render(renderer, lines, cursor_seq)
 
-    payload =
-      case {bytes, cursor_seq} do
-        {"", ""} -> ""
-        {b, c} -> b <> c
-      end
-
-    if payload != "", do: Terminal.write(terminal, payload)
-    :ok
+    if bytes != "", do: Terminal.write(terminal, bytes)
+    state
   end
 
   defp cursor_position(
@@ -478,8 +473,9 @@ defmodule OctoPi.TUI.Interactive do
        ) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
     footer_height = length(Footer.render(footer, width))
-    input_start = length(lines) - footer_height - length(input_lines) + 1
-    "\e[#{input_start + crow};#{ccol + 1}H"
+    input_end = length(lines) - footer_height
+    input_start = input_end - length(input_lines)
+    "\e[#{input_start + crow + 1};#{ccol + 1}H"
   end
 
   defp shutdown(terminal, fsm, renderer, footer_data) do
@@ -542,7 +538,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_event(state, {:resize, w, h}),
-    do: %{state | width: w, height: h, input: %{state.input | width: w}}
+    do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
 
   def handle_event(state, _), do: state
 
@@ -752,9 +748,9 @@ defmodule OctoPi.TUI.Interactive do
   # --- rendering helpers (pure) ---
 
   @doc """
-  Render the current state into a list of lines ready for the
-  renderer. Transcript entries are rendered via their component
-  render/2, then the frame is windowed to `height` via the Viewport.
+  Render the current state into a flat list of lines ready for the
+  Renderer. Components are concatenated in layout order — the
+  Renderer handles terminal mechanics (scrolling, cursor, clearing).
   """
   @spec render(t()) :: [binary()]
   def render(%{input: input, width: width} = state) do
@@ -766,32 +762,32 @@ defmodule OctoPi.TUI.Interactive do
         %{
           transcript: transcript,
           footer: footer,
-          theme: theme,
           banner: banner,
           width: width,
           height: height
         },
         input_lines
       ) do
-    footer_lines = Footer.render(footer, width)
-    content_height = max(1, height - length(footer_lines))
-    border = border_line(theme, width)
     banner_lines = render_banner(banner, width)
-
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-    all = banner_lines ++ transcript_lines ++ [border] ++ input_lines
-    Viewport.window(all, content_height) ++ footer_lines
+    footer_lines = Footer.render(footer, width)
+
+    all = banner_lines ++ transcript_lines ++ input_lines ++ footer_lines
+    fit_to_height(all, height)
+  end
+
+  defp fit_to_height(lines, height) do
+    len = length(lines)
+
+    cond do
+      len == height -> lines
+      len > height -> Enum.take(lines, -height)
+      true -> List.duplicate("", height - len) ++ lines
+    end
   end
 
   defp render_banner(nil, _width), do: []
   defp render_banner(banner, width), do: Components.WelcomeBanner.render(banner, width)
-
-  defp border_line(nil, width), do: String.duplicate("─", width)
-
-  defp border_line(theme, width) do
-    [line] = Components.DynamicBorder.render(Components.DynamicBorder.new(theme), width)
-    line
-  end
 
   defp render_entry(%mod{} = component, width), do: mod.render(component, width)
 

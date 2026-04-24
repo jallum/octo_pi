@@ -21,7 +21,7 @@ defmodule OctoPi.TUI.Renderer do
 
   @clear_screen "\e[2J"
   @cursor_home "\e[H"
-  @clear_to_eol "\e[K"
+  @sgr_reset_and_clear "\e[m\e[K"
   @sync_on "\e[?2026h"
   @sync_off "\e[?2026l"
 
@@ -30,9 +30,17 @@ defmodule OctoPi.TUI.Renderer do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
-  @doc "Render a list of lines. Returns the bytes to write."
-  @spec render(GenServer.server(), [binary()]) :: {:ok, binary()}
-  def render(pid, lines) when is_list(lines), do: GenServer.call(pid, {:render, lines})
+  @doc """
+  Render a list of lines. Returns the bytes to write.
+
+  An optional `cursor_seq` (e.g. `"\\e[5;3H"`) is appended inside
+  the sync block so the cursor move is atomic with the frame update.
+  """
+  @spec render(GenServer.server(), [binary()], binary()) :: {:ok, binary()}
+  def render(pid, lines, cursor_seq \\ "")
+
+  def render(pid, lines, cursor_seq) when is_list(lines),
+    do: GenServer.call(pid, {:render, lines, cursor_seq})
 
   @doc "Update the terminal dimensions. Next render is a full redraw."
   @spec resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
@@ -67,8 +75,8 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   @impl true
-  def handle_call({:render, lines}, _from, state) do
-    {bytes, new_state} = compute(lines, state)
+  def handle_call({:render, lines, cursor_seq}, _from, state) do
+    {bytes, new_state} = compute(lines, cursor_seq, state)
     {:reply, {:ok, bytes}, new_state}
   end
 
@@ -83,33 +91,37 @@ defmodule OctoPi.TUI.Renderer do
 
   # --- compute dispatch (multi-head on state shape) ---
 
-  # First render ever → full redraw.
-  defp compute(lines, %{previous: nil} = state), do: full_redraw(lines, state)
+  defp compute(lines, cursor_seq, %{previous: nil} = state),
+    do: full_redraw(lines, cursor_seq, state)
 
-  # Line count changed → full redraw (can't meaningfully diff).
-  defp compute(lines, %{previous: prev} = state) when length(lines) != length(prev),
-    do: full_redraw(lines, state)
+  defp compute(lines, cursor_seq, %{previous: prev} = state)
+       when length(lines) != length(prev),
+       do: full_redraw(lines, cursor_seq, state)
 
-  # Same-shape frames → emit a diff.
-  defp compute(lines, state), do: diff(lines, state)
+  defp compute(lines, cursor_seq, state), do: diff(lines, cursor_seq, state)
 
   # --- full redraw ---
 
-  defp full_redraw(lines, state) do
-    body = [@clear_screen, @cursor_home, render_lines(lines, 0)]
+  defp full_redraw(lines, cursor_seq, state) do
+    body = [@clear_screen, @cursor_home, render_lines(lines, 0), cursor_seq]
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
     {bytes, %{state | previous: lines}}
   end
 
   # --- diff ---
 
-  defp diff(lines, state) do
+  defp diff(lines, cursor_seq, state) do
     case find_diff_range(lines, state.previous) do
       {first, last} when first > last ->
-        {"", %{state | previous: lines}}
+        if cursor_seq == "" do
+          {"", %{state | previous: lines}}
+        else
+          bytes = IO.iodata_to_binary(wrap_sync([cursor_seq], state))
+          {bytes, %{state | previous: lines}}
+        end
 
       {first, last} ->
-        body = [move_to_row(first), render_lines(Enum.slice(lines, first..last), first)]
+        body = [move_to_row(first), render_lines(Enum.slice(lines, first..last), first), cursor_seq]
         bytes = IO.iodata_to_binary(wrap_sync(body, state))
         {bytes, %{state | previous: lines}}
     end
@@ -140,10 +152,10 @@ defmodule OctoPi.TUI.Renderer do
   # cursor positioning tracks line-by-line.
   defp render_lines([], _idx), do: []
 
-  defp render_lines([line], _idx), do: [line, @clear_to_eol]
+  defp render_lines([line], _idx), do: [line, @sgr_reset_and_clear]
 
   defp render_lines([line | rest], idx),
-    do: [line, @clear_to_eol, "\r\n" | render_lines(rest, idx + 1)]
+    do: [line, @sgr_reset_and_clear, "\r\n" | render_lines(rest, idx + 1)]
 
   # CSI cursor position is 1-indexed; column 1 for row start.
   defp move_to_row(idx), do: "\e[#{idx + 1};1H"

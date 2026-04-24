@@ -262,6 +262,50 @@ defmodule OctoPi.TUI.WrapAnsi do
   defp wide_codepoint?(cp) do
     (cp >= 0x1100 and cp <= 0x115F) or
       (cp >= 0x231A and cp <= 0x232A) or
+      (cp >= 0x23E9 and cp <= 0x23F3) or
+      (cp >= 0x23F8 and cp <= 0x23FA) or
+      (cp >= 0x25FD and cp <= 0x25FE) or
+      (cp >= 0x2614 and cp <= 0x2615) or
+      (cp >= 0x2648 and cp <= 0x2653) or
+      (cp >= 0x267F and cp <= 0x267F) or
+      (cp >= 0x2693 and cp <= 0x2693) or
+      (cp >= 0x26A1 and cp <= 0x26A1) or
+      (cp >= 0x26AA and cp <= 0x26AB) or
+      (cp >= 0x26BD and cp <= 0x26BE) or
+      (cp >= 0x26C4 and cp <= 0x26C5) or
+      (cp >= 0x26D4 and cp <= 0x26D4) or
+      (cp >= 0x26EA and cp <= 0x26EA) or
+      (cp >= 0x26F2 and cp <= 0x26F3) or
+      (cp >= 0x26F5 and cp <= 0x26F5) or
+      (cp >= 0x26FA and cp <= 0x26FA) or
+      (cp >= 0x26FD and cp <= 0x26FD) or
+      (cp >= 0x2702 and cp <= 0x2702) or
+      (cp >= 0x2705 and cp <= 0x2705) or
+      (cp >= 0x2708 and cp <= 0x270D) or
+      (cp >= 0x270F and cp <= 0x270F) or
+      (cp >= 0x2712 and cp <= 0x2712) or
+      (cp >= 0x2714 and cp <= 0x2714) or
+      (cp >= 0x2716 and cp <= 0x2716) or
+      (cp >= 0x271D and cp <= 0x271D) or
+      (cp >= 0x2721 and cp <= 0x2721) or
+      (cp >= 0x2728 and cp <= 0x2728) or
+      (cp >= 0x2733 and cp <= 0x2734) or
+      (cp >= 0x2744 and cp <= 0x2744) or
+      (cp >= 0x2747 and cp <= 0x2747) or
+      (cp >= 0x274C and cp <= 0x274C) or
+      (cp >= 0x274E and cp <= 0x274E) or
+      (cp >= 0x2753 and cp <= 0x2755) or
+      (cp >= 0x2757 and cp <= 0x2757) or
+      (cp >= 0x2763 and cp <= 0x2764) or
+      (cp >= 0x2795 and cp <= 0x2797) or
+      (cp >= 0x27A1 and cp <= 0x27A1) or
+      (cp >= 0x27B0 and cp <= 0x27B0) or
+      (cp >= 0x27BF and cp <= 0x27BF) or
+      (cp >= 0x2934 and cp <= 0x2935) or
+      (cp >= 0x2B05 and cp <= 0x2B07) or
+      (cp >= 0x2B1B and cp <= 0x2B1C) or
+      (cp >= 0x2B50 and cp <= 0x2B50) or
+      (cp >= 0x2B55 and cp <= 0x2B55) or
       (cp >= 0x2E80 and cp <= 0x303E) or
       (cp >= 0x3040 and cp <= 0x33FF) or
       (cp >= 0x3400 and cp <= 0x4DBF) or

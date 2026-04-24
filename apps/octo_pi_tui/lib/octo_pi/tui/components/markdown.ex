@@ -38,7 +38,7 @@ defmodule OctoPi.TUI.Components.Markdown do
   defp do_render(%__MODULE__{text: text, theme: theme, padding_x: px, padding_y: py}, width) do
     content_width = max(1, width - px * 2)
     normalized = String.replace(text, "\t", "   ")
-    {:ok, ast, _} = EarmarkParser.as_ast(normalized)
+    {_status, ast, _} = EarmarkParser.as_ast(normalized)
 
     lines = render_nodes(ast, content_width, theme)
 

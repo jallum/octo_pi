@@ -415,7 +415,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "render/1" do
-    test "produces border + transcript + border + input" do
+    test "concatenates transcript + input-with-borders + footer" do
       s = %Interactive{
         transcript: [{:user, "hi"}, {:assistant, "hello!", :done}],
         input: %Input{value: "next", cursor: 4},
@@ -427,8 +427,11 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       assert text =~ "> hi"
       assert text =~ "hello!"
-      assert text =~ "next"
-      assert text =~ "─"
+      # Input owns its borders
+      border = String.duplicate("─", 80)
+      assert border in lines
+      # Input content between borders
+      assert "next" in lines
     end
 
     test "includes footer lines at the bottom" do

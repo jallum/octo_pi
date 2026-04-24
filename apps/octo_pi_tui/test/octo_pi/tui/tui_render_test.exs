@@ -1,0 +1,416 @@
+defmodule OctoPi.TUI.TuiRenderTest do
+  @moduledoc """
+  End-to-end render tests ported from upstream tui-render.test.ts.
+
+  Each test feeds frames through the Renderer and verifies the
+  resulting screen via VirtualTerminal, exactly as upstream does
+  with its VirtualTerminal + xterm headless.
+  """
+
+  use ExUnit.Case, async: true
+
+  alias OctoPi.TUI.Renderer
+  alias OctoPi.TUI.VirtualTerminal, as: VT
+
+  # --- helpers ---
+
+  defp setup_render(opts) do
+    width = Keyword.get(opts, :width, 40)
+    height = Keyword.get(opts, :height, 10)
+    {:ok, r} = Renderer.start_link(width: width, height: height)
+    vt = VT.new(width, height)
+    {r, vt}
+  end
+
+  defp render_frame(r, vt, lines) do
+    {:ok, bytes} = Renderer.render(r, lines)
+    VT.write(vt, bytes)
+  end
+
+  defp visible(vt), do: VT.get_viewport(vt)
+
+  # --- resize handling (upstream tui-render.test.ts L66-143) ---
+
+  describe "resize handling" do
+    test "height change triggers full redraw, content preserved" do
+      {r, vt} = setup_render(width: 40, height: 10)
+      vt = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
+
+      assert Enum.at(visible(vt), 0) == "Line 0"
+      assert Enum.at(visible(vt), 1) == "Line 1"
+      assert Enum.at(visible(vt), 2) == "Line 2"
+
+      # Resize to taller terminal
+      :ok = Renderer.resize(r, 40, 15)
+      vt = VT.resize(vt, 40, 15)
+      vt = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Line 0"
+      assert Enum.at(rows, 1) == "Line 1"
+      assert Enum.at(rows, 2) == "Line 2"
+      assert length(rows) == 15
+    end
+
+    test "width change triggers full redraw" do
+      {r, vt} = setup_render(width: 40, height: 10)
+      vt = render_frame(r, vt, ["short"])
+
+      :ok = Renderer.resize(r, 60, 10)
+      vt = VT.resize(vt, 60, 10)
+      vt = render_frame(r, vt, ["wider content now"])
+
+      assert Enum.at(visible(vt), 0) == "wider content now"
+    end
+  end
+
+  # --- content shrinkage (upstream tui-render.test.ts L146-225) ---
+
+  describe "content shrinkage" do
+    test "clears stale rows when content shrinks from 6 to 2" do
+      {r, vt} = setup_render(height: 10)
+      lines = Enum.map(0..5, &"Line #{&1}")
+      vt = render_frame(r, vt, lines)
+
+      assert Enum.at(visible(vt), 5) == "Line 5"
+
+      vt = render_frame(r, vt, ["Line 0", "Line 1"])
+      rows = visible(vt)
+
+      assert Enum.at(rows, 0) == "Line 0"
+      assert Enum.at(rows, 1) == "Line 1"
+      assert Enum.at(rows, 2) == ""
+      assert Enum.at(rows, 3) == ""
+      assert Enum.at(rows, 4) == ""
+      assert Enum.at(rows, 5) == ""
+    end
+
+    test "handles shrink to single line" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["a", "b", "c", "d"])
+      vt = render_frame(r, vt, ["Only line"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Only line"
+      assert Enum.at(rows, 1) == ""
+      assert Enum.at(rows, 2) == ""
+      assert Enum.at(rows, 3) == ""
+    end
+
+    test "handles shrink to empty" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["a", "b", "c"])
+      vt = render_frame(r, vt, [])
+
+      rows = visible(vt)
+      assert Enum.all?(rows, &(&1 == ""))
+    end
+  end
+
+  # --- differential rendering (upstream tui-render.test.ts L227-508) ---
+
+  describe "differential rendering" do
+    test "cursor tracking after shrink with unchanged remaining lines" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["a", "b", "c", "d", "e"])
+
+      # Shrink to 3 lines (same content)
+      vt = render_frame(r, vt, ["a", "b", "c"])
+
+      # Change middle line — should render correctly despite shrink
+      vt = render_frame(r, vt, ["a", "X", "c"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "a"
+      assert Enum.at(rows, 1) == "X"
+      assert Enum.at(rows, 2) == "c"
+    end
+
+    test "only middle line changes — spinner animation" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["Header", "⠋ Working...", "Footer"])
+      vt = render_frame(r, vt, ["Header", "⠙ Working...", "Footer"])
+      vt = render_frame(r, vt, ["Header", "⠹ Working...", "Footer"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Header"
+      assert Enum.at(rows, 1) == "⠹ Working..."
+      assert Enum.at(rows, 2) == "Footer"
+    end
+
+    test "first line changes but rest stays same" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
+      vt = render_frame(r, vt, ["XXX", "bbb", "ccc", "ddd"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "XXX"
+      assert Enum.at(rows, 1) == "bbb"
+      assert Enum.at(rows, 2) == "ccc"
+      assert Enum.at(rows, 3) == "ddd"
+    end
+
+    test "last line changes but rest stays same" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
+      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "XXX"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "aaa"
+      assert Enum.at(rows, 1) == "bbb"
+      assert Enum.at(rows, 2) == "ccc"
+      assert Enum.at(rows, 3) == "XXX"
+    end
+
+    test "non-adjacent line changes preserve unchanged lines between" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["a", "b", "c", "d", "e"])
+      vt = render_frame(r, vt, ["a", "X", "c", "Y", "e"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "a"
+      assert Enum.at(rows, 1) == "X"
+      assert Enum.at(rows, 2) == "c"
+      assert Enum.at(rows, 3) == "Y"
+      assert Enum.at(rows, 4) == "e"
+    end
+
+    test "transition: content → empty → content" do
+      {r, vt} = setup_render(height: 10)
+      vt = render_frame(r, vt, ["hello", "world"])
+      vt = render_frame(r, vt, [])
+      vt = render_frame(r, vt, ["back", "again"])
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "back"
+      assert Enum.at(rows, 1) == "again"
+      assert Enum.at(rows, 2) == ""
+    end
+
+    test "multi-component: chat + editor, stale lines cleared after transient inflation" do
+      {r, vt} = setup_render(height: 12)
+
+      # Initial: 6 chat lines + 3 editor lines = 9 total
+      chat = Enum.map(0..5, &"Chat #{&1}")
+      editor = ["───", "input text", "───"]
+      vt = render_frame(r, vt, chat ++ editor)
+
+      # Inflate: 15 chat lines + 3 editor = 18 (exceeds terminal height)
+      big_chat = Enum.map(0..14, &"Chat #{&1}")
+      vt = render_frame(r, vt, big_chat ++ editor)
+
+      # Shrink back: 7 chat lines + 3 editor = 10
+      small_chat = Enum.map(5..11, &"Chat #{&1}")
+      vt = render_frame(r, vt, small_chat ++ editor)
+
+      rows = visible(vt)
+      # Chat 5..11 + editor should be visible, stale rows cleared
+      assert Enum.at(rows, 0) == "Chat 5"
+      assert Enum.at(rows, 6) == "Chat 11"
+      assert Enum.at(rows, 7) == "───"
+      assert Enum.at(rows, 8) == "input text"
+      assert Enum.at(rows, 9) == "───"
+      assert Enum.at(rows, 10) == ""
+      assert Enum.at(rows, 11) == ""
+    end
+
+    test "append after shrink stays clean" do
+      {r, vt} = setup_render(height: 10)
+
+      # Start with 5 lines
+      vt = render_frame(r, vt, Enum.map(0..4, &"Line #{&1}"))
+
+      # Shrink to 3
+      vt = render_frame(r, vt, Enum.map(0..2, &"Line #{&1}"))
+
+      # Append one more (4 total now)
+      vt = render_frame(r, vt, Enum.map(0..3, &"Line #{&1}"))
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Line 0"
+      assert Enum.at(rows, 1) == "Line 1"
+      assert Enum.at(rows, 2) == "Line 2"
+      assert Enum.at(rows, 3) == "Line 3"
+      assert Enum.at(rows, 4) == ""
+    end
+  end
+
+  # --- Interactive render integration ---
+
+  describe "Interactive.render end-to-end" do
+    test "input with borders always visible after long transcript" do
+      alias OctoPi.TUI.Interactive
+      alias OctoPi.TUI.Components.{Input, Footer}
+
+      # Simulate: long transcript (50 lines) + input with borders
+      transcript = Enum.map(1..50, &{:assistant, "Line #{&1}", :done})
+
+      state = %Interactive{
+        transcript: transcript,
+        input: %Input{value: "", cursor: 0},
+        footer: %Footer{cwd: "/test", model_id: "test", context_window: 200_000},
+        width: 80,
+        height: 24
+      }
+
+      lines = Interactive.render(state)
+
+      # The last lines should be footer, preceded by input with borders
+      # Input renders: [border, content, border] = 3 lines
+      # Footer renders: 3 lines
+      # Total last 6 lines = input(3) + footer(3)
+      footer_lines = Footer.render(state.footer, 80)
+      input_lines = Input.render(state.input, 80)
+
+      # Verify input border is present in the output
+      border = String.duplicate("─", 80)
+      assert border in lines
+
+      # Verify footer is at the bottom
+      assert Enum.slice(lines, -length(footer_lines)..-1) == footer_lines
+
+      # Verify input lines are just above footer
+      input_end = length(lines) - length(footer_lines)
+      input_start = input_end - length(input_lines)
+      assert Enum.slice(lines, input_start..(input_end - 1)) == input_lines
+    end
+  end
+
+  # --- streaming simulation (content growth + fit_to_height) ---
+
+  describe "streaming simulation" do
+    test "growing content stays clean through renderer diff path" do
+      {r, vt} = setup_render(width: 40, height: 10)
+
+      # Start with 5 lines (padded to 10 by fit_to_height)
+      lines0 = pad_to_height(["Header", "Line 1", "───", "", "───"], 10)
+      vt = render_frame(r, vt, lines0)
+      rows = visible(vt)
+      assert Enum.at(rows, 5) == "Header"
+      assert Enum.at(rows, 9) == "───"
+
+      # Grow to 8 lines — padding shrinks
+      lines1 = pad_to_height(["Header", "Line 1", "Line 2", "Line 3", "Line 4", "───", "", "───"], 10)
+      vt = render_frame(r, vt, lines1)
+      rows = visible(vt)
+      assert Enum.at(rows, 2) == "Header"
+      assert Enum.at(rows, 9) == "───"
+
+      # Grow past height — clipping kicks in, top lines drop off
+      lines2 = clip_to_height(Enum.map(1..8, &"Line #{&1}") ++ ["───", "", "───"], 10)
+      vt = render_frame(r, vt, lines2)
+      rows = visible(vt)
+      # First visible line should be Line 2 (Line 1 clipped)
+      assert Enum.at(rows, 0) == "Line 2"
+      assert Enum.at(rows, 9) == "───"
+
+      # Continue growing — more lines clip from top
+      lines3 = clip_to_height(Enum.map(1..12, &"Line #{&1}") ++ ["───", "", "───"], 10)
+      vt = render_frame(r, vt, lines3)
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Line 6"
+      assert Enum.at(rows, 9) == "───"
+      # No stale content in any row
+      assert Enum.at(rows, 6) == "Line 12"
+      assert Enum.at(rows, 7) == "───"
+      assert Enum.at(rows, 8) == ""
+    end
+
+    test "tool execution box appears cleanly mid-stream" do
+      {r, vt} = setup_render(width: 40, height: 12)
+
+      # Frame 1: some transcript + input + footer
+      frame1 = pad_to_height(["Hello world", "───", "", "───", "footer1", "footer2"], 12)
+      vt = render_frame(r, vt, frame1)
+
+      # Frame 2: assistant response starts streaming (7 lines → 5 padding)
+      frame2 = pad_to_height([
+        "> what's new?",
+        "Let me check...",
+        "───", "", "───",
+        "footer1", "footer2"
+      ], 12)
+      vt = render_frame(r, vt, frame2)
+      rows = visible(vt)
+      assert Enum.at(rows, 5) == "> what's new?"
+      assert Enum.at(rows, 6) == "Let me check..."
+
+      # Frame 3: tool box appears (simulating ToolExecution render)
+      frame3 = pad_to_height([
+        "> what's new?",
+        "Let me check...",
+        "",
+        "┌ bash ─────────────────────────────┐",
+        "│ ls -la                            │",
+        "└──────────────────────────────────┘",
+        "───", "", "───",
+        "footer1", "footer2"
+      ], 12)
+      vt = render_frame(r, vt, frame3)
+      rows = visible(vt)
+      # 11 content lines + 1 padding row → tool box starts at row 4
+      assert Enum.at(rows, 4) =~ "bash"
+      assert Enum.at(rows, 6) =~ "└"
+      assert Enum.at(rows, 11) == "footer2"
+
+      # Frame 4: tool completes, more streaming text
+      frame4 = clip_to_height([
+        "> what's new?",
+        "Let me check...",
+        "",
+        "┌ v bash ───────────────────────────┐",
+        "│ ls -la                            │",
+        "└──────────────────────────────────┘",
+        "Here are the results:",
+        "- file1.ex",
+        "- file2.ex",
+        "───", "", "───",
+        "footer1", "footer2"
+      ], 12)
+      vt = render_frame(r, vt, frame4)
+      rows = visible(vt)
+      # 14 lines clipped to 12 → first 2 lines dropped
+      # Row 0 = "" (tool separator), Row 1 = tool box top
+      assert Enum.at(rows, 0) == ""
+      assert Enum.at(rows, 1) =~ "bash"
+      assert Enum.at(rows, 4) == "Here are the results:"
+      assert Enum.at(rows, 11) == "footer2"
+    end
+
+    test "rapid frame updates don't leave stale content" do
+      {r, vt} = setup_render(width: 40, height: 8)
+
+      # Simulate word-by-word streaming — short words so they fit width
+      words = ~w(Hi how are you ok bye go up at)
+
+      {vt, _} =
+        Enum.reduce(words, {vt, ""}, fn word, {vt_acc, text_acc} ->
+          new_text = if text_acc == "", do: word, else: text_acc <> " " <> word
+          lines = pad_to_height([new_text, "───", "", "───"], 8)
+          vt_acc = render_frame(r, vt_acc, lines)
+          {vt_acc, new_text}
+        end)
+
+      rows = visible(vt)
+      full_text = Enum.join(words, " ")
+      # 4 content lines padded to 8 → 4 padding rows at top
+      assert Enum.at(rows, 4) == full_text
+      assert Enum.at(rows, 5) == "───"
+      assert Enum.at(rows, 6) == ""
+      assert Enum.at(rows, 7) == "───"
+      assert Enum.at(rows, 0) == ""
+      assert Enum.at(rows, 3) == ""
+    end
+  end
+
+  # --- helpers for streaming tests ---
+
+  defp pad_to_height(lines, height) do
+    len = length(lines)
+    if len >= height, do: Enum.take(lines, -height), else: List.duplicate("", height - len) ++ lines
+  end
+
+  defp clip_to_height(lines, height) do
+    Enum.take(lines, -height)
+  end
+end

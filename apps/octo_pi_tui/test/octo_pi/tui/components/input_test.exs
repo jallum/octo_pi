@@ -25,31 +25,50 @@ defmodule OctoPi.TUI.Components.InputTest do
   defp shift_enter, do: %Key{key: :enter, modifiers: [:shift]}
   defp move_right(input, n), do: Enum.reduce(1..n, input, fn _, s -> press(s, key(:right)) end)
 
+  defp border(width), do: String.duplicate("─", width)
+  defp content_lines(lines), do: Enum.slice(lines, 1..-2//1)
+
   # --- tests ---
 
-  describe "render/2" do
-    test "renders the plain value with prompt prefix" do
-      assert ["> hello"] = Input.render(%Input{value: "hello"}, 80)
+  describe "render/2 — border structure (ported from upstream editor.test.ts)" do
+    test "empty input has exactly 3 lines (top border, content, bottom border)" do
+      lines = Input.render(%Input{value: ""}, 80)
+      assert length(lines) == 3
+      assert hd(lines) == border(80)
+      assert List.last(lines) == border(80)
     end
 
-    test "renders empty value with prompt prefix only" do
-      assert ["> "] = Input.render(%Input{value: ""}, 80)
+    test "single-line input has exactly 3 lines (top border, content, bottom border)" do
+      lines = Input.render(%Input{value: "hello"}, 80)
+      assert length(lines) == 3
+      assert hd(lines) == border(80)
+      assert List.last(lines) == border(80)
+      assert content_lines(lines) == ["hello"]
     end
 
-    test "wraps value at display width minus prefix, indents continuation" do
-      # width=4, content width=2: "he" "ll" "o"
-      assert ["> he", "  ll", "  o"] = Input.render(%Input{value: "hello"}, 4)
+    test "content lines sit between borders" do
+      lines = Input.render(%Input{value: "hello"}, 80)
+      assert content_lines(lines) == ["hello"]
+    end
+
+    test "wraps at full width (no prefix)" do
+      # width=4, layoutWidth=3 (1 col reserved for cursor)
+      lines = Input.render(%Input{value: "hello"}, 4)
+      assert hd(lines) == border(4)
+      assert List.last(lines) == border(4)
+      assert content_lines(lines) == ["hel", "lo"]
     end
 
     test "wraps CJK characters respecting display width" do
-      # width=7, content width=5: "abc日" (4+2=6>5 → "abc" then "日") hmm
-      # Actually content_width=5: a(1)+b(1)+c(1)+日(2)=5, fits. 本(2)=2, new line
-      assert ["> abc日", "  本"] = Input.render(%Input{value: "abc日本"}, 7)
+      # width=5, lw=4: abc(3)+日(2)=5>4 → wraps
+      lines = Input.render(%Input{value: "abc日本"}, 5)
+      assert content_lines(lines) == ["abc", "日本"]
     end
 
     test "CJK char that does not fit wraps to next line" do
-      # width=7, content width=5: "abcd"(4) + 日(2) = 6 > 5, wraps
-      assert ["> abcd", "  日"] = Input.render(%Input{value: "abcd日"}, 7)
+      # width=6, lw=5: abcd(4)+日(2)=6>5 → wraps
+      lines = Input.render(%Input{value: "abcd日"}, 6)
+      assert content_lines(lines) == ["abcd", "日"]
     end
   end
 
@@ -67,36 +86,35 @@ defmodule OctoPi.TUI.Components.InputTest do
   end
 
   describe "cursor_rc/2" do
-    test "cursor at start is after prefix" do
-      assert {0, 2} = Input.cursor_rc(%Input{value: "hello", cursor: 0}, 80)
+    test "cursor at start is row 1 col 0 (after top border)" do
+      assert {1, 0} = Input.cursor_rc(%Input{value: "hello", cursor: 0}, 80)
     end
 
-    test "cursor tracks display columns with prefix offset" do
-      assert {0, 5} = Input.cursor_rc(%Input{value: "hello", cursor: 3}, 80)
+    test "cursor tracks display columns" do
+      assert {1, 3} = Input.cursor_rc(%Input{value: "hello", cursor: 3}, 80)
     end
 
-    test "cursor wraps to next line at content width boundary" do
-      # width=7, content width=5: "hello" fills 5 cols → wraps
-      assert {1, 2} = Input.cursor_rc(%Input{value: "hello", cursor: 5}, 7)
+    test "cursor wraps to next row at width boundary" do
+      # width=5, lw=4: "hello" → "hell"|"o", cursor 5 at row 1 col 1
+      assert {2, 1} = Input.cursor_rc(%Input{value: "hello", cursor: 5}, 5)
     end
 
     test "cursor on second wrapped line" do
-      # width=7, content width=5: "hello" wraps, "world" on line 2
-      # cursor at grapheme 6 → row 1, col 1 + 2 prefix = 3
-      assert {1, 3} = Input.cursor_rc(%Input{value: "helloworld", cursor: 6}, 7)
+      # width=5, lw=4: "hell"|"owor"|"ld", cursor 6 → row 1, col 2
+      assert {2, 2} = Input.cursor_rc(%Input{value: "helloworld", cursor: 6}, 5)
     end
 
-    test "CJK chars are two display columns plus prefix" do
-      assert {0, 6} = Input.cursor_rc(%Input{value: "日本", cursor: 2}, 80)
+    test "CJK chars are two display columns" do
+      assert {1, 4} = Input.cursor_rc(%Input{value: "日本", cursor: 2}, 80)
     end
 
     test "CJK wrap: cursor after wrapped CJK" do
-      # "abcd日" width=7, content width=5: 'abcd' fills 4, '日' (2) wraps
-      assert {1, 4} = Input.cursor_rc(%Input{value: "abcd日", cursor: 5}, 7)
+      # "abcd日" width=5: 'abcd' fills 4, '日' (2) wraps to next row
+      assert {2, 2} = Input.cursor_rc(%Input{value: "abcd日", cursor: 5}, 5)
     end
 
-    test "empty value cursor after prefix" do
-      assert {0, 2} = Input.cursor_rc(%Input{value: "", cursor: 0}, 80)
+    test "empty value cursor at row 1 col 0" do
+      assert {1, 0} = Input.cursor_rc(%Input{value: "", cursor: 0}, 80)
     end
   end
 
@@ -636,77 +654,79 @@ defmodule OctoPi.TUI.Components.InputTest do
   describe "multiline render/2" do
     test "splits on newlines and renders each logical line" do
       lines = Input.render(%Input{value: "hello\nworld"}, 80)
-      assert lines == ["> hello", "  world"]
+      assert content_lines(lines) == ["hello", "world"]
     end
 
     test "wraps each logical line separately" do
-      # width=5, content width=3
-      lines = Input.render(%Input{value: "abcde\nfg"}, 5)
-      assert lines == ["> abc", "  de", "  fg"]
+      # width=3, lw=2: "abcde" → "ab"|"cd"|"e", "fg" → "fg"
+      lines = Input.render(%Input{value: "abcde\nfg"}, 3)
+      assert content_lines(lines) == ["ab", "cd", "e", "fg"]
     end
 
     test "empty lines preserved" do
       lines = Input.render(%Input{value: "a\n\nb"}, 80)
-      assert lines == ["> a", "  ", "  b"]
+      assert content_lines(lines) == ["a", "", "b"]
     end
   end
 
   describe "multiline cursor_rc/2" do
     test "cursor on second logical line" do
-      assert {1, 4} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 8}, 80)
+      # "hello\nworld", cursor at 'r' (grapheme 8) → row 2 (after border), col 2
+      assert {2, 2} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 8}, 80)
     end
 
     test "cursor at start of second line" do
-      assert {1, 2} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 6}, 80)
+      assert {2, 0} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 6}, 80)
     end
 
     test "cursor on newline character itself" do
-      assert {0, 7} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 5}, 80)
+      # cursor at grapheme 5 (the \n) → row 1, col 5
+      assert {1, 5} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 5}, 80)
     end
 
     test "cursor after wrapping + newline" do
-      # "abcde\nfg" at width 5, content width 3: "abc" "de" "fg"
-      # cursor at 'f' = grapheme 6, should be row 2 col 2 (prefix offset)
-      assert {2, 2} = Input.cursor_rc(%Input{value: "abcde\nfg", cursor: 6}, 5)
+      # "abcde\nfg" at width 3, lw=2: "ab" "cd" "e" "fg"
+      # cursor at 'f' = grapheme 6 → row 3 (0-indexed) + 1 border = row 4
+      assert {4, 0} = Input.cursor_rc(%Input{value: "abcde\nfg", cursor: 6}, 3)
     end
   end
 
   describe "vertical navigation — Up/Down" do
     test "down arrow moves to next visual line" do
-      input = %Input{value: "hello\nworld", cursor: 2}
+      input = %Input{value: "hello\nworld", cursor: 2, width: 80}
       input = press(input, key(:down))
       assert input.cursor == 8
     end
 
     test "up arrow moves to previous visual line" do
-      input = %Input{value: "hello\nworld", cursor: 8}
+      input = %Input{value: "hello\nworld", cursor: 8, width: 80}
       input = press(input, key(:up))
       assert input.cursor == 2
     end
 
     test "down clamps to shorter line" do
-      input = %Input{value: "hello\nab", cursor: 4}
+      input = %Input{value: "hello\nab", cursor: 4, width: 80}
       input = press(input, key(:down))
       assert input.cursor == 8
     end
 
     test "up at first visual line is no-op" do
-      input = %Input{value: "hello\nworld", cursor: 2}
+      input = %Input{value: "hello\nworld", cursor: 2, width: 80}
       input = press(input, key(:up))
       assert input.cursor == 2
     end
 
     test "down at last visual line is no-op" do
-      input = %Input{value: "hello\nworld", cursor: 8}
+      input = %Input{value: "hello\nworld", cursor: 8, width: 80}
       input = press(input, key(:down))
       assert input.cursor == 8
     end
 
     test "down navigates through wrapped lines" do
-      # "abcde" at width 5 (content width 3): "abc" "de"
-      input = %Input{value: "abcde", cursor: 1, width: 5}
+      # "abcde" at width 3, lw=2: "ab" "cd" "e". Cursor 1 (col 1) → row 1 col 1 = 'd' (pos 3)
+      input = %Input{value: "abcde", cursor: 1, width: 3}
       input = press(input, key(:down))
-      assert input.cursor == 4
+      assert input.cursor == 3
     end
   end
 
@@ -878,6 +898,247 @@ defmodule OctoPi.TUI.Components.InputTest do
       input = input |> press(key(:up)) |> Input.insert("x")
       assert input.history_index == nil
       assert input.value == "oldx"
+    end
+  end
+
+  # ── Scroll indicators (ported from upstream editor.ts) ─────────
+
+  describe "scroll indicators" do
+    test "no indicators when content fits within max visible lines" do
+      input = %Input{value: "hello\nworld", height: 24}
+      lines = Input.render(input, 40)
+      assert hd(lines) == border(40)
+      assert List.last(lines) == border(40)
+      assert length(content_lines(lines)) == 2
+    end
+
+    test "shows down indicator when content exceeds viewport" do
+      # height=20 → max_visible = max(5, div(20*3,10)) = 6
+      text = Enum.map_join(1..10, "\n", &"line#{&1}")
+      input = %Input{value: text, cursor: 0, height: 20}
+      lines = Input.render(input, 40)
+
+      # Cursor at top → no up indicator
+      assert hd(lines) == border(40)
+      # More content below → down indicator
+      bottom = List.last(lines)
+      assert bottom =~ "↓"
+      assert bottom =~ "more"
+    end
+
+    test "shows up indicator when scrolled down" do
+      text = Enum.map_join(1..10, "\n", &"line#{&1}")
+      # Cursor at end → scrolled down
+      input = %Input{value: text, cursor: String.length(text), height: 20}
+      input = Input.update_scroll(input, 40)
+      lines = Input.render(input, 40)
+
+      top = hd(lines)
+      assert top =~ "↑"
+      assert top =~ "more"
+    end
+
+    test "shows both indicators when scrolled to middle" do
+      text = Enum.map_join(1..20, "\n", &"line#{&1}")
+      # Place cursor in the middle
+      mid = String.length(Enum.map_join(1..10, "\n", &"line#{&1}"))
+      input = %Input{value: text, cursor: mid, height: 20}
+      input = Input.update_scroll(input, 40)
+      lines = Input.render(input, 40)
+
+      assert hd(lines) =~ "↑"
+      assert List.last(lines) =~ "↓"
+    end
+
+    test "indicator shows correct line count" do
+      # 10 content lines, max_visible=6 (height=20), cursor at top
+      text = Enum.map_join(1..10, "\n", &"line#{&1}")
+      input = %Input{value: text, cursor: 0, height: 20}
+      lines = Input.render(input, 40)
+
+      bottom = List.last(lines)
+      assert bottom =~ "4 more"
+    end
+
+    test "scroll follows cursor downward" do
+      text = Enum.map_join(1..10, "\n", &"line#{&1}")
+      input = %Input{value: text, cursor: String.length(text), height: 20}
+      input = Input.update_scroll(input, 40)
+      lines = Input.render(input, 40)
+
+      # Should show last 6 lines with cursor visible
+      content = content_lines(lines)
+      assert Enum.any?(content, &(&1 =~ "line10"))
+    end
+
+    test "cursor_rc accounts for scroll offset" do
+      text = Enum.map_join(1..10, "\n", &"line#{&1}")
+      input = %Input{value: text, cursor: String.length(text), height: 20}
+      input = Input.update_scroll(input, 40)
+      {row, _col} = Input.cursor_rc(input, 40)
+      # max_visible=6, cursor should be within rendered range (+1 for border)
+      assert row >= 1
+      assert row <= 7
+    end
+
+    test "no indicators for short content regardless of height" do
+      input = %Input{value: "short", height: 10}
+      lines = Input.render(input, 40)
+      assert length(lines) == 3
+      assert hd(lines) == border(40)
+      assert List.last(lines) == border(40)
+    end
+  end
+
+  # ── Grapheme-aware wrapping render (ported from upstream editor.test.ts) ──
+
+  describe "grapheme-aware wrapping render" do
+    test "wraps emoji content to correct number of lines" do
+      # ✅ is 2 columns wide. 6 emojis = 12 columns at width 10 → 2 content lines
+      input = %Input{value: "✅✅✅✅✅✅"}
+      lines = Input.render(input, 10)
+      assert length(content_lines(lines)) == 2
+    end
+
+    test "CJK characters split at correct boundary" do
+      # 日本語テスト = 6 CJK = 12 cols. width=10, lw=9:
+      # 日(2)+本(4)+語(6)+テ(8)+ス(10>9 wraps) → ["日本語テ", "スト"]
+      input = %Input{value: "日本語テスト"}
+      lines = Input.render(input, 10)
+      content = content_lines(lines)
+      assert length(content) == 2
+      assert hd(content) == "日本語テ"
+      assert List.last(content) == "スト"
+    end
+
+    test "mixed ASCII and wide characters fit in single line" do
+      # "Test ✅ OK 日本" = 15 display columns, width=16 (lw=15) to fit
+      input = %Input{value: "Test ✅ OK 日本"}
+      lines = Input.render(input, 16)
+      assert length(content_lines(lines)) == 1
+    end
+
+    test "emoji at wrap boundary does not exceed width" do
+      # "0123456789✅" = 10 ASCII + 2 emoji = 12 cols, width 11
+      # Emoji wraps because 10+2 > 11
+      input = %Input{value: "0123456789✅"}
+      lines = Input.render(input, 11)
+      content = content_lines(lines)
+      assert length(content) == 2
+      assert hd(content) == "0123456789"
+      assert List.last(content) == "✅"
+    end
+
+    test "single word that fits exactly at width" do
+      # width=10, lw=9: "1234567890" (10 chars) wraps last char
+      input = %Input{value: "1234567890"}
+      lines = Input.render(input, 10)
+      assert length(lines) == 4
+      assert Enum.at(content_lines(lines), 0) == "123456789"
+      assert Enum.at(content_lines(lines), 1) == "0"
+    end
+
+    test "empty input renders border + empty + border" do
+      lines = Input.render(%Input{value: ""}, 40)
+      assert length(lines) == 3
+      assert hd(lines) == border(40)
+      assert Enum.at(lines, 1) == ""
+      assert List.last(lines) == border(40)
+    end
+  end
+
+  # ── paddingX (ported from upstream editor.test.ts line 696-714) ──
+
+  describe "paddingX" do
+    test "layout_width reserves cursor column when paddingX=0" do
+      # "aaaaaaaaa" = 9 chars at width=10 (lw=9) fits on 1 line
+      input = %Input{value: "aaaaaaaaa", padding_x: 0}
+      lines = Input.render(input, 10)
+      assert length(content_lines(lines)) == 1
+
+      # 10th char wraps
+      input = %Input{value: "aaaaaaaaaa", padding_x: 0}
+      lines = Input.render(input, 10)
+      assert length(content_lines(lines)) == 2
+    end
+
+    test "layout_width uses full contentWidth when paddingX>0" do
+      # paddingX=1, width=12: contentWidth = 12 - 2 = 10, layoutWidth = 10
+      # 10 chars should fit on 1 line
+      input = %Input{value: "aaaaaaaaaa", padding_x: 1}
+      lines = Input.render(input, 12)
+      assert length(content_lines(lines)) == 1
+
+      # 11th char wraps
+      input = %Input{value: "aaaaaaaaaaa", padding_x: 1}
+      lines = Input.render(input, 12)
+      assert length(content_lines(lines)) == 2
+    end
+
+    test "wrap boundary matches for paddingX=0 and paddingX=1" do
+      # Upstream test: for both paddingX values, 9 chars fit on 1 line,
+      # 10 chars wrap to 2 lines (layoutWidth=9 in both cases)
+      for px <- [0, 1] do
+        effective_width = 10 + px
+        input = %Input{value: String.duplicate("a", 9), padding_x: px}
+        lines = Input.render(input, effective_width)
+        assert length(content_lines(lines)) == 1, "px=#{px}: 9 chars should fit"
+
+        input = %Input{value: String.duplicate("a", 10), padding_x: px}
+        lines = Input.render(input, effective_width)
+        assert length(content_lines(lines)) == 2, "px=#{px}: 10 chars should wrap"
+      end
+    end
+
+    test "content lines are padded with spaces when paddingX>0" do
+      input = %Input{value: "hello", padding_x: 2}
+      lines = Input.render(input, 20)
+      content = content_lines(lines)
+      line = hd(content)
+      assert String.starts_with?(line, "  ")
+      assert String.ends_with?(line, "  ")
+    end
+
+    test "no padding applied when paddingX=0" do
+      input = %Input{value: "hello", padding_x: 0}
+      lines = Input.render(input, 20)
+      content = content_lines(lines)
+      line = hd(content)
+      assert String.starts_with?(line, "h")
+    end
+
+    test "cursor_rc includes padding offset" do
+      # paddingX=2, width=20: cursor at col 0 → display col 2
+      input = %Input{value: "hello", cursor: 0, padding_x: 2}
+      {row, col} = Input.cursor_rc(input, 20)
+      assert row == 1
+      assert col == 2
+
+      # cursor at 3 → display col 5
+      input = %Input{value: "hello", cursor: 3, padding_x: 2}
+      {_row, col} = Input.cursor_rc(input, 20)
+      assert col == 5
+    end
+
+    test "paddingX clamped to half width" do
+      # width=5, maxPadding=2: paddingX=10 → clamped to 2
+      input = %Input{value: "ab", padding_x: 10}
+      lines = Input.render(input, 5)
+      content = content_lines(lines)
+      line = hd(content)
+      assert String.starts_with?(line, "  ")
+    end
+
+    test "single word fits exactly at width with paddingX=1" do
+      # width=11 (10 + 1 for padding on each side), px=1
+      # contentWidth = 11 - 2 = 9, layoutWidth = 9 (no cursor col subtracted)
+      # But we said +1 padding each side = need width=12 for 10 content cols
+      # Let's use width=12, px=1: contentWidth=10, layoutWidth=10
+      input = %Input{value: "1234567890", padding_x: 1}
+      lines = Input.render(input, 12)
+      assert length(content_lines(lines)) == 1
+      line = hd(content_lines(lines))
+      assert line =~ "1234567890"
     end
   end
 end
