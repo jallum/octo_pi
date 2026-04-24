@@ -12,15 +12,25 @@ defmodule OctoPi.AI.StreamOptions do
   - `thinking_budgets` — token-based override for `:reasoning` on
     budget-thinking models (e.g. pre-Opus 4.6 Claude).
 
+  - `on_payload` — `(body :: map(), model :: Model.t()) -> map() | nil`;
+    called with the built request body before the HTTP call. Return a
+    modified body to override, or `nil` to keep the original.
+  - `on_response` — `(info :: map(), model :: Model.t()) -> :ok`;
+    called with `%{status: integer(), headers: map()}` after the
+    response starts.
+
   Deferred to later phases: `transport`, `cache_retention`,
-  `max_retry_delay_ms`, `on_payload`, `on_response`, `signal`
-  (abort-via-pid — cancellation is currently implemented by killing
-  the producer Task), `session_id` (tied to prompt caching).
+  `max_retry_delay_ms`, `signal` (abort-via-pid — cancellation is
+  currently implemented by killing the producer Task),
+  `session_id` (tied to prompt caching).
   """
 
   @type thinking_level :: :minimal | :low | :medium | :high | :xhigh
 
   @type thinking_budgets :: %{optional(thinking_level()) => pos_integer()}
+
+  @type on_payload :: (map(), OctoPi.AI.Model.t() -> map() | nil) | nil
+  @type on_response :: (map(), OctoPi.AI.Model.t() -> :ok) | nil
 
   @type t :: %__MODULE__{
           temperature: float() | nil,
@@ -29,7 +39,9 @@ defmodule OctoPi.AI.StreamOptions do
           metadata: map() | nil,
           headers: %{optional(String.t()) => String.t()} | nil,
           reasoning: thinking_level() | nil,
-          thinking_budgets: thinking_budgets() | nil
+          thinking_budgets: thinking_budgets() | nil,
+          on_payload: on_payload(),
+          on_response: on_response()
         }
 
   defstruct [
@@ -39,6 +51,8 @@ defmodule OctoPi.AI.StreamOptions do
     :metadata,
     :headers,
     :reasoning,
-    :thinking_budgets
+    :thinking_budgets,
+    :on_payload,
+    :on_response
   ]
 end
