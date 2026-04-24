@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T03:13:01Z",
+  "description": "Define the core extension data structures and behaviour.\n\n**Extension struct:**\n```elixir\n%Extension{\n  id: String.t(),\n  path: String.t(),\n  handlers: %{event_type() =\u003e [handler_fn()]},\n  tools: %{String.t() =\u003e Tool.t()},\n  commands: %{String.t() =\u003e command()},\n}\n```\n\n**Event types (26 total, from upstream types.ts lines 938-959):**\n\nFire-and-forget (no return needed):\n- session_start, session_shutdown, agent_start, agent_end\n- turn_start, turn_end, message_start, message_update, message_end\n- tool_execution_start, tool_execution_update, tool_execution_end\n- model_select, session_compact, after_provider_response, session_tree\n\nCancel-on-result (first truthy cancels):\n- session_before_switch, session_before_fork\n- session_before_compact, session_before_tree\n\nReduce-chain (handlers transform value sequentially):\n- context (transforms messages list)\n- before_provider_request (transforms payload)\n- input (transforms text + images, or returns :handled to stop)\n\nMutate-in-place (handlers modify event.input):\n- tool_call (can block execution or mutate args)\n\nPatch-merge (handlers return partial patches):\n- tool_result (patches content, details, is_error)\n\nFirst-result-wins / collect-all:\n- user_bash (first non-nil result used)\n- before_agent_start (accumulate messages, chain system_prompt)\n- resources_discover (collect all paths)\n\n**Handler signature:** `(event, context) -\u003e result | nil`\n\n**Extension behaviour:**\n```elixir\n@callback init(api :: ExtensionAPI.t()) :: :ok | {:ok, state}\n```\n\nExtensions register handlers via the API during init.\n\n**Upstream ref:** types.ts (1543 lines), runner.ts lines 673-1018",
+  "id": "octo-3gv.1",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 1,
+  "status": "open",
+  "title": "Extension behaviour + event types + handler storage",
+  "type": "task",
+  "updated_at": "2026-04-24T03:13:01Z"
+}
