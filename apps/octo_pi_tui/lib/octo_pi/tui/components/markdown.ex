@@ -3,7 +3,7 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.{SyntaxHighlight, Theme}
 
   @type t :: %__MODULE__{
           text: String.t(),
@@ -89,13 +89,17 @@ defmodule OctoPi.TUI.Components.Markdown do
   defp render_node({"pre", _, [{"code", attrs, [code], _}], _}, _width, theme, next) do
     lang = extract_lang(attrs)
     label = "```#{lang}"
-    code_lines = String.split(code, "\n")
+
+    code_lines =
+      if SyntaxHighlight.supported?(lang) do
+        SyntaxHighlight.highlight(code, lang, theme)
+      else
+        code |> String.split("\n") |> Enum.map(&Theme.fg(theme, :md_code_block, &1))
+      end
 
     lines = [
       Theme.fg(theme, :md_code_block_border, label)
-      | Enum.map(code_lines, fn line ->
-          "  " <> Theme.fg(theme, :md_code_block, line)
-        end)
+      | Enum.map(code_lines, &("  " <> &1))
     ]
 
     lines = lines ++ [Theme.fg(theme, :md_code_block_border, "```")]
