@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T12:06:19Z",
   "created": "2026-04-24T10:37:59Z",
   "description": "Port login-dialog.ts (~179 LOC). Simple overlay for entering API key.\n\nImplement:\n- Text input with masked display (show last 4 chars)\n- Validation (format check)\n- Save to config\n- Triggered when no valid key found on startup\n\nUpstream: interactive/components/login-dialog.ts\nDepends on: overlay, input component, theme",
   "id": "opi-m4h.18",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "LoginDialog: API key input",
   "type": "task",
-  "updated_at": "2026-04-24T12:04:39Z"
+  "updated_at": "2026-04-24T12:06:19Z"
 }
