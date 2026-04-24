@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-q5k.1"
+  ],
   "created": "2026-04-24T21:55:55Z",
   "description": "# Master compliance for opi-q5k.10\n\nSource check: opi-q5k.10 (markdown.test.ts audit)\n\nUpstream `tmp/pi-mono/packages/tui/test/markdown.test.ts` has 52 tests across 13 describes. Our Markdown covers ~30% (basic headings, inline formatting, flat lists, basic blockquote, hr, basic links, strikethrough). Substantial implementation gaps remain for: tables (no implementation), nested lists, heading+inline-code preservation, pre-styled context, spacing invariants, multiline blockquotes, HTML pass-through, and OSC 8 hyperlinks.\n\n## Children\n\nOne ticket per upstream describe area. Each is independent and blocks this master (which blocks opi-q5k.1).\n\n## Deps\n- Blocks opi-q5k.1 (acceptance gate).\n- OSC 8 hyperlink child soft-depends on opi-q5k.34 (capability detection).",
   "id": "opi-q5k.42",
