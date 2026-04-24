@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.11"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:38:27Z",
   "description": "Wire UIContext.add_autocomplete_provider to the autocomplete system.\n\nImplement:\n- Extensions call add_autocomplete_provider(factory) via UIContext\n- Factory wraps the base provider, adding/filtering/reordering suggestions\n- Multiple extensions can stack wrappers (composition chain)\n- Re-setup autocomplete provider when extensions load/reload\n\nUpstream: interactive-mode.ts addAutocompleteProvider, setupAutocompleteProvider\nDepends on: autocomplete provider API, UIContext wiring",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Autocomplete provider stacking from extensions",
   "type": "task",
-  "updated_at": "2026-04-24T10:38:27Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
