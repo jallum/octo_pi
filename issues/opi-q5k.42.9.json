@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.9",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done. Adapted to EarmarkParser's paragraph-merging: the 'lazy continuation' and 'explicit multiline' cases both surface as a single paragraph in our AST; we assert paragraph-separated blockquote form. Wrapping-with-per-line-border and default-color-exclusion tests deliberately skipped — they exercise upstream-specific behaviors (the ability to pass a custom color style that blockquotes opt out of) that are N/A in our theme model.",
+      "timestamp": "2026-04-24T22:42:36Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Blockquotes with multiline content (6 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:41:39Z"
+  "updated_at": "2026-04-24T22:42:36Z"
 }
