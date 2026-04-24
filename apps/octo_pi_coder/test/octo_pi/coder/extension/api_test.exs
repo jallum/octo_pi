@@ -77,24 +77,31 @@ defmodule OctoPi.Coder.Extension.APITest do
   end
 
   describe "action stubs" do
-    test "send_message raises before bind_core" do
+    test "one-arity stubs raise before bind_core" do
       api = API.new("x")
-      assert_raise RuntimeError, ~r/not bound/, fn -> api.send_message.("hi") end
+      for field <- [:send_message, :send_user_message, :append_entry,
+                    :set_model, :set_thinking_level, :compact,
+                    :set_active_tools, :set_session_name, :set_label] do
+        assert_raise RuntimeError, ~r/not bound/, fn -> Map.get(api, field).(:arg) end
+      end
     end
 
-    test "get_model raises before bind_core" do
+    test "zero-arity stubs raise before bind_core" do
       api = API.new("x")
-      assert_raise RuntimeError, ~r/not bound/, fn -> api.get_model.() end
+      for field <- [:get_model, :get_thinking_level, :abort, :get_system_prompt,
+                    :get_active_tools, :get_all_tools, :get_session_name, :get_commands] do
+        assert_raise RuntimeError, ~r/not bound/, fn -> Map.get(api, field).() end
+      end
     end
 
-    test "abort raises before bind_core" do
+    test "two-arity stubs raise before bind_core" do
       api = API.new("x")
-      assert_raise RuntimeError, ~r/not bound/, fn -> api.abort.() end
+      assert_raise RuntimeError, ~r/not bound/, fn -> api.exec.("tool", %{}) end
     end
   end
 
   describe "bind_core/2" do
-    test "replaces action stubs with real implementations" do
+    test "replaces original action stubs with real implementations" do
       api = API.new("x")
 
       actions = %{
@@ -114,6 +121,31 @@ defmodule OctoPi.Coder.Extension.APITest do
       assert :sent == bound.send_message.("hi")
       assert %{id: "test"} == bound.get_model.()
       assert :aborted == bound.abort.()
+    end
+
+    test "binds extended action methods" do
+      api = API.new("x")
+
+      actions = %{
+        send_user_message: fn _text -> :user_sent end,
+        append_entry: fn _entry -> :appended end,
+        get_session_name: fn -> "my-session" end,
+        set_session_name: fn _n -> :ok end,
+        set_label: fn _l -> :ok end,
+        exec: fn _tool, _args -> :executed end,
+        get_all_tools: fn -> [:tool_a] end,
+        get_commands: fn -> [:cmd_a] end
+      }
+
+      bound = API.bind_core(api, actions)
+      assert :user_sent == bound.send_user_message.("hello")
+      assert :appended == bound.append_entry.(%{})
+      assert "my-session" == bound.get_session_name.()
+      assert :ok == bound.set_session_name.("new")
+      assert :ok == bound.set_label.("label")
+      assert :executed == bound.exec.("bash", %{command: "ls"})
+      assert [:tool_a] == bound.get_all_tools.()
+      assert [:cmd_a] == bound.get_commands.()
     end
   end
 end
