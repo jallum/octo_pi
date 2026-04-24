@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:51:03Z",
   "created": "2026-04-24T00:32:49Z",
   "description": "Terminal has 5 tests covering the happy path. Gaps:\n\n- `terminate/2` with non-`:normal` reason — does raw_mode_fn\n  still get called with `:exit` on crash? Currently only the\n  `:normal` case is verified.\n- `write/2` routes bytes to the injected write_fn; no test\n  verifies the production path (IO.write default).\n- The stdin reader loop silently exits on `:io.get_chars`\n  returning `:eof`. The Terminal keeps running, no keystrokes\n  arrive, user sees a frozen TUI. Add:\n  - A warning log on reader exit (`:eof`, `{:error, _}`).\n  - An optional telemetry event\n    `[:octo_pi_tui, :terminal, :reader_exit]` so consumers\n    can detect it.\n\nTDD:\n- GenServer.stop(terminal, :shutdown) → raw_mode_fn called\n  with :exit.\n- Simulate :io.get_chars/2 returning :eof via an injected\n  reader fn; assert log + telemetry.\n- write/2 default path: capture via ExUnit.CaptureIO, assert\n  IO.write was used.",
   "id": "opi-v3a.7",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Terminal test coverage + reader :eof diagnostics",
   "type": "task",
-  "updated_at": "2026-04-24T01:49:26Z"
+  "updated_at": "2026-04-24T01:51:03Z"
 }
