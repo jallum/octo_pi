@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.1"
   ],
+  "closed_at": "2026-04-24T22:11:27Z",
   "created": "2026-04-24T21:35:44Z",
   "description": "# Compliance ticket for opi-q5k.8\n\nSource check: opi-q5k.8 (keybindings.test.ts audit)\n\n## Gap summary\n\nAll three upstream tests in tmp/pi-mono/packages/tui/test/keybindings.test.ts verify a single invariant — **user rebinds must not evict unrelated default bindings**. Our apps/octo_pi_tui/test/octo_pi/tui/keybindings_test.exs does not assert this invariant.\n\n## Required tests\n\nAdd the following to keybindings_test.exs:\n\n### 1. Sibling default preserved when a binding is rebound\nMirrors upstream \"does not evict selector confirm when input submit is rebound\":\n    kb = Keybindings.new(%{\"tui.input.submit\" =\u003e [\"enter\", \"ctrl+enter\"]})\n    assert Keybindings.get_keys(kb, \"tui.input.submit\") == [\"enter\", \"ctrl+enter\"]\n    assert Keybindings.get_keys(kb, \"tui.select.confirm\") == [\"enter\"]\n\n### 2. Shared-key sibling retains its default after an additive rebind\nMirrors upstream \"does not evict cursor bindings when another action reuses the same key\":\n    kb = Keybindings.new(%{\"tui.select.up\" =\u003e [\"up\", \"ctrl+p\"]})\n    assert Keybindings.get_keys(kb, \"tui.select.up\") == [\"up\", \"ctrl+p\"]\n    assert Keybindings.get_keys(kb, \"tui.editor.cursorUp\") == [\"up\"]\n\n### 3. Defaults preserved even when a user conflict exists\nMirrors upstream \"still reports direct user binding conflicts without evicting defaults\":\n    kb = Keybindings.new(%{\"tui.input.submit\" =\u003e [\"ctrl+x\"], \"tui.select.confirm\" =\u003e [\"ctrl+x\"]})\n    # conflict assertion already covered in existing \"detects user-introduced conflicts\"\n    assert Keybindings.get_keys(kb, \"tui.editor.cursorLeft\") == [\"left\", \"ctrl+b\"]\n\nConfirm the actual default values against the `TUI_KEYBINDINGS` (or equivalent Elixir module constant) before hardcoding — upstream literal values ([\"enter\"], [\"up\"], [\"left\", \"ctrl+b\"]) should match our Elixir defaults. If they diverge, use our Elixir defaults and document the divergence.\n\n## Re-comparison (required)\n\nAfter the tests land, re-read tmp/pi-mono/packages/tui/test/keybindings.test.ts top-to-bottom and confirm every upstream `it(...)` block has an equivalent in keybindings_test.exs. Post a final comment on this ticket with that re-comparison before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
   "id": "opi-q5k.25",
@@ -16,8 +17,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port keybindings.test.ts gap: defaults not evicted by user rebinds",
   "type": "task",
-  "updated_at": "2026-04-24T22:11:26Z"
+  "updated_at": "2026-04-24T22:11:27Z"
 }
