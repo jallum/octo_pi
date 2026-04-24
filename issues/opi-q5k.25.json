@@ -9,9 +9,15 @@
   "id": "opi-q5k.25",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. 3 tests locked in under 'no-eviction of defaults' describe in keybindings_test.exs. Implementation was already correct (build/2 iterates defaults per-action). Re-comparison: upstream keybindings.test.ts has 3 it(...) blocks, all three now have Elixir equivalents.",
+      "timestamp": "2026-04-24T22:11:26Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port keybindings.test.ts gap: defaults not evicted by user rebinds",
   "type": "task",
-  "updated_at": "2026-04-24T22:11:00Z"
+  "updated_at": "2026-04-24T22:11:26Z"
 }
