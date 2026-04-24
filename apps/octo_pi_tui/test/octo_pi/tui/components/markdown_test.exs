@@ -417,6 +417,29 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / HTML-like tags ─────────────────
+
+  describe "html-like tags (upstream parity)" do
+    test "renders content with HTML-like tags as text (not hidden)" do
+      text = "This is text with <thinking>hidden content</thinking> that should be visible"
+      joined = text |> render() |> Enum.map(&strip_ansi/1) |> Enum.join(" ")
+
+      assert String.contains?(joined, "hidden content") or String.contains?(joined, "<thinking>"),
+             "expected HTML-like tag or its content to be visible: #{inspect(joined)}"
+    end
+
+    test "renders HTML tags inside code blocks verbatim" do
+      joined =
+        "```html\n<div>Some HTML</div>\n```"
+        |> render()
+        |> Enum.map(&strip_ansi/1)
+        |> Enum.join("\n")
+
+      assert String.contains?(joined, "<div>")
+      assert String.contains?(joined, "</div>")
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
