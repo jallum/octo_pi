@@ -27,6 +27,7 @@ defmodule OctoPi.TUI.Components.InputTest do
 
   defp border(width), do: String.duplicate("─", width)
   defp content_lines(lines), do: Enum.slice(lines, 1..-2//1)
+  defp strip_ansi(text), do: String.replace(text, ~r/\e\[[0-9;]*m/, "")
 
   # --- tests ---
 
@@ -43,12 +44,12 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert length(lines) == 3
       assert hd(lines) == border(80)
       assert List.last(lines) == border(80)
-      assert content_lines(lines) == ["hello"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["hello"]
     end
 
     test "content lines sit between borders" do
       lines = Input.render(%Input{value: "hello"}, 80)
-      assert content_lines(lines) == ["hello"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["hello"]
     end
 
     test "wraps at full width (no prefix)" do
@@ -56,19 +57,19 @@ defmodule OctoPi.TUI.Components.InputTest do
       lines = Input.render(%Input{value: "hello"}, 4)
       assert hd(lines) == border(4)
       assert List.last(lines) == border(4)
-      assert content_lines(lines) == ["hel", "lo"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["hel", "lo"]
     end
 
     test "wraps CJK characters respecting display width" do
       # width=5, lw=4: abc(3)+日(2)=5>4 → wraps
       lines = Input.render(%Input{value: "abc日本"}, 5)
-      assert content_lines(lines) == ["abc", "日本"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["abc", "日本"]
     end
 
     test "CJK char that does not fit wraps to next line" do
       # width=6, lw=5: abcd(4)+日(2)=6>5 → wraps
       lines = Input.render(%Input{value: "abcd日"}, 6)
-      assert content_lines(lines) == ["abcd", "日"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["abcd", "日"]
     end
   end
 
@@ -82,6 +83,32 @@ defmodule OctoPi.TUI.Components.InputTest do
     test "inserts backslash as regular character" do
       input = %Input{} |> type("\\") |> type("x")
       assert input.value == "\\x"
+    end
+  end
+
+  describe "render/2 — visible cursor (ported from upstream editor.test.ts)" do
+    @reverse_on "\e[7m"
+    @reverse_off "\e[27m"
+
+    test "empty input renders a reverse-video space as cursor" do
+      lines = Input.render(%Input{value: "", cursor: 0}, 80)
+      content = content_lines(lines)
+      assert length(content) == 1
+      [line] = content
+      assert line =~ @reverse_on
+      assert line =~ @reverse_off
+    end
+
+    test "cursor on a character highlights it in reverse video" do
+      lines = Input.render(%Input{value: "hello", cursor: 1}, 80)
+      [line] = content_lines(lines)
+      assert line =~ "h" <> @reverse_on <> "e" <> @reverse_off <> "llo"
+    end
+
+    test "cursor at end of text renders reverse-video space" do
+      lines = Input.render(%Input{value: "hi", cursor: 2}, 80)
+      [line] = content_lines(lines)
+      assert line =~ "hi" <> @reverse_on <> " " <> @reverse_off
     end
   end
 
@@ -654,18 +681,18 @@ defmodule OctoPi.TUI.Components.InputTest do
   describe "multiline render/2" do
     test "splits on newlines and renders each logical line" do
       lines = Input.render(%Input{value: "hello\nworld"}, 80)
-      assert content_lines(lines) == ["hello", "world"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["hello", "world"]
     end
 
     test "wraps each logical line separately" do
       # width=3, lw=2: "abcde" → "ab"|"cd"|"e", "fg" → "fg"
       lines = Input.render(%Input{value: "abcde\nfg"}, 3)
-      assert content_lines(lines) == ["ab", "cd", "e", "fg"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["ab", "cd", "e", "fg"]
     end
 
     test "empty lines preserved" do
       lines = Input.render(%Input{value: "a\n\nb"}, 80)
-      assert content_lines(lines) == ["a", "", "b"]
+      assert Enum.map(content_lines(lines), &strip_ansi/1) == ["a", "", "b"]
     end
   end
 
@@ -1005,7 +1032,7 @@ defmodule OctoPi.TUI.Components.InputTest do
       # 日(2)+本(4)+語(6)+テ(8)+ス(10>9 wraps) → ["日本語テ", "スト"]
       input = %Input{value: "日本語テスト"}
       lines = Input.render(input, 10)
-      content = content_lines(lines)
+      content = Enum.map(content_lines(lines), &strip_ansi/1)
       assert length(content) == 2
       assert hd(content) == "日本語テ"
       assert List.last(content) == "スト"
@@ -1023,7 +1050,7 @@ defmodule OctoPi.TUI.Components.InputTest do
       # Emoji wraps because 10+2 > 11
       input = %Input{value: "0123456789✅"}
       lines = Input.render(input, 11)
-      content = content_lines(lines)
+      content = Enum.map(content_lines(lines), &strip_ansi/1)
       assert length(content) == 2
       assert hd(content) == "0123456789"
       assert List.last(content) == "✅"
@@ -1034,15 +1061,16 @@ defmodule OctoPi.TUI.Components.InputTest do
       input = %Input{value: "1234567890"}
       lines = Input.render(input, 10)
       assert length(lines) == 4
-      assert Enum.at(content_lines(lines), 0) == "123456789"
-      assert Enum.at(content_lines(lines), 1) == "0"
+      assert strip_ansi(Enum.at(content_lines(lines), 0)) == "123456789"
+      assert strip_ansi(Enum.at(content_lines(lines), 1)) == "0"
     end
 
     test "empty input renders border + empty + border" do
       lines = Input.render(%Input{value: ""}, 40)
       assert length(lines) == 3
       assert hd(lines) == border(40)
-      assert Enum.at(lines, 1) == ""
+      # Empty input shows cursor as reverse-video space
+      assert Enum.at(lines, 1) =~ "\e[7m \e[27m"
       assert List.last(lines) == border(40)
     end
   end
@@ -1103,7 +1131,7 @@ defmodule OctoPi.TUI.Components.InputTest do
       input = %Input{value: "hello", padding_x: 0}
       lines = Input.render(input, 20)
       content = content_lines(lines)
-      line = hd(content)
+      line = strip_ansi(hd(content))
       assert String.starts_with?(line, "h")
     end
 
@@ -1137,7 +1165,7 @@ defmodule OctoPi.TUI.Components.InputTest do
       input = %Input{value: "1234567890", padding_x: 1}
       lines = Input.render(input, 12)
       assert length(content_lines(lines)) == 1
-      line = hd(content_lines(lines))
+      line = strip_ansi(hd(content_lines(lines)))
       assert line =~ "1234567890"
     end
   end

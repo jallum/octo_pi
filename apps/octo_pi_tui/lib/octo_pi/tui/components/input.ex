@@ -76,12 +76,18 @@ defmodule OctoPi.TUI.Components.Input do
     %{input | scroll_offset: new_offset}
   end
 
+  @reverse_on "\e[7m"
+  @reverse_off "\e[27m"
+
   # --- render ---
 
   @impl true
   def render(%__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input, width) do
     {effective_px, content_w, lw} = layout_width(width, px)
     all_lines = layout_lines(value, lw)
+
+    {cursor_row, cursor_col} = content_rc(input, lw)
+    all_lines = inject_cursor(all_lines, cursor_row, cursor_col)
 
     padded = pad_content_lines(all_lines, effective_px, content_w)
 
@@ -743,6 +749,31 @@ defmodule OctoPi.TUI.Components.Input do
       _ -> Theme.fg(theme, :border_muted, line)
     end
   end
+
+  # --- visible cursor injection ---
+
+  defp inject_cursor(lines, row, col) do
+    List.update_at(lines, row, &inject_cursor_at(&1, col))
+  end
+
+  defp inject_cursor_at(line, col) do
+    graphemes = String.graphemes(line)
+    {before, at_and_after} = split_at_display_col(graphemes, col, 0, [])
+
+    case at_and_after do
+      [] -> before <> @reverse_on <> " " <> @reverse_off
+      [g | rest] -> before <> @reverse_on <> g <> @reverse_off <> Enum.join(rest)
+    end
+  end
+
+  defp split_at_display_col(rest, target, current, acc) when current >= target,
+    do: {acc |> Enum.reverse() |> Enum.join(), rest}
+
+  defp split_at_display_col([], _target, _current, acc),
+    do: {acc |> Enum.reverse() |> Enum.join(), []}
+
+  defp split_at_display_col([g | rest], target, current, acc),
+    do: split_at_display_col(rest, target, current + WrapAnsi.grapheme_width(g), [g | acc])
 
   defp wrap_input(value, width) do
     value
