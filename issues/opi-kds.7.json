@@ -5,14 +5,13 @@
   ],
   "blocks": [],
   "created": "2026-04-24T01:29:54.100363Z",
-  "defer_until": "2026-07-01",
   "description": "Port `buildCopilotDynamicHeaders()` — dynamic headers for GitHub Copilot based on message content (vision input detection). Only relevant when `model.provider == :github_copilot`.\n\nUpstream: github-copilot-headers.ts, openai-completions.ts L433-439\nPort map: §8",
   "id": "opi-kds.7",
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "deferred",
+  "status": "open",
   "title": "GitHub Copilot dynamic headers",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:01Z"
+  "updated_at": "2026-04-24T01:30:42Z"
 }
