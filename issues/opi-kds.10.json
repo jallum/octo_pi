@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Prompt caching + Anthropic-style cache control",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:42Z"
+  "updated_at": "2026-04-24T02:04:58.853735Z"
 }
