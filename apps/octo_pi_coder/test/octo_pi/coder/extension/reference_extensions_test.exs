@@ -21,6 +21,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     test "cancels when repo is dirty", %{ext: ext} do
       dir = System.tmp_dir!() |> Path.join("drg_dirty_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
 
       System.cmd("git", ["init"], cd: dir)
       File.write!(Path.join(dir, "file.txt"), "dirty")
@@ -31,13 +32,12 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
 
       assert {:cancel, "uncommitted changes in repo"} =
                Dispatcher.cancel_on_result([ext], event, ctx)
-
-      File.rm_rf!(dir)
     end
 
     test "allows when repo is clean", %{ext: ext} do
       dir = System.tmp_dir!() |> Path.join("drg_clean_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
 
       System.cmd("git", ["init"], cd: dir)
       System.cmd("git", ["-c", "user.name=Test", "-c", "user.email=test@test", "commit", "--allow-empty", "-m", "init"], cd: dir)
@@ -46,20 +46,17 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       event = Event.new(:session_before_switch, %{reason: :new})
 
       assert :ok = Dispatcher.cancel_on_result([ext], event, ctx)
-
-      File.rm_rf!(dir)
     end
 
     test "allows in non-git directory", %{ext: ext} do
       dir = System.tmp_dir!() |> Path.join("drg_nogit_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
 
       ctx = Context.new(%{cwd: dir})
       event = Event.new(:session_before_switch, %{reason: :new})
 
       assert :ok = Dispatcher.cancel_on_result([ext], event, ctx)
-
-      File.rm_rf!(dir)
     end
   end
 
