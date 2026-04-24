@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T14:48:36Z",
+  "description": "pi-mono distinguishes user messages from assistant messages using a subtle background color on user turns (backgroundSecondary from the theme). Add this to OctoPi.TUI.Components.UserMessage: wrap each rendered line with the theme's backgroundSecondary ANSI escape. This provides visual turn separation without needing a glyph prefix. The background should extend to the full terminal width (pad with spaces to width before applying background color).",
+  "id": "opi-j50.5",
+  "labels": [],
+  "parent": "opi-j50",
+  "priority": 3,
+  "status": "open",
+  "title": "User message background styling",
+  "type": "task",
+  "updated_at": "2026-04-24T14:48:36Z"
+}
