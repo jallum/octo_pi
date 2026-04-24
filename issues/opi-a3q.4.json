@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:13:18Z",
+  "description": "loader.ex discover_all and dispatcher.ex get_all_commands use acc ++ [item] inside Enum.reduce, which is O(n²). Replace with [item | acc] and Enum.reverse at the end. Low priority — current scale is tens, not thousands.",
+  "id": "opi-a3q.4",
+  "labels": [],
+  "parent": "opi-a3q",
+  "priority": 3,
+  "status": "open",
+  "title": "Replace O(n²) list append with prepend+reverse in discover_all and get_all_commands",
+  "type": "task",
+  "updated_at": "2026-04-24T10:13:18Z"
+}
