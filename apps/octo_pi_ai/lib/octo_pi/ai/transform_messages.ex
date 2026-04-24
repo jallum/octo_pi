@@ -40,7 +40,10 @@ defmodule OctoPi.AI.TransformMessages do
   end
 
   defp downgrade_message_images(%Message.ToolResult{content: blocks} = msg) do
-    %{msg | content: replace_images(blocks, "(tool image omitted: model does not support images)")}
+    %{
+      msg
+      | content: replace_images(blocks, "(tool image omitted: model does not support images)")
+    }
   end
 
   defp downgrade_message_images(msg), do: msg
@@ -75,7 +78,12 @@ defmodule OctoPi.AI.TransformMessages do
 
           %Message.ToolResult{} = tr ->
             normalized_id = Map.get(map, tr.tool_call_id, tr.tool_call_id)
-            updated = if normalized_id != tr.tool_call_id, do: %{tr | tool_call_id: normalized_id}, else: tr
+
+            updated =
+              if normalized_id != tr.tool_call_id,
+                do: %{tr | tool_call_id: normalized_id},
+                else: tr
+
             {[updated | acc], map}
 
           %Message.Assistant{} = asst ->
@@ -119,7 +127,14 @@ defmodule OctoPi.AI.TransformMessages do
   defp transform_block(%Content.Thinking{redacted?: true}, false, _model, _source, _norm, map),
     do: {:drop, map}
 
-  defp transform_block(%Content.Thinking{signature: sig} = block, true, _model, _source, _norm, map)
+  defp transform_block(
+         %Content.Thinking{signature: sig} = block,
+         true,
+         _model,
+         _source,
+         _norm,
+         map
+       )
        when is_binary(sig) and sig != "" do
     {:keep, block, map}
   end

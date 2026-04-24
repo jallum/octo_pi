@@ -134,7 +134,9 @@ defmodule OctoPi.TUI.WrapAnsiTest do
       underline_on = "\e[4m"
       underline_off = "\e[24m"
 
-      text = "\e[41mprefix #{underline_on}UNDERLINED_CONTENT_THAT_WRAPS#{underline_off} suffix\e[0m"
+      text =
+        "\e[41mprefix #{underline_on}UNDERLINED_CONTENT_THAT_WRAPS#{underline_off} suffix\e[0m"
+
       wrapped = WrapAnsi.wrap(text, 20)
 
       for line <- wrapped do

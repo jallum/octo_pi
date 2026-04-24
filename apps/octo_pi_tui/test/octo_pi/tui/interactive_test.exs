@@ -289,7 +289,10 @@ defmodule OctoPi.TUI.InteractiveTest do
       raw_mode_fn = counting_raw_mode(test_pid)
       terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
 
-      write_fn = fn _ -> send(test_pid, :frame_rendered); :ok end
+      write_fn = fn _ ->
+        send(test_pid, :frame_rendered)
+        :ok
+      end
 
       runner =
         Task.async(fn ->
@@ -320,7 +323,10 @@ defmodule OctoPi.TUI.InteractiveTest do
       raw_mode_fn = counting_raw_mode(test_pid)
       terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
 
-      write_fn = fn _ -> send(test_pid, :frame_rendered); :ok end
+      write_fn = fn _ ->
+        send(test_pid, :frame_rendered)
+        :ok
+      end
 
       runner =
         Task.async(fn ->

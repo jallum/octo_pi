@@ -15,18 +15,35 @@ defmodule OctoPi.Coder.Extension.EventTest do
 
   describe "pattern/1" do
     test "fire-and-forget events" do
-      for t <- [:session_start, :session_shutdown, :session_compact, :session_tree,
-                :agent_start, :agent_end, :turn_start, :turn_end,
-                :message_start, :message_update, :message_end,
-                :tool_execution_start, :tool_execution_update, :tool_execution_end,
-                :model_select, :after_provider_response] do
+      for t <- [
+            :session_start,
+            :session_shutdown,
+            :session_compact,
+            :session_tree,
+            :agent_start,
+            :agent_end,
+            :turn_start,
+            :turn_end,
+            :message_start,
+            :message_update,
+            :message_end,
+            :tool_execution_start,
+            :tool_execution_update,
+            :tool_execution_end,
+            :model_select,
+            :after_provider_response
+          ] do
         assert :fire_and_forget == Event.pattern(t), "expected #{t} to be fire_and_forget"
       end
     end
 
     test "cancel-on-result events" do
-      for t <- [:session_before_switch, :session_before_fork,
-                :session_before_compact, :session_before_tree] do
+      for t <- [
+            :session_before_switch,
+            :session_before_fork,
+            :session_before_compact,
+            :session_before_tree
+          ] do
         assert :cancel_on_result == Event.pattern(t), "expected #{t} to be cancel_on_result"
       end
     end

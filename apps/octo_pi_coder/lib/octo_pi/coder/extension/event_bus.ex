@@ -11,7 +11,7 @@ defmodule OctoPi.Coder.Extension.EventBus do
   @spec emit(server(), String.t(), term()) :: :ok
   def emit(bus, channel, data), do: GenServer.cast(bus, {:emit, channel, data})
 
-  @spec on(server(), String.t(), (term() -> term())) :: (() -> :ok)
+  @spec on(server(), String.t(), (term() -> term())) :: (-> :ok)
   def on(bus, channel, handler) when is_function(handler, 1) do
     ref = make_ref()
     GenServer.call(bus, {:on, channel, handler, ref})

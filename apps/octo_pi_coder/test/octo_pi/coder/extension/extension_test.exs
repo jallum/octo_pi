@@ -36,6 +36,7 @@ defmodule OctoPi.Coder.ExtensionTest do
 
     test "rejects unknown event types" do
       handler = fn _, _ -> nil end
+
       assert_raise ArgumentError, ~r/unknown event type/, fn ->
         Extension.new("x", "/x") |> Extension.add_handler(:bogus_event, handler)
       end

@@ -40,14 +40,15 @@ defmodule OctoPi.Coder.Extension.ToolRenderTest do
       render_call = fn _ctx -> "custom call render" end
       render_result = fn _ctx -> "custom result render" end
 
-      merged = ToolRender.merge_into_tool(tool, %{
-        render_call: render_call,
-        render_result: render_result,
-        render_shell: :self,
-        execution_mode: :sequential,
-        prompt_snippet: "Use my_tool for X",
-        prompt_guidelines: ["Always pass --verbose", "Never use without args"]
-      })
+      merged =
+        ToolRender.merge_into_tool(tool, %{
+          render_call: render_call,
+          render_result: render_result,
+          render_shell: :self,
+          execution_mode: :sequential,
+          prompt_snippet: "Use my_tool for X",
+          prompt_guidelines: ["Always pass --verbose", "Never use without args"]
+        })
 
       assert merged.name == "my_tool"
       assert merged.render_call == render_call

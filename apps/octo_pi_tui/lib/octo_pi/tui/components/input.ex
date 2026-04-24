@@ -59,7 +59,13 @@ defmodule OctoPi.TUI.Components.Input do
   def insert(%__MODULE__{value: v, cursor: c} = s, char) do
     s = if whitespace?(char) or s.last_action != :type_word, do: push_undo(s), else: s
     {before, after_cursor} = split_at_grapheme(v, c)
-    %{s | value: before <> char <> after_cursor, cursor: c + String.length(char), last_action: :type_word}
+
+    %{
+      s
+      | value: before <> char <> after_cursor,
+        cursor: c + String.length(char),
+        last_action: :type_word
+    }
   end
 
   @doc "Insert pasted text atomically (single undo unit)."
@@ -74,7 +80,13 @@ defmodule OctoPi.TUI.Components.Input do
 
     s = push_undo(s)
     {before, after_cursor} = split_at_grapheme(v, c)
-    %{s | value: before <> clean <> after_cursor, cursor: c + String.length(clean), last_action: nil}
+
+    %{
+      s
+      | value: before <> clean <> after_cursor,
+        cursor: c + String.length(clean),
+        last_action: nil
+    }
   end
 
   # --- handle_key: multi-head dispatch ---
@@ -105,10 +117,14 @@ defmodule OctoPi.TUI.Components.Input do
   end
 
   def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: s
-  def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: delete_word_backward(s)
+
+  def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}),
+    do: delete_word_backward(s)
 
   def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: ?u, modifiers: [:ctrl]}), do: s
-  def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}), do: delete_to_line_start(s)
+
+  def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}),
+    do: delete_to_line_start(s)
 
   def handle_key(%__MODULE__{} = s, %Key{key: ?k, modifiers: [:ctrl]}), do: delete_to_line_end(s)
 
@@ -200,7 +216,13 @@ defmodule OctoPi.TUI.Components.Input do
   defp yank(%__MODULE__{kill_ring: [text | _], value: v, cursor: c} = s) do
     s = push_undo(s)
     {before, after_cursor} = split_at_grapheme(v, c)
-    %{s | value: before <> text <> after_cursor, cursor: c + String.length(text), last_action: :yank}
+
+    %{
+      s
+      | value: before <> text <> after_cursor,
+        cursor: c + String.length(text),
+        last_action: :yank
+    }
   end
 
   defp yank_pop(%__MODULE__{last_action: action} = s) when action != :yank, do: s
@@ -213,7 +235,13 @@ defmodule OctoPi.TUI.Components.Input do
     {_, after_cursor} = split_at_grapheme(v, c)
     s = kill_rotate(s)
     [new_text | _] = s.kill_ring
-    %{s | value: before <> new_text <> after_cursor, cursor: start + String.length(new_text), last_action: :yank}
+
+    %{
+      s
+      | value: before <> new_text <> after_cursor,
+        cursor: start + String.length(new_text),
+        last_action: :yank
+    }
   end
 
   # --- kill ring helpers ---
@@ -257,7 +285,9 @@ defmodule OctoPi.TUI.Components.Input do
     {ws, rest} = count_while(graphemes, &whitespace?/1)
 
     case rest do
-      [] -> ws
+      [] ->
+        ws
+
       [g | _] ->
         pred = if punctuation?(g), do: &punctuation?/1, else: &word_char?/1
         {run, _} = count_while(rest, pred)
@@ -267,14 +297,19 @@ defmodule OctoPi.TUI.Components.Input do
 
   defp word_boundary_forward(value, cursor) do
     len = String.length(value)
-    if cursor >= len, do: cursor, else: cursor + count_forward(value |> String.slice(cursor, len) |> String.graphemes())
+
+    if cursor >= len,
+      do: cursor,
+      else: cursor + count_forward(value |> String.slice(cursor, len) |> String.graphemes())
   end
 
   defp count_forward(graphemes) do
     {ws, rest} = count_while(graphemes, &whitespace?/1)
 
     case rest do
-      [] -> ws
+      [] ->
+        ws
+
       [g | _] ->
         pred = if punctuation?(g), do: &punctuation?/1, else: &word_char?/1
         {run, _} = count_while(rest, pred)

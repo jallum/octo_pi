@@ -47,10 +47,17 @@ defmodule OctoPi.Coder.Extension.ToolRender do
 
   @spec merge_into_tool(map(), tool_render_opts()) :: map()
   def merge_into_tool(tool, opts) when is_map(tool) and is_map(opts) do
-    Map.merge(tool, Map.take(opts, [
-      :render_call, :render_result, :render_shell,
-      :prepare_arguments, :execution_mode,
-      :prompt_snippet, :prompt_guidelines
-    ]))
+    Map.merge(
+      tool,
+      Map.take(opts, [
+        :render_call,
+        :render_result,
+        :render_shell,
+        :prepare_arguments,
+        :execution_mode,
+        :prompt_snippet,
+        :prompt_guidelines
+      ])
+    )
   end
 end

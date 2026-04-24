@@ -97,6 +97,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
     test "returns error for module without init/1", %{dir: dir} do
       path = Path.join(dir, "no_init.ex")
+
       File.write!(path, """
       defmodule OctoPi.Extensions.NoInit do
       end
@@ -107,6 +108,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
     test "returns error when init/1 raises", %{dir: dir} do
       path = Path.join(dir, "crash_ext.ex")
+
       File.write!(path, """
       defmodule OctoPi.Extensions.CrashExt do
         def init(_api), do: raise "init boom"
@@ -129,9 +131,10 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
     end
 
     test "emits telemetry for loaded extensions", %{dir: dir} do
-      ref = :telemetry_test.attach_event_handlers(self(), [
-        [:octo_pi_coder, :extension, :loaded]
-      ])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:octo_pi_coder, :extension, :loaded]
+        ])
 
       File.write!(Path.join(dir, "telem.ex"), sample_extension("TelemExt"))
       [path] = Loader.discover(dir)
@@ -142,9 +145,10 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
     end
 
     test "emits telemetry for load errors", %{dir: dir} do
-      ref = :telemetry_test.attach_event_handlers(self(), [
-        [:octo_pi_coder, :extension, :load_error]
-      ])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:octo_pi_coder, :extension, :load_error]
+        ])
 
       File.write!(Path.join(dir, "broken.ex"), "not valid !!!")
       [path] = Loader.discover(dir)

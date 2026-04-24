@@ -103,10 +103,18 @@ defmodule OctoPi.TUI.Components.Footer do
   defp token_parts(f) do
     parts = []
     parts = if f.input_tokens > 0, do: parts ++ ["↑#{format_tokens(f.input_tokens)}"], else: parts
-    parts = if f.output_tokens > 0, do: parts ++ ["↓#{format_tokens(f.output_tokens)}"], else: parts
+
+    parts =
+      if f.output_tokens > 0, do: parts ++ ["↓#{format_tokens(f.output_tokens)}"], else: parts
+
     parts = if f.cache_read > 0, do: parts ++ ["R#{format_tokens(f.cache_read)}"], else: parts
     parts = if f.cache_write > 0, do: parts ++ ["W#{format_tokens(f.cache_write)}"], else: parts
-    parts = if f.cost > 0, do: parts ++ ["$#{:erlang.float_to_binary(f.cost, decimals: 3)}"], else: parts
+
+    parts =
+      if f.cost > 0,
+        do: parts ++ ["$#{:erlang.float_to_binary(f.cost, decimals: 3)}"],
+        else: parts
+
     parts
   end
 

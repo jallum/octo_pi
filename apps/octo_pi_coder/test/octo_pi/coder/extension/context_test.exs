@@ -14,13 +14,14 @@ defmodule OctoPi.Coder.Extension.ContextTest do
     end
 
     test "accepts all fields" do
-      ctx = Context.new(%{
-        cwd: "/home",
-        model: %{id: "test-model"},
-        session_id: "sess-123",
-        idle?: true,
-        signal: make_ref()
-      })
+      ctx =
+        Context.new(%{
+          cwd: "/home",
+          model: %{id: "test-model"},
+          session_id: "sess-123",
+          idle?: true,
+          signal: make_ref()
+        })
 
       assert ctx.cwd == "/home"
       assert ctx.model.id == "test-model"

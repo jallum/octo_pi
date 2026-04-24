@@ -19,14 +19,15 @@ defmodule OctoPi.Coder.Extension.CommandContext do
 
   @spec new(Context.t()) :: t()
   def new(%Context{} = base) do
-    stubs = Map.new(@session_actions, fn
-      :wait_for_idle -> {:wait_for_idle, stub(:wait_for_idle, 0)}
-      :reload -> {:reload, stub(:reload, 0)}
-      :new_session -> {:new_session, stub(:new_session, 1)}
-      :switch_session -> {:switch_session, stub(:switch_session, 1)}
-      :fork -> {:fork, stub(:fork, 2)}
-      :navigate_tree -> {:navigate_tree, stub(:navigate_tree, 2)}
-    end)
+    stubs =
+      Map.new(@session_actions, fn
+        :wait_for_idle -> {:wait_for_idle, stub(:wait_for_idle, 0)}
+        :reload -> {:reload, stub(:reload, 0)}
+        :new_session -> {:new_session, stub(:new_session, 1)}
+        :switch_session -> {:switch_session, stub(:switch_session, 1)}
+        :fork -> {:fork, stub(:fork, 2)}
+        :navigate_tree -> {:navigate_tree, stub(:navigate_tree, 2)}
+      end)
 
     struct!(__MODULE__, Map.put(stubs, :base, base))
   end
@@ -41,7 +42,12 @@ defmodule OctoPi.Coder.Extension.CommandContext do
     end)
   end
 
-  defp stub(field, 0), do: fn -> raise RuntimeError, "#{field} not bound — interactive mode only" end
-  defp stub(field, 1), do: fn _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
-  defp stub(field, 2), do: fn _, _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+  defp stub(field, 0),
+    do: fn -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+
+  defp stub(field, 1),
+    do: fn _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+
+  defp stub(field, 2),
+    do: fn _, _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
 end

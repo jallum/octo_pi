@@ -19,7 +19,9 @@ defmodule OctoPi.TUI.Overlay do
           | :left_center
           | :right_center
 
-  @type margin :: non_neg_integer() | %{top: integer(), right: integer(), bottom: integer(), left: integer()}
+  @type margin ::
+          non_neg_integer()
+          | %{top: integer(), right: integer(), bottom: integer(), left: integer()}
 
   @type t :: %__MODULE__{
           lines: [String.t()],
@@ -102,7 +104,10 @@ defmodule OctoPi.TUI.Overlay do
   def anchor_row(anchor, height, avail_h, margin_top)
 
   def anchor_row(a, _h, _ah, mt) when a in [:top_left, :top_center, :top_right], do: mt
-  def anchor_row(a, h, ah, mt) when a in [:bottom_left, :bottom_center, :bottom_right], do: mt + ah - h
+
+  def anchor_row(a, h, ah, mt) when a in [:bottom_left, :bottom_center, :bottom_right],
+    do: mt + ah - h
+
   def anchor_row(_a, h, ah, mt), do: mt + div(ah - h, 2)
 
   @doc "Resolve anchor position to a concrete column."
@@ -111,7 +116,10 @@ defmodule OctoPi.TUI.Overlay do
   def anchor_col(anchor, width, avail_w, margin_left)
 
   def anchor_col(a, _w, _aw, ml) when a in [:top_left, :left_center, :bottom_left], do: ml
-  def anchor_col(a, w, aw, ml) when a in [:top_right, :right_center, :bottom_right], do: ml + aw - w
+
+  def anchor_col(a, w, aw, ml) when a in [:top_right, :right_center, :bottom_right],
+    do: ml + aw - w
+
   def anchor_col(_a, w, aw, ml), do: ml + div(aw - w, 2)
 
   # --- internals ---
@@ -122,9 +130,7 @@ defmodule OctoPi.TUI.Overlay do
   end
 
   defp parse_margin(%{} = m) do
-    {max(0, Map.get(m, :top, 0)),
-     max(0, Map.get(m, :right, 0)),
-     max(0, Map.get(m, :bottom, 0)),
+    {max(0, Map.get(m, :top, 0)), max(0, Map.get(m, :right, 0)), max(0, Map.get(m, :bottom, 0)),
      max(0, Map.get(m, :left, 0))}
   end
 
@@ -283,6 +289,7 @@ defmodule OctoPi.TUI.Overlay do
 
   defp take_csi(<<>>), do: {"", ""}
   defp take_csi(<<b::8, rest::binary>>) when b >= 0x40 and b <= 0x7E, do: {<<b>>, rest}
+
   defp take_csi(<<b::8, rest::binary>>) do
     {tail, rem} = take_csi(rest)
     {<<b>> <> tail, rem}
@@ -291,6 +298,7 @@ defmodule OctoPi.TUI.Overlay do
   defp take_osc(<<>>), do: {"", ""}
   defp take_osc(<<0x07, rest::binary>>), do: {<<0x07>>, rest}
   defp take_osc(<<"\e\\", rest::binary>>), do: {"\e\\", rest}
+
   defp take_osc(<<b::8, rest::binary>>) do
     {tail, rem} = take_osc(rest)
     {<<b>> <> tail, rem}

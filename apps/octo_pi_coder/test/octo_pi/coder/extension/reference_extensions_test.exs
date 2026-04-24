@@ -40,7 +40,19 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       on_exit(fn -> File.rm_rf!(dir) end)
 
       System.cmd("git", ["init"], cd: dir)
-      System.cmd("git", ["-c", "user.name=Test", "-c", "user.email=test@test", "commit", "--allow-empty", "-m", "init"], cd: dir)
+
+      System.cmd(
+        "git",
+        [
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@test",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "init"
+        ], cd: dir)
 
       ctx = Context.new(%{cwd: dir})
       event = Event.new(:session_before_switch, %{reason: :new})
@@ -89,7 +101,9 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     test "blocks sudo rm", %{ext: ext} do
       [handler] = Extension.get_handlers(ext, :input)
       ctx = Context.new(%{cwd: "/tmp"})
-      event = Event.new(:input, %{text: "try sudo rm something", images: nil, source: :interactive})
+
+      event =
+        Event.new(:input, %{text: "try sudo rm something", images: nil, source: :interactive})
 
       result = handler.(event, ctx)
       assert result.action == :transform
@@ -99,7 +113,9 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     test "passes through safe input", %{ext: ext} do
       [handler] = Extension.get_handlers(ext, :input)
       ctx = Context.new(%{cwd: "/tmp"})
-      event = Event.new(:input, %{text: "fix the failing test", images: nil, source: :interactive})
+
+      event =
+        Event.new(:input, %{text: "fix the failing test", images: nil, source: :interactive})
 
       result = handler.(event, ctx)
       assert result.action == :continue
@@ -133,14 +149,18 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       assert :ok = Dispatcher.cancel_on_result(exts, Event.new(:session_before_switch), ctx)
 
       [handler] = Extension.get_handlers(Enum.at(exts, 1), :input)
-      result = handler.(Event.new(:input, %{text: "safe input", images: nil, source: :interactive}), ctx)
+
+      result =
+        handler.(Event.new(:input, %{text: "safe input", images: nil, source: :interactive}), ctx)
+
       assert result.action == :continue
     end
 
     test "telemetry fires for emit dispatch", %{extensions: exts} do
-      ref = :telemetry_test.attach_event_handlers(self(), [
-        [:octo_pi_coder, :extension, :emit]
-      ])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:octo_pi_coder, :extension, :emit]
+        ])
 
       ctx = Context.new(%{cwd: "/tmp"})
       Dispatcher.emit(exts, Event.new(:session_start, %{reason: :new}), ctx)

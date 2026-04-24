@@ -15,7 +15,18 @@ defmodule OctoPi.TUI.Interactive do
   `handle_event/2`.
   """
 
-  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, Safe, StdinFSM, Terminal, Viewport, WrapAnsi}
+  alias OctoPi.TUI.{
+    Components,
+    Events,
+    Key,
+    KeyParser,
+    Renderer,
+    Safe,
+    StdinFSM,
+    Terminal,
+    Viewport,
+    WrapAnsi
+  }
 
   @type transcript_entry ::
           {:user, String.t()}
@@ -97,8 +108,18 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp detect_dimensions do
-    w = case :io.columns() do {:ok, n} -> n; _ -> 80 end
-    h = case :io.rows() do {:ok, n} -> n; _ -> 24 end
+    w =
+      case :io.columns() do
+        {:ok, n} -> n
+        _ -> 80
+      end
+
+    h =
+      case :io.rows() do
+        {:ok, n} -> n
+        _ -> 24
+      end
+
     {w, h}
   end
 

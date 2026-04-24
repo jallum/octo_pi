@@ -6,7 +6,13 @@ defmodule OctoPi.TUI.Components.FooterTest do
   defp strip_ansi(str), do: String.replace(str, ~r/\e\[[0-9;]*m/, "")
 
   defp footer(overrides \\ %{}) do
-    struct!(Footer, Map.merge(%{cwd: "/home/user/project", model_id: "claude-opus-4-6", context_window: 200_000}, overrides))
+    struct!(
+      Footer,
+      Map.merge(
+        %{cwd: "/home/user/project", model_id: "claude-opus-4-6", context_window: 200_000},
+        overrides
+      )
+    )
   end
 
   describe "render/2" do

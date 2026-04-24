@@ -60,7 +60,11 @@ defmodule OctoPi.TUI.InteractiveIntegrationTest do
 
     assert_receive {:tui_output, _initial}, 5_000
 
-    Terminal.feed_chunk(terminal_name, "Reply with exactly the single word 'pong' and nothing else.")
+    Terminal.feed_chunk(
+      terminal_name,
+      "Reply with exactly the single word 'pong' and nothing else."
+    )
+
     Terminal.feed_chunk(terminal_name, "\r")
 
     receive_until_containing("pong", 30_000)

@@ -79,17 +79,35 @@ defmodule OctoPi.Coder.Extension.APITest do
   describe "action stubs" do
     test "one-arity stubs raise before bind_core" do
       api = API.new("x")
-      for field <- [:send_message, :send_user_message, :append_entry,
-                    :set_model, :set_thinking_level, :compact,
-                    :set_active_tools, :set_session_name, :set_label] do
+
+      for field <- [
+            :send_message,
+            :send_user_message,
+            :append_entry,
+            :set_model,
+            :set_thinking_level,
+            :compact,
+            :set_active_tools,
+            :set_session_name,
+            :set_label
+          ] do
         assert_raise RuntimeError, ~r/not bound/, fn -> Map.get(api, field).(:arg) end
       end
     end
 
     test "zero-arity stubs raise before bind_core" do
       api = API.new("x")
-      for field <- [:get_model, :get_thinking_level, :abort, :get_system_prompt,
-                    :get_active_tools, :get_all_tools, :get_session_name, :get_commands] do
+
+      for field <- [
+            :get_model,
+            :get_thinking_level,
+            :abort,
+            :get_system_prompt,
+            :get_active_tools,
+            :get_all_tools,
+            :get_session_name,
+            :get_commands
+          ] do
         assert_raise RuntimeError, ~r/not bound/, fn -> Map.get(api, field).() end
       end
     end

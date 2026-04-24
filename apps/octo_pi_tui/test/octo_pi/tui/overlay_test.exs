@@ -115,14 +115,28 @@ defmodule OctoPi.TUI.OverlayTest do
     end
 
     test "negative margins clamped to zero" do
-      ov = ov(lines: ["XX"], width: 2, anchor: :top_left, margin: %{top: -5, left: -3, right: 0, bottom: 0})
+      ov =
+        ov(
+          lines: ["XX"],
+          width: 2,
+          anchor: :top_left,
+          margin: %{top: -5, left: -3, right: 0, bottom: 0}
+        )
+
       {row, col, _w, _lines} = Overlay.resolve_and_clip(ov, 20, 10)
       assert row == 0
       assert col == 0
     end
 
     test "map margin with individual sides" do
-      ov = ov(lines: ["XX"], width: 2, anchor: :top_left, margin: %{top: 2, left: 5, right: 0, bottom: 0})
+      ov =
+        ov(
+          lines: ["XX"],
+          width: 2,
+          anchor: :top_left,
+          margin: %{top: 2, left: 5, right: 0, bottom: 0}
+        )
+
       {row, col, _w, _lines} = Overlay.resolve_and_clip(ov, 20, 10)
       assert row == 2
       assert col == 5

@@ -19,12 +19,13 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
     test "replaces stubs with real implementations" do
       ctx = UIContext.new()
 
-      bound = UIContext.bind(ctx, %{
-        notify: fn msg -> {:notified, msg} end,
-        get_theme: fn -> "dark" end,
-        select: fn opts, _kw -> {:ok, hd(opts).value} end,
-        custom: fn widget, _opts -> {:rendered, widget} end
-      })
+      bound =
+        UIContext.bind(ctx, %{
+          notify: fn msg -> {:notified, msg} end,
+          get_theme: fn -> "dark" end,
+          select: fn opts, _kw -> {:ok, hd(opts).value} end,
+          custom: fn widget, _opts -> {:rendered, widget} end
+        })
 
       assert {:notified, "hi"} == bound.notify.("hi")
       assert "dark" == bound.get_theme.()
@@ -48,12 +49,16 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
     end
 
     test "input returns {:ok, text} when bound" do
-      ctx = UIContext.new() |> UIContext.bind(%{input: fn _prompt, _opts -> {:ok, "user input"} end})
+      ctx =
+        UIContext.new() |> UIContext.bind(%{input: fn _prompt, _opts -> {:ok, "user input"} end})
+
       assert {:ok, "user input"} == ctx.input.("Enter value:", [])
     end
 
     test "editor returns {:ok, text} when bound" do
-      ctx = UIContext.new() |> UIContext.bind(%{editor: fn _initial, _opts -> {:ok, "edited"} end})
+      ctx =
+        UIContext.new() |> UIContext.bind(%{editor: fn _initial, _opts -> {:ok, "edited"} end})
+
       assert {:ok, "edited"} == ctx.editor.("initial", [])
     end
   end
@@ -61,11 +66,14 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
   describe "theme methods" do
     test "get/set theme" do
       theme = "monokai"
-      ctx = UIContext.new() |> UIContext.bind(%{
-        get_theme: fn -> theme end,
-        set_theme: fn _t -> :ok end,
-        get_all_themes: fn -> ["dark", "light", "monokai"] end
-      })
+
+      ctx =
+        UIContext.new()
+        |> UIContext.bind(%{
+          get_theme: fn -> theme end,
+          set_theme: fn _t -> :ok end,
+          get_all_themes: fn -> ["dark", "light", "monokai"] end
+        })
 
       assert "monokai" == ctx.get_theme.()
       assert :ok == ctx.set_theme.("dark")
@@ -75,11 +83,13 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
 
   describe "editor control" do
     test "paste/get/set editor text" do
-      ctx = UIContext.new() |> UIContext.bind(%{
-        paste_to_editor: fn _text -> :ok end,
-        set_editor_text: fn _text -> :ok end,
-        get_editor_text: fn -> "current text" end
-      })
+      ctx =
+        UIContext.new()
+        |> UIContext.bind(%{
+          paste_to_editor: fn _text -> :ok end,
+          set_editor_text: fn _text -> :ok end,
+          get_editor_text: fn -> "current text" end
+        })
 
       assert :ok == ctx.paste_to_editor.("pasted")
       assert :ok == ctx.set_editor_text.("new text")

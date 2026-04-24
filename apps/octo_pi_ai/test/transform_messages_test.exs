@@ -65,7 +65,10 @@ defmodule OctoPi.AI.TransformMessagesTest do
         user_msg("hello"),
         %Message.Assistant{
           content: [
-            %Content.Thinking{thinking: "Let me think about this...", signature: "reasoning_content"},
+            %Content.Thinking{
+              thinking: "Let me think about this...",
+              signature: "reasoning_content"
+            },
             %Content.Text{text: "Hi there!"}
           ],
           api: :openai_completions,
@@ -99,7 +102,8 @@ defmodule OctoPi.AI.TransformMessagesTest do
             id: "call_123",
             name: "bash",
             arguments: %{"command" => "ls"},
-            thought_signature: Jason.encode!(%{type: "reasoning.encrypted", id: "call_123", data: "encrypted"})
+            thought_signature:
+              Jason.encode!(%{type: "reasoning.encrypted", id: "call_123", data: "encrypted"})
           }
         ]),
         tool_result("call_123", "bash", "output")
@@ -178,11 +182,12 @@ defmodule OctoPi.AI.TransformMessagesTest do
       assert %Message.User{content: blocks} = user
 
       texts = Enum.map(blocks, & &1.text)
+
       assert texts == [
-        "look at this",
-        "(image omitted: model does not support images)",
-        "what do you see?"
-      ]
+               "look at this",
+               "(image omitted: model does not support images)",
+               "what do you see?"
+             ]
     end
 
     test "replaces tool result images with placeholder for non-vision models" do

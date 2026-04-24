@@ -193,7 +193,6 @@ defmodule OctoPi.TUI.Components.InputTest do
       s = %Input{value: "", cursor: 0}
       assert %Input{value: "日", cursor: 1} = Input.insert(s, "日")
     end
-
   end
 
   describe "handle_key/2 — submit/cancel" do

@@ -20,7 +20,13 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
       e1 = ext("a", session_start: fn _e, _c -> send(test_pid, {:called, :a}) end)
       e2 = ext("b", session_start: fn _e, _c -> send(test_pid, {:called, :b}) end)
 
-      assert :ok = Dispatcher.fire_and_forget([e1, e2], Event.new(:session_start, %{reason: :new}), ctx())
+      assert :ok =
+               Dispatcher.fire_and_forget(
+                 [e1, e2],
+                 Event.new(:session_start, %{reason: :new}),
+                 ctx()
+               )
+
       assert_received {:called, :a}
       assert_received {:called, :b}
     end
@@ -38,19 +44,21 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "continues after handler error" do
       test_pid = self()
 
-      e = ext("a", [
-        {:session_start, fn _e, _c -> raise "boom" end},
-        {:session_start, fn _e, _c -> send(test_pid, :second_called) end}
-      ])
+      e =
+        ext("a", [
+          {:session_start, fn _e, _c -> raise "boom" end},
+          {:session_start, fn _e, _c -> send(test_pid, :second_called) end}
+        ])
 
       assert :ok = Dispatcher.fire_and_forget([e], Event.new(:session_start), ctx())
       assert_received :second_called
     end
 
     test "emits telemetry on handler error" do
-      ref = :telemetry_test.attach_event_handlers(self(), [
-        [:octo_pi_coder, :extension, :handler_error]
-      ])
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:octo_pi_coder, :extension, :handler_error]
+        ])
 
       e = ext("a", session_start: fn _e, _c -> raise "kaboom" end)
       Dispatcher.fire_and_forget([e], Event.new(:session_start), ctx())
@@ -64,13 +72,19 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "executes handlers in registration order" do
       test_pid = self()
 
-      e = ext("a", [
-        {:turn_start, fn _e, _c -> send(test_pid, 1) end},
-        {:turn_start, fn _e, _c -> send(test_pid, 2) end},
-        {:turn_start, fn _e, _c -> send(test_pid, 3) end}
-      ])
+      e =
+        ext("a", [
+          {:turn_start, fn _e, _c -> send(test_pid, 1) end},
+          {:turn_start, fn _e, _c -> send(test_pid, 2) end},
+          {:turn_start, fn _e, _c -> send(test_pid, 3) end}
+        ])
 
-      Dispatcher.fire_and_forget([e], Event.new(:turn_start, %{turn_index: 0, timestamp: 0}), ctx())
+      Dispatcher.fire_and_forget(
+        [e],
+        Event.new(:turn_start, %{turn_index: 0, timestamp: 0}),
+        ctx()
+      )
+
       assert_received 1
       assert_received 2
       assert_received 3
@@ -88,10 +102,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "short-circuits on {:cancel, reason}" do
       test_pid = self()
 
-      e = ext("a", [
-        {:session_before_switch, fn _e, _c -> {:cancel, "dirty repo"} end},
-        {:session_before_switch, fn _e, _c -> send(test_pid, :should_not_reach) end}
-      ])
+      e =
+        ext("a", [
+          {:session_before_switch, fn _e, _c -> {:cancel, "dirty repo"} end},
+          {:session_before_switch, fn _e, _c -> send(test_pid, :should_not_reach) end}
+        ])
 
       assert {:cancel, "dirty repo"} =
                Dispatcher.cancel_on_result([e], Event.new(:session_before_switch), ctx())
@@ -122,10 +137,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "reduce_chain/4" do
     test "folds handlers over accumulator" do
-      e = ext("a", [
-        {:context, fn _e, _c -> %{messages: [:added_by_a]} end},
-        {:context, fn _e, _c -> %{messages: [:added_by_a, :added_by_b]} end}
-      ])
+      e =
+        ext("a", [
+          {:context, fn _e, _c -> %{messages: [:added_by_a]} end},
+          {:context, fn _e, _c -> %{messages: [:added_by_a, :added_by_b]} end}
+        ])
 
       result = Dispatcher.reduce_chain([e], :context, [], ctx())
       assert result == [:added_by_a, :added_by_b]
@@ -139,12 +155,14 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "passes current accumulator in event payload" do
       test_pid = self()
 
-      e = ext("a", [
-        {:context, fn event, _c ->
-          send(test_pid, {:saw, event.messages})
-          %{messages: event.messages ++ [:transformed]}
-        end}
-      ])
+      e =
+        ext("a", [
+          {:context,
+           fn event, _c ->
+             send(test_pid, {:saw, event.messages})
+             %{messages: event.messages ++ [:transformed]}
+           end}
+        ])
 
       result = Dispatcher.reduce_chain([e], :context, [:original], ctx())
       assert_received {:saw, [:original]}
@@ -152,10 +170,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "error skips handler, preserves accumulator" do
-      e = ext("a", [
-        {:context, fn _e, _c -> raise "fail" end},
-        {:context, fn _e, _c -> %{messages: [:from_second]} end}
-      ])
+      e =
+        ext("a", [
+          {:context, fn _e, _c -> raise "fail" end},
+          {:context, fn _e, _c -> %{messages: [:from_second]} end}
+        ])
 
       assert [:from_second] = Dispatcher.reduce_chain([e], :context, [:init], ctx())
     end
@@ -165,13 +184,21 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "mutate_in_place/3" do
     test "threads event through handlers, updating input" do
-      e = ext("a", [
-        {:tool_call, fn event, _c ->
-          %{event | input: Map.put(event.input, :sanitized, true)}
-        end}
-      ])
+      e =
+        ext("a", [
+          {:tool_call,
+           fn event, _c ->
+             %{event | input: Map.put(event.input, :sanitized, true)}
+           end}
+        ])
 
-      event = Event.new(:tool_call, %{tool_call_id: "tc1", tool_name: "bash", input: %{command: "rm -rf /"}})
+      event =
+        Event.new(:tool_call, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{command: "rm -rf /"}
+        })
+
       assert {:ok, result} = Dispatcher.mutate_in_place([e], event, ctx())
       assert result.input.sanitized == true
       assert result.input.command == "rm -rf /"
@@ -186,15 +213,18 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "later handler sees earlier mutations" do
       test_pid = self()
 
-      e = ext("a", [
-        {:tool_call, fn event, _c ->
-          %{event | input: Map.put(event.input, :step1, true)}
-        end},
-        {:tool_call, fn event, _c ->
-          send(test_pid, {:saw_step1, event.input[:step1]})
-          %{event | input: Map.put(event.input, :step2, true)}
-        end}
-      ])
+      e =
+        ext("a", [
+          {:tool_call,
+           fn event, _c ->
+             %{event | input: Map.put(event.input, :step1, true)}
+           end},
+          {:tool_call,
+           fn event, _c ->
+             send(test_pid, {:saw_step1, event.input[:step1]})
+             %{event | input: Map.put(event.input, :step2, true)}
+           end}
+        ])
 
       event = Event.new(:tool_call, %{tool_call_id: "tc1", tool_name: "bash", input: %{}})
       {:ok, result} = Dispatcher.mutate_in_place([e], event, ctx())
@@ -204,10 +234,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "error skips handler, preserves event state" do
-      e = ext("a", [
-        {:tool_call, fn _e, _c -> raise "boom" end},
-        {:tool_call, fn event, _c -> %{event | input: Map.put(event.input, :ok, true)} end}
-      ])
+      e =
+        ext("a", [
+          {:tool_call, fn _e, _c -> raise "boom" end},
+          {:tool_call, fn event, _c -> %{event | input: Map.put(event.input, :ok, true)} end}
+        ])
 
       event = Event.new(:tool_call, %{tool_call_id: "tc1", tool_name: "bash", input: %{}})
       {:ok, result} = Dispatcher.mutate_in_place([e], event, ctx())
@@ -219,15 +250,21 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "patch_merge/3" do
     test "merges partial patches from handlers" do
-      e = ext("a", [
-        {:tool_result, fn _e, _c -> %{content: "patched content"} end},
-        {:tool_result, fn _e, _c -> %{is_error: true} end}
-      ])
+      e =
+        ext("a", [
+          {:tool_result, fn _e, _c -> %{content: "patched content"} end},
+          {:tool_result, fn _e, _c -> %{is_error: true} end}
+        ])
 
-      event = Event.new(:tool_result, %{
-        tool_call_id: "tc1", tool_name: "bash",
-        input: %{}, content: "original", is_error: false, details: nil
-      })
+      event =
+        Event.new(:tool_result, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{},
+          content: "original",
+          is_error: false,
+          details: nil
+        })
 
       assert {:ok, patches} = Dispatcher.patch_merge([e], event, ctx())
       assert patches.content == "patched content"
@@ -235,29 +272,59 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "later patches override earlier ones for same key" do
-      e = ext("a", [
-        {:tool_result, fn _e, _c -> %{content: "first"} end},
-        {:tool_result, fn _e, _c -> %{content: "second"} end}
-      ])
+      e =
+        ext("a", [
+          {:tool_result, fn _e, _c -> %{content: "first"} end},
+          {:tool_result, fn _e, _c -> %{content: "second"} end}
+        ])
 
-      event = Event.new(:tool_result, %{tool_call_id: "tc1", tool_name: "bash", input: %{}, content: "", is_error: false, details: nil})
+      event =
+        Event.new(:tool_result, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{},
+          content: "",
+          is_error: false,
+          details: nil
+        })
+
       {:ok, patches} = Dispatcher.patch_merge([e], event, ctx())
       assert patches.content == "second"
     end
 
     test "returns :unchanged when no handler patches" do
       e = ext("a", tool_result: fn _e, _c -> nil end)
-      event = Event.new(:tool_result, %{tool_call_id: "tc1", tool_name: "bash", input: %{}, content: "", is_error: false, details: nil})
+
+      event =
+        Event.new(:tool_result, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{},
+          content: "",
+          is_error: false,
+          details: nil
+        })
+
       assert :unchanged = Dispatcher.patch_merge([e], event, ctx())
     end
 
     test "error skips handler" do
-      e = ext("a", [
-        {:tool_result, fn _e, _c -> raise "nope" end},
-        {:tool_result, fn _e, _c -> %{content: "survived"} end}
-      ])
+      e =
+        ext("a", [
+          {:tool_result, fn _e, _c -> raise "nope" end},
+          {:tool_result, fn _e, _c -> %{content: "survived"} end}
+        ])
 
-      event = Event.new(:tool_result, %{tool_call_id: "tc1", tool_name: "bash", input: %{}, content: "", is_error: false, details: nil})
+      event =
+        Event.new(:tool_result, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{},
+          content: "",
+          is_error: false,
+          details: nil
+        })
+
       {:ok, patches} = Dispatcher.patch_merge([e], event, ctx())
       assert patches.content == "survived"
     end
@@ -283,10 +350,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     test "stops after first non-nil" do
       test_pid = self()
 
-      e = ext("a", [
-        {:user_bash, fn _e, _c -> %{result: "done"} end},
-        {:user_bash, fn _e, _c -> send(test_pid, :should_not_reach) end}
-      ])
+      e =
+        ext("a", [
+          {:user_bash, fn _e, _c -> %{result: "done"} end},
+          {:user_bash, fn _e, _c -> send(test_pid, :should_not_reach) end}
+        ])
 
       event = Event.new(:user_bash, %{command: "ls", cwd: "/tmp", exclude_from_context: false})
       Dispatcher.first_result([e], event, ctx())
@@ -294,10 +362,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "error skips handler, continues" do
-      e = ext("a", [
-        {:user_bash, fn _e, _c -> raise "err" end},
-        {:user_bash, fn _e, _c -> %{result: "ok"} end}
-      ])
+      e =
+        ext("a", [
+          {:user_bash, fn _e, _c -> raise "err" end},
+          {:user_bash, fn _e, _c -> %{result: "ok"} end}
+        ])
 
       event = Event.new(:user_bash, %{command: "ls", cwd: "/tmp", exclude_from_context: false})
       assert %{result: "ok"} = Dispatcher.first_result([e], event, ctx())
@@ -319,10 +388,11 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "filters out nil results" do
-      e = ext("a", [
-        {:resources_discover, fn _e, _c -> nil end},
-        {:resources_discover, fn _e, _c -> %{skill_paths: ["/x"]} end}
-      ])
+      e =
+        ext("a", [
+          {:resources_discover, fn _e, _c -> nil end},
+          {:resources_discover, fn _e, _c -> %{skill_paths: ["/x"]} end}
+        ])
 
       event = Event.new(:resources_discover, %{cwd: "/tmp", reason: :startup})
       results = Dispatcher.collect_all([e], event, ctx())
@@ -360,7 +430,17 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
     test "auto-dispatches patch_merge" do
       e = ext("a", tool_result: fn _e, _c -> %{content: "patched"} end)
-      event = Event.new(:tool_result, %{tool_call_id: "tc1", tool_name: "bash", input: %{}, content: "", is_error: false, details: nil})
+
+      event =
+        Event.new(:tool_result, %{
+          tool_call_id: "tc1",
+          tool_name: "bash",
+          input: %{},
+          content: "",
+          is_error: false,
+          details: nil
+        })
+
       assert {:ok, %{content: "patched"}} = Dispatcher.emit([e], event, ctx())
     end
 

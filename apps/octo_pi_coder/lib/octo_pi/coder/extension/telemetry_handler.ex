@@ -25,7 +25,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandler do
   def detach, do: :telemetry.detach("octo-pi-coder-extension-logger")
 
   def handle_event([:octo_pi_coder, :extension, :loaded], %{count: 1}, meta, _config) do
-    Logger.info("Extension #{meta.id} loaded (#{meta.handler_count} handlers, #{meta.tool_count} tools)")
+    Logger.info(
+      "Extension #{meta.id} loaded (#{meta.handler_count} handlers, #{meta.tool_count} tools)"
+    )
   end
 
   def handle_event([:octo_pi_coder, :extension, :load_error], _measurements, meta, _config) do
@@ -34,7 +36,10 @@ defmodule OctoPi.Coder.Extension.TelemetryHandler do
 
   def handle_event([:octo_pi_coder, :extension, :emit], %{duration: duration}, meta, _config) do
     us = System.convert_time_unit(duration, :native, :microsecond)
-    Logger.debug("Dispatched #{meta.event_type} (#{meta.pattern}, #{meta.handler_count} handlers, #{us}µs)")
+
+    Logger.debug(
+      "Dispatched #{meta.event_type} (#{meta.pattern}, #{meta.handler_count} handlers, #{us}µs)"
+    )
   end
 
   def handle_event([:octo_pi_coder, :extension, :handler_error], _measurements, meta, _config) do
@@ -42,6 +47,8 @@ defmodule OctoPi.Coder.Extension.TelemetryHandler do
   end
 
   def handle_event([:octo_pi_coder, :extension, :handler_cancel], _measurements, meta, _config) do
-    Logger.info("Extension #{meta.extension_id} cancelled #{meta.event_type}: #{inspect(meta.reason)}")
+    Logger.info(
+      "Extension #{meta.extension_id} cancelled #{meta.event_type}: #{inspect(meta.reason)}"
+    )
   end
 end

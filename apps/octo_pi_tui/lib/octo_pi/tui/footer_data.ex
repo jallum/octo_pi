@@ -53,7 +53,9 @@ defmodule OctoPi.TUI.FooterData do
     do: {:noreply, put_in(state, [:extension_statuses, key], text), @poll_interval_ms}
 
   def handle_cast({:clear_ext, key}, state),
-    do: {:noreply, %{state | extension_statuses: Map.delete(state.extension_statuses, key)}, @poll_interval_ms}
+    do:
+      {:noreply, %{state | extension_statuses: Map.delete(state.extension_statuses, key)},
+       @poll_interval_ms}
 
   @impl true
   def handle_info(:timeout, state) do

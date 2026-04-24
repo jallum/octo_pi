@@ -30,15 +30,26 @@ defmodule OctoPi.Coder.Extension.API do
         }
 
   @one_arity_actions [
-    :send_message, :send_user_message, :append_entry,
-    :set_model, :set_thinking_level,
-    :compact, :set_active_tools,
-    :set_session_name, :set_label
+    :send_message,
+    :send_user_message,
+    :append_entry,
+    :set_model,
+    :set_thinking_level,
+    :compact,
+    :set_active_tools,
+    :set_session_name,
+    :set_label
   ]
 
   @zero_arity_actions [
-    :get_model, :get_thinking_level, :abort, :get_system_prompt,
-    :get_active_tools, :get_all_tools, :get_session_name, :get_commands
+    :get_model,
+    :get_thinking_level,
+    :abort,
+    :get_system_prompt,
+    :get_active_tools,
+    :get_all_tools,
+    :get_session_name,
+    :get_commands
   ]
 
   @two_arity_actions [:exec]
@@ -46,16 +57,16 @@ defmodule OctoPi.Coder.Extension.API do
   @action_fields @one_arity_actions ++ @zero_arity_actions ++ @two_arity_actions
 
   defstruct [
-    :extension_id,
-    registered_handlers: [],
-    registered_tools: [],
-    registered_commands: [],
-    registered_renderers: [],
-    registered_flags: [],
-    registered_shortcuts: [],
-    pending_providers: [],
-    bound?: false
-  ] ++ Enum.map(@action_fields, &{&1, nil})
+              :extension_id,
+              registered_handlers: [],
+              registered_tools: [],
+              registered_commands: [],
+              registered_renderers: [],
+              registered_flags: [],
+              registered_shortcuts: [],
+              pending_providers: [],
+              bound?: false
+            ] ++ Enum.map(@action_fields, &{&1, nil})
 
   @spec new(String.t()) :: t()
   def new(extension_id) do
@@ -87,7 +98,8 @@ defmodule OctoPi.Coder.Extension.API do
   end
 
   @spec register_message_renderer(t(), String.t(), Extension.message_renderer()) :: {:ok, t()}
-  def register_message_renderer(%__MODULE__{} = api, type, renderer) when is_binary(type) and is_function(renderer, 2) do
+  def register_message_renderer(%__MODULE__{} = api, type, renderer)
+      when is_binary(type) and is_function(renderer, 2) do
     {:ok, %{api | registered_renderers: api.registered_renderers ++ [{type, renderer}]}}
   end
 
@@ -111,7 +123,8 @@ defmodule OctoPi.Coder.Extension.API do
   end
 
   @spec unregister_provider(t(), String.t()) :: {:ok, t()}
-  def unregister_provider(%__MODULE__{bound?: false} = api, provider_id) when is_binary(provider_id) do
+  def unregister_provider(%__MODULE__{bound?: false} = api, provider_id)
+      when is_binary(provider_id) do
     {:ok, %{api | pending_providers: api.pending_providers ++ [{:unregister, provider_id}]}}
   end
 
@@ -165,7 +178,12 @@ defmodule OctoPi.Coder.Extension.API do
     %{api | bound?: true}
   end
 
-  defp stub(field, 0), do: fn -> raise RuntimeError, "#{field} not bound — call bind_core first" end
-  defp stub(field, 1), do: fn _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
-  defp stub(field, 2), do: fn _, _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+  defp stub(field, 0),
+    do: fn -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+
+  defp stub(field, 1),
+    do: fn _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+
+  defp stub(field, 2),
+    do: fn _, _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
 end

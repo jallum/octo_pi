@@ -148,7 +148,10 @@ defmodule OctoPi.TUI.WrapAnsi do
         line_end = Tracker.line_end_reset(tracker)
         line_start = Tracker.active_codes(tracker)
         trimmed = String.trim_trailing(current)
-        build_lines([{:word, text} | rest], width, tracker, line_start, 0, [trimmed <> line_end | completed])
+
+        build_lines([{:word, text} | rest], width, tracker, line_start, 0, [
+          trimmed <> line_end | completed
+        ])
     end
   end
 
@@ -173,7 +176,10 @@ defmodule OctoPi.TUI.WrapAnsi do
     if cw + gw > width do
       line_end = Tracker.line_end_reset(tracker)
       line_start = Tracker.active_codes(tracker)
-      do_break([{:visible, g} | rest], width, tracker, line_start, 0, [current <> line_end | lines])
+
+      do_break([{:visible, g} | rest], width, tracker, line_start, 0, [
+        current <> line_end | lines
+      ])
     else
       do_break(rest, width, tracker, current <> g, cw + gw, lines)
     end
@@ -270,5 +276,4 @@ defmodule OctoPi.TUI.WrapAnsi do
       (cp >= 0x1F1E6 and cp <= 0x1F1FF) or
       (cp >= 0x20000 and cp <= 0x323AF)
   end
-
 end
