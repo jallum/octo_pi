@@ -512,6 +512,30 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Links (partial) ────────────────
+
+  describe "links — unsupported-hyperlinks path (upstream parity)" do
+    test "shows URL in parentheses when hyperlinks not supported" do
+      output = "[click](https://example.com)" |> render() |> Enum.join("\n")
+      assert String.contains?(output, "click")
+      assert String.contains?(output, "https://example.com")
+    end
+
+    test "no URL duplication when link text equals URL" do
+      output = "[https://example.com](https://example.com)" |> render() |> Enum.join("\n")
+      plain = strip_ansi(output)
+      # URL should appear but not twice in parens form
+      refute String.contains?(plain, "example.com (https://example.com)")
+    end
+
+    test "file:// URL works" do
+      output = "[file](file:///tmp/a)" |> render() |> Enum.join("\n")
+      plain = strip_ansi(output)
+      assert String.contains?(plain, "file")
+      assert String.contains?(plain, "file:///tmp/a") or String.contains?(plain, "/tmp/a")
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
