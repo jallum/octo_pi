@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:38:28Z",
+  "description": "Pull extension-registered commands into the slash-command autocomplete.\n\nImplement:\n- Query Dispatcher.get_all_commands for extension commands\n- Filter out names that conflict with built-in commands\n- Include in CombinedProvider alongside built-in commands\n- Support extension-provided argument completions (getArgumentCompletions)\n- Report conflicts via diagnostics\n\nUpstream: interactive-mode.ts lines 470-479\nDepends on: autocomplete provider API, Extension.Dispatcher",
+  "id": "opi-m4h.25",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "Extension commands in slash-command autocomplete",
+  "type": "task",
+  "updated_at": "2026-04-24T10:38:28Z"
+}
