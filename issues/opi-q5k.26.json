@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:36:23Z",
+  "description": "# Compliance ticket for opi-q5k.13\n\nSource check: opi-q5k.13 (overlay-short-content.test.ts audit)\n\n## Gap\n\nUpstream tmp/pi-mono/packages/tui/test/overlay-short-content.test.ts is a regression integration test for a bug where overlays were not rendered when the child content was shorter than the terminal height. It constructs a full TUI, renders, and inspects the viewport for the overlay's text.\n\nOur apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs only exercises Overlay module functions in isolation. It does not exercise the TUI render pipeline. This regression is therefore not guarded against in our suite.\n\nPossibly partially covered by the new (untracked) apps/octo_pi_tui/test/octo_pi/tui/tui_render_test.exs — verify before porting.\n\n## Work\n\n1. Read apps/octo_pi_tui/test/octo_pi/tui/tui_render_test.exs and check whether it already covers: \"overlay is rendered when child content is shorter than terminal height\". If yes, record that and skip porting.\n2. If not covered, add an integration test (in tui_render_test.exs or overlay_test.exs — whichever matches project convention) that:\n   - Constructs a TUI with an 80-col × 24-row virtual terminal.\n   - Adds a child that renders 3 lines (\"Line 1\", \"Line 2\", \"Line 3\").\n   - Calls the Elixir equivalent of showOverlay() with an overlay rendering [\"OVERLAY_TOP\", \"OVERLAY_MID\", \"OVERLAY_BOT\"].\n   - Triggers a render and waits for it to complete (follow project convention — telemetry sync per memory feedback_no_process_sleep_in_tests; NO Process.sleep).\n   - Asserts the viewport contains one of the OVERLAY_* strings.\n3. The equivalent API names (showOverlay, start/render, viewport inspection) will differ — inspect apps/octo_pi_tui/lib/octo_pi/tui/ to locate the right calls. tui_render_test.exs (if it exists) likely demonstrates the idiom.\n\n## Re-comparison (required)\n\nAfter the test lands, re-read tmp/pi-mono/packages/tui/test/overlay-short-content.test.ts and confirm the Elixir test covers the same invariant. Post a final comment on this ticket with that re-comparison before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
+  "id": "opi-q5k.26",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Port overlay-short-content.test.ts: integration test for short-content overlay render",
+  "type": "task",
+  "updated_at": "2026-04-24T21:36:23Z"
+}
