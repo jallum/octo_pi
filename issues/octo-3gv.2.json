@@ -7,14 +7,15 @@
     "octo-3gv.5",
     "octo-3gv.6"
   ],
+  "closed_at": "2026-04-24T09:43:22Z",
   "created": "2026-04-24T03:13:19Z",
   "description": "GenServer dispatcher with one function per emission pattern. All handlers\nexecute sequentially within an extension; errors in one handler don't\nstop others (each wrapped in try/rescue, error emitted via telemetry).\n\n**Pattern 1: fire_and_forget/2** — call all handlers, ignore results.\nEvents: session_start, session_shutdown, agent_start/end, turn_start/end,\nmessage_start/update/end, tool_execution_start/update/end, model_select,\nsession_compact, after_provider_response, session_tree.\n\n**Pattern 2: cancel_on_result/2** — iterate handlers, short-circuit on\n`{:cancel, reason}`. Events: session_before_switch, session_before_fork,\nsession_before_compact, session_before_tree.\n\n**Pattern 3: reduce_chain/3** — fold handlers over an accumulator.\n- emit_context(messages) → transformed messages\n- emit_before_provider_request(payload) → transformed payload\n- emit_input(text, images, source) → {:continue, text, images} | :handled | {:transform, text, images}\n\n**Pattern 4: mutate_in_place/2** — handler receives mutable-ish event,\ncan modify input args. Returns {:block, reason} to prevent execution.\nEvent: tool_call. Upstream: runner.ts lines 757-778.\n\n**Pattern 5: patch_merge/2** — handlers return partial maps, merged.\nEvent: tool_result. Patches: content, details, is_error.\nUpstream: runner.ts lines 707-755.\n\n**Pattern 6: first_result/2** — first non-nil result wins.\nEvent: user_bash. Upstream: runner.ts lines 780-807.\n\n**Hybrid patterns:**\n- before_agent_start: accumulates messages list + chains system_prompt (last wins)\n- resources_discover: collects all paths from all handlers, deduplicates\n\n**Error handling:** Each handler wrapped in try/rescue. On error:\n- :telemetry.execute([:octo_pi_coder, :extension, :handler_error], %{}, meta)\n- Logger.warning with extension path, event type, error message\n- Continue to next handler\n\n**Ordering:** Extensions execute in registration order. Handlers within\nan extension execute in registration order.\n\n**Context:** Fresh context struct created per emit call containing:\nmodel, cwd, session state, abort signal, idle state.\n\n**Upstream ref:** runner.ts class ExtensionRunner, lines 220-1018",
   "id": "octo-3gv.2",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Event dispatcher: six emission patterns",
   "type": "task",
-  "updated_at": "2026-04-24T09:40:11Z"
+  "updated_at": "2026-04-24T09:43:22Z"
 }
