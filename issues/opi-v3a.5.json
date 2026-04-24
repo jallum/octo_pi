@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:11:36Z",
   "created": "2026-04-24T00:32:19Z",
   "description": "Upstream `stdin-buffer.test.ts` is 422 lines (port-map §14.1).\nOur current FSM has 20 tests covering the MVP shape. Gaps:\n\n- SGR mouse (`\\e[\u003c...M`) — currently falls through to CSI which\n  extracts the sequence but doesn't mark it as mouse. Add\n  mouse detection so downstream can route it separately.\n- Old-style X11 mouse: `ESC M` + 3 bytes (all opaque).\n- DCS / APC / PM / SS3 handling — we handle SS3 for 3-byte\n  sequences; DCS/APC/PM need ST terminator detection (same\n  pattern as OSC).\n- Bracketed paste with Unicode in the content — verify UTF-8\n  codepoints inside the 200~/201~ markers come through\n  correctly when split across chunks.\n- Flush/destroy semantics: upstream has an explicit teardown\n  that flushes any pending buffer. Ours terminates via\n  GenServer.stop. Add a `flush/1` convenience + test.\n- Kitty press/release/repeat events routed via the FSM: ensure\n  sequence boundaries don't break modifier/event reporting.\n\nTDD:\n- Every scenario from stdin-buffer.test.ts → ExUnit test.\n- Mouse decoding (SGR + X11).\n- DCS/APC/PM ST-terminated sequences.\n- UTF-8 across paste-marker boundaries.",
   "id": "opi-v3a.5",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "StdinFSM parity with upstream stdin-buffer.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T01:03:51Z"
+  "updated_at": "2026-04-24T01:11:36Z"
 }
