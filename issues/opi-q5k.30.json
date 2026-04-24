@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:40:38Z",
+  "description": "# Compliance ticket for opi-q5k.14\n\nSource check: opi-q5k.14 (regression-regional-indicator-width.test.ts audit)\n\n## Gaps\n\nUpstream tmp/pi-mono/packages/tui/test/regression-regional-indicator-width.test.ts covers streaming-drift prevention for wide graphemes. Our wrap_ansi_test.exs covers only the first (🇨=2, 🇨🇳=2) case.\n\n## Work — add to apps/octo_pi_tui/test/octo_pi/tui/wrap_ansi_test.exs\n\n1. Extend \"treats isolated regional indicators as width 2\" (or add a new test):\n   - `assert WrapAnsi.visible_width(\"      - 🇨\") == 10`\n\n2. Add \"wraps intermediate partial-flag list line before overflow\":\n   - `wrapped = WrapAnsi.wrap(\"      - 🇨\", 9)`\n   - `assert length(wrapped) == 2`\n   - `assert WrapAnsi.visible_width(Enum.at(wrapped, 0)) == 7`\n   - `assert WrapAnsi.visible_width(Enum.at(wrapped, 1)) == 2`\n\n3. Add \"treats all regional-indicator singleton graphemes as width 2\":\n   - For each codepoint in 0x1F1E6..0x1F1FF, assert `WrapAnsi.visible_width(\u003c\u003c cp :: utf8 \u003e\u003e) == 2`.\n\n4. Add \"keeps full flag pairs at width 2\":\n   - For each of [\"🇯🇵\", \"🇺🇸\", \"🇬🇧\", \"🇨🇳\", \"🇩🇪\", \"🇫🇷\"], assert width 2.\n\n5. Add \"keeps common streaming emoji intermediates at stable width\":\n   - For each of [\"👍\", \"👍🏻\", \"✅\", \"⚡\", \"⚡️\", \"👨\", \"👨‍💻\", \"🏳️‍🌈\"], assert width 2.\n\nIf any of these fail, do NOT relax the assertion — the upstream invariant exists to prevent streaming render drift. Instead, fix `WrapAnsi.visible_width` (likely in apps/octo_pi_tui/lib/octo_pi/tui/wrap_ansi.ex) to match the invariant, and document the fix.\n\n## Re-comparison (required)\n\nAfter the tests land, re-read tmp/pi-mono/packages/tui/test/regression-regional-indicator-width.test.ts and confirm every upstream assertion has an Elixir equivalent. Post a final comment here with the re-comparison before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
+  "id": "opi-q5k.30",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Port regression-regional-indicator-width.test.ts gaps: full regional range, flag pairs, streaming emoji intermediates",
+  "type": "task",
+  "updated_at": "2026-04-24T21:40:38Z"
+}
