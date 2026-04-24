@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:42:29Z",
   "created": "2026-04-24T21:32:36Z",
   "description": "# Check: upstream truncated-text.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/truncated-text.test.ts\n\n## Subject\nTruncatedText component — padded, truncated multi-line rendering.\n\n## Upstream test count (approx)\n10\n\n## Behaviors asserted upstream\n- pads output lines to exactly match width\n- pads output with vertical padding lines to width\n- truncates long text and pads to width\n- preserves ANSI codes in output and pads correctly\n- truncates styled text and adds reset code before ellipsis\n- handles text that fits exactly\n- handles empty text\n- stops at newline and only shows first line\n- truncates first line even with newlines in text\n\n## Upstream dependencies\nTruncatedText from ../src/components/truncated-text.js; visibleWidth; Chalk\n\n## Upstream notes\nTruncatedText(text, paddingX, paddingY). render(width) returns array of lines padded to width. Ellipsis is \"...\". ANSI reset codes before/after styled text. Vertical padding creates empty lines above and below.\n\n## Candidate Elixir counterpart(s)\n- grep apps/octo_pi_tui for truncated_text (components/truncated_text_test.exs if it exists)\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.19",
@@ -16,8 +17,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream truncated-text.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:42:28Z"
+  "updated_at": "2026-04-24T21:42:29Z"
 }
