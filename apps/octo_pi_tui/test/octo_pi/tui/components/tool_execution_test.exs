@@ -71,18 +71,34 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   # ── Expand/collapse ─────────────────────────────────────────────
 
   describe "expand/collapse" do
-    test "collapsed hides result text" do
+    test "collapsed shows short result as preview" do
       te =
         ToolExecution.new("Read", "call-1", %{}, @theme)
-        |> ToolExecution.set_result("hidden content", false)
+        |> ToolExecution.set_result("short content", false)
         |> ToolExecution.set_expanded(false)
 
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
-      refute Enum.any?(stripped, &(&1 =~ "hidden content"))
+      assert Enum.any?(stripped, &(&1 =~ "short content"))
     end
 
-    test "expanded shows result text" do
+    test "collapsed shows last 5 lines for long output" do
+      long_result = Enum.map_join(1..20, "\n", &"line #{&1}")
+
+      te =
+        ToolExecution.new("Bash", "call-1", %{}, @theme)
+        |> ToolExecution.set_result(long_result, false)
+        |> ToolExecution.set_expanded(false)
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "line 20"))
+      assert Enum.any?(stripped, &(&1 =~ "line 16"))
+      refute Enum.any?(stripped, &String.contains?(&1, "line 5"))
+      assert Enum.any?(stripped, &(&1 =~ "15 earlier lines"))
+    end
+
+    test "expanded shows full result text" do
       te =
         ToolExecution.new("Read", "call-1", %{}, @theme)
         |> ToolExecution.set_result("visible content", false)

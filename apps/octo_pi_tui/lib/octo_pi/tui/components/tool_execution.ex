@@ -167,6 +167,8 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp truncate_value(v) when is_binary(v), do: v
   defp truncate_value(v), do: inspect(v, limit: 3)
 
+  @preview_lines 5
+
   defp build_content(te) do
     cond do
       te.status == :error and te.result ->
@@ -178,11 +180,32 @@ defmodule OctoPi.TUI.Components.ToolExecution do
       te.expanded and te.partial ->
         [%Text{content: Theme.fg(te.theme, :tool_output, te.partial)}]
 
+      te.result ->
+        preview_collapsed(te.result, te.theme)
+
       te.partial ->
         [%Text{content: Theme.fg(te.theme, :tool_output, String.slice(te.partial, -1, 1))}]
 
       true ->
         [%Text{content: ""}]
+    end
+  end
+
+  defp preview_collapsed(result, theme) do
+    lines = String.split(result, "\n")
+    total = length(lines)
+
+    if total <= @preview_lines do
+      [%Text{content: Theme.fg(theme, :tool_output, result)}]
+    else
+      preview = lines |> Enum.take(-@preview_lines) |> Enum.join("\n")
+      skipped = total - @preview_lines
+      hint = Theme.fg(theme, :muted, "... (#{skipped} earlier lines)")
+
+      [
+        %Text{content: hint},
+        %Text{content: Theme.fg(theme, :tool_output, preview)}
+      ]
     end
   end
 
