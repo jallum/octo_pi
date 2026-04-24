@@ -234,9 +234,13 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:add_autocomplete_provider, provider}) do
-    providers = Map.get(state.ui_overrides, :autocomplete_providers, [])
-    overrides = Map.put(state.ui_overrides, :autocomplete_providers, providers ++ [provider])
-    {%{state | ui_overrides: overrides}, :ok}
+    alias OctoPi.TUI.Autocomplete.ExtensionProvider
+
+    ext_provider = ExtensionProvider.new(provider)
+    current = state.input.autocomplete_provider
+    combined = ExtensionProvider.add_provider(current, ext_provider)
+    input = %{state.input | autocomplete_provider: combined}
+    {%{state | input: input}, :ok}
   end
 
   def handle_ui_request(state, {:select, ref, options, opts}) do

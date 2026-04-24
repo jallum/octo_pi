@@ -632,11 +632,17 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.ui_overrides.editor_component == :vim_input
     end
 
-    test "add_autocomplete_provider appends to list" do
+    test "add_autocomplete_provider wires into input" do
+      alias OctoPi.TUI.Autocomplete
+      alias OctoPi.TUI.Autocomplete.CombinedProvider
+
       s = %Interactive{}
       provider = fn _text -> ["suggestion"] end
       {s, :ok} = Interactive.handle_ui_request(s, {:add_autocomplete_provider, provider})
-      assert [^provider] = s.ui_overrides.autocomplete_providers
+      assert %CombinedProvider{} = s.input.autocomplete_provider
+      {:ok, items} = Autocomplete.get_suggestions(s.input.autocomplete_provider, "x")
+      labels = Enum.map(items, & &1.label)
+      assert "suggestion" in labels
     end
   end
 
