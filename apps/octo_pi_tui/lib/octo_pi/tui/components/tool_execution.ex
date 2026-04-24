@@ -3,10 +3,12 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.Coder.Extension.ToolRender
   alias OctoPi.TUI.Components.Box
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Theme
 
+  @type render_fn :: (ToolRender.Context.t() -> [String.t()])
   @type status :: :pending | :success | :error
   @type t :: %__MODULE__{
           tool_name: String.t(),
@@ -16,27 +18,36 @@ defmodule OctoPi.TUI.Components.ToolExecution do
           result: String.t() | nil,
           partial: String.t() | nil,
           status: status(),
-          expanded: boolean()
+          expanded: boolean(),
+          render_call: render_fn() | nil,
+          render_result: render_fn() | nil,
+          render_shell: :default | :self
         }
 
   defstruct [
     :tool_name,
     :tool_call_id,
     :theme,
+    :render_call,
+    :render_result,
     args: %{},
     result: nil,
     partial: nil,
     status: :pending,
-    expanded: false
+    expanded: false,
+    render_shell: :default
   ]
 
-  @spec new(String.t(), String.t(), map(), Theme.t()) :: t()
-  def new(tool_name, tool_call_id, args, theme) do
+  @spec new(String.t(), String.t(), map(), Theme.t(), keyword()) :: t()
+  def new(tool_name, tool_call_id, args, theme, opts \\ []) do
     %__MODULE__{
       tool_name: tool_name,
       tool_call_id: tool_call_id,
       args: args,
-      theme: theme
+      theme: theme,
+      render_call: Keyword.get(opts, :render_call),
+      render_result: Keyword.get(opts, :render_result),
+      render_shell: Keyword.get(opts, :render_shell, :default)
     }
   end
 
@@ -63,12 +74,39 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   @impl true
   def render(%__MODULE__{} = te, width) do
+    case custom_render_fn(te) do
+      nil -> render_default(te, width)
+      custom_fn -> render_custom(te, custom_fn, width)
+    end
+  end
+
+  defp custom_render_fn(%{status: :pending, render_call: f}) when is_function(f), do: f
+
+  defp custom_render_fn(%{status: s, render_result: f})
+       when s in [:success, :error] and is_function(f), do: f
+
+  defp custom_render_fn(_), do: nil
+
+  defp render_custom(te, custom_fn, width) do
+    ctx = build_render_context(te)
+    custom_lines = custom_fn.(ctx)
+
+    case te.render_shell do
+      :self -> ["" | custom_lines]
+      :default -> render_in_box(te, custom_lines, width)
+    end
+  end
+
+  defp render_default(te, width) do
+    content = build_content(te)
+    render_in_box(te, content, width)
+  end
+
+  defp render_in_box(te, content, width) do
     bg_key = status_bg_key(te.status)
     bg_fn = fn text -> Theme.bg(te.theme, bg_key, text) end
     border_color = status_border_color(te)
-
     header_text = format_header(te)
-    content = build_content(te)
 
     box =
       Box.new(
@@ -79,8 +117,26 @@ defmodule OctoPi.TUI.Components.ToolExecution do
         border_color: border_color
       )
 
-    box = Enum.reduce(content, box, &Box.add_child(&2, &1))
+    children =
+      Enum.map(content, fn
+        %Text{} = t -> t
+        line when is_binary(line) -> %Text{content: line}
+      end)
+
+    box = Enum.reduce(children, box, &Box.add_child(&2, &1))
     ["" | Box.render(box, width)]
+  end
+
+  defp build_render_context(te) do
+    %ToolRender.Context{
+      args: te.args,
+      tool_call_id: te.tool_call_id,
+      execution_started: te.status != :pending,
+      args_complete: true,
+      is_partial: te.partial != nil,
+      expanded: te.expanded,
+      is_error: te.status == :error
+    }
   end
 
   defp format_header(te) do

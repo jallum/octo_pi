@@ -128,4 +128,135 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       assert Enum.any?(stripped, &(&1 =~ "Edit"))
     end
   end
+
+  # ── Custom tool renderers ─────────────────────────────────────
+
+  describe "custom render_call" do
+    test "delegates to render_call when pending" do
+      render_call = fn ctx ->
+        ["[custom-call] #{ctx.args[:file_path]}"]
+      end
+
+      te =
+        ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme,
+          render_call: render_call
+        )
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "[custom-call] /foo"))
+    end
+
+    test "is not invoked after result arrives" do
+      render_call = fn _ctx -> ["[custom-call]"] end
+      render_result = fn _ctx -> ["[custom-result]"] end
+
+      te =
+        ToolExecution.new("Read", "call-1", %{}, @theme,
+          render_call: render_call,
+          render_result: render_result
+        )
+        |> ToolExecution.set_result("done", false)
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      refute Enum.any?(stripped, &(&1 =~ "[custom-call]"))
+      assert Enum.any?(stripped, &(&1 =~ "[custom-result]"))
+    end
+  end
+
+  describe "custom render_result" do
+    test "delegates to render_result on success" do
+      render_result = fn ctx ->
+        ["[custom-result] error=#{ctx.is_error}"]
+      end
+
+      te =
+        ToolExecution.new("Bash", "call-1", %{}, @theme, render_result: render_result)
+        |> ToolExecution.set_result("output", false)
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "[custom-result] error=false"))
+    end
+
+    test "delegates to render_result on error" do
+      render_result = fn ctx ->
+        ["[error-render] #{Map.get(ctx.args, :command, "")}"]
+      end
+
+      te =
+        ToolExecution.new("Bash", "call-1", %{command: "rm -rf"}, @theme,
+          render_result: render_result
+        )
+        |> ToolExecution.set_result("denied", true)
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "[error-render] rm -rf"))
+    end
+
+    test "receives context with expanded state" do
+      render_result = fn ctx ->
+        if ctx.expanded, do: ["[expanded-view]"], else: ["[collapsed-view]"]
+      end
+
+      te =
+        ToolExecution.new("Read", "call-1", %{}, @theme, render_result: render_result)
+        |> ToolExecution.set_result("data", false)
+
+      collapsed = ToolExecution.render(te, 80) |> Enum.map(&strip_ansi/1)
+      assert Enum.any?(collapsed, &(&1 =~ "[collapsed-view]"))
+
+      expanded =
+        te
+        |> ToolExecution.set_expanded(true)
+        |> ToolExecution.render(80)
+        |> Enum.map(&strip_ansi/1)
+
+      assert Enum.any?(expanded, &(&1 =~ "[expanded-view]"))
+    end
+  end
+
+  describe "render_shell" do
+    test ":self skips default box framing" do
+      render_call = fn _ctx -> ["SELF-FRAMED-LINE"] end
+
+      te =
+        ToolExecution.new("Custom", "call-1", %{}, @theme,
+          render_call: render_call,
+          render_shell: :self
+        )
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "SELF-FRAMED-LINE"))
+      refute Enum.any?(stripped, &(&1 =~ "│"))
+    end
+
+    test ":default wraps custom content in standard box" do
+      render_call = fn _ctx -> ["BOXED-LINE"] end
+
+      te =
+        ToolExecution.new("Custom", "call-1", %{}, @theme,
+          render_call: render_call,
+          render_shell: :default
+        )
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "BOXED-LINE"))
+      assert Enum.any?(stripped, &(&1 =~ "│"))
+    end
+  end
+
+  describe "no custom renderers" do
+    test "renders with default when no custom render functions set" do
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/bar"}, @theme)
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "Read"))
+      assert Enum.any?(stripped, &(&1 =~ "│"))
+    end
+  end
 end
