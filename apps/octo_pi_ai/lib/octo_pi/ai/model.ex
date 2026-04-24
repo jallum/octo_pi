@@ -25,7 +25,8 @@ defmodule OctoPi.AI.Model do
           input: [input_modality()],
           cost: Cost.t(),
           context_window: pos_integer(),
-          max_tokens: pos_integer()
+          max_tokens: pos_integer(),
+          compat: map() | nil
         }
 
   defstruct [
@@ -38,6 +39,7 @@ defmodule OctoPi.AI.Model do
     :max_tokens,
     reasoning: false,
     input: [:text],
-    cost: %Cost{}
+    cost: %Cost{},
+    compat: nil
   ]
 end
