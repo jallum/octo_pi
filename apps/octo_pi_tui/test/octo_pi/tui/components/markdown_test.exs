@@ -440,6 +440,41 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Blockquotes with multiline ─────
+
+  describe "blockquotes with multiline content (upstream parity)" do
+    test "explicit multiline blockquote: separated paragraphs are each bordered" do
+      # Our EarmarkParser merges consecutive `>` lines into a single
+      # paragraph — matching that behavior, we test two paragraphs
+      # separated by `>` blank line (upstream "explicit multiline").
+      lines = render(">Foo\n>\n>bar")
+      plain = Enum.map(lines, &strip_ansi/1)
+      quoted = Enum.filter(plain, &String.starts_with?(&1, "│ "))
+      assert Enum.any?(quoted, &String.contains?(&1, "Foo"))
+      assert Enum.any?(quoted, &String.contains?(&1, "bar"))
+      output = Enum.join(lines, "\n")
+      assert String.contains?(output, "\e[3m"), "blockquote text should be italic"
+    end
+
+    test "list content inside blockquote" do
+      plain = "> 1. bla bla\n> - nested bullet" |> render() |> Enum.map(&strip_ansi/1)
+      quoted = Enum.filter(plain, &String.starts_with?(&1, "│ "))
+      assert Enum.any?(quoted, &String.contains?(&1, "1. bla bla"))
+      assert Enum.any?(quoted, &String.contains?(&1, "- nested bullet"))
+    end
+
+    test "inline formatting inside blockquote" do
+      lines = render("> Quote with **bold** and `code`")
+      output = Enum.join(lines, "\n")
+      plain = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(plain, &String.starts_with?(&1, "│ "))
+      assert String.contains?(Enum.join(plain, " "), "bold")
+      assert String.contains?(Enum.join(plain, " "), "code")
+      assert String.contains?(output, "\e[1m"), "bold re-applied"
+      assert String.contains?(output, "\e[3m"), "italic from quote"
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
