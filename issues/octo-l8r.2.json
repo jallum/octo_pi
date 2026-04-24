@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T03:08:07Z",
   "created": "2026-04-24T03:05:59Z",
   "description": "Port upstream google.ts + google-shared.ts as new umbrella app octo_pi_ai_google.\n\nGoogle's Generative AI REST API (generativelanguage.googleapis.com). Uses API key auth (simpler than Vertex).\n\n**Scope:**\n- Request builder: convert Context to Google's generateContent format\n  - Parts-based content (text, inline_data for images, function_call/response)\n  - Tool declarations with OpenAPI-style function schemas\n  - System instruction as separate field\n  - Safety settings, generation config (temperature, topP, topK, maxOutputTokens)\n- Decoder: SSE stream of GenerateContentResponse chunks → canonical events\n  - candidates[0].content.parts → text deltas, function calls\n  - usageMetadata → token counts\n  - finishReason mapping (STOP, MAX_TOKENS, SAFETY, etc.)\n- Thinking/reasoning support (thinkingConfig with thinkingBudget)\n- Producer + Provider + Application wiring\n- API key from GOOGLE_API_KEY or GEMINI_API_KEY env\n\n**Upstream ref:** google.ts (500 lines), google-shared.ts (354 lines)",
   "id": "octo-l8r.2",
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Google Generative AI provider (octo_pi_ai_google)",
   "type": "task",
-  "updated_at": "2026-04-24T03:05:59Z"
+  "updated_at": "2026-04-24T03:08:07Z"
 }
