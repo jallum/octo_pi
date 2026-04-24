@@ -318,6 +318,43 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Spacing after code blocks ──────
+
+  describe "spacing after code blocks (upstream parity)" do
+    test "one blank line between code block and following paragraph" do
+      md = """
+      hello world
+
+      ```js
+      const hello = "world";
+      ```
+
+      again, hello world
+      """
+
+      plain =
+        md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+
+      closing_idx = Enum.find_index(plain, &(&1 == "```"))
+      assert is_integer(closing_idx)
+      after_closing = Enum.drop(plain, closing_idx + 1)
+      empty_count = Enum.find_index(after_closing, &(&1 != ""))
+      assert empty_count == 1
+    end
+
+    test "no trailing blank line when code block is the last rendered block" do
+      for md <- [
+            "```js\nconst hello = 'world';\n```",
+            "hello world\n\n```js\nconst hello = 'world';\n```"
+          ] do
+        plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+
+        refute List.last(plain) == "",
+               "code-block-as-last should not end blank: #{inspect(plain)}"
+      end
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
