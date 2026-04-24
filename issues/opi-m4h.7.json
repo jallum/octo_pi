@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.1"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:37:09Z",
   "description": "Port tool-execution.ts (~280 LOC). This is critical — currently tool calls are invisible.\n\nImplement:\n- Tool call header (tool name + styled border)\n- Arguments display (key: value pairs or JSON)\n- Result display (text content, truncated when collapsed)\n- Expand/collapse toggle\n- Error state styling (red border, error message)\n- Streaming state (spinner/loader while executing)\n- Hook point for custom tool renderers (extension integration, wired later)\n\nUpstream: interactive/components/tool-execution.ts\nDepends on: container, theme, box/border component",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "ToolExecution component: call/result display with expansion",
   "type": "task",
-  "updated_at": "2026-04-24T10:37:09Z"
+  "updated_at": "2026-04-24T10:39:15Z"
 }

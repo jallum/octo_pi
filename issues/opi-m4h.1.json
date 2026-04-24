@@ -4,7 +4,8 @@
   "blocks": [
     "opi-m4h.4",
     "opi-m4h.5",
-    "opi-m4h.6"
+    "opi-m4h.6",
+    "opi-m4h.7"
   ],
   "created": "2026-04-24T10:36:43Z",
   "description": "Port the theme engine from interactive/theme/theme.ts (1141 LOC). Implement:\n- Theme struct with ~47 named color keys (ui, markdown, syntax, bash, thinking levels)\n- JSON theme loading from dark.json/light.json with variable resolution (vars → color aliases)\n- Hex/ANSI/256-color/truecolor conversion to IO.ANSI sequences\n- Fluent API: Theme.fg(theme, :accent), Theme.bold(theme, text), etc.\n- Runtime theme switching (no file watching needed for MVP)\n\nUpstream: theme/theme.ts, theme/dark.json, theme/light.json, theme/theme-schema.json\nEvery component below depends on this.",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Theme system: color palette, JSON schema, runtime switching",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:14Z"
+  "updated_at": "2026-04-24T10:39:15Z"
 }
