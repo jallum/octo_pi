@@ -8,25 +8,28 @@ defmodule OctoPi.TUI.KeyParser do
   dispatches via multi-head pattern matching. No top-level
   `case`/`cond` on input shape.
 
-  Supported (Phase 4 MVP):
+  Supported:
 
     * Printable ASCII + Unicode → `{:char, binary}`
     * C0 controls: `\\r` / `\\n` (enter), `\\t` (tab), `\\e`
       (escape), `\\x7f` / `\\b` (backspace), `\\x01..\\x1a` as
-      Ctrl+letter
-    * Legacy CSI arrows + navigation + F1..F12
-    * SS3 arrows (application keypad mode)
-    * Kitty CSI-u: `\\e[<cp>;<mod>[:<event>]u`
+      Ctrl+letter, `\\x00` as Ctrl+Space, `\\x1c..\\x1f` as
+      Ctrl+symbol
+    * Legacy CSI arrows + navigation + F1..F12 + clear
+    * SS3 arrows, Home/End, F1..F4 (application keypad mode)
+    * Kitty CSI-u: `\\e[<cp>[:<shifted>:<base>];<mod>[:<event>]u`
+      with keypad functional key mapping and alternate-layout
+      (Cyrillic/Dvorak) base-key resolution
+    * xterm modifyOtherKeys: `\\e[27;<mod>;<cp>~`
+    * Alt-prefix legacy: `\\e<char>` for Meta keys
+    * rxvt modifier variants: `\\e[a..d` (shift+arrow),
+      `\\eOa..d` (ctrl+arrow), `$`/`^` suffixes on nav keys
     * Bracketed paste markers: `\\e[200~` / `\\e[201~`
-
-  Deferred to Phase 4.1:
-    * Alt-prefix legacy (`\\e<char>`) for Meta keys
-    * Mouse reporting (SGR, X10, X11)
-    * Kitty alternate layouts (Cyrillic, Dvorak) via the shifted-
-      key + base-layout fields
   """
 
   alias OctoPi.TUI.Key
+
+  import Bitwise, only: [band: 2]
 
   # --- public entry point (multi-head dispatch) ---
 
@@ -45,19 +48,29 @@ defmodule OctoPi.TUI.KeyParser do
   def parse("\b"), do: {:key, %Key{key: :backspace}}
   def parse("\x7f"), do: {:key, %Key{key: :backspace}}
 
+  # Ctrl+Space (NUL).
+  def parse(<<0x00>>), do: {:key, %Key{key: :space, modifiers: [:ctrl]}}
+
   # Ctrl+letter: 0x01 (Ctrl+A) through 0x1A (Ctrl+Z).
   # Skip C0 controls that also have named keys above.
   def parse(<<b::8>>) when b in 0x01..0x1A and b not in [0x08, 0x09, 0x0A, 0x0D] do
     {:key, %Key{key: b + 0x60, modifiers: [:ctrl]}}
   end
 
-  # Kitty CSI-u: "\e[<code>;<mod>[:<event>]u"
-  def parse(<<"\e[", rest::binary>> = seq) do
-    parse_csi(rest, seq)
-  end
+  # Ctrl+symbol: the C0 controls beyond the letter range.
+  def parse(<<0x1C>>), do: {:key, %Key{key: ?\\, modifiers: [:ctrl]}}
+  def parse(<<0x1D>>), do: {:key, %Key{key: ?], modifiers: [:ctrl]}}
+  def parse(<<0x1E>>), do: {:key, %Key{key: ?^, modifiers: [:ctrl]}}
+  def parse(<<0x1F>>), do: {:key, %Key{key: ?-, modifiers: [:ctrl]}}
+
+  # CSI sequences: "\e[..."
+  def parse(<<"\e[", rest::binary>>), do: parse_csi(rest)
 
   # SS3 sequences: "\eO<char>"
   def parse(<<"\eO", final::8>>), do: ss3(final)
+
+  # Alt-prefix: ESC followed by a single byte (legacy Meta).
+  def parse(<<"\e", b::8>>), do: alt_prefix(b)
 
   # Printable ASCII.
   def parse(<<b::8>> = c) when b >= 32 and b < 127, do: {:char, c}
@@ -69,26 +82,35 @@ defmodule OctoPi.TUI.KeyParser do
 
   # --- CSI dispatch ---
 
-  # CSI-u final byte is 'u'; anything else is legacy.
-  defp parse_csi(body, _full) do
-    case String.last(body) do
-      "u" -> parse_kitty_csi_u(body)
+  defp parse_csi(body) do
+    case :binary.last(body) do
+      ?u -> parse_kitty_csi_u(body)
       _ -> legacy_csi(body)
     end
   end
 
-  # Legacy CSI table — single-head dispatch via pattern match on
-  # the body (the part after "\e[").
+  # --- Legacy CSI table ---
+
+  # Arrows.
   defp legacy_csi("A"), do: {:key, %Key{key: :up}}
   defp legacy_csi("B"), do: {:key, %Key{key: :down}}
   defp legacy_csi("C"), do: {:key, %Key{key: :right}}
   defp legacy_csi("D"), do: {:key, %Key{key: :left}}
+
+  # Home / End.
   defp legacy_csi("H"), do: {:key, %Key{key: :home}}
   defp legacy_csi("F"), do: {:key, %Key{key: :end}}
+
+  # Clear (keypad 5).
+  defp legacy_csi("E"), do: {:key, %Key{key: :clear}}
+
+  # Insert / Delete / PageUp / PageDown.
   defp legacy_csi("2~"), do: {:key, %Key{key: :insert}}
   defp legacy_csi("3~"), do: {:key, %Key{key: :delete}}
   defp legacy_csi("5~"), do: {:key, %Key{key: :page_up}}
   defp legacy_csi("6~"), do: {:key, %Key{key: :page_down}}
+
+  # Function keys F1..F12.
   defp legacy_csi("11~"), do: {:key, %Key{key: :f1}}
   defp legacy_csi("12~"), do: {:key, %Key{key: :f2}}
   defp legacy_csi("13~"), do: {:key, %Key{key: :f3}}
@@ -101,53 +123,223 @@ defmodule OctoPi.TUI.KeyParser do
   defp legacy_csi("21~"), do: {:key, %Key{key: :f10}}
   defp legacy_csi("23~"), do: {:key, %Key{key: :f11}}
   defp legacy_csi("24~"), do: {:key, %Key{key: :f12}}
+
+  # Double-bracket (some Linux consoles).
+  defp legacy_csi("[5~"), do: {:key, %Key{key: :page_up}}
+
+  # rxvt shift+arrow (lowercase final byte).
+  defp legacy_csi("a"), do: {:key, %Key{key: :up, modifiers: [:shift]}}
+  defp legacy_csi("b"), do: {:key, %Key{key: :down, modifiers: [:shift]}}
+  defp legacy_csi("c"), do: {:key, %Key{key: :right, modifiers: [:shift]}}
+  defp legacy_csi("d"), do: {:key, %Key{key: :left, modifiers: [:shift]}}
+
+  # rxvt shift+nav ($ suffix) and ctrl+nav (^ suffix).
+  defp legacy_csi("2$"), do: {:key, %Key{key: :insert, modifiers: [:shift]}}
+  defp legacy_csi("3$"), do: {:key, %Key{key: :delete, modifiers: [:shift]}}
+  defp legacy_csi("5$"), do: {:key, %Key{key: :page_up, modifiers: [:shift]}}
+  defp legacy_csi("6$"), do: {:key, %Key{key: :page_down, modifiers: [:shift]}}
+  defp legacy_csi("7$"), do: {:key, %Key{key: :home, modifiers: [:shift]}}
+  defp legacy_csi("8$"), do: {:key, %Key{key: :end, modifiers: [:shift]}}
+  defp legacy_csi("2^"), do: {:key, %Key{key: :insert, modifiers: [:ctrl]}}
+  defp legacy_csi("3^"), do: {:key, %Key{key: :delete, modifiers: [:ctrl]}}
+  defp legacy_csi("5^"), do: {:key, %Key{key: :page_up, modifiers: [:ctrl]}}
+  defp legacy_csi("6^"), do: {:key, %Key{key: :page_down, modifiers: [:ctrl]}}
+  defp legacy_csi("7^"), do: {:key, %Key{key: :home, modifiers: [:ctrl]}}
+  defp legacy_csi("8^"), do: {:key, %Key{key: :end, modifiers: [:ctrl]}}
+
+  # xterm modifyOtherKeys: "27;<mod>;<cp>~"
+  defp legacy_csi(<<"27;", rest::binary>>), do: parse_modify_other_keys(rest)
+
   defp legacy_csi(_), do: :unknown
 
-  # SS3 (application keypad): "\eO<char>"
+  # --- SS3 (application keypad): "\eO<char>" ---
+
   defp ss3(?A), do: {:key, %Key{key: :up}}
   defp ss3(?B), do: {:key, %Key{key: :down}}
   defp ss3(?C), do: {:key, %Key{key: :right}}
   defp ss3(?D), do: {:key, %Key{key: :left}}
+  defp ss3(?H), do: {:key, %Key{key: :home}}
+  defp ss3(?F), do: {:key, %Key{key: :end}}
+
+  # SS3 function keys.
+  defp ss3(?P), do: {:key, %Key{key: :f1}}
+  defp ss3(?Q), do: {:key, %Key{key: :f2}}
+  defp ss3(?R), do: {:key, %Key{key: :f3}}
+  defp ss3(?S), do: {:key, %Key{key: :f4}}
+
+  # rxvt ctrl+arrow via SS3.
+  defp ss3(?a), do: {:key, %Key{key: :up, modifiers: [:ctrl]}}
+  defp ss3(?b), do: {:key, %Key{key: :down, modifiers: [:ctrl]}}
+  defp ss3(?c), do: {:key, %Key{key: :right, modifiers: [:ctrl]}}
+  defp ss3(?d), do: {:key, %Key{key: :left, modifiers: [:ctrl]}}
+
   defp ss3(_), do: :unknown
+
+  # --- Alt-prefix (ESC + single byte) ---
+
+  # Readline-style word navigation.
+  defp alt_prefix(?b), do: {:key, %Key{key: :left, modifiers: [:alt]}}
+  defp alt_prefix(?f), do: {:key, %Key{key: :right, modifiers: [:alt]}}
+  defp alt_prefix(?B), do: {:key, %Key{key: :left, modifiers: [:alt]}}
+  defp alt_prefix(?F), do: {:key, %Key{key: :right, modifiers: [:alt]}}
+
+  # rxvt alt+arrow.
+  defp alt_prefix(?p), do: {:key, %Key{key: :up, modifiers: [:alt]}}
+  defp alt_prefix(?q), do: {:key, %Key{key: :down, modifiers: [:alt]}}
+
+  # Alt+Space / Alt+Backspace.
+  defp alt_prefix(?\s), do: {:key, %Key{key: :space, modifiers: [:alt]}}
+  defp alt_prefix(?\b), do: {:key, %Key{key: :backspace, modifiers: [:alt]}}
+  defp alt_prefix(0x7F), do: {:key, %Key{key: :backspace, modifiers: [:alt]}}
+
+  # Ctrl+Alt: ESC + C0 control.
+  defp alt_prefix(b) when b in 0x01..0x1A and b not in [0x08, 0x09, 0x0A, 0x0D] do
+    {:key, %Key{key: b + 0x60, modifiers: [:alt, :ctrl]}}
+  end
+
+  # ESC+ESC → Ctrl+Alt+[
+  defp alt_prefix(0x1B), do: {:key, %Key{key: ?[, modifiers: [:alt, :ctrl]}}
+  defp alt_prefix(0x1C), do: {:key, %Key{key: ?\\, modifiers: [:alt, :ctrl]}}
+  defp alt_prefix(0x1D), do: {:key, %Key{key: ?], modifiers: [:alt, :ctrl]}}
+  defp alt_prefix(0x1F), do: {:key, %Key{key: ?-, modifiers: [:alt, :ctrl]}}
+
+  # Alt+printable (lowercase letter, digit, or symbol).
+  defp alt_prefix(b) when b >= 0x20 and b < 0x7F do
+    {:key, %Key{key: b, modifiers: [:alt]}}
+  end
+
+  defp alt_prefix(_), do: :unknown
+
+  # --- xterm modifyOtherKeys: "27;<mod>;<cp>~" ---
+  # `rest` is "<mod>;<cp>~" (the part after "27;").
+
+  defp parse_modify_other_keys(rest) do
+    trimmed = String.trim_trailing(rest, "~")
+
+    case String.split(trimmed, ";", parts: 2) do
+      [mod_s, cp_s] ->
+        with {:ok, mod} <- parse_int(mod_s),
+             {:ok, cp} <- parse_int(cp_s) do
+          key = mok_key(cp)
+          {:key, %Key{key: key, modifiers: bits_to_modifiers(max(mod - 1, 0))}}
+        else
+          _ -> :unknown
+        end
+
+      _ ->
+        :unknown
+    end
+  end
+
+  # Map codepoints to named keys for modifyOtherKeys sequences.
+  defp mok_key(13), do: :enter
+  defp mok_key(9), do: :tab
+  defp mok_key(27), do: :escape
+  defp mok_key(127), do: :backspace
+  defp mok_key(32), do: :space
+  defp mok_key(cp) when cp >= ?A and cp <= ?Z, do: cp + 32
+  defp mok_key(cp), do: cp
 
   # --- Kitty CSI-u parsing ---
 
-  # `body` here is the part after "\e[", including the trailing "u".
-  # Strip the "u" and split on ";" (modifier group), then on ":"
-  # (code / shifted / base OR mod / event) — MVP ignores alternate
-  # layouts, so we only need the first field of each group.
   defp parse_kitty_csi_u(body) do
     trimmed = binary_part(body, 0, byte_size(body) - 1)
 
-    with {:ok, code, mod_and_event} <- split_code(trimmed),
+    with {:ok, raw_cp, base_cp, mod_and_event} <- split_code(trimmed),
          {:ok, mod_bits, event} <- split_mod_event(mod_and_event) do
-      {:key, %Key{key: code, modifiers: bits_to_modifiers(mod_bits), event_type: event}}
+      modifiers = bits_to_modifiers(mod_bits)
+      build_kitty_key(raw_cp, base_cp, modifiers, event)
     else
       :error -> :unknown
     end
   end
 
-  # Returns {:ok, codepoint, rest_after_semi_or_empty} | :error
+  defp build_kitty_key(raw_cp, _base, modifiers, event) do
+    case keypad_map(raw_cp) do
+      {:char_key, c} when modifiers == [] and event == :press ->
+        {:char, <<c::utf8>>}
+
+      {:char_key, c} ->
+        {:key, %Key{key: c, modifiers: modifiers, event_type: event}}
+
+      {:named_key, name} ->
+        {:key, %Key{key: name, modifiers: modifiers, event_type: event}}
+
+      nil ->
+        resolved = resolve_key_with_base(raw_cp, _base)
+        key = csi_u_named_key(resolved)
+        {:key, %Key{key: key, modifiers: modifiers, event_type: event}}
+    end
+  end
+
+  # Kitty keypad functional keys (codepoints 57399–57426).
+  defp keypad_map(n) when n in 57399..57408, do: {:char_key, n - 57399 + ?0}
+  defp keypad_map(57409), do: {:char_key, ?.}
+  defp keypad_map(57410), do: {:char_key, ?/}
+  defp keypad_map(57411), do: {:char_key, ?*}
+  defp keypad_map(57412), do: {:char_key, ?-}
+  defp keypad_map(57413), do: {:char_key, ?+}
+  defp keypad_map(57414), do: {:named_key, :enter}
+  defp keypad_map(57415), do: {:char_key, ?=}
+  defp keypad_map(57416), do: {:char_key, ?,}
+  defp keypad_map(57417), do: {:named_key, :left}
+  defp keypad_map(57418), do: {:named_key, :right}
+  defp keypad_map(57419), do: {:named_key, :up}
+  defp keypad_map(57420), do: {:named_key, :down}
+  defp keypad_map(57421), do: {:named_key, :page_up}
+  defp keypad_map(57422), do: {:named_key, :page_down}
+  defp keypad_map(57423), do: {:named_key, :home}
+  defp keypad_map(57424), do: {:named_key, :end}
+  defp keypad_map(57425), do: {:named_key, :insert}
+  defp keypad_map(57426), do: {:named_key, :delete}
+  defp keypad_map(_), do: nil
+
+  # Map well-known codepoints to named key atoms in CSI-u context.
+  defp csi_u_named_key(13), do: :enter
+  defp csi_u_named_key(9), do: :tab
+  defp csi_u_named_key(27), do: :escape
+  defp csi_u_named_key(127), do: :backspace
+  defp csi_u_named_key(cp), do: cp
+
+  # Alternate-layout resolution: when codepoint is non-Latin
+  # and a Latin base is available, use the base. When codepoint
+  # IS Latin/printable, prefer it (handles Dvorak correctly).
+  defp resolve_key_with_base(cp, nil), do: cp
+  defp resolve_key_with_base(cp, _base) when cp in 0x20..0x7E, do: cp
+  defp resolve_key_with_base(_cp, base) when base in 0x20..0x7E, do: base
+  defp resolve_key_with_base(cp, _base), do: cp
+
+  # Returns {:ok, raw_codepoint, base_codepoint | nil, rest} | :error
   defp split_code(s) do
     case String.split(s, ";", parts: 2) do
-      [head] -> parse_first_int(head, "")
-      [head, rest] -> parse_first_int(head, rest)
+      [head] -> parse_code_fields(head, "")
+      [head, rest] -> parse_code_fields(head, rest)
     end
   end
 
-  defp parse_first_int(head, rest) do
-    # The codepoint field may itself be "cp:shifted:base" — MVP only
-    # cares about the first segment.
-    first = head |> String.split(":") |> hd()
+  defp parse_code_fields(head, rest) do
+    parts = String.split(head, ":")
 
-    case Integer.parse(first) do
-      {cp, ""} -> {:ok, cp, rest}
-      _ -> :error
+    case Integer.parse(hd(parts)) do
+      {cp, ""} ->
+        base = parse_base_field(parts)
+        {:ok, cp, base, rest}
+
+      _ ->
+        :error
     end
   end
+
+  defp parse_base_field(parts) when length(parts) >= 3 do
+    case Integer.parse(Enum.at(parts, 2)) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
+
+  defp parse_base_field(_), do: nil
 
   # `rest` is the "<mod>[:<event>]" group (or "") after the ';'.
-  # An empty rest means no modifier, event_type press.
   defp split_mod_event(""), do: {:ok, 0, :press}
 
   defp split_mod_event(rest) do
@@ -177,6 +369,8 @@ defmodule OctoPi.TUI.KeyParser do
 
   # Kitty modifier bitmask: shift=1, alt=2, ctrl=4, super=8.
   # (After subtracting 1 from the reported value.)
+  defp bits_to_modifiers(0), do: []
+
   defp bits_to_modifiers(bits) do
     []
     |> put_if(band(bits, 1) != 0, :shift)
@@ -187,6 +381,4 @@ defmodule OctoPi.TUI.KeyParser do
 
   defp put_if(list, true, mod), do: [mod | list]
   defp put_if(list, false, _), do: list
-
-  defp band(a, b), do: Bitwise.band(a, b)
 end
