@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T12:41:02Z",
   "created": "2026-04-24T10:38:57Z",
   "description": "Port image.ts (~104 LOC) and terminal-image.ts. Display inline images in the TUI.\n\nImplement:\n- Terminal capability detection (Kitty vs iTerm2 vs sixel vs none)\n- Kitty graphics protocol (base64 image data via APC sequences)\n- iTerm2 inline images (OSC 1337)\n- Cell dimension queries (CSI 16t) for proper sizing\n- Fallback: show [image: filename] placeholder\n\nUpstream: packages/tui/src/components/image.ts, terminal-image.ts\nDepends on: terminal module, theme",
   "id": "opi-m4h.29",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Image rendering: Kitty/iTerm2 graphics protocol",
   "type": "task",
-  "updated_at": "2026-04-24T12:38:22Z"
+  "updated_at": "2026-04-24T12:41:02Z"
 }
