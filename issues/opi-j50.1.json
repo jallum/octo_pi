@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T15:39:20Z",
   "created": "2026-04-24T14:48:11Z",
   "description": "BEAM break handler intercepts SIGINT before it reaches :io.get_chars in the stdin reader. The KeyParser and handle_event code for Ctrl+C (0x03) are correct — the bytes just never arrive. Fix: add +Bc flag to the elixir invocation in the mix task or a wrapper script (elixir --erl '+Bc' -S mix pi). This suppresses the BEAM break handler and lets Ctrl+C flow through raw-mode stdin as byte 0x03. Verify: Ctrl+C in empty input triggers graceful exit; Ctrl+C during agent run cancels the run. Do NOT attempt :os.set_signal(:sigint, :handle) — :sigint is not in OTP's allowed signal set.",
   "id": "opi-j50.1",
   "labels": [],
   "parent": "opi-j50",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Ctrl+C exit via +Bc erl flag wrapper",
   "type": "task",
-  "updated_at": "2026-04-24T15:32:37Z"
+  "updated_at": "2026-04-24T15:39:20Z"
 }
