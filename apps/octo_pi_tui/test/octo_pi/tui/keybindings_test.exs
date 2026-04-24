@@ -93,6 +93,30 @@ defmodule OctoPi.TUI.KeybindingsTest do
     end
   end
 
+  describe "no-eviction of defaults (upstream keybindings.test.ts parity)" do
+    test "sibling default preserved when a binding is rebound" do
+      kb = Keybindings.new(%{"tui.input.submit" => ["enter", "ctrl+enter"]})
+      assert Keybindings.get_keys(kb, "tui.input.submit") == ["enter", "ctrl+enter"]
+      assert Keybindings.get_keys(kb, "tui.select.confirm") == ["enter"]
+    end
+
+    test "shared-key sibling retains its default after an additive rebind" do
+      kb = Keybindings.new(%{"tui.select.up" => ["up", "ctrl+p"]})
+      assert Keybindings.get_keys(kb, "tui.select.up") == ["up", "ctrl+p"]
+      assert Keybindings.get_keys(kb, "tui.editor.cursorUp") == ["up"]
+    end
+
+    test "defaults preserved even when user introduces a conflict" do
+      kb =
+        Keybindings.new(%{
+          "tui.input.submit" => ["ctrl+x"],
+          "tui.select.confirm" => ["ctrl+x"]
+        })
+
+      assert Keybindings.get_keys(kb, "tui.editor.cursorLeft") == ["left", "ctrl+b"]
+    end
+  end
+
   describe "set_user_bindings/2" do
     test "rebuilds with new user bindings" do
       kb = Keybindings.new()
