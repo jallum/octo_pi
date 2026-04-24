@@ -9,9 +9,15 @@
   "id": "opi-q5k.26",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. Added 'overlay renders when base content is shorter than terminal height' under new 'overlay visibility' describe in tui_render_test.exs. Uses Overlay.composite + Renderer. Re-comparison: upstream overlay-short-content.test.ts has 1 it(...) block; covered.",
+      "timestamp": "2026-04-24T22:19:38Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port overlay-short-content.test.ts: integration test for short-content overlay render",
   "type": "task",
-  "updated_at": "2026-04-24T22:19:00Z"
+  "updated_at": "2026-04-24T22:19:38Z"
 }
