@@ -9,9 +9,15 @@
   "id": "opi-q5k.15",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/select-list.test.ts (5 tests — render with label/description/alignment)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/components/select_list_test.exs (10 tests — keyboard behavior + MVP render)\n\n## Scope divergence\n\nUpstream and ours test at different abstraction levels:\n\n**Upstream SelectList**: items are `{value, label, description}`. Render produces a two-column layout (primary label + aligned description), with minimum/maximum primary column width, custom truncation hook, and multiline description normalization. No keyboard tests in this file (those live elsewhere upstream).\n\n**Ours**: items are plain `[String.t()]`. No label/description, no column alignment, no truncation options. The moduledoc explicitly defers these to \"Phase 4.1 — MVP is a plain list with arrow keys.\" Our tests cover the MVP's keyboard/selection behavior, which has no upstream counterpart in this file.\n\n## MAPPED\n\nNone — upstream and our tests cover disjoint concerns.\n\n## UNMAPPED (all 5 upstream)\n\n1. normalizes multiline descriptions to a single line (`\"Line one\\nLine two\\nLine three\"` → `\"Line one Line two Line three\"`; no `\\n` in rendered output)\n2. keeps descriptions aligned when the primary text is truncated (two items with different primary widths — the description columns line up)\n3. uses the configured minimum primary column width (`minPrimaryColumnWidth: 12, maxPrimaryColumnWidth: 20` → descriptions start at column 14)\n4. uses the configured maximum primary column width (same config, but long primary text → descriptions start at column 22)\n5. allows overriding primary truncation while preserving description alignment (custom `truncatePrimary` hook inserting `…`)\n\n## Implementation gap\n\nTo port these tests we must first implement the upstream semantics in `OctoPi.TUI.Components.SelectList`:\n- item struct with value/label/description\n- two-column layout with min/max primary column width\n- multiline description normalization\n- truncation hook / theme protocol (selectedPrefix, selectedText, description, scrollInfo, noMatch)\n\nExisting MVP keyboard behavior should be preserved; the upstream handle-key surface (scroll, filter) can land in follow-ups outside this ticket's scope.\n\n## Action\n\nCompliance ticket: port SelectList to upstream semantics and add the 5 tests. Depends on opi-q5k.31 (truncate_to_width) for correct ANSI-aware truncation.",
+      "timestamp": "2026-04-24T21:43:27Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream select-list.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:42:32Z"
+  "updated_at": "2026-04-24T21:43:27Z"
 }
