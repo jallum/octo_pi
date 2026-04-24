@@ -42,7 +42,8 @@ defmodule OctoPi.TUI.Components.Footer do
   def render(%__MODULE__{} = f, width) do
     pwd_line = build_pwd_line(f, width)
     stats_line = build_stats_line(f, width)
-    lines = [pwd_line, stats_line]
+    hints_line = build_hints_line(width)
+    lines = [pwd_line, stats_line, hints_line]
 
     case build_extension_line(f, width) do
       nil -> lines
@@ -96,6 +97,11 @@ defmodule OctoPi.TUI.Components.Footer do
       |> Enum.join(" ")
 
     truncate_dim(line, width)
+  end
+
+  defp build_hints_line(width) do
+    hints = "Esc interrupt · Ctrl+C exit · /help commands · ? toggle tips"
+    truncate_dim(hints, width)
   end
 
   # --- token formatting ---

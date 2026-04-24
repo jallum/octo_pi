@@ -16,9 +16,9 @@ defmodule OctoPi.TUI.Components.FooterTest do
   end
 
   describe "render/2" do
-    test "renders 2 lines by default (pwd + stats)" do
+    test "renders 3 lines by default (pwd + stats + hints)" do
       lines = Footer.render(footer(), 80)
-      assert length(lines) == 2
+      assert length(lines) == 3
     end
 
     test "pwd line shows cwd" do
@@ -78,11 +78,19 @@ defmodule OctoPi.TUI.Components.FooterTest do
       assert stats =~ "?%"
     end
 
-    test "extension statuses add a third line" do
+    test "hints line shows shortcut keys" do
+      lines = Footer.render(footer(), 80)
+      hints = strip_ansi(Enum.at(lines, 2))
+      assert hints =~ "Esc"
+      assert hints =~ "Ctrl+C"
+      assert hints =~ "/help"
+    end
+
+    test "extension statuses add a fourth line" do
       f = footer(%{extension_statuses: %{"mcp" => "connected", "auth" => "ready"}})
       lines = Footer.render(f, 80)
-      assert length(lines) == 3
-      ext = strip_ansi(Enum.at(lines, 2))
+      assert length(lines) == 4
+      ext = strip_ansi(Enum.at(lines, 3))
       assert ext =~ "connected"
       assert ext =~ "ready"
     end
@@ -90,7 +98,7 @@ defmodule OctoPi.TUI.Components.FooterTest do
     test "extension statuses sorted alphabetically" do
       f = footer(%{extension_statuses: %{"z_ext" => "Z", "a_ext" => "A"}})
       lines = Footer.render(f, 80)
-      ext = strip_ansi(Enum.at(lines, 2))
+      ext = strip_ansi(Enum.at(lines, 3))
       assert ext =~ ~r/A.*Z/
     end
   end
