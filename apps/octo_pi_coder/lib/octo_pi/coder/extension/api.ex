@@ -101,7 +101,7 @@ defmodule OctoPi.Coder.Extension.API do
     {:ok, %{api | registered_shortcuts: api.registered_shortcuts ++ [{key, spec}]}}
   end
 
-  @spec register_provider(t(), ProviderConfig.t()) :: {:ok, t()}
+  @spec register_provider(t(), ProviderConfig.t()) :: {:ok, t()} | {:error, String.t()}
   def register_provider(%__MODULE__{bound?: false} = api, %ProviderConfig{} = config) do
     {:ok, %{api | pending_providers: api.pending_providers ++ [{:register, config}]}}
   end
