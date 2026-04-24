@@ -299,6 +299,25 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Strikethrough syntax ────────────
+
+  describe "strikethrough syntax (upstream parity)" do
+    test "renders ~~text~~ as strikethrough" do
+      output = render("Use ~~strikethrough~~ here") |> Enum.join("\n")
+      plain = strip_ansi(output)
+      assert String.contains?(output, "\e[9m")
+      assert String.contains?(plain, "strikethrough")
+      refute String.contains?(plain, "~~strikethrough~~")
+    end
+
+    test "keeps ~text~ as plain text (single tilde)" do
+      output = render("Use ~strikethrough~ literally") |> Enum.join("\n")
+      plain = strip_ansi(output)
+      assert String.contains?(plain, "~strikethrough~")
+      refute String.contains?(output, "\e[9m")
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
