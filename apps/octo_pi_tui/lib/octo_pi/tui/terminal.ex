@@ -86,6 +86,8 @@ defmodule OctoPi.TUI.Terminal do
     unless skip_raw_mode, do: raw_mode_fn.(:enter)
     unless skip_sigwinch, do: :os.set_signal(:sigwinch, :handle)
 
+    reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
+
     state = %{
       width: w,
       height: h,
@@ -98,7 +100,7 @@ defmodule OctoPi.TUI.Terminal do
 
     state =
       case auto_start_reader do
-        true -> %{state | reader_pid: spawn_reader()}
+        true -> %{state | reader_pid: spawn_reader(reader_fn)}
         false -> state
       end
 
@@ -157,23 +159,36 @@ defmodule OctoPi.TUI.Terminal do
     end)
   end
 
-  defp spawn_reader do
+  defp default_reader, do: :io.get_chars("", 256)
+
+  defp spawn_reader(reader_fn) do
     parent = self()
-    spawn_link(fn -> reader_loop(parent) end)
+    spawn_link(fn -> reader_loop(parent, reader_fn) end)
   end
 
-  defp reader_loop(parent) do
-    case :io.get_chars("", 256) do
+  defp reader_loop(parent, reader_fn) do
+    case reader_fn.() do
       :eof ->
-        :ok
+        reader_exit(:eof, parent)
 
-      {:error, _} ->
-        :ok
+      {:error, reason} ->
+        reader_exit({:error, reason}, parent)
 
       data when is_list(data) or is_binary(data) ->
         send(parent, {:stdin_chunk, IO.iodata_to_binary(data)})
-        reader_loop(parent)
+        reader_loop(parent, reader_fn)
     end
+  end
+
+  defp reader_exit(reason, parent) do
+    require Logger
+    Logger.warning("Terminal stdin reader exited: #{inspect(reason)}")
+
+    :telemetry.execute(
+      [:octo_pi_tui, :terminal, :reader_exit],
+      %{},
+      %{reason: reason, terminal: parent}
+    )
   end
 
   defp term_cols(fallback) do

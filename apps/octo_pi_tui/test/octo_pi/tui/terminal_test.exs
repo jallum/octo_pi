@@ -77,6 +77,17 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "write/2" do
+    test "routes bytes to the injected write_fn" do
+      test_pid = self()
+      write_fn = fn bytes -> send(test_pid, {:written, bytes}) end
+      pid = start_terminal(name: nil, write_fn: write_fn)
+
+      Terminal.write(pid, "hello")
+      assert_receive {:written, "hello"}, 500
+    end
+  end
+
   describe "terminate/2" do
     test "calls raw_mode.exit on normal shutdown" do
       test_pid = self()
@@ -86,7 +97,6 @@ defmodule OctoPi.TUI.TerminalTest do
         :ok
       end
 
-      # Pass raw_mode as a 1-arg fn that accepts :enter / :exit.
       pid =
         start_terminal(
           skip_raw_mode: false,
@@ -96,6 +106,77 @@ defmodule OctoPi.TUI.TerminalTest do
       assert_receive {:raw_mode, :enter}, 500
       GenServer.stop(pid, :normal)
       assert_receive {:raw_mode, :exit}, 500
+    end
+
+    test "calls raw_mode.exit on non-normal shutdown" do
+      test_pid = self()
+      Process.flag(:trap_exit, true)
+
+      raw_mode = fn action ->
+        send(test_pid, {:raw_mode, action})
+        :ok
+      end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: raw_mode
+        )
+
+      assert_receive {:raw_mode, :enter}, 500
+      GenServer.stop(pid, :shutdown)
+      assert_receive {:raw_mode, :exit}, 500
+    end
+  end
+
+  describe "reader exit diagnostics" do
+    test "emits telemetry on :eof" do
+      test_pid = self()
+
+      :telemetry.attach(
+        "test-reader-eof-#{inspect(test_pid)}",
+        [:octo_pi_tui, :terminal, :reader_exit],
+        fn _event, _measurements, meta, _ ->
+          send(test_pid, {:reader_exit, meta.reason})
+        end,
+        nil
+      )
+
+      _pid =
+        start_terminal(
+          name: nil,
+          auto_start_reader: true,
+          reader_fn: fn -> :eof end
+        )
+
+      assert_receive {:reader_exit, :eof}, 1_000
+
+      :telemetry.detach("test-reader-eof-#{inspect(test_pid)}")
+    end
+
+    test "emits telemetry on {:error, reason}" do
+      test_pid = self()
+
+      :telemetry.attach(
+        "test-reader-err-#{inspect(test_pid)}",
+        [:octo_pi_tui, :terminal, :reader_exit],
+        fn _event, _measurements, meta, _ ->
+          send(test_pid, {:reader_exit, meta.reason})
+        end,
+        nil
+      )
+
+      _pid =
+        start_terminal(
+          name: nil,
+          auto_start_reader: true,
+          reader_fn: fn -> {:error, :closed} end
+        )
+
+      assert_receive {:reader_exit, {:error, :closed}}, 1_000
+
+      :telemetry.detach("test-reader-err-#{inspect(test_pid)}")
     end
   end
 end
