@@ -15,7 +15,7 @@ defmodule OctoPi.TUI.Interactive do
   `handle_event/2`.
   """
 
-  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, StdinFSM, Terminal, Viewport, WrapAnsi}
+  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, Safe, StdinFSM, Terminal, Viewport, WrapAnsi}
 
   @type transcript_entry ::
           {:user, String.t()}
@@ -357,5 +357,5 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp render_entry({:user, text}, width), do: WrapAnsi.wrap("> #{text}", width)
-  defp render_entry({:assistant, text, _}, width), do: WrapAnsi.wrap(text, width)
+  defp render_entry({:assistant, text, _}, width), do: WrapAnsi.wrap(Safe.sanitize(text), width)
 end
