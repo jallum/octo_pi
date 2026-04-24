@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T10:17:30Z",
   "created": "2026-04-24T10:13:22Z",
   "description": "provider_config.ex — api_key is stored as a plain string. If the struct is ever logged, inspected in error messages, or serialized as telemetry metadata, the key leaks. Implement the Inspect protocol to redact the api_key field, or store a fetch-function instead of the raw value.",
   "id": "opi-a3q.5",
   "labels": [],
   "parent": "opi-a3q",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Implement Inspect protocol for ProviderConfig to redact api_key",
   "type": "task",
-  "updated_at": "2026-04-24T10:16:31Z"
+  "updated_at": "2026-04-24T10:17:30Z"
 }
