@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:27:28Z",
+  "description": "# Check: upstream input.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/input.test.ts\n\n## Subject\nSingle-line text input component with kill ring and undo/redo (subset of editor behaviors).\n\n## Upstream test count (approx)\n60\n\n## Behaviors asserted upstream\n- submits value including backslash on Enter\n- inserts backslash as regular character\n- no overflow with wide CJK/fullwidth text at cursor start/middle/end position\n- keeps cursor visible when horizontally scrolling wide text\n- Ctrl+W saves deleted text to kill ring and Ctrl+Y yanks it\n- Ctrl+U saves deleted text to kill ring\n- Ctrl+K saves deleted text to kill ring\n- Ctrl+Y no-op when kill ring is empty\n- Alt+Y cycles through kill ring after Ctrl+Y\n- Alt+Y no-op if not preceded by yank\n- Alt+Y no-op if kill ring has one entry\n- consecutive Ctrl+W accumulates into one kill ring entry\n- non-delete actions break kill accumulation\n- non-yank actions break Alt+Y chain\n- kill ring rotation persists after cycling\n- backward deletions prepend, forward deletions append during accumulation\n- Alt+D deletes word forward and saves to kill ring\n- handles yank in middle of text\n- handles yank-pop in middle of text\n- undo no-op when stack empty\n- coalesces consecutive word characters into one undo unit\n- undoes spaces one at a time\n- undoes backspace\n- undoes forward delete\n- undoes Ctrl+W (delete word backward)\n- undoes Ctrl+K (delete to line end)\n- undoes Ctrl+U (delete to line start)\n- undoes yank\n- undoes paste atomically\n- undoes Alt+D (delete word forward)\n- cursor movement starts new undo unit\n\n## Upstream dependencies\nInput from ../src/components/input.js; visibleWidth\n\n## Upstream notes\nSingle-line variant of Editor. Kill ring and undo tests are comprehensive. Wide character handling critical for rendering.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.7",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream input.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:27:28Z"
+}
