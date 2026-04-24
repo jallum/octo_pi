@@ -75,7 +75,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp do_run(opts) do
-    {w, h} = Keyword.get(opts, :dimensions, {80, 24})
+    {w, h} = Keyword.get_lazy(opts, :dimensions, &detect_dimensions/0)
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
 
     session = start_agent_session(opts)
@@ -94,6 +94,12 @@ defmodule OctoPi.TUI.Interactive do
 
     shutdown(terminal, fsm, renderer)
     :ok
+  end
+
+  defp detect_dimensions do
+    w = case :io.columns() do {:ok, n} -> n; _ -> 80 end
+    h = case :io.rows() do {:ok, n} -> n; _ -> 24 end
+    {w, h}
   end
 
   defp default_raw_mode(:enter), do: OctoPi.TUI.RawMode.enter()
