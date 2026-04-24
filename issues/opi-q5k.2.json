@@ -14,6 +14,7 @@
     "opi-q5k.20",
     "opi-q5k.21",
     "opi-q5k.22",
+    "opi-q5k.23",
     "opi-q5k.3",
     "opi-q5k.4",
     "opi-q5k.5",
@@ -34,5 +35,5 @@
   "status": "open",
   "title": "Check-completion gate: all per-file check tickets processed",
   "type": "task",
-  "updated_at": "2026-04-24T21:33:12Z"
+  "updated_at": "2026-04-24T21:33:13Z"
 }
