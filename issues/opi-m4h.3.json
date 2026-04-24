@@ -4,7 +4,8 @@
   "blocks": [
     "opi-m4h.5",
     "opi-m4h.6",
-    "opi-m4h.7"
+    "opi-m4h.7",
+    "opi-m4h.8"
   ],
   "created": "2026-04-24T10:36:43Z",
   "description": "Port the Container pattern from pi-tui's tui.ts. The upstream TUI uses Container as the fundamental building block — components nest children, each rendering into lines that are stacked vertically.\n\nImplement:\n- Container struct with ordered children list\n- render/2 concatenates children's rendered lines\n- add_child/remove_child/clear_children\n- Invalidation propagation (child invalidate → parent re-render)\n\nThis is the foundation for all composite components (AssistantMessage, ToolExecution, etc.)\n\nUpstream: packages/tui/src/tui.ts (Container class)",
