@@ -527,4 +527,87 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
     end
   end
+
+  describe "OpenAI prompt caching" do
+    test "includes prompt_cache_key for api.openai.com with session_id" do
+      opts = %StreamOptions{metadata: %{"session_id" => "sess-abc"}}
+      req = Request.build(model(), context([]), opts, Compat.detect(model()))
+
+      assert req.body["prompt_cache_key"] == "sess-abc"
+    end
+
+    test "includes prompt_cache_retention: 24h when cache_retention is long" do
+      opts = %StreamOptions{metadata: %{"session_id" => "sess-abc", "cache_retention" => "long"}}
+      req = Request.build(model(), context([]), opts, Compat.detect(model()))
+
+      assert req.body["prompt_cache_retention"] == "24h"
+    end
+
+    test "omits prompt_cache_key when cache_retention is none" do
+      opts = %StreamOptions{metadata: %{"session_id" => "s", "cache_retention" => "none"}}
+      req = Request.build(model(), context([]), opts, Compat.detect(model()))
+
+      refute Map.has_key?(req.body, "prompt_cache_key")
+    end
+
+    test "omits prompt caching for non-openai hosts" do
+      m = model(%{base_url: "https://api.x.ai/v1", provider: :xai})
+      opts = %StreamOptions{metadata: %{"session_id" => "s"}}
+      req = Request.build(m, context([]), opts, Compat.detect(m))
+
+      refute Map.has_key?(req.body, "prompt_cache_key")
+    end
+  end
+
+  describe "Anthropic-style cache control" do
+    defp openrouter_anthropic_model do
+      model(%{
+        id: "anthropic/claude-sonnet-4",
+        provider: :openrouter,
+        base_url: "https://openrouter.ai/api/v1"
+      })
+    end
+
+    test "adds cache_control to system prompt, last tool, last conversation message" do
+      m = openrouter_anthropic_model()
+      tools = [
+        %Tool{name: "read", description: "Read", parameters: %{}},
+        %Tool{name: "write", description: "Write", parameters: %{}}
+      ]
+      msgs = [%Message.User{content: "hello", timestamp: 0}]
+      ctx = context(msgs, system_prompt: "Be helpful", tools: tools)
+      compat = Compat.detect(m)
+      req = Request.build(m, ctx, %StreamOptions{}, compat)
+
+      [sys | rest] = req.body["messages"]
+      assert [%{"type" => "text", "cache_control" => %{"type" => "ephemeral"}}] = sys["content"]
+
+      last_tool = List.last(req.body["tools"])
+      assert last_tool["cache_control"] == %{"type" => "ephemeral"}
+
+      last_conv = List.last(rest)
+      assert last_conv["role"] == "user"
+      assert [%{"type" => "text", "cache_control" => %{"type" => "ephemeral"}}] = last_conv["content"]
+    end
+
+    test "omits cache control when cache_control_format is nil" do
+      msgs = [%Message.User{content: "hi", timestamp: 0}]
+      ctx = context(msgs, system_prompt: "Be helpful")
+      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+
+      [sys | _] = req.body["messages"]
+      assert sys["content"] == "Be helpful"
+    end
+
+    test "omits cache control when cache_retention is none" do
+      m = openrouter_anthropic_model()
+      msgs = [%Message.User{content: "hi", timestamp: 0}]
+      ctx = context(msgs, system_prompt: "Be helpful")
+      opts = %StreamOptions{metadata: %{"cache_retention" => "none"}}
+      req = Request.build(m, ctx, opts, Compat.detect(m))
+
+      [sys | _] = req.body["messages"]
+      assert sys["content"] == "Be helpful"
+    end
+  end
 end

@@ -109,6 +109,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   defp body(model, context, opts, compat) do
     messages = convert_messages(model, context, compat)
+    cache_retention = resolve_cache_retention(opts)
 
     %{"model" => model.id, "stream" => true, "messages" => messages}
     |> put_max_tokens(opts, compat)
@@ -118,6 +119,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     |> put_tools(context, compat)
     |> put_reasoning(model, opts, compat)
     |> put_routing(model, compat)
+    |> put_prompt_cache(model, opts, cache_retention)
+    |> apply_cache_control(model, compat, cache_retention)
   end
 
   defp put_max_tokens(body, %StreamOptions{max_tokens: nil}, _compat), do: body
@@ -202,6 +205,108 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   end
 
   defp put_routing(body, _model, _compat), do: body
+
+  # --- Caching ---
+
+  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"], do: r
+  defp resolve_cache_retention(_opts), do: "short"
+
+  defp put_prompt_cache(body, %Model{base_url: base_url}, opts, cache_retention) do
+    if String.contains?(base_url, "api.openai.com") do
+      session_id = get_in((opts.metadata || %{}), ["session_id"])
+
+      body
+      |> then(fn b ->
+        if cache_retention != "none" and session_id,
+          do: Map.put(b, "prompt_cache_key", session_id),
+          else: b
+      end)
+      |> then(fn b ->
+        if cache_retention == "long",
+          do: Map.put(b, "prompt_cache_retention", "24h"),
+          else: b
+      end)
+    else
+      body
+    end
+  end
+
+  defp apply_cache_control(body, _model, %Compat{cache_control_format: nil}, _retention), do: body
+  defp apply_cache_control(body, _model, _compat, "none"), do: body
+
+  defp apply_cache_control(body, model, %Compat{cache_control_format: :anthropic}, cache_retention) do
+    ttl =
+      if cache_retention == "long" and String.contains?(model.base_url, "api.anthropic.com"),
+        do: "1h",
+        else: nil
+
+    cc = if ttl, do: %{"type" => "ephemeral", "ttl" => ttl}, else: %{"type" => "ephemeral"}
+
+    messages = body["messages"]
+    tools = body["tools"]
+
+    messages = add_cache_control_to_system(messages, cc)
+    tools = add_cache_control_to_last_tool(tools, cc)
+    messages = add_cache_control_to_last_conversation_msg(messages, cc)
+
+    body
+    |> Map.put("messages", messages)
+    |> then(fn b -> if tools, do: Map.put(b, "tools", tools), else: b end)
+  end
+
+  defp add_cache_control_to_system(messages, cc) do
+    case Enum.find_index(messages, &(&1["role"] in ["system", "developer"])) do
+      nil -> messages
+      idx -> List.update_at(messages, idx, &add_cache_control_to_text_content(&1, cc))
+    end
+  end
+
+  defp add_cache_control_to_last_tool(nil, _cc), do: nil
+  defp add_cache_control_to_last_tool([], _cc), do: []
+
+  defp add_cache_control_to_last_tool(tools, cc) do
+    List.update_at(tools, -1, &Map.put(&1, "cache_control", cc))
+  end
+
+  defp add_cache_control_to_last_conversation_msg(messages, cc) do
+    idx =
+      messages
+      |> Enum.with_index()
+      |> Enum.reverse()
+      |> Enum.find_value(fn {msg, i} ->
+        if msg["role"] in ["user", "assistant"], do: i
+      end)
+
+    case idx do
+      nil -> messages
+      i -> List.update_at(messages, i, &add_cache_control_to_text_content(&1, cc))
+    end
+  end
+
+  defp add_cache_control_to_text_content(%{"content" => content} = msg, cc) when is_binary(content) do
+    if content == "" do
+      msg
+    else
+      Map.put(msg, "content", [%{"type" => "text", "text" => content, "cache_control" => cc}])
+    end
+  end
+
+  defp add_cache_control_to_text_content(%{"content" => content} = msg, cc) when is_list(content) do
+    idx =
+      content
+      |> Enum.with_index()
+      |> Enum.reverse()
+      |> Enum.find_value(fn {part, i} ->
+        if part["type"] == "text", do: i
+      end)
+
+    case idx do
+      nil -> msg
+      i -> Map.put(msg, "content", List.update_at(content, i, &Map.put(&1, "cache_control", cc)))
+    end
+  end
+
+  defp add_cache_control_to_text_content(msg, _cc), do: msg
 
   # --- Tools ---
 
