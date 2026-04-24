@@ -6,6 +6,8 @@ defmodule OctoPi.TUI.Components.Input do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.Autocomplete
+  alias OctoPi.TUI.Autocomplete.Suggestion
   alias OctoPi.TUI.{Key, WrapAnsi}
 
   @page_size 10
@@ -17,7 +19,11 @@ defmodule OctoPi.TUI.Components.Input do
           kill_ring: [String.t()],
           last_action: :kill | :yank | :type_word | nil,
           undo_stack: [{String.t(), non_neg_integer()}],
-          preferred_col: non_neg_integer() | nil
+          preferred_col: non_neg_integer() | nil,
+          autocomplete_provider: struct() | nil,
+          autocomplete_suggestions: [Suggestion.t()],
+          autocomplete_selected: non_neg_integer(),
+          autocomplete_active: boolean()
         }
 
   defstruct value: "",
@@ -26,7 +32,11 @@ defmodule OctoPi.TUI.Components.Input do
             kill_ring: [],
             last_action: nil,
             undo_stack: [],
-            preferred_col: nil
+            preferred_col: nil,
+            autocomplete_provider: nil,
+            autocomplete_suggestions: [],
+            autocomplete_selected: 0,
+            autocomplete_active: false
 
   # --- render ---
 
@@ -68,6 +78,7 @@ defmodule OctoPi.TUI.Components.Input do
         cursor: c + String.length(char),
         last_action: :type_word
     }
+    |> refresh_autocomplete()
   end
 
   @doc "Insert pasted text atomically (single undo unit)."
@@ -94,6 +105,21 @@ defmodule OctoPi.TUI.Components.Input do
 
   @impl true
   def handle_key(%__MODULE__{} = s, %Key{key: ?-, modifiers: [:ctrl]}), do: undo(s)
+
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :up}),
+    do: autocomplete_navigate(s, -1)
+
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :down}),
+    do: autocomplete_navigate(s, 1)
+
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :tab}),
+    do: autocomplete_accept(s)
+
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :enter}),
+    do: autocomplete_accept(s)
+
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :escape}),
+    do: dismiss_autocomplete(s)
 
   def handle_key(%__MODULE__{} = s, %Key{key: :enter, modifiers: [:shift]}), do: insert(s, "\n")
 
@@ -462,6 +488,82 @@ defmodule OctoPi.TUI.Components.Input do
     graphemes = String.graphemes(str)
     {before, rest} = Enum.split(graphemes, n)
     {Enum.join(before), Enum.join(rest)}
+  end
+
+  # --- autocomplete ---
+
+  @doc "Render autocomplete dropdown lines. Returns [] when inactive."
+  @spec render_dropdown(t(), pos_integer()) :: [String.t()]
+  def render_dropdown(%__MODULE__{autocomplete_active: false}, _width), do: []
+
+  def render_dropdown(
+        %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel},
+        width
+      ) do
+    prefix = "> "
+    pad = String.duplicate(" ", String.length(prefix))
+
+    suggestions
+    |> Enum.with_index()
+    |> Enum.map(fn {%Suggestion{label: label, description: desc}, idx} ->
+      text = format_suggestion(label, desc, width - String.length(prefix))
+      if idx == sel, do: "\e[7m#{prefix}#{text}\e[27m", else: "#{pad}#{text}"
+    end)
+  end
+
+  defp format_suggestion(label, nil, _max_width), do: label
+
+  defp format_suggestion(label, desc, max_width) do
+    combined = "#{label}  #{desc}"
+
+    if String.length(combined) > max_width,
+      do: String.slice(combined, 0, max_width),
+      else: combined
+  end
+
+  defp refresh_autocomplete(%__MODULE__{autocomplete_provider: nil} = s), do: s
+
+  defp refresh_autocomplete(%__MODULE__{value: value, autocomplete_provider: provider} = s) do
+    {:ok, suggestions} = Autocomplete.get_suggestions(provider, value)
+
+    case suggestions do
+      [] ->
+        %{s | autocomplete_active: false, autocomplete_suggestions: [], autocomplete_selected: 0}
+
+      _ ->
+        %{
+          s
+          | autocomplete_active: true,
+            autocomplete_suggestions: suggestions,
+            autocomplete_selected: 0
+        }
+    end
+  end
+
+  defp autocomplete_navigate(
+         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s,
+         delta
+       ) do
+    len = length(suggestions)
+    new_sel = rem(sel + delta + len, len)
+    %{s | autocomplete_selected: new_sel}
+  end
+
+  defp autocomplete_accept(
+         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s
+       ) do
+    case Enum.at(suggestions, sel) do
+      nil ->
+        s
+
+      %Suggestion{value: value} ->
+        %{s | value: value, cursor: String.length(value)}
+        |> dismiss_autocomplete()
+    end
+  end
+
+  defp dismiss_autocomplete(%__MODULE__{} = s) do
+    %{s | autocomplete_active: false, autocomplete_suggestions: [], autocomplete_selected: 0}
   end
 
   defp wrap_input(value, width) do
