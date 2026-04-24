@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:38Z",
+  "description": "Rewrite Interactive's render pipeline to use the new message components instead of plain text.\n\nCurrently: transcript is [{:user, text} | {:assistant, text, status}], rendered as plain strings.\nTarget: transcript entries become component structs (AssistantMessage, UserMessage, ToolExecution), each rendering via their own render/2.\n\nChanges to Interactive:\n- Replace transcript list with message component list\n- Handle agent events to create/update proper components:\n  - MessageUpdate/MessageEnd → AssistantMessage\n  - ToolStart/ToolResult → ToolExecution\n  - UserInput → UserMessage\n- Auto-scroll to bottom on new content\n- Compose: header + messages + input + footer (reserve lines for each)\n\nThis is the integration ticket that makes T2 components visible.\nDepends on: AssistantMessage, UserMessage, ToolExecution, footer wiring",
+  "id": "opi-m4h.10",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 1,
+  "status": "open",
+  "title": "Message rendering pipeline: replace transcript text with components",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:38Z"
+}
