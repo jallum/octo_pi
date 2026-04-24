@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:27:28Z",
+  "description": "# Check: upstream keybindings.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/keybindings.test.ts\n\n## Subject\nKeybindings manager — rebinding conflicts and default preservation.\n\n## Upstream test count (approx)\n3\n\n## Behaviors asserted upstream\n- does not evict selector confirm when input submit is rebound\n- does not evict cursor bindings when another action reuses the same key\n- still reports direct user binding conflicts without evicting defaults\n\n## Upstream dependencies\nKeybindingsManager, TUI_KEYBINDINGS from ../src/keybindings.js\n\n## Upstream notes\nTests keybinding conflict detection and preservation of default bindings when user rebinds. getConflicts() returns array of {key, keybindings[]}.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/keybindings_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.8",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream keybindings.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:27:28Z"
+}
