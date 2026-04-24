@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T02:37:35Z",
+  "description": "Port the upstream footer from footer.ts (220 lines). The footer is a fixed 2-3 line status bar anchored to the bottom of the terminal.\n\n**Line 1 — location:**\n- `cwd` with `~` home substitution + git branch in parens: `~/Workspace/octo_pi (main)`\n- Optional session name appended with ` • `\n- Dim styling, truncated to width with dim `...`\n\n**Line 2 — token stats + model:**\n- Left side: `↑{input} ↓{output} R{cacheRead} W{cacheWrite} ${cost} {context%}/{contextWindow}`\n  - Token counts formatted: \u003c1k raw, \u003c10k `X.Xk`, \u003c1M `Xk`, etc.\n  - Context % colorized: \u003e90% error (red), \u003e70% warning (yellow), else default\n  - Auto-compact indicator ` (auto)` when enabled\n- Right side (right-aligned): model id + thinking level if reasoning model\n  - e.g. `claude-opus-4-6 • medium`\n- Dim styling on both halves; min 2 spaces padding between left and right\n- Truncation: left side truncated first, then right side shrinks\n\n**Line 3 (optional) — extension statuses:**\n- Sorted alphabetically by key, joined with space, truncated to width\n\n**Implementation:**\n- New module `OctoPi.TUI.Components.Footer`\n- Pure render: `render(%Footer{}, width) :: [binary()]`\n- Footer state holds: cwd, git_branch, session_name, usage stats, model info, extension statuses\n- `format_tokens/1` helper for human-readable token counts\n- Wire into Interactive layout: footer lines appended after input\n- Needs session usage data — plumb from Agent.Session or a data provider\n\n**Upstream ref:** `footer.ts` full file, `footer-data-provider.ts` for data shape",
+  "id": "octo-3di.12",
+  "labels": [],
+  "parent": "octo-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "Footer component: pwd/branch + token stats + model name",
+  "type": "task",
+  "updated_at": "2026-04-24T02:37:35Z"
+}
