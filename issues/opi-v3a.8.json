@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:32:49Z",
+  "description": "Our Renderer has 17 tests. Upstream `tui-render.test.ts` is\n510 lines (port-map §14.5). Gaps to port:\n\n- **Cursor tracking on shrink**: when content goes from N\n  lines to M\u003cN, the cursor moves to M (not stays at N). Our\n  code does this implicitly via CSI but there's no test.\n- **Spinner-in-middle detection**: a single middle line\n  changes while surrounding lines stay — diff should emit\n  only the middle.\n- **Stale-content clearance**: a component inflates maxLines\n  then shrinks; stale rows below get cleared with `\\e[K`.\n- **Transition content → empty → content** — the renderer\n  treats each as a separate frame.\n- **Full-redraw on component branch switch** — different\n  layout entirely.\n- **Styles reset after each line** — no italic/bold bleed.\n- **Viewport upward move on large shrink** forces a full\n  redraw.\n\nPlus a resize-during-render race test:\n- Issue resize + render back-to-back; the resize's\n  invalidation must take effect on the next render.\n\nTDD:\n- Port each scenario from tui-render.test.ts into ExUnit.\n- Add the resize-race test with GenServer.call interleaving.",
+  "id": "opi-v3a.8",
+  "labels": [],
+  "parent": "opi-v3a",
+  "priority": 2,
+  "status": "open",
+  "title": "Renderer test coverage + upstream tui-render.test.ts parity",
+  "type": "task",
+  "updated_at": "2026-04-24T00:32:49Z"
+}
