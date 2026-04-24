@@ -101,11 +101,19 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes =~ "\e[2J"
     end
 
-    test "line-count change triggers full redraw" do
+    test "line-count shrink triggers full redraw" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
+      assert bytes =~ "\e[2J"
+    end
+
+    test "line-count growth stays on the diff path" do
       pid = new()
       {:ok, _} = Renderer.render(pid, ["a", "b"])
       {:ok, bytes} = Renderer.render(pid, ["a", "b", "c"])
-      assert bytes =~ "\e[2J"
+      refute bytes =~ "\e[2J"
+      assert bytes =~ "c"
     end
   end
 
@@ -166,7 +174,7 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   describe "content transitions" do
-    test "content → empty → content each triggers full redraw" do
+    test "content → empty is a shrink (full redraw), empty → content grows (diff)" do
       pid = new()
       {:ok, bytes1} = Renderer.render(pid, ["hello"])
       assert bytes1 =~ "\e[2J"
@@ -175,15 +183,18 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes2 =~ "\e[2J"
 
       {:ok, bytes3} = Renderer.render(pid, ["back"])
-      assert bytes3 =~ "\e[2J"
+      refute bytes3 =~ "\e[2J"
       assert strip_csi(bytes3) =~ "back"
     end
 
-    test "completely different layout triggers full redraw" do
+    test "growth to a wider frame paints new lines via diff" do
       pid = new()
       {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
       {:ok, bytes} = Renderer.render(pid, ["x", "y", "z", "w"])
-      assert bytes =~ "\e[2J"
+      refute bytes =~ "\e[2J"
+      text = strip_csi(bytes)
+      assert text =~ "x"
+      assert text =~ "w"
     end
   end
 

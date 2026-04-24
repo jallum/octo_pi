@@ -429,6 +429,109 @@ defmodule OctoPi.TUI.TuiRenderTest do
     end
   end
 
+  # --- redraw counter + Termux + SGR reset (upstream tui-render.test.ts L66-290) ---
+
+  describe "redraw counter" do
+    test "full_redraws increments on first render and on shrink, stays flat on growth" do
+      {r, _vt} = setup_render(height: 10)
+      assert Renderer.full_redraws(r) == 0
+
+      {:ok, _} = Renderer.render(r, ["a", "b", "c", "d"])
+      assert Renderer.full_redraws(r) == 1
+
+      {:ok, _} = Renderer.render(r, ["a", "b"])
+      assert Renderer.full_redraws(r) == 2, "shrink must trigger a full redraw"
+
+      {:ok, _} = Renderer.render(r, ["a", "b", "c"])
+      assert Renderer.full_redraws(r) == 2, "growth must stay on the diff path"
+    end
+  end
+
+  describe "Termux height-resize suppression" do
+    test "height change under TERMUX_VERSION does not full-redraw or clear" do
+      prev = System.get_env("TERMUX_VERSION")
+      System.put_env("TERMUX_VERSION", "0.118.0")
+
+      try do
+        {r, vt} = setup_render(width: 40, height: 10)
+        lines = Enum.map(0..19, &"Line #{&1}")
+        {:ok, bytes0} = Renderer.render(r, lines)
+        vt = VT.write(vt, bytes0)
+        initial = Renderer.full_redraws(r)
+
+        for h <- [15, 8, 14, 11] do
+          :ok = Renderer.resize(r, 40, h)
+          {:ok, bytes} = Renderer.render(r, lines)
+
+          refute bytes =~ "\e[2J",
+                 "Termux height change must not emit clear-screen (h=#{h})"
+
+          refute bytes =~ "\e[3J",
+                 "Termux height change must not clear scrollback (h=#{h})"
+
+          _ = VT.write(vt, bytes)
+        end
+
+        assert Renderer.full_redraws(r) == initial,
+               "Termux height changes must not bump full_redraws"
+      after
+        case prev do
+          nil -> System.delete_env("TERMUX_VERSION")
+          v -> System.put_env("TERMUX_VERSION", v)
+        end
+      end
+    end
+  end
+
+  describe "style isolation across lines" do
+    test "rendered italic line does not leak italic into the next line" do
+      {r, vt} = setup_render(width: 20, height: 6)
+      {:ok, bytes} = Renderer.render(r, ["\e[3mItalic\e[23m", "Plain"])
+      vt = VT.write(vt, bytes)
+      refute VT.cell_italic?(vt, 1, 0), "italic leaked to plain line"
+    end
+  end
+
+  describe "strict shrink/append counter invariants" do
+    test "deleting lines that move the viewport upward triggers a single full redraw" do
+      {r, vt} = setup_render(width: 20, height: 12)
+      twelve = Enum.map(0..11, &"Line #{&1}")
+      {:ok, bytes0} = Renderer.render(r, twelve)
+      vt = VT.write(vt, bytes0)
+      initial = Renderer.full_redraws(r)
+
+      seven = Enum.map(0..6, &"Line #{&1}")
+      {:ok, bytes1} = Renderer.render(r, seven)
+      vt = VT.write(vt, bytes1)
+
+      assert Renderer.full_redraws(r) == initial + 1, "shrink should full-redraw"
+      rows = visible(vt)
+      for i <- 0..6, do: assert(Enum.at(rows, i) == "Line #{i}")
+    end
+
+    test "appending after a shrink stays on the diff path (no extra full redraw)" do
+      {r, vt} = setup_render(width: 20, height: 10)
+      eight = Enum.map(0..7, &"Line #{&1}")
+      {:ok, b0} = Renderer.render(r, eight)
+      vt = VT.write(vt, b0)
+
+      {:ok, b1} = Renderer.render(r, ["Line 0", "Line 1"])
+      vt = VT.write(vt, b1)
+      after_shrink = Renderer.full_redraws(r)
+
+      {:ok, b2} = Renderer.render(r, ["Line 0", "Line 1", "Line 2"])
+      vt = VT.write(vt, b2)
+
+      assert Renderer.full_redraws(r) == after_shrink,
+             "append after shrink should stay on the diff path"
+
+      rows = visible(vt)
+      assert Enum.at(rows, 0) == "Line 0"
+      assert Enum.at(rows, 1) == "Line 1"
+      assert Enum.at(rows, 2) == "Line 2"
+    end
+  end
+
   # --- overlay visibility (upstream overlay-short-content.test.ts) ---
 
   describe "overlay visibility" do

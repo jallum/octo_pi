@@ -46,6 +46,10 @@ defmodule OctoPi.TUI.Renderer do
   @spec resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
   def resize(pid, width, height), do: GenServer.call(pid, {:resize, width, height})
 
+  @doc "Return the number of full-redraw passes performed since start."
+  @spec full_redraws(GenServer.server()) :: non_neg_integer()
+  def full_redraws(pid), do: GenServer.call(pid, :full_redraws)
+
   @doc """
   Pure function used by the diff path and exposed for unit tests.
   Returns `{first_changed_index, last_changed_index}`. When nothing
@@ -68,7 +72,8 @@ defmodule OctoPi.TUI.Renderer do
       width: Keyword.get(opts, :width, 80),
       height: Keyword.get(opts, :height, 24),
       csi_2026?: Keyword.get(opts, :csi_2026?, false),
-      termux?: termux?()
+      termux?: termux?(),
+      full_redraws: 0
     }
 
     {:ok, state}
@@ -89,13 +94,20 @@ defmodule OctoPi.TUI.Renderer do
     {:reply, :ok, %{state | width: w, height: h, previous: new_prev}}
   end
 
+  def handle_call(:full_redraws, _from, state),
+    do: {:reply, state.full_redraws, state}
+
   # --- compute dispatch (multi-head on state shape) ---
+  #
+  # Full redraw when: first render, or previous frame was longer
+  # (need to clear stale rows). Growth is handled by the diff path
+  # — new lines simply paint below the previous content.
 
   defp compute(lines, cursor_seq, %{previous: nil} = state),
     do: full_redraw(lines, cursor_seq, state)
 
   defp compute(lines, cursor_seq, %{previous: prev} = state)
-       when length(lines) != length(prev),
+       when length(lines) < length(prev),
        do: full_redraw(lines, cursor_seq, state)
 
   defp compute(lines, cursor_seq, state), do: diff(lines, cursor_seq, state)
@@ -105,7 +117,7 @@ defmodule OctoPi.TUI.Renderer do
   defp full_redraw(lines, cursor_seq, state) do
     body = [@clear_screen, @cursor_home, render_lines(lines, 0), cursor_seq]
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
-    {bytes, %{state | previous: lines}}
+    {bytes, %{state | previous: lines, full_redraws: state.full_redraws + 1}}
   end
 
   # --- diff ---
@@ -121,7 +133,12 @@ defmodule OctoPi.TUI.Renderer do
         end
 
       {first, last} ->
-        body = [move_to_row(first), render_lines(Enum.slice(lines, first..last), first), cursor_seq]
+        body = [
+          move_to_row(first),
+          render_lines(Enum.slice(lines, first..last), first),
+          cursor_seq
+        ]
+
         bytes = IO.iodata_to_binary(wrap_sync(body, state))
         {bytes, %{state | previous: lines}}
     end
