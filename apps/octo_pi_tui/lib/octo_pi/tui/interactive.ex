@@ -526,6 +526,10 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, :paste_end),
     do: %{state | paste_buffer: nil}
 
+  def handle_event(%{input: %{value: ""}, banner: %_{} = banner} = state, {:char, "?"}) do
+    %{state | banner: Components.WelcomeBanner.handle_key(banner, %Key{key: ??})}
+  end
+
   def handle_event(%{input: input} = state, {:char, c}),
     do: %{state | input: Components.Input.insert(input, c)}
 
@@ -541,10 +545,6 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | width: w, height: h, input: %{state.input | width: w}}
 
   def handle_event(state, _), do: state
-
-  defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??}) do
-    %{state | banner: Components.WelcomeBanner.handle_key(banner, %Key{key: ??})}
-  end
 
   defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}),
     do: %{state | exit: true}
@@ -678,16 +678,30 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp find_last_assistant(transcript) do
-    transcript
-    |> Enum.with_index()
-    |> Enum.reverse()
-    |> Enum.find(fn
-      {%AssistantMessage{}, _idx} -> true
-      _ -> false
-    end)
-    |> case do
-      {msg, idx} -> {idx, msg}
-      nil -> nil
+    result =
+      transcript
+      |> Enum.with_index()
+      |> Enum.reverse()
+      |> Enum.find(fn
+        {%AssistantMessage{}, _idx} -> true
+        _ -> false
+      end)
+
+    case result do
+      {msg, idx} ->
+        has_user_after =
+          transcript
+          |> Enum.drop(idx + 1)
+          |> Enum.any?(fn
+            %UserMessage{} -> true
+            {:user, _} -> true
+            _ -> false
+          end)
+
+        if has_user_after, do: nil, else: {idx, msg}
+
+      nil ->
+        nil
     end
   end
 

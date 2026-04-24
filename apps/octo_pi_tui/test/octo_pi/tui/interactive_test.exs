@@ -481,8 +481,18 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
+      s2 = Interactive.handle_event(s, {:char, "?"})
       assert s2.banner.expanded
+    end
+
+    test "? types into input when input is not empty" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+      s = %Interactive{input: %Input{value: "hello", cursor: 5}, banner: banner, theme: theme}
+
+      s2 = Interactive.handle_event(s, {:char, "?"})
+      assert s2.input.value == "hello?"
+      refute s2.banner.expanded
     end
   end
 
