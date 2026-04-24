@@ -5,13 +5,14 @@
     "opi-v3a"
   ],
   "blocks": [],
+  "closed_at": "2026-04-24T03:08:07Z",
   "created": "2026-04-23T16:43:11.635138Z",
   "description": "Once the provider behaviour is proven against Anthropic, add the rest. Each is a self-contained codec module; no agent-side changes needed.\n\nScope (children to be created when we approach this phase):\n- OpenAI Responses provider.\n- Google Generative AI provider.\n- Amazon Bedrock (Converse Stream API) — complex auth: profile / static creds / bearer / ECS / IRSA chain.\n- Cross-provider message normalization (tool-id regex differences, thinking block coercion, image-downgrade for non-vision models).\n- Cross-provider handoff integration tests.\n\nRef: RESEARCH.md §3.1, §6 Phase 5. Upstream's Provider plug-in pattern is in AGENTS.md \"Adding a New LLM Provider\" — mirror the structure.",
   "id": "octo-l8r",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 5: additional providers (OpenAI, Google, Bedrock)",
   "type": "epic",
-  "updated_at": "2026-04-24T00:31:00Z"
+  "updated_at": "2026-04-24T03:08:07Z"
 }
