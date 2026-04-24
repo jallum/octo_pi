@@ -374,6 +374,27 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Spacing after headings ──────────
+
+  describe "spacing after headings (upstream parity)" do
+    test "one blank line between heading and following paragraph" do
+      plain =
+        "# Hello\n\nThis is a paragraph"
+        |> render()
+        |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+
+      head_idx = Enum.find_index(plain, &String.contains?(&1, "Hello"))
+      assert is_integer(head_idx)
+      after_head = Enum.drop(plain, head_idx + 1)
+      assert Enum.find_index(after_head, &(&1 != "")) == 1
+    end
+
+    test "no trailing blank line when heading is the last rendered block" do
+      plain = "# Hello" |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      refute List.last(plain) == ""
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
