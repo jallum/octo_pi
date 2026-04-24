@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T10:00:47Z",
   "created": "2026-04-24T09:33:01Z",
   "description": "Port the ExtensionRunner query/introspection methods. Upstream runner.ts 364-552. Methods: getExtensionPaths (list loaded paths), getAllRegisteredTools (deduplicated tool list), getToolDefinition (lookup by name), getRegisteredCommands (deduplicated with invocation name resolution), getCommand (lookup by invocation name), getCommandDiagnostics (name conflict diagnostics), getMessageRenderer (custom message renderer lookup), hasHandlers (check if handlers registered for event type), onError/emitError (error listener registration and dispatch). These enable tooling, diagnostics, and extension-aware UI.",
   "id": "octo-3gv.13",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Runner introspection methods",
   "type": "task",
-  "updated_at": "2026-04-24T09:59:39Z"
+  "updated_at": "2026-04-24T10:00:47Z"
 }
