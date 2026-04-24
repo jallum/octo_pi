@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:03:46Z",
   "created": "2026-04-24T00:32:19Z",
   "description": "Upstream `keys.test.ts` is 615 lines (port-map §14.2). Our\ncurrent KeyParser has 49 tests covering the MVP shape. Gaps:\n\n- **NUL (0x00) classification bug**: the printable Unicode\n  catchall matches `0x00` as valid UTF-8, emitting\n  `{:char, \u003c\u003c0\u003e\u003e}`. Fix: add `b != 0` guard to the ASCII clause\n  and a dedicated `def parse(\u003c\u003c0\u003e\u003e), do: :unknown` head.\n- **Kitty CSI-u unhappy paths**: malformed mod/event fields,\n  garbage after `u`, non-numeric code. Currently the `with`\n  pipeline returns `:unknown` for most, but not all branches\n  are tested. Port every edge case.\n- **Alternate layouts**: Cyrillic, Dvorak, swapped — Kitty\n  reports codepoint + shifted + base via\n  `\\e[\u003ccp\u003e:\u003cshifted\u003e:\u003cbase\u003e;\u003cmod\u003eu`. MVP ignored the shifted/\n  base fields; this ticket lands them with tests.\n- **xterm modifyOtherKeys**: Ctrl/Shift/Alt + letter/symbol/\n  digit/arrow/special. Upstream has dedicated decoder for\n  this format; mirror it.\n- **Legacy Ctrl+letter edge cases**: Windows Terminal local vs\n  SSH distinction for Ctrl+Backspace (env-aware via\n  WT_SESSION / SSH_CONNECTION).\n- **Alt-prefix legacy (ESC+X)** — currently deferred. Port it\n  so Meta+key works.\n- **Mouse reporting**: SGR, old X11 (ESC+M+3 bytes). Decode\n  enough for click events.\n\nTDD:\n- Every scenario from keys.test.ts → ExUnit head. Quality\n  parity, not just surface. Pure parser — no I/O, no state.",
   "id": "opi-v3a.4",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "KeyParser parity with upstream keys.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T00:55:39Z"
+  "updated_at": "2026-04-24T01:03:46Z"
 }
