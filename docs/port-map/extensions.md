@@ -491,14 +491,35 @@ apps/octo_pi_coder/test/octo_pi/coder/extension/
 
 ## 11. Tickets
 
+### 11.1 Core (P1)
+
 | Ticket | Title | Deps |
 |--------|-------|------|
 | octo-3gv.1 | Extension behaviour + event types + handler storage | — |
 | octo-3gv.2 | Event dispatcher: six emission patterns | .1 |
 | octo-3gv.3 | Extension loading + registration + ExtensionAPI | .1 |
+
+### 11.2 Infrastructure (P2)
+
+| Ticket | Title | Deps |
+|--------|-------|------|
 | octo-3gv.4 | EventBus: inter-extension pub/sub | — |
 | octo-3gv.5 | Telemetry + log handler for extension events | .2 |
 | octo-3gv.6 | Reference extensions: dirty-repo-guard + input-transform | .2, .3 |
+| octo-3gv.10 | Extended ExtensionAPI action methods | .3 |
+| octo-3gv.11 | Command context: session control methods | .3 |
+| octo-3gv.12 | Provider registration via extensions | .3 |
+| octo-3gv.14 | Extension lifecycle: stale tracking + invalidation | .1 |
+
+### 11.3 Advanced / TUI-bound (P3)
+
+| Ticket | Title | Deps |
+|--------|-------|------|
+| octo-3gv.7 | Extension struct: messageRenderers, flags, shortcuts | .1 |
+| octo-3gv.8 | UI Context: extension interaction with TUI | .3 |
+| octo-3gv.9 | Tool rendering: renderCall, renderResult, ToolRenderContext | .1 |
+| octo-3gv.13 | Runner introspection methods | .2 |
+| octo-3gv.15 | Advanced loader: factory, manifest discovery, Mix deps | .3 |
 
 **Definition of done (from epic):** a custom extension can register a
 `tool_call` handler that sanitizes bash commands and a
