@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:31:42Z",
+  "description": "`Interactive.render/1` concatenates the full transcript into a\nline list with no windowing and no word-wrap. Long sessions\noverflow the visible screen; long assistant messages \u003e\nterminal width soft-wrap inconsistently.\n\nUpstream parity: tui-render.test.ts (port-map §14.5) covers\nviewport math — content shrinkage, scroll-up on overflow,\ncursor-tracking on shrink, transition empty→content, spinner\nmiddle-line detection. Port each scenario.\n\nDesign:\n- A Viewport that takes (transcript, input_height, term_height,\n  term_width) → list of lines fitting in (term_height -\n  input_height).\n- Word-wrap each transcript message at term_width, ANSI-aware\n  (don't count escape codes in width). Upstream has\n  wrap-ansi.test.ts (port-map §14.3) — port those scenarios.\n- Scroll: when total_rendered_height \u003e available_height, keep\n  the tail (most recent). Rough equivalent of a read-only\n  scrollback; no keyboard scrolling for MVP.\n\nTDD:\n- short session fits on screen with no wrap\n- long assistant message wraps at width; ANSI preserved\n- transcript exceeds height → only tail visible\n- shrinking transcript (e.g. streaming replaces earlier text\n  via MessageUpdate) updates viewport correctly\n- wide-char lines (CJK) wrap at grapheme boundaries, not bytes\n\nPure functions — no GenServer. `Interactive.render/1` calls\ninto Viewport and gets the already-windowed lines ready for the\nRenderer.",
+  "id": "opi-v3a.2",
+  "labels": [],
+  "parent": "opi-v3a",
+  "priority": 1,
+  "status": "open",
+  "title": "Transcript viewport abstraction + word-wrap",
+  "type": "task",
+  "updated_at": "2026-04-24T00:31:42Z"
+}
