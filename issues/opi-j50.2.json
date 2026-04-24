@@ -5,14 +5,15 @@
     "opi-j50.4",
     "opi-j50.6"
   ],
+  "closed_at": "2026-04-24T15:42:29Z",
   "created": "2026-04-24T14:48:15Z",
   "description": "Port pi-mono's DynamicBorder component: a full-width horizontal rule using '─' (U+2500) repeated to terminal width, styled with the theme's borderMuted color. Implements the Component behaviour with render/2 (returns single line) and handle_key/2 (noop passthrough). Used as visual separator above chat area and between chat and input. pi-mono places these in headerContainer (below banner) and between chatContainer and editorContainer.",
   "id": "opi-j50.2",
   "labels": [],
   "parent": "opi-j50",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "DynamicBorder separator component",
   "type": "task",
-  "updated_at": "2026-04-24T15:39:25Z"
+  "updated_at": "2026-04-24T15:42:29Z"
 }
