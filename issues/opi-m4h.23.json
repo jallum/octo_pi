@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:38:27Z",
+  "description": "Wire Extension shortcut registrations into the input/editor keybinding chain.\n\nImplement:\n- On each keypress, check registered extension shortcuts before default bindings\n- If extension handler returns true, consume the key (don't pass to editor)\n- Pull shortcuts from Dispatcher or extension list\n\nUpstream: custom-editor.ts onExtensionShortcut pattern\nDepends on: input/editor component, Extension struct shortcuts field",
+  "id": "opi-m4h.23",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "Extension shortcuts: wire into editor keybinding chain",
+  "type": "task",
+  "updated_at": "2026-04-24T10:38:27Z"
+}
