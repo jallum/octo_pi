@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T21:52:40Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-q5k.40",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "editor.test.ts / Character jump (Ctrl+]) (14 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T21:52:40Z"
+  "updated_at": "2026-04-24T22:47:07Z"
 }
