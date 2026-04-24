@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.5",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done.",
+      "timestamp": "2026-04-24T22:40:08Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Spacing after code blocks (3 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:39:47Z"
+  "updated_at": "2026-04-24T22:40:08Z"
 }
