@@ -9,9 +9,15 @@
   "id": "opi-q5k.24",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. fuzzy_test.exs now asserts score \u003c 0.0 for exact match 'test'/'test'. Re-comparison: all 12 upstream it(...) blocks in tmp/pi-mono fuzzy.test.ts have Elixir equivalents (enumerated in opi-q5k.6 audit).",
+      "timestamp": "2026-04-24T22:10:56Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port fuzzy.test.ts gap: exact-match score is negative",
   "type": "task",
-  "updated_at": "2026-04-24T22:10:23Z"
+  "updated_at": "2026-04-24T22:10:56Z"
 }
