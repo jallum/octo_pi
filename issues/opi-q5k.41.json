@@ -9,9 +9,15 @@
   "id": "opi-q5k.41",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. Key.matches?/2 + WT-aware 0x08 decoding + with_wt_env test helper. 16 matches?/2 tests and 3 WT tests added. Layout-aware matching delegates to KeyParser's alternate-key resolution. 1054 tui tests pass.",
+      "timestamp": "2026-04-24T22:34:10Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port keys.test.ts gaps: matchesKey function, Windows Terminal 0x08, ~35 tests",
   "type": "task",
-  "updated_at": "2026-04-24T22:31:09Z"
+  "updated_at": "2026-04-24T22:34:10Z"
 }
