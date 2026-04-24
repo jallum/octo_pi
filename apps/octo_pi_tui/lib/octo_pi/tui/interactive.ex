@@ -779,7 +779,7 @@ defmodule OctoPi.TUI.Interactive do
     banner_lines = render_banner(banner, width)
 
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-    all = banner_lines ++ [border] ++ transcript_lines ++ [border] ++ input_lines
+    all = banner_lines ++ transcript_lines ++ [border] ++ input_lines
     Viewport.window(all, content_height) ++ footer_lines
   end
 
