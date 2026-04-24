@@ -9,9 +9,15 @@
   "id": "opi-q5k.34",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. 26+ tests added covering image_line? edge cases (long lines, ANSI, mixed, false positives), detect_capabilities env matrix via with_env helper, and exact hyperlink format. Re-comparison: all upstream it(...) blocks in terminal-image.test.ts + the regressions from isimageline have Elixir equivalents. Ticket opi-q5k.4 (cross-referenced) also covered.",
+      "timestamp": "2026-04-24T22:27:00Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port terminal-image.test.ts gaps: 26 tests across isImageLine/detectCapabilities/hyperlink",
   "type": "task",
-  "updated_at": "2026-04-24T22:25:11Z"
+  "updated_at": "2026-04-24T22:27:00Z"
 }
