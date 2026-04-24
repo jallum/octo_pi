@@ -9,9 +9,15 @@
   "id": "opi-q5k.39",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. FilePathProvider + 14 tests: trigger classification, directory-first ranking, hidden/.git, fuzzy nested matching, case insensitivity, quoting, absolute-path, symlink follow. Pure Elixir walker — no fd dependency. Quoted-in-the-middle-of-input and preserve-./-prefix edge cases are Input-layer concerns and can be handled in an Input integration ticket if/when a real file-path autocomplete use case in the UI surfaces.",
+      "timestamp": "2026-04-24T22:37:17Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Implement Autocomplete file-path provider + port autocomplete.test.ts (32 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:35:16Z"
+  "updated_at": "2026-04-24T22:37:17Z"
 }
