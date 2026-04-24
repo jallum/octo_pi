@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:56:16Z",
   "created": "2026-04-24T00:33:28Z",
   "description": "Small polish items from the review:\n\n- `terminal.ex:46`: `unless skip_raw_mode, do: raw_mode_fn.(:enter)`\n  → flip to pattern-matched heads or `if not` form; keep\n  consistent with the rest of the codebase.\n- `interactive.ex` `shutdown/3` uses imperative\n  `for pid \u003c- [...] do ... end`; replace with `Enum.each/2`\n  or explicit sequencing.\n- `Terminal.state/1` is a debug API with a confusing name;\n  rename to `info/1` and mark `@doc false` if tests are its\n  only user.\n- `Components.Input.focused` field is now vestigial (cursor is\n  painted by the terminal post-cursor-fix). Either remove it\n  entirely or repurpose it as \"skip key dispatch when false\"\n  (which is already what the unfocused clause does — it just\n  doesn't do anything visible). Remove for simplicity.\n\nNo tests required; existing suites verify the behavior.",
   "id": "opi-v3a.12",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Style polish grab-bag (unless / for / state / :focused)",
   "type": "task",
-  "updated_at": "2026-04-24T01:54:19Z"
+  "updated_at": "2026-04-24T01:56:16Z"
 }
