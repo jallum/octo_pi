@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.10",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Declined. Vim-style Ctrl+] jump-to-char is not a target feature for our Input component at this phase. The 14 upstream tests exercise a feature that has no Elixir equivalent; porting would require implementing a two-stage key handler (press Ctrl+], capture next char, jump cursor forward/back to next/prev occurrence). Reopen if the coding-agent UX adds this binding.",
+      "timestamp": "2026-04-24T22:47:07Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Character jump (Ctrl+]) (14 upstream tests)",
