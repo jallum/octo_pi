@@ -24,12 +24,11 @@ defmodule OctoPi.Coder.Modes.Print do
 
   alias OctoPi.Agent.Event
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools
 
   @spec run(map()) :: {:ok, atom()} | {:error, atom()}
   def run(%{prompt: prompt, model: model} = opts) do
     cwd = Map.get(opts, :cwd, File.cwd!())
-    tools = Map.get(opts, :tools, default_tools(cwd))
+    tools = Map.get(opts, :tools, OctoPi.Coder.default_tools(cwd))
     transport = Map.get(opts, :transport)
 
     session_opts =
@@ -52,18 +51,6 @@ defmodule OctoPi.Coder.Modes.Print do
 
   defp maybe_put(kw, _, nil), do: kw
   defp maybe_put(kw, k, v), do: Keyword.put(kw, k, v)
-
-  defp default_tools(cwd) do
-    [
-      Tools.Read.tool(cwd),
-      Tools.Write.tool(cwd),
-      Tools.Edit.tool(cwd),
-      Tools.Ls.tool(cwd),
-      Tools.Bash.tool(cwd),
-      Tools.Grep.tool(cwd),
-      Tools.Find.tool(cwd)
-    ]
-  end
 
   # `printed` is how much of the current partial assistant's text
   # has already been written to stdout.
