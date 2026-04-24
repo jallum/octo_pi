@@ -5,14 +5,13 @@
   ],
   "blocks": [],
   "created": "2026-04-24T01:29:54.100363Z",
-  "defer_until": "2026-07-01",
   "description": "Port the pre-request (`onPayload`) and post-response (`onResponse`) hook callbacks from StreamOptions. `onPayload` receives the built params + model before the HTTP call, can return modified params. `onResponse` receives status + headers after the response starts.\n\nUpstream: openai-completions.ts L143-150\nPort map: §8",
   "id": "opi-kds.12",
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "deferred",
+  "status": "open",
   "title": "onPayload / onResponse callbacks",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:01Z"
+  "updated_at": "2026-04-24T01:30:42Z"
 }
