@@ -53,22 +53,15 @@ defmodule OctoPi.TUI.Terminal do
   @spec write(GenServer.server(), iodata()) :: :ok
   def write(pid, bytes), do: GenServer.call(pid, {:write, bytes})
 
-  @doc "Snapshot the Terminal state (for tests + debugging)."
+  @doc false
   @spec state(GenServer.server()) :: map()
   def state(pid), do: GenServer.call(pid, :state)
 
-  @doc """
-  Feed a chunk of bytes into the Terminal as if they had arrived on
-  stdin. Used by the reader loop in production, and by tests that
-  want to exercise the broadcast path without real I/O.
-  """
+  @doc false
   @spec feed_chunk(GenServer.server(), binary()) :: :ok
   def feed_chunk(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:feed_chunk, bin})
 
-  @doc """
-  Simulate a window resize with explicit dimensions. Used by tests
-  (and by the production SIGWINCH handler after reading new dims).
-  """
+  @doc false
   @spec simulate_resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
   def simulate_resize(pid, width, height),
     do: GenServer.call(pid, {:resize, width, height})
