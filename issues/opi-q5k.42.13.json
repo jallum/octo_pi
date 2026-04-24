@@ -7,6 +7,12 @@
   "id": "opi-q5k.42.13",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Deferred — depends on opi-q5k.42.1 (tables). The 1 upstream 'Combined features' test verifies lists + tables together; pointless to port until tables are implemented.",
+      "timestamp": "2026-04-24T22:45:22Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Combined features (1 upstream tests)",
