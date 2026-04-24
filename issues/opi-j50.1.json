@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T14:48:11Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-j50",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Ctrl+C exit via +Bc erl flag wrapper",
   "type": "task",
-  "updated_at": "2026-04-24T14:48:11Z"
+  "updated_at": "2026-04-24T15:32:37Z"
 }
