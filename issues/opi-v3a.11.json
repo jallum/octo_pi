@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-v3a.13"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-v3a",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Terminal.feed_chunk: scope to test-support only",
   "type": "task",
-  "updated_at": "2026-04-24T00:33:28Z"
+  "updated_at": "2026-04-24T01:53:36Z"
 }
