@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:59Z",
+  "description": "Port settings-selector.ts (~471 LOC). Configuration overlay.\n\nImplement:\n- Theme picker (dark/light/custom)\n- Thinking level selector (off/brief/verbose)\n- Tool expansion default toggle\n- Hardware cursor toggle\n- Settings persist to config file\n\nUpstream: interactive/components/settings-selector.ts, thinking-selector.ts, theme-selector.ts, show-images-selector.ts\nDepends on: overlay, settings_list component, theme",
+  "id": "opi-m4h.17",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 2,
+  "status": "open",
+  "title": "SettingsSelector dialog: theme, thinking level, preferences",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:59Z"
+}
