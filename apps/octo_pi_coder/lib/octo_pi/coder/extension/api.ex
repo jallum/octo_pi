@@ -2,7 +2,7 @@ defmodule OctoPi.Coder.Extension.API do
   @moduledoc false
 
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.Event
+  alias OctoPi.Coder.Extension.{Event, ProviderConfig}
 
   @type t :: %__MODULE__{
           extension_id: String.t(),
@@ -49,7 +49,9 @@ defmodule OctoPi.Coder.Extension.API do
     :extension_id,
     registered_handlers: [],
     registered_tools: [],
-    registered_commands: []
+    registered_commands: [],
+    pending_providers: [],
+    bound?: false
   ] ++ Enum.map(@action_fields, &{&1, nil})
 
   @spec new(String.t()) :: t()
@@ -81,6 +83,23 @@ defmodule OctoPi.Coder.Extension.API do
     {:ok, %{api | registered_commands: api.registered_commands ++ [{name, command}]}}
   end
 
+  @spec register_provider(t(), ProviderConfig.t()) :: {:ok, t()}
+  def register_provider(%__MODULE__{bound?: false} = api, %ProviderConfig{} = config) do
+    {:ok, %{api | pending_providers: api.pending_providers ++ [{:register, config}]}}
+  end
+
+  def register_provider(%__MODULE__{bound?: true} = _api, %ProviderConfig{} = _config) do
+    {:error, "register_provider after bind_core not yet implemented — use pending queue"}
+  end
+
+  @spec unregister_provider(t(), String.t()) :: {:ok, t()}
+  def unregister_provider(%__MODULE__{bound?: false} = api, provider_id) when is_binary(provider_id) do
+    {:ok, %{api | pending_providers: api.pending_providers ++ [{:unregister, provider_id}]}}
+  end
+
+  @spec pending_providers(t()) :: [{:register, ProviderConfig.t()} | {:unregister, String.t()}]
+  def pending_providers(%__MODULE__{} = api), do: api.pending_providers
+
   @spec build_extension(t(), String.t()) :: Extension.t()
   def build_extension(%__MODULE__{} = api, path) do
     ext = Extension.new(api.extension_id, path)
@@ -102,12 +121,15 @@ defmodule OctoPi.Coder.Extension.API do
 
   @spec bind_core(t(), map()) :: t()
   def bind_core(%__MODULE__{} = api, actions) do
-    Enum.reduce(@action_fields, api, fn field, api ->
-      case Map.get(actions, field) do
-        nil -> api
-        fun -> Map.put(api, field, fun)
-      end
-    end)
+    api =
+      Enum.reduce(@action_fields, api, fn field, api ->
+        case Map.get(actions, field) do
+          nil -> api
+          fun -> Map.put(api, field, fun)
+        end
+      end)
+
+    %{api | bound?: true}
   end
 
   defp stub(field, 0), do: fn -> raise RuntimeError, "#{field} not bound — call bind_core first" end
