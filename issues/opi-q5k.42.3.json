@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.3",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done — partial. Bold-preservation locked in; foreground-re-emit-after-inline-code gap documented in the test describe's preamble comment. Full fix requires render_inline to re-emit the outer heading fg after each child closes — deferred as its own refactor ticket if/when an alternating-color heading regression surfaces.",
+      "timestamp": "2026-04-24T22:43:38Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Heading with inline code (4 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:42:48Z"
+  "updated_at": "2026-04-24T22:43:38Z"
 }
