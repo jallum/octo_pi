@@ -9,9 +9,15 @@
   "id": "opi-q5k.38",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. 2 sweep tests under 'wide-character overflow invariant' describe. 4 samples × 3 cursor positions = 12 render invariants plus horizontal-scroll case. All pass.",
+      "timestamp": "2026-04-24T22:18:16Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port input.test.ts overflow sweeps: CJK render width invariant",
   "type": "task",
-  "updated_at": "2026-04-24T22:17:43Z"
+  "updated_at": "2026-04-24T22:18:16Z"
 }
