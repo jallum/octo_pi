@@ -420,4 +420,41 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       assert roles == ["user", "assistant", "tool", "assistant", "user"]
     end
   end
+
+  describe "provider routing" do
+    test "includes OpenRouter provider routing when base_url matches" do
+      routing = %{order: ["anthropic"], allow_fallbacks: false}
+      m = model(%{base_url: "https://openrouter.ai/api/v1", provider: :openrouter})
+      compat = %{Compat.detect(m) | open_router_routing: routing}
+      req = Request.build(m, context([]), %StreamOptions{}, compat)
+
+      assert req.body["provider"] == routing
+    end
+
+    test "omits OpenRouter routing when base_url does not match" do
+      routing = %{order: ["anthropic"]}
+      m = model(%{base_url: "https://api.openai.com/v1"})
+      compat = %{Compat.detect(m) | open_router_routing: routing}
+      req = Request.build(m, context([]), %StreamOptions{}, compat)
+
+      refute Map.has_key?(req.body, "provider")
+    end
+
+    test "includes Vercel gateway routing when base_url matches" do
+      routing = %{only: ["openai"], order: ["anthropic", "openai"]}
+      m = model(%{base_url: "https://ai-gateway.vercel.sh/v1"})
+      compat = %{Compat.detect(m) | vercel_gateway_routing: routing}
+      req = Request.build(m, context([]), %StreamOptions{}, compat)
+
+      assert req.body["providerOptions"] == %{
+        "gateway" => %{"only" => ["openai"], "order" => ["anthropic", "openai"]}
+      }
+    end
+
+    test "omits Vercel routing when empty" do
+      m = model()
+      req = Request.build(m, context([]), %StreamOptions{}, Compat.detect(m))
+      refute Map.has_key?(req.body, "providerOptions")
+    end
+  end
 end

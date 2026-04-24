@@ -66,6 +66,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     |> put_temperature(opts)
     |> put_tools(context, compat)
     |> put_reasoning(model, opts, compat)
+    |> put_routing(model, compat)
   end
 
   defp put_max_tokens(body, %StreamOptions{max_tokens: nil}, _compat), do: body
@@ -124,6 +125,32 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp map_reasoning_effort(level, effort_map) do
     Map.get(effort_map, level, to_string(level))
   end
+
+  # --- Routing ---
+
+  defp put_routing(body, %Model{base_url: base_url}, %Compat{open_router_routing: routing})
+       when routing != %{} and is_map(routing) do
+    if String.contains?(base_url, "openrouter.ai"),
+      do: Map.put(body, "provider", routing),
+      else: body
+  end
+
+  defp put_routing(body, %Model{base_url: base_url}, %Compat{vercel_gateway_routing: routing})
+       when routing != %{} and is_map(routing) do
+    if String.contains?(base_url, "ai-gateway.vercel.sh") do
+      gateway = %{}
+      gateway = if routing[:only], do: Map.put(gateway, "only", routing[:only]), else: gateway
+      gateway = if routing[:order], do: Map.put(gateway, "order", routing[:order]), else: gateway
+
+      if gateway != %{},
+        do: Map.put(body, "providerOptions", %{"gateway" => gateway}),
+        else: body
+    else
+      body
+    end
+  end
+
+  defp put_routing(body, _model, _compat), do: body
 
   # --- Tools ---
 
