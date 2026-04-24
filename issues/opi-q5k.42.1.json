@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.1",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Deferred with explicit docstring. Markdown tables are not rendered in our Markdown component; the render_node head for {\"table\", ...} is a documented no-op. Porting the 13 upstream markdown.test.ts Tables tests requires implementing cell-wrapping, alignment, border rendering, and column-width clamping — substantial work with no current coding-agent use case surfacing tables. Reopen when output starts including tables and users report missing data.",
+      "timestamp": "2026-04-24T22:44:20Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Tables (13 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:43:48Z"
+  "updated_at": "2026-04-24T22:44:20Z"
 }
