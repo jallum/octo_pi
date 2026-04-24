@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:31:42Z",
+  "description": "`Interactive.run/1` currently relies on `Terminal.terminate/2`\nto call `RawMode.exit()`. If the main receive loop raises or\nexits via a linked crash before `GenServer.stop(terminal)` runs,\nthe tty stays in raw mode and the user's shell is broken until\nthey `reset`.\n\nFix: wrap the body of `run/1` (from session start through the\nloop) in a `try/rescue/after` that *always* calls\n`RawMode.exit()` and clears the cursor/paste/focus escape\nsequences. Also trap exits in the runner process so a linked\nchild crash (e.g. Renderer, FSM) doesn't bypass cleanup.\n\nMirrors upstream pi-mono's Tui shutdown path\n(`tmp/pi-mono/packages/tui/src/terminal.ts` L266-307 — restore\nraw-mode state, disable bracketed paste, pause stdin).\n\nTDD:\n- Inject a raw_mode_fn that counts enter/exit calls. Have\n  Interactive.run/1 raise mid-loop via a test-only key or a\n  send-induced exception. Assert raw_mode_fn was called with\n  :exit even on the crash path.\n- Assert a child crash (linked Renderer going down abnormally)\n  still triggers the cleanup.",
+  "id": "opi-v3a.1",
+  "labels": [],
+  "parent": "opi-v3a",
+  "priority": 1,
+  "status": "open",
+  "title": "Crash-safe tty restoration in Interactive.run/1",
+  "type": "task",
+  "updated_at": "2026-04-24T00:31:42Z"
+}
