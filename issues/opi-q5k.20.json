@@ -9,9 +9,15 @@
   "id": "opi-q5k.20",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/tui-cell-size-input.test.ts (2 tests — integration)\nOurs: searched terminal_image_test.exs, stdin_fsm_test.exs, tui_render_test.exs, terminal_test.exs — no matching coverage.\n\n## Analysis\n\nUpstream verifies two invariants of the TUI runtime when it has an image-capable terminal (Ghostty in the test fixture):\n1. On startup the TUI may issue a cell-size query (e.g. `\\e[14t` / `\\e[16t`) — a bare ESC sent by the user after startup must still be forwarded to the focused component, not swallowed into the reply parser.\n2. The cell-size *response* format `\\e[6;HEIGHT;WIDTHt` must be **consumed** by the TUI (not forwarded to components), must update the cached cell dimensions (getCellDimensions returns {widthPx: WIDTH, heightPx: HEIGHT}), and subsequent ordinary keystrokes ('q') must still be forwarded normally.\n\nUpstream uses a process-env fixture (`withImageTerminal`) to force TERM_PROGRAM=ghostty and reset the capabilities cache.\n\n## Elixir architectural divergence\n\napps/octo_pi_tui/lib/octo_pi/tui/terminal_image.ex defines `cell_dims` as a pure-function parameter with a fixed default `%{width_px: 9, height_px: 18}` — no module-level cached state, no startup query, no parser for `\\e[6;H;Wt` responses. No code path in apps/octo_pi_tui queries or consumes cell-size responses.\n\nThe upstream tests therefore have no Elixir counterpart because the feature itself is unimplemented. This is not just a test gap — it's an implementation gap exposed by the audit.\n\n## UNMAPPED\n\n- Startup cell-size query issued on image-capable terminals (implementation)\n- Parsing and consumption of `\\e[6;H;Wt` responses (implementation + test)\n- Non-forwarding of the response to focused components while still forwarding all other input (test)\n- Cache update semantics (getter/setter equivalent) (implementation + test)\n- Bare-ESC pass-through when a query is in flight (test)\n\n## Action\n\nCompliance ticket will flag the implementation gap first and require a decision: implement the feature (port both implementation + tests) or deliberately decline (document the N/A with justification). Either path requires ticket closure to be explicit about which was chosen.",
+      "timestamp": "2026-04-24T21:37:28Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream tui-cell-size-input.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:36:31Z"
+  "updated_at": "2026-04-24T21:37:28Z"
 }
