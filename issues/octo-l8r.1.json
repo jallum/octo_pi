@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T03:07:57Z",
   "created": "2026-04-24T03:05:40Z",
   "description": "Port upstream openai-responses.ts + openai-responses-shared.ts as a new umbrella app or module within octo_pi_ai_openai.\n\nThe OpenAI Responses API is a newer API shape (distinct from Chat Completions). Key differences from Completions:\n- Uses `responses.create()` instead of `chat.completions.create()`\n- Message format uses `input` array with items (not `messages`)\n- Tools use `type: \"function\"` wrapper with different schema\n- Response stream uses different chunk format (response.output_item.*, response.content_part.*)\n- Supports prompt caching via `cache_retention` parameter\n- Built-in tool call support for OpenAI-native tools\n\n**Scope:**\n- Request builder: convert Context messages + tools to Responses API format\n- Decoder: ResponseStreamEvent → canonical OctoPi.AI.Event events\n- Producer GenServer: SSE streaming via Req/Mint\n- Provider behaviour implementation + Application wiring\n- Cache retention support (short/long)\n- Copilot dynamic headers support (shared with Completions)\n\n**Upstream ref:** openai-responses.ts (264 lines), openai-responses-shared.ts (539 lines)",
   "id": "octo-l8r.1",
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "OpenAI Responses provider (octo_pi_ai_openai_responses)",
   "type": "task",
-  "updated_at": "2026-04-24T03:06:21Z"
+  "updated_at": "2026-04-24T03:07:57Z"
 }
