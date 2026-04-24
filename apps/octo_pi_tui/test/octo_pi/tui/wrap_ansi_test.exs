@@ -25,6 +25,32 @@ defmodule OctoPi.TUI.WrapAnsiTest do
       assert WrapAnsi.visible_width("🇨🇳") == 2
     end
 
+    test "partial flag in list line measures to surrounding + flag width" do
+      # 6 spaces + "- " (2) + 🇨 (2) = 10
+      assert WrapAnsi.visible_width("      - 🇨") == 10
+    end
+
+    test "every regional-indicator singleton (U+1F1E6..U+1F1FF) is width 2" do
+      for cp <- 0x1F1E6..0x1F1FF do
+        grapheme = <<cp::utf8>>
+
+        assert WrapAnsi.visible_width(grapheme) == 2,
+               "expected U+#{Integer.to_string(cp, 16) |> String.upcase()} width 2"
+      end
+    end
+
+    test "full flag pairs measure as width 2" do
+      for flag <- ["🇯🇵", "🇺🇸", "🇬🇧", "🇨🇳", "🇩🇪", "🇫🇷"] do
+        assert WrapAnsi.visible_width(flag) == 2, "expected #{flag} width 2"
+      end
+    end
+
+    test "common streaming emoji intermediates remain width 2" do
+      for sample <- ["👍", "👍🏻", "✅", "⚡", "⚡️", "👨", "👨‍💻", "🏳️‍🌈"] do
+        assert WrapAnsi.visible_width(sample) == 2, "expected #{sample} width 2"
+      end
+    end
+
     test "CJK characters are width 2" do
       assert WrapAnsi.visible_width("日本") == 4
     end
@@ -70,6 +96,15 @@ defmodule OctoPi.TUI.WrapAnsiTest do
     test "breaks long words that exceed width" do
       wrapped = WrapAnsi.wrap("abcdefghij", 4)
       assert wrapped == ["abcd", "efgh", "ij"]
+    end
+
+    test "wraps partial-flag list line before overflow" do
+      # Width 9 cannot fit "      - 🇨" (10 cols); must wrap rather
+      # than let the terminal auto-wrap and drift.
+      wrapped = WrapAnsi.wrap("      - 🇨", 9)
+      assert length(wrapped) == 2
+      assert WrapAnsi.visible_width(Enum.at(wrapped, 0)) == 7
+      assert WrapAnsi.visible_width(Enum.at(wrapped, 1)) == 2
     end
   end
 
