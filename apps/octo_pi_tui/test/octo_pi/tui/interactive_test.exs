@@ -456,6 +456,36 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "welcome banner" do
+    test "renders banner when present" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+
+      s = %Interactive{
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        banner: banner,
+        theme: theme,
+        width: 80,
+        height: 24
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      assert text =~ "Claude Code"
+    end
+
+    test "? toggles banner when input is empty" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+      s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
+      refute s.banner.expanded
+
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
+      assert s2.banner.expanded
+    end
+  end
+
   describe "footer updates from agent events" do
     test "MessageEnd accumulates usage into footer" do
       alias OctoPi.TUI.Components.Footer

@@ -50,6 +50,7 @@ defmodule OctoPi.TUI.Interactive do
           tools_expanded: boolean(),
           working_message: String.t() | nil,
           notification: String.t() | nil,
+          banner: Components.WelcomeBanner.t() | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}]
@@ -61,6 +62,7 @@ defmodule OctoPi.TUI.Interactive do
             footer: %Footer{},
             footer_data: nil,
             theme: nil,
+            banner: nil,
             width: 80,
             height: 24,
             exit: false,
@@ -329,6 +331,7 @@ defmodule OctoPi.TUI.Interactive do
       width: w,
       height: h,
       theme: theme,
+      banner: Components.WelcomeBanner.new(theme, model: model.id),
       footer: footer,
       footer_data: footer_data
     }
@@ -539,6 +542,10 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, _), do: state
 
+  defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??}) do
+    %{state | banner: Components.WelcomeBanner.handle_key(banner, %Key{key: ??})}
+  end
+
   defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}),
     do: %{state | exit: true}
 
@@ -742,17 +749,28 @@ defmodule OctoPi.TUI.Interactive do
 
   @spec render(t(), [binary()]) :: [binary()]
   def render(
-        %{transcript: transcript, footer: footer, theme: theme, width: width, height: height},
+        %{
+          transcript: transcript,
+          footer: footer,
+          theme: theme,
+          banner: banner,
+          width: width,
+          height: height
+        },
         input_lines
       ) do
     footer_lines = Footer.render(footer, width)
     content_height = max(1, height - length(footer_lines))
     border = border_line(theme, width)
+    banner_lines = render_banner(banner, width)
 
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-    all = [border] ++ transcript_lines ++ [border] ++ input_lines
+    all = banner_lines ++ [border] ++ transcript_lines ++ [border] ++ input_lines
     Viewport.window(all, content_height) ++ footer_lines
   end
+
+  defp render_banner(nil, _width), do: []
+  defp render_banner(banner, width), do: Components.WelcomeBanner.render(banner, width)
 
   defp border_line(nil, width), do: String.duplicate("─", width)
 
