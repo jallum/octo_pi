@@ -8,13 +8,14 @@
   "blocks": [
     "octo-qhu"
   ],
+  "closed_at": "2026-04-24T10:03:47Z",
   "created": "2026-04-23T16:43:19.196907Z",
   "description": "Port pi-coding-agent's extensions/events system — the 20+ event plugin architecture.\n\nCritical design: extensions have SEVEN distinct emission patterns (fire-and-forget, cancel-on-result, reduce-chain, mutate-in-place, patch-merge, first-result-wins, parallel-collect). A single `emit/2` cannot paper over this. See RESEARCH.md §8.3 for the full catalog.\n\nScope (children to be created when we approach this phase):\n- `OctoPi.Coder.Extension` behaviour with seven optional callbacks matching the patterns.\n- `OctoPi.Coder.Events` GenServer dispatcher with one function per pattern.\n- Extension loading + registration.\n- Port 2-3 reference extensions (`dirty-repo-guard`, `input-transform`, `pirate` or equivalent).\n\nDefinition of done: a custom extension can register a `tool_call` handler that sanitizes bash commands and a `session_before_switch` handler that blocks on a dirty repo.\n\nRef: RESEARCH.md §3.3 \"Extensions system\", §8.3, §6 Phase 6.",
   "id": "octo-3gv",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 6: extensions system (seven emission patterns)",
   "type": "epic",
-  "updated_at": "2026-04-24T00:31:00Z"
+  "updated_at": "2026-04-24T10:03:47Z"
 }
