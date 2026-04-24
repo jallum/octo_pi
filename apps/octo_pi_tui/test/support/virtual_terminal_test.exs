@@ -179,4 +179,33 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
       assert Enum.at(viewport, 2) == "Footer"
     end
   end
+
+  describe "SGR attribute tracking" do
+    test "italic on/off applies to written cells only" do
+      vt = VT.new(20, 3) |> VT.write("\e[3mIT\e[23mPL")
+      assert VT.cell_italic?(vt, 0, 0)
+      assert VT.cell_italic?(vt, 0, 1)
+      refute VT.cell_italic?(vt, 0, 2)
+      refute VT.cell_italic?(vt, 0, 3)
+    end
+
+    test "bold / underline tracked independently" do
+      vt = VT.new(10, 1) |> VT.write("\e[1mB\e[22m\e[4mU\e[24mX")
+      assert VT.cell_attrs(vt, 0, 0).bold
+      refute VT.cell_attrs(vt, 0, 0).underline
+      assert VT.cell_attrs(vt, 0, 1).underline
+      refute VT.cell_attrs(vt, 0, 1).bold
+      refute VT.cell_attrs(vt, 0, 2).underline
+    end
+
+    test "full reset clears all attrs" do
+      vt = VT.new(10, 1) |> VT.write("\e[1;3;4mX\e[0mY")
+      attrs0 = VT.cell_attrs(vt, 0, 0)
+      assert attrs0.bold and attrs0.italic and attrs0.underline
+      attrs1 = VT.cell_attrs(vt, 0, 1)
+      refute attrs1.bold
+      refute attrs1.italic
+      refute attrs1.underline
+    end
+  end
 end

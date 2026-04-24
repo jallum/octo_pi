@@ -18,15 +18,29 @@ defmodule OctoPi.TUI.VirtualTerminal do
   a list of trimmed-right row strings.
   """
 
+  @type attrs :: %{italic: boolean(), bold: boolean(), underline: boolean()}
+
   @type t :: %__MODULE__{
           cols: pos_integer(),
           rows: pos_integer(),
           grid: %{non_neg_integer() => String.t()},
           cursor_row: non_neg_integer(),
-          cursor_col: non_neg_integer()
+          cursor_col: non_neg_integer(),
+          sgr: attrs(),
+          cell_attrs: %{{non_neg_integer(), non_neg_integer()} => attrs()}
         }
 
-  defstruct [:cols, :rows, :grid, cursor_row: 0, cursor_col: 0]
+  @initial_sgr %{italic: false, bold: false, underline: false}
+
+  defstruct [
+    :cols,
+    :rows,
+    :grid,
+    cursor_row: 0,
+    cursor_col: 0,
+    sgr: %{italic: false, bold: false, underline: false},
+    cell_attrs: %{}
+  ]
 
   @doc "Create a new virtual terminal with the given dimensions."
   @spec new(pos_integer(), pos_integer()) :: t()
@@ -98,10 +112,27 @@ defmodule OctoPi.TUI.VirtualTerminal do
   @spec get_cursor(t()) :: {non_neg_integer(), non_neg_integer()}
   def get_cursor(%__MODULE__{cursor_row: r, cursor_col: c}), do: {r, c}
 
+  @doc "Return the effective SGR attribute map for the given cell."
+  @spec cell_attrs(t(), non_neg_integer(), non_neg_integer()) :: attrs()
+  def cell_attrs(%__MODULE__{cell_attrs: ca}, row, col),
+    do: Map.get(ca, {row, col}, %{italic: false, bold: false, underline: false})
+
+  @doc "Whether the cell at `{row, col}` was written with italic SGR active."
+  @spec cell_italic?(t(), non_neg_integer(), non_neg_integer()) :: boolean()
+  def cell_italic?(vt, row, col), do: cell_attrs(vt, row, col).italic
+
   @doc "Resize the terminal. Clears the grid."
   @spec resize(t(), pos_integer(), pos_integer()) :: t()
   def resize(term, cols, rows) do
-    %{term | cols: cols, rows: rows, grid: blank_grid(rows), cursor_row: 0, cursor_col: 0}
+    %{
+      term
+      | cols: cols,
+        rows: rows,
+        grid: blank_grid(rows),
+        cursor_row: 0,
+        cursor_col: 0,
+        cell_attrs: %{}
+    }
   end
 
   # --- CSI parser ---
@@ -129,7 +160,7 @@ defmodule OctoPi.TUI.VirtualTerminal do
 
   # Clear screen: CSI 2 J
   defp exec_csi(term, "J", "2") do
-    %{term | grid: blank_grid(term.rows)}
+    %{term | grid: blank_grid(term.rows), cell_attrs: %{}}
   end
 
   # Cursor home: CSI H (no params)
@@ -162,6 +193,11 @@ defmodule OctoPi.TUI.VirtualTerminal do
     %{term | grid: Map.put(term.grid, term.cursor_row, truncated)}
   end
 
+  # SGR: CSI n (;n)* m — update attribute state
+  defp exec_csi(term, "m", params) do
+    %{term | sgr: apply_sgr(term.sgr, params)}
+  end
+
   # Synchronized output — ignore
   defp exec_csi(term, "h", "?" <> _), do: term
   defp exec_csi(term, "l", "?" <> _), do: term
@@ -190,8 +226,36 @@ defmodule OctoPi.TUI.VirtualTerminal do
   defp put_char(term, char) do
     row_str = Map.get(term.grid, term.cursor_row, "")
     new_row = replace_at_col(row_str, term.cursor_col, char)
-    %{term | grid: Map.put(term.grid, term.cursor_row, new_row), cursor_col: term.cursor_col + 1}
+    cell_attrs = Map.put(term.cell_attrs, {term.cursor_row, term.cursor_col}, term.sgr)
+
+    %{
+      term
+      | grid: Map.put(term.grid, term.cursor_row, new_row),
+        cursor_col: term.cursor_col + 1,
+        cell_attrs: cell_attrs
+    }
   end
+
+  defp apply_sgr(_sgr, "") do
+    # CSI m with no params is equivalent to CSI 0 m (reset all).
+    @initial_sgr
+  end
+
+  defp apply_sgr(sgr, params) do
+    params
+    |> String.split(";")
+    |> Enum.map(&parse_int(&1, 0))
+    |> Enum.reduce(sgr, &apply_sgr_code/2)
+  end
+
+  defp apply_sgr_code(0, _sgr), do: @initial_sgr
+  defp apply_sgr_code(1, sgr), do: %{sgr | bold: true}
+  defp apply_sgr_code(3, sgr), do: %{sgr | italic: true}
+  defp apply_sgr_code(4, sgr), do: %{sgr | underline: true}
+  defp apply_sgr_code(22, sgr), do: %{sgr | bold: false}
+  defp apply_sgr_code(23, sgr), do: %{sgr | italic: false}
+  defp apply_sgr_code(24, sgr), do: %{sgr | underline: false}
+  defp apply_sgr_code(_other, sgr), do: sgr
 
   defp newline(%{cursor_row: row, rows: rows} = term) do
     new_row = row + 1
