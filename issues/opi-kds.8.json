@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Provider routing: OpenRouter + Vercel AI Gateway",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:42Z"
+  "updated_at": "2026-04-24T02:00:44.593063Z"
 }
