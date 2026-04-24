@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-j50.2"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-j50.6"
+  ],
   "created": "2026-04-24T14:48:27Z",
   "description": "Insert DynamicBorder separators into Interactive.render/2 layout assembly. Place one separator line above the transcript area (below any future banner) and one between the transcript and the input area. This replaces the current blank-line separator between transcript and input. The render pipeline becomes: [top_border] ++ transcript_lines ++ [bottom_border] ++ input_lines → Viewport.window → append footer. Depends on opi-j50.2 (DynamicBorder component).",
   "id": "opi-j50.4",
