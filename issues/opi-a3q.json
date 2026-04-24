@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:12:54Z",
+  "description": "Fix issues identified during code review of the Phase 6 extensions system (octo-3gv). All items are in apps/octo_pi_coder.",
+  "id": "opi-a3q",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 6 review cleanup (octo-3gv review findings)",
+  "type": "epic",
+  "updated_at": "2026-04-24T10:12:54Z"
+}
