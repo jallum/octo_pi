@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:33:06Z",
+  "description": "Port the extension runtime state and stale-instance tracking system. Upstream types.ts 1425-1441, runner.ts 461-483. ExtensionRuntimeState holds flagValues, pendingProviderRegistrations, and an active/stale flag. invalidate(message?) marks all extensions stale after reload or session replacement — handlers throw if called after invalidation. assertActive() checks before handler execution. This prevents use of old extension context after session replacement or extension reload. Critical safety invariant alongside the handler error isolation (section 8.3).",
+  "id": "octo-3gv.14",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 2,
+  "status": "open",
+  "title": "Extension lifecycle: stale tracking + invalidation",
+  "type": "task",
+  "updated_at": "2026-04-24T09:33:06Z"
+}
