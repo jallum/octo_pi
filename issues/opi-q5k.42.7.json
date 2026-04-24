@@ -2,6 +2,7 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T22:40:53Z",
   "created": "2026-04-24T21:55:56Z",
   "description": "# Compliance child for opi-q5k.42 (opi-q5k.10 / markdown.test.ts)\n\n## Scope\n\nUpstream describe 'Spacing after headings' (2 tests). Port: single blank line between heading and following paragraph, no trailing blank line when heading is last. Our 'heading followed by paragraph has spacing' covers the first; strengthen + add second.\n\n## Protocol\n\n1. Read tmp/pi-mono/packages/tui/test/markdown.test.ts; locate the \"Spacing after headings\" describe.\n2. Enumerate every it(...) under that describe.\n3. For each, find or confirm absent an equivalent Elixir assertion in apps/octo_pi_tui/test/octo_pi/tui/components/markdown_test.exs.\n4. Implement missing behavior in OctoPi.TUI.Components.Markdown.\n5. Port missing tests.\n6. Re-read upstream \"Spacing after headings\" top-to-bottom; confirm mapping.\n7. Post a final mapping comment.\n8. Close.\n\nUpstream uses VirtualTerminal + Chalk for rendering assertions and relies on defaultMarkdownTheme fixture. Elixir equivalent: our Theme module (OctoPi.TUI.Theme.load_builtin(:dark, :truecolor)) + WrapAnsi helpers for strip/visible-width.\n\n## Deps\nParent opi-q5k.42 (which blocks opi-q5k.1).",
   "id": "opi-q5k.42.7",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "markdown.test.ts / Spacing after headings (2 upstream tests)",
   "type": "task",
   "updated_at": "2026-04-24T22:40:53Z"
