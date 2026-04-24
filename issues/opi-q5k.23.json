@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:33:12Z",
+  "description": "# Check: upstream wrap-ansi.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/wrap-ansi.test.ts\n\n## Subject\nText wrapping with ANSI code preservation and style re-application across wrapped lines.\n\n## Upstream test count (approx)\n20\n\n## Behaviors asserted upstream\n- does not apply underline style before the styled text\n- no whitespace before underline reset code\n- does not bleed underline to padding (ends with reset for underline only)\n- preserves background color across wrapped lines without full reset\n- resets underline but preserves background when wrapping underlined text inside background\n- wraps plain text correctly\n- ignores OSC 133 semantic markers in visible width\n- ignores OSC sequences terminated with ST in visible width\n- treats isolated regional indicators as width 2\n- truncates trailing whitespace that exceeds width\n- preserves color codes across wraps\n- middle lines do not end with full reset\n- re-emits OSC 8 open at the start of continuation lines\n- closes OSC 8 before each line break\n- does not emit OSC 8 sequences on lines outside the hyperlink\n\n## Upstream dependencies\nvisibleWidth, wrapTextWithAnsi from ../src/utils.js\n\n## Upstream notes\nwrapTextWithAnsi(text, width) returns array of wrapped lines. ANSI codes re-applied at start of continuation lines. Full reset (\\\\x1b[0m) avoided for middle lines to prevent style bleeding. Underline (SGR 4) tracked separately to avoid affecting background colors. OSC 8 hyperlinks closed before line breaks and reopened on continuation. OSC 133 markers (semantic line tracking) ignored in width calculations. OSC ST = \\\\x1b\\\\ or \\\\x07.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/wrap_ansi_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.23",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream wrap-ansi.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:33:12Z"
+}
