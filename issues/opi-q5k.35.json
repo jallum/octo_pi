@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.1"
   ],
+  "closed_at": "2026-04-24T22:30:58Z",
   "created": "2026-04-24T21:46:09Z",
   "description": "# Compliance ticket for opi-q5k.12\n\nSource check: opi-q5k.12 (overlay-options.test.ts audit)\n\n## Work — add integration tests\n\nThese are integration-level. Use the pattern established in apps/octo_pi_tui/test/octo_pi/tui/tui_render_test.exs (Renderer + VirtualTerminal) OR build a lightweight TUI test harness that mirrors `tui.showOverlay(...)` + render + `VT.get_viewport()`. Inspect the existing codebase first — if there is an Interactive/TUI GenServer with a showOverlay message API, use it; otherwise thread via Renderer + Overlay.composite.\n\nPlace tests in overlay_test.exs (extend existing file) or a new overlay_integration_test.exs — follow project convention.\n\n### Width overflow protection (5 tests)\n\n1. Overlay lines wider than declared width — composite result must not exceed declared width on any row.\n2. Overlay content with complex ANSI (truecolor fg+bg + OSC 8 hyperlink) — render completes without crash.\n3. Overlay composited on styled base (`\\e[1m\\e[38;2;255;0;0m` + \"X\"*width + reset) — overlay text visible in viewport.\n4. Overlay containing wide CJK characters at declared-width boundary (width 15, content \"中文日本語한글テスト漢字\") — no crash.\n5. Overlay positioned at terminal right edge (col 60, width 20, terminal 80 wide) — no crash.\n\n### Row extremes (2 tests)\n\n6. `row: \"0%\"` → overlay on row 0.\n7. `row: \"100%\"` → overlay on last row (`height - overlay_height`, i.e., row 23 in 24-row terminal).\n\n### Stacked overlays via showOverlay (3 tests)\n\n8. Call showOverlay twice at same anchor; the second (top of stack) covers the first's overlapping cells. Verify viewport contains the second overlay's text on the overlapping row.\n9. Two overlays at different anchors (top-left + bottom-right) — both visible in viewport.\n10. After showing two overlays, call `hideOverlay()` → topmost removed, previously-covered one visible. Assert the first overlay's text is now on the row where the second had been.\n\n### OSC 8 base content (already partly covered by existing \"OSC 8 in base content does not crash\" — verify it exercises the *overlay over base with hyperlink* path; if not, add a separate test with a base that renders `\"See \\\\e]8;;file:///f.ts\\\\e\\\\f.ts\\\\e]8;;\\\\e\\\\\\\"` and an overlay at center — no crash and overlay visible.)\n\n## Re-comparison (required)\n\nAfter all tests land, re-read tmp/pi-mono/packages/tui/test/overlay-options.test.ts and confirm every `it(...)` block has an Elixir equivalent (many will map to existing overlay_test.exs tests; confirm those are sufficient or strengthen). Post a final comment here before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
   "id": "opi-q5k.35",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port overlay-options.test.ts gaps: width overflow, edges, stacked overlays, row extremes",
   "type": "task",
   "updated_at": "2026-04-24T22:30:58Z"
