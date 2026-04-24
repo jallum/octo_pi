@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.1"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:37:09Z",
   "description": "Port user-message.ts (~118 LOC). Renders user messages in the transcript with:\n- Distinct styling (color/prefix) to differentiate from assistant\n- Code block detection and highlighting\n- Width-aware wrapping\n\nUpstream: interactive/components/user-message.ts\nDepends on: theme, container",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "UserMessage component: styled user input display",
   "type": "task",
-  "updated_at": "2026-04-24T10:37:09Z"
+  "updated_at": "2026-04-24T10:39:14Z"
 }
