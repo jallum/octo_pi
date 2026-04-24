@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:32:19Z",
+  "description": "Two related perf/correctness items:\n\n1. **Registry scoping**. `OctoPi.TUI.Events` Registry uses\n   topic atoms `:stdin_chunk` and `:resize` that are VM-global.\n   Two concurrent `Interactive.run/1` calls register against\n   the same topics and see each other's events. Either:\n   - Scope topics per-session: `{:stdin_chunk, session_id}`.\n     Terminal takes a session_id on start_link and broadcasts\n     under the scoped topic.\n   - Or document that Interactive is single-run-per-VM and\n     guard it (return :error if already running).\n\n   Prefer scoping — supports future use-cases (multi-terminal\n   session, tests running in parallel).\n\n2. **Render memoization**. `Interactive.render_frame/3`\n   computes `render/1` which calls `Components.Input.render/2`,\n   then `cursor_position/2` calls `Components.Input.render/2`\n   AGAIN to count its lines. Cache the result — one call per\n   frame. Keep `render/1` pure; pass the cached input lines\n   into both consumers.\n\nTDD:\n- Two concurrent Interactive runs → each only sees its own\n  events (integration test with two sessions).\n- Input render call count is 1 per frame (inject a test\n  Components.Input that counts calls, or use :counters).",
+  "id": "opi-v3a.6",
+  "labels": [],
+  "parent": "opi-v3a",
+  "priority": 2,
+  "status": "open",
+  "title": "Events Registry per-session scoping + Interactive render memoization",
+  "type": "task",
+  "updated_at": "2026-04-24T00:32:19Z"
+}
