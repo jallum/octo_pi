@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-q5k.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-q5k",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Check: upstream overlay-options.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:28:14Z"
+  "updated_at": "2026-04-24T21:45:07Z"
 }
