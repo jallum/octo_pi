@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:24:19Z",
   "created": "2026-04-24T00:31:42Z",
   "description": "Two coupled issues:\n\n1. `Interactive.handle_event` catchall clause at line 86\n   swallows the `:cancel` event that `Components.Input` returns\n   when Escape is pressed. Escape currently does nothing.\n\n2. `Components.Input.handle_key/2` covers enter/left/right/\n   home/end/backspace/delete but is missing the full set of\n   upstream `input.test.ts` scenarios (port-map §14.1, 580\n   lines): kill ring semantics (save/delete cycle for Ctrl+W/\n   U/K/Alt+D, Alt+Y yank-pop both directions), undo/redo with\n   coalescing, wide-char cursor tracking, horizontal scroll on\n   narrow widths.\n\nScope:\n- `handle_event({:key, %Key{key: :escape}})` in Interactive:\n  clear the input field. Double-Escape exits (matches upstream\n  double-Ctrl+C pattern, different key for muscle memory).\n- Input.handle_key/2 gains all the editing ops from upstream\n  (kill ring + undo). `insert/2` grows paste handling.\n- Port the upstream input.test.ts scenarios verbatim — match\n  intent and quality of the 580 lines of cases.\n\nTDD:\n- Every case from input.test.ts mirrored\n- Escape clears input; double-Escape exits\n- Kill ring: Ctrl+W deletes word, Ctrl+Y yanks, Alt+Y cycles\n- Undo: coalesces consecutive chars, splits on spaces,\n  preserves across cursor moves",
   "id": "opi-v3a.3",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Escape key handling + Input.handle_key upstream parity",
   "type": "task",
-  "updated_at": "2026-04-24T01:11:49Z"
+  "updated_at": "2026-04-24T01:24:19Z"
 }
