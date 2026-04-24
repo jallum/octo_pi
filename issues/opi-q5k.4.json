@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:26:28Z",
+  "description": "# Check: upstream bug-regression-isimageline-startswith-bug.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts\n\n## Subject\nImage line detection for iTerm2 and Kitty protocols — regression for a crash caused by using startsWith() instead of includes().\n\n## Upstream test count (approx)\n14\n\n## Behaviors asserted upstream\n- old startsWith() implementation would return false and cause \"Rendered line exceeds terminal width\" crash — new implementation returns true\n- detects Kitty sequences in any position (start, prefix, suffix, middle)\n- handles very long lines (300KB+) with image sequences without crashing\n- detects iTerm2 sequences in any position\n- detects image sequences in read tool output\n- detects Kitty sequences emitted by Image component\n- handles ANSI codes before and after image sequences\n- does NOT crash on very long lines with image sequences (prevents TUI crash)\n- handles lines exactly matching crash log dimensions (58649 chars)\n- does not detect images in regular long text\n- does not detect images in lines with file paths\n\n## Upstream dependencies\nisImageLine from ../src/terminal-image.js\n\n## Upstream notes\nRegression test for crash with 300KB+ lines containing image escape sequences when terminal doesn't support images. Old implementation used startsWith() and failed for sequences not at line start.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/terminal_image_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket (if needed) must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.4",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream bug-regression-isimageline-startswith-bug.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:26:28Z"
+}
