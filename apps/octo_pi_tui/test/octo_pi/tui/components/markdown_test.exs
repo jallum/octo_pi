@@ -395,6 +395,28 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
   end
 
+  # ── Upstream markdown.test.ts / Spacing after blockquotes ───────
+
+  describe "spacing after blockquotes (upstream parity)" do
+    test "one blank line between blockquote and following paragraph" do
+      md = "hello world\n\n> This is a quote\n\nagain, hello world"
+      plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      quote_idx = Enum.find_index(plain, &String.contains?(&1, "This is a quote"))
+      assert is_integer(quote_idx)
+      after_q = Enum.drop(plain, quote_idx + 1)
+      assert Enum.find_index(after_q, &(&1 != "")) == 1
+    end
+
+    test "no trailing blank line when blockquote is the last rendered block" do
+      plain =
+        "> This is a quote"
+        |> render()
+        |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+
+      refute List.last(plain) == ""
+    end
+  end
+
   # ── Padding ─────────────────────────────────────────────────────
 
   describe "padding" do
