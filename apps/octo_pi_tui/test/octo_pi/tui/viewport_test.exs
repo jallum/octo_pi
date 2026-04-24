@@ -4,9 +4,12 @@ defmodule OctoPi.TUI.ViewportTest do
   alias OctoPi.TUI.Viewport
 
   describe "window/2" do
-    test "returns all lines when content fits within height" do
+    test "pads with blank lines when content fits within height" do
       lines = ["line 1", "line 2", "line 3"]
-      assert Viewport.window(lines, 5) == lines
+      result = Viewport.window(lines, 5)
+      assert length(result) == 5
+      assert Enum.take(result, 2) == ["", ""]
+      assert Enum.drop(result, 2) == lines
     end
 
     test "returns all lines when content exactly matches height" do
@@ -23,8 +26,10 @@ defmodule OctoPi.TUI.ViewportTest do
       assert Viewport.window(["a", "b", "c"], 1) == ["c"]
     end
 
-    test "empty list returns empty" do
-      assert Viewport.window([], 10) == []
+    test "empty list pads to height" do
+      result = Viewport.window([], 10)
+      assert length(result) == 10
+      assert Enum.all?(result, &(&1 == ""))
     end
   end
 end

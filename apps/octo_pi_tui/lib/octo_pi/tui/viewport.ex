@@ -8,6 +8,11 @@ defmodule OctoPi.TUI.Viewport do
   @spec window([String.t()], pos_integer()) :: [String.t()]
   def window(lines, height) when height > 0 do
     len = length(lines)
-    if len <= height, do: lines, else: Enum.drop(lines, len - height)
+
+    cond do
+      len == height -> lines
+      len > height -> Enum.drop(lines, len - height)
+      true -> List.duplicate("", height - len) ++ lines
+    end
   end
 end
