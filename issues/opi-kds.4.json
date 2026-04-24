@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.2",
+    "opi-kds.3"
+  ],
+  "blocks": [
+    "opi-kds.6"
+  ],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port `buildParams()`, `convertMessages()`, `convertTools()` as `OctoPi.AI.Providers.OpenAI.Request`.\n\nCovers:\n- System prompt as inline message (developer vs system role per compat)\n- User messages (text + base64 image_url parts)\n- Assistant messages (plain string content — not array; thinking block handling per compat; tool_calls array; reasoning_details)\n- Tool results (role:tool, image extraction to follow-up user message, synthetic assistant bridging, consecutive batching)\n- Tool definitions (function type, strict mode per compat)\n- Param injection: reasoning_effort / enable_thinking / reasoning:{effort} per thinking_format; store; stream_options; max_tokens field selection\n- Tool-call ID normalization (pipe-split, truncation)\n\nTDD from 5 upstream test files:\n- openai-completions-cache-control-format.test.ts\n- openai-completions-thinking-as-text.test.ts\n- openai-completions-tool-choice.test.ts\n- openai-completions-tool-result-images.test.ts\n- openai-completions-prompt-cache.test.ts\n\nUpstream: openai-completions.ts L460-933\nPort map: §2-3",
+  "id": "opi-kds.4",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Request builder: message/tool conversion + param shaping",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

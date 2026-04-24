@@ -1,0 +1,28 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.4",
+    "opi-kds.5"
+  ],
+  "blocks": [
+    "opi-kds.7",
+    "opi-kds.8",
+    "opi-kds.9",
+    "opi-kds.10",
+    "opi-kds.11",
+    "opi-kds.12",
+    "opi-kds.13"
+  ],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Wire everything together:\n\n**Producer** (`OctoPi.AI.Providers.OpenAI.Producer`): supervised Task matching the Anthropic pattern — Req.post!(into: :self), SSE decode, JSON parse, Decoder.handle/2, emit canonical events. Handle `data: [DONE]` terminal (skip, not valid JSON). Caller-death monitor → aborted. HTTP errors → error event. Telemetry.\n\n**Provider** (`OctoPi.AI.Providers.OpenAI`): `@behaviour OctoPi.AI.Provider`. `stream/3` spawns Producer, returns Stream.resource/3. `stream_simple/3` maps reasoning level → reasoning_effort via Compat, clamps xhigh, passes tool_choice through.\n\n**Application** (`OctoPi.AI.Providers.OpenAI.Application`): registers `:openai_completions` in ProviderRegistry, starts Task.Supervisor, attaches telemetry handler.\n\n**mix.exs**: deps on octo_pi_ai (umbrella), req, jason, telemetry; plug for test.\n\nTDD: Plug-based fake OpenAI server returning canned SSE, verifying full pipeline.\n\nPort map: §6",
+  "id": "opi-kds.6",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Producer + Provider + Application wiring",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

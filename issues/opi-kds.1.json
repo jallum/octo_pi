@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-kds.2",
+    "opi-kds.3"
+  ],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Extend `OctoPi.AI.Model` with `compat: map() | nil` (default nil). The compat map carries provider-specific knobs — the OpenAI provider uses it for the 16-field `OpenAICompletionsCompat` shape; other future providers will use it for their own shapes.\n\nTiny change, unblocks everything else.\n\nPort map: §1.3",
+  "id": "opi-kds.1",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Add optional :compat field to OctoPi.AI.Model",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

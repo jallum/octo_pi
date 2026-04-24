@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.6"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port the multi-provider integration tests that hit real APIs with real credentials. Requires OPENAI_API_KEY and potentially other provider keys.\n\nUpstream tests to consider:\n- stream.test.ts (basic streaming)\n- tokens.test.ts, total-tokens.test.ts (usage/cost)\n- abort.test.ts (cancellation)\n- empty.test.ts (edge cases)\n- responseid.test.ts (response ID capture)\n- cross-provider-handoff.test.ts (context portability)\n- tool-call-id-normalization.test.ts (Copilot/Codex ID formats)\n- tool-call-without-result.test.ts (orphaned tool calls)\n\nPort map: §7.3",
+  "id": "opi-kds.13",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Live API integration tests for OpenAI Completions",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

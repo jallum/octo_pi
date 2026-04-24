@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.1"
+  ],
+  "blocks": [
+    "opi-kds.4"
+  ],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port `transform-messages.ts` to `OctoPi.AI.TransformMessages` in the `octo_pi_ai` app (shared, provider-agnostic). Both Anthropic and OpenAI providers will call this before converting messages to their wire format.\n\nCovers:\n- Image downgrade for non-vision models (placeholder text)\n- Assistant message transformation for cross-model replay (drop redacted thinking, strip signatures, normalize tool-call IDs via provider callback)\n- Orphaned tool-call synthesis (insert synthetic error results for unmatched tool calls)\n- Errored/aborted message skipping\n\nTDD from `test/transform-messages-copilot-openai-to-anthropic.test.ts`.\n\nUpstream: `transform-messages.ts` L64-220\nPort map: §5",
+  "id": "opi-kds.2",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "TransformMessages: shared cross-provider message normalization",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

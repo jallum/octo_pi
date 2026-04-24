@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port the upstream `openai-completions` API dialect from `tmp/pi-mono/packages/ai/src/providers/openai-completions.ts` as a new umbrella app `octo_pi_ai_openai`. Registers `:openai_completions` in the ProviderRegistry.\n\nThis is the most versatile provider — covers OpenAI, xAI/Grok, Groq, Cerebras, OpenRouter, Fireworks, HuggingFace, MiniMax, Kimi, DeepSeek via a single implementation with a 16-field compat layer that tunes behavior per-provider.\n\nFollows the pattern established by `octo_pi_ai_anthropic` (Provider behaviour, Producer, Decoder, Request, Application). TDD throughout — port upstream tests first, then implement.\n\nPort map: `docs/port-map/openai-completions.md`\nUpstream: `tmp/pi-mono/packages/ai/src/providers/openai-completions.ts`",
+  "id": "opi-kds",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "OpenAI Completions provider (octo_pi_ai_openai)",
+  "type": "epic",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

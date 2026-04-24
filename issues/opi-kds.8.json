@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.6"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Wire `open_router_routing` and `vercel_gateway_routing` compat fields into the request body. OpenRouter sends a `provider` field with routing preferences (allow_fallbacks, require_parameters, data_collection, order, only, ignore, quantizations, sort, max_price). Vercel sends `providerOptions.gateway` with only/order arrays.\n\nUpstream: openai-completions.ts L542-555, types.ts L312-355\nPort map: §8",
+  "id": "opi-kds.8",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Provider routing: OpenRouter + Vercel AI Gateway",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

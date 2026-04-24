@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.6"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port `sanitizeSurrogates()` — strips invalid Unicode surrogate pairs from user-supplied text before sending to the API. Low priority; Elixir strings are UTF-8 by default and invalid surrogates are uncommon.\n\nUpstream: sanitize-unicode.ts, openai-completions.ts L730\nPort map: §8",
+  "id": "opi-kds.11",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Surrogate sanitization for user content",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}

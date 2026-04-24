@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-kds.1"
+  ],
+  "blocks": [
+    "opi-kds.4"
+  ],
+  "comments": [],
+  "created": "2026-04-24T01:29:54.100363Z",
+  "description": "Port `OpenAICompletionsCompat` as `OctoPi.AI.Providers.OpenAI.Compat` — a 16-field struct with `detect/1` (auto-detect from `model.provider` + `model.base_url`) and `resolve/1` (merge explicit `model.compat` overrides onto detected defaults).\n\nFields: supports_store, supports_developer_role, supports_reasoning_effort, reasoning_effort_map, supports_usage_in_streaming, max_tokens_field, requires_tool_result_name, requires_assistant_after_tool_result, requires_thinking_as_text, thinking_format, supports_strict_mode, cache_control_format, send_session_affinity_headers, zai_tool_stream, open_router_routing, vercel_gateway_routing.\n\nTDD: write tests from `detectCompat()` / `getCompat()` behavior.\n\nUpstream: openai-completions.ts L1004-1088\nPort map: §1",
+  "id": "opi-kds.3",
+  "labels": [],
+  "parent": "opi-kds",
+  "priority": 2,
+  "status": "open",
+  "title": "Compat struct + auto-detection + merge",
+  "type": "task",
+  "updated_at": "2026-04-24T01:29:54.100363Z"
+}
