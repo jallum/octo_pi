@@ -290,7 +290,9 @@ defmodule OctoPi.TUI.TuiRenderTest do
       assert Enum.at(rows, 9) == "───"
 
       # Grow to 8 lines — padding shrinks
-      lines1 = pad_to_height(["Header", "Line 1", "Line 2", "Line 3", "Line 4", "───", "", "───"], 10)
+      lines1 =
+        pad_to_height(["Header", "Line 1", "Line 2", "Line 3", "Line 4", "───", "", "───"], 10)
+
       vt = render_frame(r, vt, lines1)
       rows = visible(vt)
       assert Enum.at(rows, 2) == "Header"
@@ -324,28 +326,44 @@ defmodule OctoPi.TUI.TuiRenderTest do
       vt = render_frame(r, vt, frame1)
 
       # Frame 2: assistant response starts streaming (7 lines → 5 padding)
-      frame2 = pad_to_height([
-        "> what's new?",
-        "Let me check...",
-        "───", "", "───",
-        "footer1", "footer2"
-      ], 12)
+      frame2 =
+        pad_to_height(
+          [
+            "> what's new?",
+            "Let me check...",
+            "───",
+            "",
+            "───",
+            "footer1",
+            "footer2"
+          ],
+          12
+        )
+
       vt = render_frame(r, vt, frame2)
       rows = visible(vt)
       assert Enum.at(rows, 5) == "> what's new?"
       assert Enum.at(rows, 6) == "Let me check..."
 
       # Frame 3: tool box appears (simulating ToolExecution render)
-      frame3 = pad_to_height([
-        "> what's new?",
-        "Let me check...",
-        "",
-        "┌ bash ─────────────────────────────┐",
-        "│ ls -la                            │",
-        "└──────────────────────────────────┘",
-        "───", "", "───",
-        "footer1", "footer2"
-      ], 12)
+      frame3 =
+        pad_to_height(
+          [
+            "> what's new?",
+            "Let me check...",
+            "",
+            "┌ bash ─────────────────────────────┐",
+            "│ ls -la                            │",
+            "└──────────────────────────────────┘",
+            "───",
+            "",
+            "───",
+            "footer1",
+            "footer2"
+          ],
+          12
+        )
+
       vt = render_frame(r, vt, frame3)
       rows = visible(vt)
       # 11 content lines + 1 padding row → tool box starts at row 4
@@ -354,19 +372,27 @@ defmodule OctoPi.TUI.TuiRenderTest do
       assert Enum.at(rows, 11) == "footer2"
 
       # Frame 4: tool completes, more streaming text
-      frame4 = clip_to_height([
-        "> what's new?",
-        "Let me check...",
-        "",
-        "┌ v bash ───────────────────────────┐",
-        "│ ls -la                            │",
-        "└──────────────────────────────────┘",
-        "Here are the results:",
-        "- file1.ex",
-        "- file2.ex",
-        "───", "", "───",
-        "footer1", "footer2"
-      ], 12)
+      frame4 =
+        clip_to_height(
+          [
+            "> what's new?",
+            "Let me check...",
+            "",
+            "┌ v bash ───────────────────────────┐",
+            "│ ls -la                            │",
+            "└──────────────────────────────────┘",
+            "Here are the results:",
+            "- file1.ex",
+            "- file2.ex",
+            "───",
+            "",
+            "───",
+            "footer1",
+            "footer2"
+          ],
+          12
+        )
+
       vt = render_frame(r, vt, frame4)
       rows = visible(vt)
       # 14 lines clipped to 12 → first 2 lines dropped
@@ -403,11 +429,39 @@ defmodule OctoPi.TUI.TuiRenderTest do
     end
   end
 
+  # --- overlay visibility (upstream overlay-short-content.test.ts) ---
+
+  describe "overlay visibility" do
+    alias OctoPi.TUI.Overlay
+
+    test "overlay renders when base content is shorter than terminal height" do
+      # Regression: 24-row terminal, 3-line child, centered overlay
+      # must appear in viewport (upstream overlay-short-content.test.ts).
+      {r, vt} = setup_render(width: 80, height: 24)
+      base = pad_to_height(["Line 1", "Line 2", "Line 3"], 24)
+
+      overlay = %Overlay{
+        lines: ["OVERLAY_TOP", "OVERLAY_MID", "OVERLAY_BOT"],
+        width: 11,
+        anchor: :center
+      }
+
+      composed = Overlay.composite(base, [overlay], 80, 24)
+      vt = render_frame(r, vt, composed)
+
+      assert Enum.any?(visible(vt), &String.contains?(&1, "OVERLAY")),
+             "expected overlay text in viewport: #{inspect(visible(vt))}"
+    end
+  end
+
   # --- helpers for streaming tests ---
 
   defp pad_to_height(lines, height) do
     len = length(lines)
-    if len >= height, do: Enum.take(lines, -height), else: List.duplicate("", height - len) ++ lines
+
+    if len >= height,
+      do: Enum.take(lines, -height),
+      else: List.duplicate("", height - len) ++ lines
   end
 
   defp clip_to_height(lines, height) do
