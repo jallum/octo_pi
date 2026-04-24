@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:38:57Z",
+  "description": "Port fuzzy.ts. Used by select_list, autocomplete, and all selector dialogs.\n\nImplement:\n- Fuzzy string matching with scoring (consecutive matches score higher)\n- Case-insensitive by default\n- Highlight matched characters in results\n- Sort by score descending\n\nUpstream: packages/tui/src/fuzzy.ts",
+  "id": "opi-m4h.27",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "Fuzzy matching algorithm for autocomplete and selectors",
+  "type": "task",
+  "updated_at": "2026-04-24T10:38:57Z"
+}
