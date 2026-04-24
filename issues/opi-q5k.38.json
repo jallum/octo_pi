@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:49:46Z",
+  "description": "# Compliance ticket for opi-q5k.7\n\nSource check: opi-q5k.7 (input.test.ts audit)\n\n## Gaps\n\nTwo upstream tests exercise an overflow-safety invariant — `visibleWidth(rendered_line) \u003c= terminal_width` — across wide-character inputs at arbitrary cursor positions. Our tests cover similar cases qualitatively but do not assert the invariant in this sweep form.\n\n## Work — add to apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs\n\n### Test 1: \"CJK and fullwidth text does not overflow at any cursor position\"\n\nMirror upstream \"does not overflow with wide CJK and fullwidth text\":\n\n    cases = [\n      \"가나다라마바사아자차카타파하 한글 텍스트가 터미널 너비를 초과하면 크래시가 발생합니다 이것은 재현용 테스트입니다\",\n      \"これはテスト文장です。日本語のテキストが正しく表示されるかどうかを確認するためのサンプルテキストです。あいうえお\",\n      \"这是一段测试文本，用于验证中文字符在终端中的显示宽度是否被正确计算，如果不正确就会导致用户界面崩溃的问题\",\n      \"ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ０１２３４５６７８９ａｂｃｄｅｆｇｈｉｊｋｌｍ\"\n    ]\n\n    width = 93\n\n    cursor_positions = [\n      {\"start\", fn input -\u003e input end},\n      {\"middle\", fn input -\u003e Enum.reduce(1..10, input, fn _, s -\u003e press(s, key(:right)) end) end},\n      {\"end\", fn input -\u003e press(input, ctrl(?e)) end}\n    ]\n\n    for text \u003c- cases, {label, move} \u003c- cursor_positions do\n      input =\n        %Input{}\n        |\u003e Input.set_value(text)\n        |\u003e Map.put(:focused, true)\n        |\u003e move.()\n\n      lines = Input.render(input, width)\n      for line \u003c- lines do\n        assert WrapAnsi.visible_width(line) \u003c= width,\n               \"rendered line overflowed for #{text} at #{label}: #{inspect(line)}\"\n      end\n    end\n\n(Note: upstream asserts only the first rendered line; we assert all rendered lines since our Input is multiline. Stricter is fine.)\n\n### Test 2: \"cursor stays visible during horizontal scroll with wide text\"\n\n    width = 20\n    text = \"가나다라마바사아자차카타파하\"\n\n    input =\n      %Input{}\n      |\u003e Input.set_value(text)\n      |\u003e Map.put(:focused, true)\n      |\u003e press(ctrl(?a))\n      |\u003e move_right(5)\n\n    input = Input.update_scroll(input, width)\n    lines = Input.render(input, width)\n    for line \u003c- lines do\n      assert WrapAnsi.visible_width(line) \u003c= width\n    end\n\n## Re-comparison (required)\n\nAfter tests land, re-read tmp/pi-mono/packages/tui/test/input.test.ts top-to-bottom and confirm every upstream `it(...)` block has an Elixir equivalent. Post a final comment here before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
+  "id": "opi-q5k.38",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Port input.test.ts overflow sweeps: CJK render width invariant",
+  "type": "task",
+  "updated_at": "2026-04-24T21:49:46Z"
+}
