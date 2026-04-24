@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:47:06Z",
   "created": "2026-04-24T21:28:14Z",
   "description": "# Check: upstream overlay-non-capturing.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/overlay-non-capturing.test.ts\n\n## Subject\nTUI overlay focus and rendering management for non-capturing overlays.\n\n## Upstream test count (approx)\n25\n\n## Behaviors asserted upstream\n- non-capturing overlay preserves focus on creation\n- focus() transfers focus to the overlay\n- unfocus() restores previous focus\n- setHidden(false) on non-capturing overlay does not auto-focus\n- hide() when not focused does not change focus\n- hide() when focused restores focus correctly\n- capturing overlay removed with non-capturing below restores focus to editor\n- sub-overlay cleanup then hideOverlay restores focus and input to editor\n- microtask-deferred sub-overlay pattern (showExtensionCustom simulation) restores focus\n- handleInput redirection skips non-capturing overlays when focused overlay becomes invisible\n- hideOverlay() does not reassign focus when topmost overlay is non-capturing\n- multiple capturing and non-capturing overlays restore focus through removals\n- capturing overlay unfocus() on topmost capturing overlay falls back to preFocus\n- focus() on hidden overlay is a no-op\n- focus() after hide() is a no-op\n- unfocus() when overlay does not have focus is a no-op\n- unfocus() with null preFocus clears focus and does not route input back to overlay\n- toggle focus between non-capturing overlays then unfocus returns to editor\n- focus() on already-focused overlay bumps visual order\n- default rendering order for overlapping overlays follows creation order\n- focus() on lower overlay renders it on top\n- focusing middle overlay places it on top while preserving others' relative order\n- capturing overlay hidden and shown again renders on top after unhide\n- unfocus() does not change visual order until another overlay is focused\n\n## Upstream dependencies\nComponent, Focusable, TUI, VirtualTerminal\n\n## Upstream notes\nNon-capturing overlays do not capture input focus by default. Focus management tracks preFocus state. Rendering order determined by focus state and creation order. hideOverlay() only removes topmost overlay. Input redirection bypasses non-capturing overlays when focused overlay becomes invisible.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.11",
@@ -16,8 +17,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream overlay-non-capturing.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:47:05Z"
+  "updated_at": "2026-04-24T21:47:06Z"
 }
