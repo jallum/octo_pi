@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:33:12Z",
+  "description": "# Check: upstream tui-overlay-style-leak.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/tui-overlay-style-leak.test.ts\n\n## Subject\nTUI overlay compositing — regression tests that SGR style does not leak into subsequent lines when overlays or long content drop trailing resets.\n\n## Upstream test count (approx)\n2\n\n## Behaviors asserted upstream\n- does not leak styles when a trailing reset sits beyond the last visible column (no overlay case)\n- does not leak styles when overlay slicing drops trailing SGR resets\n\n## Upstream dependencies\nComponent, TUI, VirtualTerminal, Terminal from @xterm/headless\n\n## Upstream notes\nItalic style (\\\\x1b[3m / \\\\x1b[23m) is checked via getCellItalic() on xterm buffer cells. The Elixir equivalent will need a way to inspect effective SGR state per cell after compositing — may require a helper.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/tui_render_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/renderer_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.21",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream tui-overlay-style-leak.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:33:12Z"
+}
