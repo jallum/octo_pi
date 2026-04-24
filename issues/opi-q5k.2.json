@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:25:07Z",
+  "description": "# Check-completion gate for epic opi-q5k\n\nClose this ticket when every per-file check ticket under epic opi-q5k has been processed (closed). Each check ticket either (a) confirms our Elixir tests already match upstream, or (b) spawned a compliance ticket that blocks the acceptance gate.\n\nThis gate does NOT wait for compliance tickets to be resolved — only for the checks themselves to be done.\n\n# How to verify\n\n- \\`bw list --parent opi-q5k --all\\` — every check ticket (titled \"Check: upstream \u003cfile\u003e\") is closed.\n- The acceptance gate remains blocked by any open compliance tickets.\n\n# On close\n\nAcceptance gate (see its blocked-by list) becomes eligible once no other blockers remain.",
+  "id": "opi-q5k.2",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 1,
+  "status": "open",
+  "title": "Check-completion gate: all per-file check tickets processed",
+  "type": "task",
+  "updated_at": "2026-04-24T21:25:07Z"
+}
