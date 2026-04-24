@@ -35,12 +35,23 @@ defmodule OctoPi.TUI.Components.UserMessage do
     md = Markdown.new(text, theme, padding_x: 1)
     content_lines = Markdown.render(md, width)
 
-    bg_fn = fn line -> Theme.bg(theme, :user_message_bg, line) end
+    bg_fn = fn line -> Theme.bg(theme, :user_message_bg, pad_to_width(line, width)) end
 
     lines =
       [bg_fn.("") | Enum.map(content_lines, &bg_fn.(&1))] ++ [bg_fn.("")]
 
     wrap_osc133(lines)
+  end
+
+  defp pad_to_width(line, width) do
+    visible_len = visible_length(line)
+    if visible_len < width, do: line <> String.duplicate(" ", width - visible_len), else: line
+  end
+
+  defp visible_length(str) do
+    str
+    |> String.replace(~r/\e\[[0-9;]*m/, "")
+    |> String.length()
   end
 
   defp wrap_osc133([single]) do

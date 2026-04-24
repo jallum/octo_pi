@@ -51,5 +51,16 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
       content_line = Enum.find(stripped, &(&1 =~ "hi"))
       assert String.starts_with?(content_line, " ")
     end
+
+    test "background extends to full terminal width" do
+      msg = UserMessage.new("hi", @theme)
+      lines = UserMessage.render(msg, 40)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      Enum.each(stripped, fn line ->
+        assert String.length(line) == 40,
+               "line width #{String.length(line)} != 40: #{inspect(line)}"
+      end)
+    end
   end
 end
