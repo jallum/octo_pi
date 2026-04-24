@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:54:18Z",
   "created": "2026-04-24T21:27:28Z",
   "description": "# Check: upstream keys.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/keys.test.ts\n\n## Subject\nKeyboard input parsing and key matching across Kitty CSI-u, xterm modifyOtherKeys, and legacy protocols.\n\n## Upstream test count (approx)\n108\n\n## Behaviors asserted upstream\n\nKitty protocol with base layout keys (non-Latin layouts):\n- matches Ctrl+c/Ctrl+d/Ctrl+z when pressing Ctrl+Cyrillic-equivalent with base layout key\n- matches Ctrl+Shift+p with base layout key\n- still matches direct codepoint when no base layout key\n- matches super-modified Kitty bindings including combined modifiers\n- matches digit bindings via Kitty CSI-u\n- normalizes Kitty keypad functional keys to logical digits, symbols, and navigation\n- handles shifted key in format (codepoint:shifted:base;modifier)\n- handles event type in format (modifier:event)\n- handles full format with shifted key, base key, and event type\n- prefers codepoint for Latin letters even when base layout differs\n- prefers codepoint for symbol keys even when base layout differs\n- does not match wrong key even with base layout\n- does not match wrong modifiers even with base layout\n\nxterm modifyOtherKeys:\n- matches Ctrl+c/d/z\n- Enter variants (ctrl+enter, shift+enter, alt+enter)\n- Tab variants\n- Backspace variants\n- Escape\n- Space variants\n- symbol combos, digit combos\n- shifted uppercase letters\n- Ctrl+Alt+letter\n\nLegacy encoding:\n- legacy Ctrl+c (ASCII 3); Ctrl+d (ASCII 4); escape; linefeed as enter; linefeed as shift+enter when kitty active; Ctrl+space (ASCII 0)\n- legacy Ctrl+symbol (e.g., Ctrl+\\\\, Ctrl+], Ctrl+_)\n- legacy Ctrl+Alt+symbol\n- raw 0x08 as plain backspace outside Windows Terminal\n- raw 0x08 as ctrl+backspace in local Windows Terminal\n- raw 0x08 as plain backspace in Windows Terminal over SSH\n- legacy alt-prefixed sequences when kitty inactive\n- does NOT parse legacy alt-prefixed sequences when kitty active\n- arrow keys\n- SS3 arrows, home/end\n- legacy function keys and clear\n- alt+arrows\n- rxvt modifier sequences\n\nDecoding helpers:\n- decodes Kitty keypad functional keys to printable characters\n- decodes printable xterm modifyOtherKeys sequences\n\nParsing:\n- Kitty protocol with alternate keys returning Latin key name\n- codepoint preference for Latin/symbol keys when base layout differs\n- returns key name from codepoint when no base layout\n- shifted uppercase CSI-u letters as shift+letter\n- ignores Kitty CSI-u with unsupported modifiers\n- legacy Ctrl+letter\n- special keys (escape, tab, enter, etc.)\n- double bracket pageUp\n\n## Upstream dependencies\ndecodeKittyPrintable, decodePrintableKey, Key, matchesKey, parseKey, setKittyProtocolActive from ../src/keys.js\n\n## Upstream notes\nsetKittyProtocolActive() toggles protocol. Windows Terminal 0x08 handling depends on SSH env vars (WT_SESSION, SSH_CONNECTION, SSH_CLIENT, SSH_TTY).\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/key_parser_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/stdin_fsm_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Given size (108 tests), compliance work may need to be split by protocol family (Kitty / xterm / legacy). Each compliance ticket must require re-comparison and block opi-q5k.1.",
   "id": "opi-q5k.9",
@@ -16,8 +17,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream keys.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:54:17Z"
+  "updated_at": "2026-04-24T21:54:18Z"
 }
