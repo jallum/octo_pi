@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:38:57Z",
+  "description": "Port loader.ts (~86 LOC) and cancellable-loader.ts (~40 LOC). Used during tool execution and model loading.\n\nImplement:\n- Animated spinner (braille or box-drawing sequence)\n- Optional label text\n- Cancel support (show \"press Esc to cancel\")\n- Timer-driven animation (invalidate on interval)\n\nUpstream: packages/tui/src/components/loader.ts, cancellable-loader.ts\nDepends on: component behaviour, theme",
+  "id": "opi-m4h.32",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "Loader/spinner component for streaming states",
+  "type": "task",
+  "updated_at": "2026-04-24T10:38:57Z"
+}
