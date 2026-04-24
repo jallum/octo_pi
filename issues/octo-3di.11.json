@@ -4,14 +4,15 @@
     "octo-3di.6"
   ],
   "blocks": [],
+  "closed_at": "2026-04-24T02:59:14Z",
   "created": "2026-04-24T02:37:18Z",
   "description": "Port the upstream header/banner from interactive-mode.ts lines 558-619.\n\n**Layout (collapsed — default):**\n- Logo line: bold accent `OctoPi` + dim ` v{version}`\n- Compact keybinding hints on one line, joined by dim ` · ` separator:\n  `Ctrl+C interrupt · Ctrl+L/Esc clear/exit · / commands · ! bash · ? more`\n- Dim onboarding line: \"Press ? to show full startup help and loaded resources.\"\n- Blank spacer line above and below\n\n**Layout (expanded — toggled by `?` key):**\n- Logo line (same)\n- Multi-line keybinding hints, one per line:\n  `Ctrl+C to interrupt`, `Ctrl+L to clear`, `Ctrl+L twice to exit`,\n  `Esc to exit (empty)`, `Ctrl+K to delete to end`, etc.\n- Dim onboarding: \"OctoPi can explain its own features...\"\n\n**Implementation:**\n- New module `OctoPi.TUI.Components.Header`\n- Pure render function: `render(%Header{}, width) :: [binary()]`\n- State holds `expanded :: boolean`, toggled by a key event\n- Keybinding hint text uses dim/muted ANSI SGR codes\n- Wire into Interactive layout: header lines prepended before transcript\n\n**Upstream ref:** `interactive-mode.ts` lines 558-619, `keybinding-hints.ts`",
   "id": "octo-3di.11",
   "labels": [],
   "parent": "octo-3di",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Header component: logo + version + keybinding hints (compact/expanded)",
   "type": "task",
-  "updated_at": "2026-04-24T02:58:27Z"
+  "updated_at": "2026-04-24T02:59:14Z"
 }
