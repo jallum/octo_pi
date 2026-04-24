@@ -15,7 +15,7 @@ defmodule OctoPi.TUI.Interactive do
   `handle_event/2`.
   """
 
-  alias OctoPi.TUI.{Components, Key}
+  alias OctoPi.TUI.{Components, Events, Key, KeyParser, Renderer, StdinFSM, Terminal}
 
   @type transcript_entry ::
           {:user, String.t()}
@@ -38,15 +38,126 @@ defmodule OctoPi.TUI.Interactive do
             exit: false
 
   @doc """
-  Entry point for the CLI. Not fully wired yet — the full main
-  loop (Terminal + FSM + Renderer + event pump) is a follow-up
-  task. For now, accepts opts but returns immediately with a
-  "not implemented" message so the CLI's dispatch path is
-  testable.
+  Entry point for the CLI. Wires up the full pipeline — Session,
+  Terminal, StdinFSM, Renderer — subscribes to the events each
+  produces, and runs the receive loop until `state.exit` flips.
+
+  Options:
+
+    * `:model`    — `%OctoPi.AI.Model{}` (required for real runs)
+    * `:tools`    — list of `%OctoPi.Agent.Tool{}` (default `[]`)
+    * `:transport`, `:system_prompt` — forwarded to
+      `OctoPi.Agent.start_session/1`
+    * `:dimensions` — `{w, h}` override for tests
+    * `:write_fn`  — 1-arg fn that receives rendered bytes;
+      default `&IO.write/1`. Tests use this to capture output.
+    * `:skip_raw_mode`, `:skip_sigwinch`, `:auto_start_reader`,
+      `:raw_mode_fn` — Terminal test overrides, passed through.
+    * `:terminal_name` — name under which to register the
+      Terminal GenServer. Pass `nil` to leave it unregistered
+      (useful when multiple Interactive runs share a VM, e.g.
+      tests).
   """
   @spec run(keyword()) :: :ok
-  def run(_opts) do
-    IO.puts(:stderr, "[octo_pi_tui] interactive mode MVP stub — full wiring lands with follow-up")
+  def run(opts) do
+    {w, h} = Keyword.get(opts, :dimensions, {80, 24})
+    write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
+
+    session = start_agent_session(opts)
+    {:ok, terminal} = start_terminal(opts, write_fn)
+    {:ok, fsm} = StdinFSM.start_link(subscriber: self())
+    {:ok, renderer} = Renderer.start_link(width: w, height: h)
+
+    {:ok, _} = Registry.register(Events, :stdin_chunk, nil)
+    {:ok, _} = Registry.register(Events, :resize, nil)
+    OctoPi.Agent.subscribe(session, self(), :async)
+
+    state = %__MODULE__{session: session, width: w, height: h}
+    render_frame(state, renderer, terminal)
+
+    loop(state, fsm, renderer, terminal)
+
+    shutdown(terminal, fsm, renderer)
+    :ok
+  end
+
+  defp start_agent_session(opts) do
+    session_opts =
+      [model: Keyword.fetch!(opts, :model), tools: Keyword.get(opts, :tools, [])]
+      |> put_if_present(:transport, opts[:transport])
+      |> put_if_present(:system_prompt, opts[:system_prompt])
+
+    {:ok, pid} = OctoPi.Agent.start_session(session_opts)
+    pid
+  end
+
+  defp put_if_present(kw, _k, nil), do: kw
+  defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
+
+  defp start_terminal(opts, write_fn) do
+    terminal_opts =
+      opts
+      |> Keyword.take([
+        :skip_raw_mode,
+        :skip_sigwinch,
+        :auto_start_reader,
+        :dimensions,
+        :raw_mode_fn
+      ])
+      |> Keyword.put(:name, Keyword.get(opts, :terminal_name, Terminal))
+      |> Keyword.put(:write_fn, write_fn)
+
+    Terminal.start_link(terminal_opts)
+  end
+
+  # --- main message loop ---
+
+  defp loop(%__MODULE__{exit: true}, _fsm, _renderer, _terminal), do: :ok
+
+  defp loop(state, fsm, renderer, terminal) do
+    receive do
+      {:stdin_chunk, bin} ->
+        :ok = StdinFSM.process(fsm, bin)
+        loop(state, fsm, renderer, terminal)
+
+      {:stdin_event, seq} ->
+        state
+        |> handle_event(KeyParser.parse(seq))
+        |> advance(fsm, renderer, terminal)
+
+      {:resize, w, h} = msg ->
+        Renderer.resize(renderer, w, h)
+
+        state
+        |> handle_event(msg)
+        |> advance(fsm, renderer, terminal)
+
+      {:octo_pi_agent_event, _} = msg ->
+        state
+        |> handle_event(msg)
+        |> advance(fsm, renderer, terminal)
+    end
+  end
+
+  defp advance(new_state, fsm, renderer, terminal) do
+    render_frame(new_state, renderer, terminal)
+    loop(new_state, fsm, renderer, terminal)
+  end
+
+  defp render_frame(state, renderer, terminal) do
+    lines = render(state)
+    {:ok, bytes} = Renderer.render(renderer, lines)
+    if bytes != "", do: Terminal.write(terminal, bytes)
+    :ok
+  end
+
+  # Shut down children in reverse start order. Terminal goes last
+  # because its `terminate/2` restores the tty.
+  defp shutdown(terminal, fsm, renderer) do
+    for pid <- [renderer, fsm, terminal], Process.alive?(pid) do
+      GenServer.stop(pid, :normal)
+    end
+
     :ok
   end
 

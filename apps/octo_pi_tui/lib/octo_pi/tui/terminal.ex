@@ -36,7 +36,19 @@ defmodule OctoPi.TUI.Terminal do
   # --- public API ---
 
   @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(opts \\ []) do
+    name = Keyword.get(opts, :name, __MODULE__)
+    gen_opts = if name, do: [name: name], else: []
+    GenServer.start_link(__MODULE__, opts, gen_opts)
+  end
+
+  @doc """
+  Write bytes to the Terminal's output. In production this is
+  stdout via `IO.write/1`; tests inject a different write_fn via
+  the `:write_fn` start_link opt to capture output.
+  """
+  @spec write(GenServer.server(), iodata()) :: :ok
+  def write(pid, bytes), do: GenServer.call(pid, {:write, bytes})
 
   @doc "Snapshot the Terminal state (for tests + debugging)."
   @spec state(GenServer.server()) :: map()
@@ -76,7 +88,8 @@ defmodule OctoPi.TUI.Terminal do
       height: h,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
-      reader_pid: nil
+      reader_pid: nil,
+      write_fn: Keyword.get(opts, :write_fn, &IO.write/1)
     }
 
     state =
@@ -93,6 +106,11 @@ defmodule OctoPi.TUI.Terminal do
 
   def handle_call({:feed_chunk, bin}, _from, state) do
     broadcast(:stdin_chunk, {:stdin_chunk, bin})
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:write, bytes}, _from, state) do
+    state.write_fn.(bytes)
     {:reply, :ok, state}
   end
 

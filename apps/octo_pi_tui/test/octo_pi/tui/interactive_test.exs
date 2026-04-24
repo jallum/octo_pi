@@ -116,6 +116,119 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "run/1 end-to-end" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Event, as: AIEvent
+    alias OctoPi.AI.Model
+    alias OctoPi.TUI.Terminal, as: TUITerminal
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    defp model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    defp assistant_msg(text, stop_reason \\ :stop) do
+      %Assistant{
+        api: :fake_api,
+        provider: :fake,
+        model: "fake-model",
+        timestamp: 0,
+        content: [%Content.Text{text: text}],
+        stop_reason: stop_reason,
+        usage: %OctoPi.AI.Usage{}
+      }
+    end
+
+    test "types a prompt, receives response, then exits on Ctrl+C" do
+      final = assistant_msg("pong")
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: %{final | content: [], stop_reason: nil}},
+          %AIEvent.TextDelta{content_index: 0, delta: "pong", partial: final},
+          %AIEvent.Done{reason: :stop, message: final}
+        ]
+      ])
+
+      parent = self()
+
+      # write_fn sends every rendered chunk to both a buffer and
+      # the test pid, so we can synchronize via `assert_receive`
+      # on specific payloads without polling.
+      {:ok, buffer} = Agent.start_link(fn -> [] end)
+
+      write_fn = fn bytes ->
+        bin = IO.iodata_to_binary(bytes)
+        Agent.update(buffer, &[bin | &1])
+        send(parent, {:tui_output, bin})
+      end
+
+      terminal_name = :"test_terminal_#{System.unique_integer([:positive])}"
+
+      runner =
+        Task.async(fn ->
+          result =
+            Interactive.run(
+              model: model(),
+              transport: FakeTransport,
+              tools: [],
+              write_fn: write_fn,
+              skip_raw_mode: true,
+              skip_sigwinch: true,
+              auto_start_reader: false,
+              dimensions: {80, 24},
+              terminal_name: terminal_name
+            )
+
+          send(parent, {:run_done, result})
+        end)
+
+      # Initial render lands first; wait for it before feeding input.
+      assert_receive {:tui_output, _initial}, 2_000
+
+      # Feed the prompt + Enter.
+      :ok = TUITerminal.feed_chunk(terminal_name, "hi")
+      :ok = TUITerminal.feed_chunk(terminal_name, "\r")
+
+      # Drain tui_output messages until one contains "pong" (the
+      # agent's streamed response). receive_until is defined below.
+      receive_until_containing("pong", 2_000)
+
+      # Ctrl+C exits.
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x03>>)
+      assert_receive {:run_done, :ok}, 2_000
+
+      Task.await(runner, 1_000)
+
+      all = Agent.get(buffer, & &1) |> Enum.reverse() |> IO.iodata_to_binary()
+      assert all =~ "hi"
+      assert all =~ "pong"
+    end
+
+    defp receive_until_containing(needle, timeout) do
+      receive do
+        {:tui_output, bin} ->
+          if String.contains?(bin, needle),
+            do: :ok,
+            else: receive_until_containing(needle, timeout)
+      after
+        timeout -> flunk("did not see #{inspect(needle)} in any tui_output")
+      end
+    end
+  end
+
   describe "render/1" do
     test "produces transcript lines + blank + input" do
       s = %Interactive{
