@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.4"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:38:27Z",
   "description": "Port custom-message.ts (~80 LOC). Allow extensions to provide custom rendering for specific message types.\n\nImplement:\n- Check Dispatcher.get_message_renderer(type) for custom message types\n- If renderer exists, delegate to extension's render function\n- Fallback: styled box with type label + markdown content\n\nUpstream: interactive/components/custom-message.ts\nDepends on: message pipeline, Extension.Dispatcher, markdown renderer",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Custom message renderers: wire into message pipeline",
   "type": "task",
-  "updated_at": "2026-04-24T10:38:27Z"
+  "updated_at": "2026-04-24T10:39:15Z"
 }
