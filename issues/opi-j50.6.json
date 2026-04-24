@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-j50.2"
+  ],
   "blocks": [],
   "created": "2026-04-24T14:48:41Z",
   "description": "Port pi-mono's startup banner. Compact mode: single line showing 'Claude Code' + version + model name. Expanded mode: shows keybinding hints (Esc to interrupt, Shift+Tab to switch modes, /help for commands). Toggle with a keybinding (pi-mono uses a dedicated key in ExpandableText). Respect a quietStartup config flag to suppress entirely. Render above the top DynamicBorder separator. Depends on opi-j50.2 (DynamicBorder) and opi-j50.4 (layout wiring).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Welcome banner with ExpandableText",
   "type": "task",
-  "updated_at": "2026-04-24T14:48:41Z"
+  "updated_at": "2026-04-24T14:48:49Z"
 }

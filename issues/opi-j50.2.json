@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "opi-j50.4"
+    "opi-j50.4",
+    "opi-j50.6"
   ],
   "created": "2026-04-24T14:48:15Z",
   "description": "Port pi-mono's DynamicBorder component: a full-width horizontal rule using '─' (U+2500) repeated to terminal width, styled with the theme's borderMuted color. Implements the Component behaviour with render/2 (returns single line) and handle_key/2 (noop passthrough). Used as visual separator above chat area and between chat and input. pi-mono places these in headerContainer (below banner) and between chatContainer and editorContainer.",
