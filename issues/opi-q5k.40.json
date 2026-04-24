@@ -4,14 +4,15 @@
   "blocks": [
     "opi-q5k.1"
   ],
+  "closed_at": "2026-04-24T22:47:37Z",
   "created": "2026-04-24T21:52:38Z",
   "description": "# Master compliance for opi-q5k.5\n\nSource check: opi-q5k.5 (editor.test.ts audit)\n\nUpstream `tmp/pi-mono/packages/tui/test/editor.test.ts` has 173 tests across 13 describes. Our Input absorbed upstream Editor features; this epic audits and ports the remaining gaps per describe area. Each child is independent and blocks opi-q5k.1 (the parent audit epic's acceptance gate).\n\n## Children\n\nOne ticket per upstream describe area. Processing workflow:\n\n1. Read the specific describe block in editor.test.ts.\n2. Enumerate every `it(...)` in that describe.\n3. Locate matching Elixir assertions in apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs (and related test files if relevant).\n4. Implement any unmapped behavior + add the missing tests.\n5. Re-compare upstream vs Elixir and close the child.\n\nThe \"Backslash+Enter newline workaround\" describe is a documented divergence — its child ticket should codify the divergence in a moduledoc / AGENTS note and close without porting.\n\n## Deps\n- This ticket blocks opi-q5k.1 (acceptance gate).\n- All children block this ticket.",
   "id": "opi-q5k.40",
   "labels": [],
   "parent": "opi-q5k",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Port editor.test.ts gaps (master — 13 describe areas)",
   "type": "epic",
-  "updated_at": "2026-04-24T21:52:38Z"
+  "updated_at": "2026-04-24T22:47:37Z"
 }
