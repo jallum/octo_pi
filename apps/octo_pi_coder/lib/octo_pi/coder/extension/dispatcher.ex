@@ -8,15 +8,30 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
   @spec emit([Extension.t()], Event.t(), Context.t()) :: term()
   def emit(extensions, %{type: type} = event, ctx) do
-    case Event.pattern(type) do
-      :fire_and_forget -> fire_and_forget(extensions, event, ctx)
-      :cancel_on_result -> cancel_on_result(extensions, event, ctx)
-      :reduce_chain -> reduce_chain(extensions, type, event_acc(event), ctx)
-      :mutate_in_place -> mutate_in_place(extensions, event, ctx)
-      :patch_merge -> patch_merge(extensions, event, ctx)
-      :first_result -> first_result(extensions, event, ctx)
-      :collect_all -> collect_all(extensions, event, ctx)
-    end
+    pattern = Event.pattern(type)
+    handler_count = count_handlers(extensions, type)
+    start = System.monotonic_time()
+
+    result =
+      case pattern do
+        :fire_and_forget -> fire_and_forget(extensions, event, ctx)
+        :cancel_on_result -> cancel_on_result(extensions, event, ctx)
+        :reduce_chain -> reduce_chain(extensions, type, event_acc(event), ctx)
+        :mutate_in_place -> mutate_in_place(extensions, event, ctx)
+        :patch_merge -> patch_merge(extensions, event, ctx)
+        :first_result -> first_result(extensions, event, ctx)
+        :collect_all -> collect_all(extensions, event, ctx)
+      end
+
+    duration = System.monotonic_time() - start
+
+    :telemetry.execute(
+      [:octo_pi_coder, :extension, :emit],
+      %{duration: duration},
+      %{event_type: type, pattern: pattern, handler_count: handler_count}
+    )
+
+    result
   end
 
   @spec fire_and_forget([Extension.t()], Event.t(), Context.t()) :: :ok
@@ -32,8 +47,12 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   def cancel_on_result(extensions, event, ctx) do
     Enum.reduce_while(all_handlers(extensions, event.type), :ok, fn {handler, ext}, :ok ->
       case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-        {:cancel, reason} -> {:halt, {:cancel, reason}}
-        _ -> {:cont, :ok}
+        {:cancel, reason} ->
+          emit_cancel_telemetry(ext, event.type, reason)
+          {:halt, {:cancel, reason}}
+
+        _ ->
+          {:cont, :ok}
       end
     end)
   end
@@ -150,4 +169,8 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   defp event_acc(%{messages: msgs}), do: msgs
   defp event_acc(%{payload: p}), do: p
   defp event_acc(event), do: event
+
+  defp count_handlers(extensions, event_type) do
+    Enum.sum(for ext <- extensions, do: length(Extension.get_handlers(ext, event_type)))
+  end
 end
