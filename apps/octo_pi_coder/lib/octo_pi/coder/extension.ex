@@ -3,14 +3,14 @@ defmodule OctoPi.Coder.Extension do
 
   alias OctoPi.Coder.Extension.Event
 
-  @type handler_fn :: (event :: map(), context :: OctoPi.Coder.Extension.Context.t() -> term())
+  @type handler_fn :: (map(), OctoPi.Coder.Extension.Context.t() -> term())
 
   @type command_spec :: %{
           description: String.t(),
           handler: (term() -> term())
         }
 
-  @type message_renderer :: (type :: String.t(), data :: term() -> String.t())
+  @type message_renderer :: (String.t(), term() -> String.t())
 
   @type flag_spec :: %{
           name: String.t(),
