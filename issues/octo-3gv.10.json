@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T09:52:54Z",
   "created": "2026-04-24T09:32:42Z",
   "description": "Port the full set of ExtensionAPI action methods beyond the basics in .3. Upstream types.ts 1156-1290, loader.ts 193-339. Includes: session state (sendMessage, sendUserMessage, appendEntry), session metadata (setSessionName, getSessionName, setLabel), tool management (exec, getAllTools), commands (getCommands). These are bound during the bindCore phase (runner.ts 261-331) and require the two-phase stub/real binding pattern. The port map's API struct (section 5.3) covers some of these but several are missing.",
   "id": "octo-3gv.10",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Extended ExtensionAPI action methods",
   "type": "task",
-  "updated_at": "2026-04-24T09:51:46Z"
+  "updated_at": "2026-04-24T09:52:54Z"
 }
