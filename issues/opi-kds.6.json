@@ -21,8 +21,8 @@
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Producer + Provider + Application wiring",
   "type": "task",
-  "updated_at": "2026-04-24T01:29:54.100363Z"
+  "updated_at": "2026-04-24T01:58:38.424337Z"
 }
