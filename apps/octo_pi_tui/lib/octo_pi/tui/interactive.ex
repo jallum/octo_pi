@@ -741,13 +741,24 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
-  def render(%{transcript: transcript, footer: footer, width: width, height: height}, input_lines) do
+  def render(
+        %{transcript: transcript, footer: footer, theme: theme, width: width, height: height},
+        input_lines
+      ) do
     footer_lines = Footer.render(footer, width)
     content_height = max(1, height - length(footer_lines))
+    border = border_line(theme, width)
 
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-    all = transcript_lines ++ [""] ++ input_lines
+    all = [border] ++ transcript_lines ++ [border] ++ input_lines
     Viewport.window(all, content_height) ++ footer_lines
+  end
+
+  defp border_line(nil, width), do: String.duplicate("─", width)
+
+  defp border_line(theme, width) do
+    [line] = Components.DynamicBorder.render(Components.DynamicBorder.new(theme), width)
+    line
   end
 
   defp render_entry(%mod{} = component, width), do: mod.render(component, width)

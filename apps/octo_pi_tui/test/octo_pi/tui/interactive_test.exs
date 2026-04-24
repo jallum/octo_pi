@@ -415,7 +415,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "render/1" do
-    test "produces transcript lines + blank + input" do
+    test "produces border + transcript + border + input" do
       s = %Interactive{
         transcript: [{:user, "hi"}, {:assistant, "hello!", :done}],
         input: %Input{value: "next", cursor: 4},
@@ -428,6 +428,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert text =~ "> hi"
       assert text =~ "hello!"
       assert text =~ "next"
+      assert text =~ "─"
     end
 
     test "includes footer lines at the bottom" do
