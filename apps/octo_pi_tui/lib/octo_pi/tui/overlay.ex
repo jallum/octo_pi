@@ -2,6 +2,30 @@ defmodule OctoPi.TUI.Overlay do
   @moduledoc """
   Overlay positioning and compositing. An overlay is a rectangular
   region placed on top of a base screen at a computed position.
+
+  ## Divergence from upstream: no focus/capturing subsystem
+
+  Upstream pi-mono exposes a stateful overlay lifecycle on its TUI
+  runtime: `tui.showOverlay(overlay, {capturing})`, `hideOverlay()`,
+  `focus()`, `unfocus()`, `setHidden()`, plus input routing that
+  dispatches keystrokes to the topmost focused *capturing* overlay
+  while passing non-capturing overlays through to the underlying
+  focusable.
+
+  We deliberately do not replicate that model. Our `Overlay` is a
+  pure compositing function (`composite/4`); the Interactive mode
+  decides which overlay (if any) is visible per frame and composes
+  it before handing the final line list to `Renderer.render/3`.
+  Input routing follows the Interactive state machine — no shared
+  focus stack, no `preFocus` restoration, no non-capturing
+  transparency.
+
+  Upstream's overlay-non-capturing.test.ts (24 tests) exercises that
+  lifecycle. Those tests are N/A by architectural choice (audit
+  opi-q5k.11 + compliance opi-q5k.36). If a dialog surface in
+  Interactive grows to the point that focus lifecycle is warranted,
+  a dedicated ticket should re-open this decision; the upstream
+  semantics remain the reference implementation.
   """
 
   alias OctoPi.TUI.WrapAnsi
