@@ -4,7 +4,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.Agent.Event
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
-  alias OctoPi.TUI.Components.Input
+  alias OctoPi.TUI.Components.{AssistantMessage, Input, ToolExecution}
   alias OctoPi.TUI.{Interactive, Key}
 
   describe "handle_event — keyboard input" do
@@ -86,11 +86,12 @@ defmodule OctoPi.TUI.InteractiveTest do
           {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
         )
 
-      assert s.transcript == [{:assistant, "hello", :streaming}]
+      assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
     end
 
     test "subsequent MessageUpdates replace the streaming entry's text" do
-      s = %Interactive{transcript: [{:assistant, "he", :streaming}]}
+      existing = AssistantMessage.new(nil, content: [text: "he"])
+      s = %Interactive{transcript: [existing]}
 
       partial = %Assistant{
         content: [%Content.Text{text: "hello"}],
@@ -106,11 +107,12 @@ defmodule OctoPi.TUI.InteractiveTest do
           {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
         )
 
-      assert s.transcript == [{:assistant, "hello", :streaming}]
+      assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
     end
 
     test "MessageEnd finalizes the streaming entry" do
-      s = %Interactive{transcript: [{:assistant, "hi", :streaming}]}
+      existing = AssistantMessage.new(nil, content: [text: "hi"])
+      s = %Interactive{transcript: [existing]}
 
       msg = %Assistant{
         content: [%Content.Text{text: "hi"}],
@@ -122,7 +124,64 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
-      assert s.transcript == [{:assistant, "hi", :done}]
+      assert [%AssistantMessage{content: [text: "hi"], stop_reason: nil}] = s.transcript
+    end
+
+    test "MessageEnd with tool calls sets has_tool_calls" do
+      existing = AssistantMessage.new(nil, content: [text: "ok"])
+      s = %Interactive{transcript: [existing]}
+
+      msg = %Assistant{
+        content: [%Content.Text{text: "ok"}, %OctoPi.AI.ToolCall{id: "tc1", name: "Read"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0,
+        stop_reason: :tool_use
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+      assert [%AssistantMessage{has_tool_calls: true}] = s.transcript
+    end
+
+    test "ToolExecutionStart appends a ToolExecution component" do
+      s = %Interactive{}
+
+      ev = %Event.ToolExecutionStart{tool_call_id: "tc1", tool_name: "Read"}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert [%ToolExecution{tool_name: "Read", tool_call_id: "tc1", status: :pending}] =
+               s.transcript
+    end
+
+    test "ToolExecutionEnd sets result on matching ToolExecution" do
+      te = ToolExecution.new("Bash", "tc2", %{}, nil)
+      s = %Interactive{transcript: [te]}
+
+      result = %OctoPi.Agent.Tool.Result{
+        content: [%Content.Text{text: "output here"}],
+        is_error?: false
+      }
+
+      ev = %Event.ToolExecutionEnd{tool_call_id: "tc2", tool_name: "Bash", result: result}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert [%ToolExecution{status: :success, result: "output here"}] = s.transcript
+    end
+
+    test "ToolExecutionEnd with error sets error status" do
+      te = ToolExecution.new("Bash", "tc3", %{}, nil)
+      s = %Interactive{transcript: [te]}
+
+      result = %OctoPi.Agent.Tool.Result{
+        content: [%Content.Text{text: "permission denied"}],
+        is_error?: true
+      }
+
+      ev = %Event.ToolExecutionEnd{tool_call_id: "tc3", tool_name: "Bash", result: result}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert [%ToolExecution{status: :error, result: "permission denied"}] = s.transcript
     end
 
     test "unrelated agent events don't modify the transcript" do

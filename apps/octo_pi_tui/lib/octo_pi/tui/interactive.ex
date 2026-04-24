@@ -18,26 +18,29 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.{
     Components,
     Events,
+    FooterData,
     Key,
     KeyParser,
+    RawMode,
     Renderer,
     Safe,
     StdinFSM,
     Terminal,
+    Theme,
     Viewport,
     WrapAnsi
   }
 
-  @type transcript_entry ::
-          {:user, String.t()}
-          | {:assistant, String.t(), :streaming | :done}
+  alias Components.{AssistantMessage, Footer, ToolExecution, UserMessage}
+  alias OctoPi.Coder
 
   @type t :: %__MODULE__{
           session: pid() | nil,
           input: Components.Input.t(),
-          transcript: [transcript_entry()],
-          footer: Components.Footer.t(),
+          transcript: [struct()],
+          footer: Footer.t(),
           footer_data: pid() | nil,
+          theme: Theme.t(),
           width: pos_integer(),
           height: pos_integer(),
           exit: boolean(),
@@ -47,8 +50,9 @@ defmodule OctoPi.TUI.Interactive do
   defstruct session: nil,
             input: %Components.Input{},
             transcript: [],
-            footer: %Components.Footer{},
+            footer: %Footer{},
             footer_data: nil,
+            theme: nil,
             width: 80,
             height: 24,
             exit: false,
@@ -99,23 +103,26 @@ defmodule OctoPi.TUI.Interactive do
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
     {:ok, renderer} = Renderer.start_link(width: w, height: h)
-    {:ok, footer_data} = OctoPi.TUI.FooterData.start_link(cwd: cwd)
+    {:ok, footer_data} = FooterData.start_link(cwd: cwd)
 
     {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
-    footer = %Components.Footer{
+    theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
+
+    footer = %Footer{
       cwd: cwd,
       model_id: model.id,
       context_window: model.context_window,
-      git_branch: OctoPi.TUI.FooterData.get_git_branch(footer_data)
+      git_branch: FooterData.get_git_branch(footer_data)
     }
 
     state = %__MODULE__{
       session: session,
       width: w,
       height: h,
+      theme: theme,
       footer: footer,
       footer_data: footer_data
     }
@@ -144,8 +151,8 @@ defmodule OctoPi.TUI.Interactive do
     {w, h}
   end
 
-  defp default_raw_mode(:enter), do: OctoPi.TUI.RawMode.enter()
-  defp default_raw_mode(:exit), do: OctoPi.TUI.RawMode.exit()
+  defp default_raw_mode(:enter), do: RawMode.enter()
+  defp default_raw_mode(:exit), do: RawMode.exit()
 
   defp safe_raw_mode_exit(_fun, true), do: :ok
 
@@ -159,11 +166,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp start_agent_session(opts) do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
-    tools = Keyword.get_lazy(opts, :tools, fn -> OctoPi.Coder.default_tools(cwd) end)
+    tools = Keyword.get_lazy(opts, :tools, fn -> Coder.default_tools(cwd) end)
 
     system_prompt =
       Keyword.get_lazy(opts, :system_prompt, fn ->
-        OctoPi.Coder.SystemPrompt.render(cwd: cwd, tools: tools)
+        Coder.SystemPrompt.render(cwd: cwd, tools: tools)
       end)
 
     session_opts =
@@ -246,15 +253,18 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  defp cursor_position(%__MODULE__{input: input, width: width}, input_lines, lines) do
+  defp cursor_position(
+         %__MODULE__{input: input, width: width, footer: footer},
+         input_lines,
+         lines
+       ) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    input_start = length(lines) - length(input_lines) + 1
+    footer_height = length(Footer.render(footer, width))
+    input_start = length(lines) - footer_height - length(input_lines) + 1
     "\e[#{input_start + crow};#{ccol + 1}H"
   end
 
-  # Shut down children in reverse start order. Terminal goes last
-  # because its `terminate/2` restores the tty.
-  defp shutdown(terminal, fsm, renderer, footer_data \\ nil) do
+  defp shutdown(terminal, fsm, renderer, footer_data) do
     pids = [footer_data, renderer, fsm, terminal] |> Enum.reject(&is_nil/1)
 
     Enum.each(pids, fn pid ->
@@ -273,27 +283,31 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec handle_event(t(), term()) :: t()
 
-  # Ctrl+C always exits immediately.
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}),
     do: %{state | exit: true}
 
-  # Escape: clear input if non-empty, exit if already empty.
   def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: :escape}}),
     do: %{state | exit: true}
 
   def handle_event(%{input: input} = state, {:key, %Key{key: :escape}}),
     do: %{state | input: %{input | value: "", cursor: 0}}
 
-  # Enter submits the prompt.
   def handle_event(%{input: input, session: session} = state, {:key, %Key{key: :enter}}) do
     case Components.Input.handle_key(input, %Key{key: :enter}) do
       {new_input, [{:submit, value}]} when value != "" ->
         if session, do: OctoPi.Agent.prompt(session, value)
 
+        user_msg =
+          if state.theme do
+            UserMessage.new(value, state.theme)
+          else
+            {:user, value}
+          end
+
         %{
           state
           | input: %{new_input | value: "", cursor: 0},
-            transcript: state.transcript ++ [{:user, value}]
+            transcript: state.transcript ++ [user_msg]
         }
 
       _ ->
@@ -301,7 +315,6 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  # Other named keys route to the Input component.
   def handle_event(%{input: input} = state, {:key, %Key{} = key}) do
     case Components.Input.handle_key(input, key) do
       {new_input, _events} -> %{state | input: new_input}
@@ -309,7 +322,6 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  # Paste buffering: accumulate chars between markers, flush atomically.
   def handle_event(state, :paste_start),
     do: %{state | paste_buffer: ""}
 
@@ -322,42 +334,51 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, :paste_end),
     do: %{state | paste_buffer: nil}
 
-  # Printable chars insert into the Input.
   def handle_event(%{input: input} = state, {:char, c}),
     do: %{state | input: Components.Input.insert(input, c)}
 
-  # Agent events drive the transcript and footer stats.
   def handle_event(state, {:octo_pi_agent_event, event}) do
     %{
       state
-      | transcript: update_transcript(state.transcript, event),
+      | transcript: update_transcript(state.transcript, event, state.theme),
         footer: update_footer(state.footer, event)
     }
   end
 
-  # Resize.
   def handle_event(state, {:resize, w, h}), do: %{state | width: w, height: h}
 
-  # Unknown — no-op.
   def handle_event(state, _), do: state
 
   # --- transcript updates ---
 
-  # MessageUpdate streams text into the last assistant entry;
-  # MessageEnd finalizes it. Other events are ignored for MVP
-  # rendering (they show up in telemetry but don't affect the
-  # transcript text we paint).
+  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageUpdate} = ev, theme),
+    do: apply_partial(transcript, ev.partial, theme)
 
-  defp update_transcript(transcript, %{
-         __struct__: OctoPi.Agent.Event.MessageUpdate,
-         partial: partial
-       }),
-       do: apply_partial(transcript, partial)
+  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageEnd} = ev, theme),
+    do: finalize_assistant(transcript, ev.message, theme)
 
-  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageEnd, message: msg}),
-    do: finalize_assistant(transcript, msg)
+  defp update_transcript(
+         transcript,
+         %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev,
+         theme
+       ) do
+    te = ToolExecution.new(ev.tool_name, ev.tool_call_id, %{}, theme)
+    transcript ++ [te]
+  end
 
-  defp update_transcript(transcript, _), do: transcript
+  defp update_transcript(
+         transcript,
+         %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev,
+         _theme
+       ) do
+    update_tool_execution(transcript, ev.tool_call_id, fn te ->
+      result_text = extract_tool_result_text(ev.result)
+      is_error = Map.get(ev.result, :is_error?, false)
+      ToolExecution.set_result(te, result_text, is_error)
+    end)
+  end
+
+  defp update_transcript(transcript, _, _theme), do: transcript
 
   defp update_footer(footer, %{__struct__: OctoPi.Agent.Event.MessageEnd, message: msg}) do
     usage = Map.get(msg, :usage, %{})
@@ -375,44 +396,108 @@ defmodule OctoPi.TUI.Interactive do
 
   defp update_footer(footer, _), do: footer
 
-  defp apply_partial(transcript, partial) do
-    text = extract_text(partial)
+  defp apply_partial(transcript, partial, theme) do
+    content = extract_content_blocks(partial)
 
-    case List.last(transcript) do
-      {:assistant, _, :streaming} ->
-        List.replace_at(transcript, -1, {:assistant, text, :streaming})
+    case find_last_assistant(transcript) do
+      {idx, %AssistantMessage{} = msg} ->
+        updated = AssistantMessage.update_content(msg, content: content)
+        List.replace_at(transcript, idx, updated)
 
       _ ->
-        transcript ++ [{:assistant, text, :streaming}]
+        msg = AssistantMessage.new(theme, content: content)
+        transcript ++ [msg]
     end
   end
 
-  defp finalize_assistant(transcript, msg) do
-    text = extract_text(msg)
+  defp finalize_assistant(transcript, msg, theme) do
+    content = extract_content_blocks(msg)
+    stop_reason = extract_stop_reason(msg)
+    error_message = Map.get(msg, :error_message)
+    has_tool_calls = has_tool_calls?(msg)
 
-    case List.last(transcript) do
-      {:assistant, _, :streaming} ->
-        List.replace_at(transcript, -1, {:assistant, text, :done})
+    updates = [
+      content: content,
+      stop_reason: stop_reason,
+      error_message: error_message,
+      has_tool_calls: has_tool_calls
+    ]
+
+    case find_last_assistant(transcript) do
+      {idx, %AssistantMessage{} = existing} ->
+        updated = AssistantMessage.update_content(existing, updates)
+        List.replace_at(transcript, idx, updated)
 
       _ ->
-        transcript ++ [{:assistant, text, :done}]
+        msg = AssistantMessage.new(theme, updates)
+        transcript ++ [msg]
     end
   end
 
-  defp extract_text(%{content: content}) when is_list(content) do
-    content
-    |> Enum.filter(&match?(%OctoPi.AI.Content.Text{}, &1))
-    |> Enum.map_join("", & &1.text)
+  defp find_last_assistant(transcript) do
+    transcript
+    |> Enum.with_index()
+    |> Enum.reverse()
+    |> Enum.find(fn
+      {%AssistantMessage{}, _idx} -> true
+      _ -> false
+    end)
+    |> case do
+      {msg, idx} -> {idx, msg}
+      nil -> nil
+    end
   end
 
-  defp extract_text(_), do: ""
+  defp update_tool_execution(transcript, tool_call_id, update_fn) do
+    idx =
+      Enum.find_index(transcript, fn
+        %ToolExecution{tool_call_id: id} -> id == tool_call_id
+        _ -> false
+      end)
+
+    if idx do
+      List.update_at(transcript, idx, update_fn)
+    else
+      transcript
+    end
+  end
+
+  defp extract_content_blocks(%{content: content}) when is_list(content) do
+    Enum.flat_map(content, fn
+      %OctoPi.AI.Content.Text{text: text} -> [{:text, text}]
+      %OctoPi.AI.Content.Thinking{thinking: text} -> [{:thinking, text}]
+      _ -> []
+    end)
+  end
+
+  defp extract_content_blocks(_), do: []
+
+  defp extract_stop_reason(%{stop_reason: :stop}), do: nil
+  defp extract_stop_reason(%{stop_reason: reason}) when is_atom(reason), do: reason
+  defp extract_stop_reason(_), do: nil
+
+  defp has_tool_calls?(%{content: content}) when is_list(content) do
+    Enum.any?(content, &match?(%OctoPi.AI.ToolCall{}, &1))
+  end
+
+  defp has_tool_calls?(_), do: false
+
+  defp extract_tool_result_text(%{content: content}) when is_list(content) do
+    Enum.map_join(content, "\n", fn
+      %{text: text} -> text
+      other -> inspect(other)
+    end)
+  end
+
+  defp extract_tool_result_text(%{text: text}), do: text
+  defp extract_tool_result_text(result), do: inspect(result)
 
   # --- rendering helpers (pure) ---
 
   @doc """
   Render the current state into a list of lines ready for the
-  renderer. Transcript entries are word-wrapped at `width`, then
-  the whole frame is windowed to `height` via the Viewport.
+  renderer. Transcript entries are rendered via their component
+  render/2, then the frame is windowed to `height` via the Viewport.
   """
   @spec render(t()) :: [binary()]
   def render(%{input: input, width: width} = state) do
@@ -421,7 +506,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @spec render(t(), [binary()]) :: [binary()]
   def render(%{transcript: transcript, footer: footer, width: width, height: height}, input_lines) do
-    footer_lines = Components.Footer.render(footer, width)
+    footer_lines = Footer.render(footer, width)
     content_height = max(1, height - length(footer_lines))
 
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
@@ -429,6 +514,13 @@ defmodule OctoPi.TUI.Interactive do
     Viewport.window(all, content_height) ++ footer_lines
   end
 
-  defp render_entry({:user, text}, width), do: WrapAnsi.wrap("> #{text}", width)
-  defp render_entry({:assistant, text, _}, width), do: WrapAnsi.wrap(Safe.sanitize(text), width)
+  defp render_entry(%mod{} = component, width), do: mod.render(component, width)
+
+  defp render_entry({:user, text}, width) do
+    WrapAnsi.wrap("> #{text}", width)
+  end
+
+  defp render_entry({:assistant, text, _}, width) do
+    WrapAnsi.wrap(Safe.sanitize(text), width)
+  end
 end
