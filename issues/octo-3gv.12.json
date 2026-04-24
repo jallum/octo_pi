@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T09:55:25Z",
   "created": "2026-04-24T09:32:53Z",
   "description": "Port the extension-based provider registration system. Extensions can register custom LLM providers at runtime via registerProvider/unregisterProvider. Upstream types.ts 1222-1351, runner.ts 261-331 (bindCore flushes queued registrations). ProviderConfig: baseUrl, apiKey, api type, streamSimple (custom stream handler), headers, authHeader, models (ProviderModelConfig array), oauth (full OAuth flow: login, refreshToken, getApiKey, modifyModels). ProviderModelConfig: model ID, name, API override, reasoning support, input types, cost tracking, contextWindow, maxTokens, compat. Registrations queued during load, flushed live after bindCore.",
   "id": "octo-3gv.12",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Provider registration via extensions",
   "type": "task",
-  "updated_at": "2026-04-24T09:54:07Z"
+  "updated_at": "2026-04-24T09:55:25Z"
 }
