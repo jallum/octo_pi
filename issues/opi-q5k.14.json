@@ -9,9 +9,15 @@
   "id": "opi-q5k.14",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/regression-regional-indicator-width.test.ts (5 tests)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/wrap_ansi_test.exs (partial overlap on 1 test)\n\n## MAPPED (partial)\n\n| Upstream | Elixir |\n|---|---|\n| treats partial flag grapheme as full-width (🇨 = 2) — half of test 1 | \"treats isolated regional indicators as width 2\" (🇨=2, 🇨🇳=2) |\n\n## UNMAPPED\n\n- Second half of upstream #1: `visibleWidth(\"      - 🇨\")` must equal 10 (6 spaces + \"- \" + flag-width-2).\n- Upstream #2 \"wraps intermediate partial-flag list line before overflow\": `wrap(\"      - 🇨\", 9)` must produce 2 lines with widths 7 and 2.\n- Upstream #3 \"treats all regional-indicator singleton graphemes as width 2\": iterate U+1F1E6..U+1F1FF and assert width 2 for every one.\n- Upstream #4 \"keeps full flag pairs at width 2\": samples [🇯🇵, 🇺🇸, 🇬🇧, 🇨🇳, 🇩🇪, 🇫🇷] each width 2.\n- Upstream #5 \"keeps common streaming emoji intermediates at stable width\": samples [👍, 👍🏻, ✅, ⚡, ⚡️, 👨, 👨‍💻, 🏳️‍🌈] each width 2.\n\nNote: the streaming emoji intermediates test (#5) is the key regression — ensures width is stable across streaming intermediates (e.g., 👨 before 👨‍💻 arrives). If the Elixir implementation measures differently, this will fail and reveal a real drift risk.\n\n## Action\n\nOne compliance ticket porting 4 missing tests and extending one.",
+      "timestamp": "2026-04-24T21:40:38Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream regression-regional-indicator-width.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:40:10Z"
+  "updated_at": "2026-04-24T21:40:38Z"
 }
