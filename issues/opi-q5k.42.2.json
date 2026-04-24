@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.2",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done. 5 upstream nested-list tests ported and pass against existing impl.",
+      "timestamp": "2026-04-24T22:38:43Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Nested lists (5 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:37:58Z"
+  "updated_at": "2026-04-24T22:38:43Z"
 }
