@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "opi-m4h.10"
+    "opi-m4h.10",
+    "opi-m4h.20"
   ],
   "created": "2026-04-24T10:36:43Z",
   "description": "Footer.ex and FooterData.ex exist but are never composed into Interactive's render output. Wire them in:\n- Start FooterData GenServer in Interactive.run/1\n- Reserve bottom 2-3 lines for footer in render pipeline\n- Feed token counts, model_id, cost from session events into footer state\n- Feed git branch from FooterData polling\n\nUpstream: interactive/components/footer.ts (220 LOC)\nExisting code: components/footer.ex, footer_data.ex — just needs integration.",
