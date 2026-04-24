@@ -9,9 +9,15 @@
   "id": "opi-q5k.19",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/truncated-text.test.ts (9 tests)\nUpstream impl: tmp/pi-mono/packages/tui/src/components/truncated-text.ts (exported from pi-tui)\nUpstream usage: tmp/pi-mono/packages/coding-agent uses `TruncatedText` in interactive mode (e.g., status/footer lines that must always fit on one row).\n\nOurs: no `TruncatedText` component. `grep -rn 'TruncatedText\\|truncated_text'` in apps/octo_pi_tui returns nothing. Our existing Text/SelectList/Footer each implement their own ad-hoc single-line truncation (see opi-q5k.18 notes).\n\n## MAPPED\n\nNone.\n\n## UNMAPPED\n\nAll 9 upstream tests:\n1. pads output to exactly width with `paddingX=1, paddingY=0` (1 content line)\n2. pads with vertical padding (`paddingX=0, paddingY=2` → 5 lines: 2 pad + 1 content + 2 pad)\n3. truncates long text and pads to width; stripped output contains `\"...\"`\n4. preserves ANSI codes, pads to exact visible width\n5. truncates styled text, `\"\\e[0m...\"` appears before the ellipsis\n6. text that fits exactly — no ellipsis\n7. empty text — still emits one line padded to width\n8. stops at newline — only first line rendered\n9. truncates first line even when multiple newlines exist\n\n## Implementation gap\n\nThe `TruncatedText` component is missing. It is used by the upstream coding-agent interactive mode (imported alongside Input, Loader, Markdown, etc.). We should port it so anything that needs single-line-always-fits rendering can use a shared ANSI/wide-grapheme-aware implementation instead of re-inventing it per component.\n\nDepends on opi-q5k.31 (WrapAnsi.truncate_to_width) — TruncatedText internally uses truncateToWidth upstream.\n\n## Action\n\nCompliance ticket: implement `OctoPi.TUI.Components.TruncatedText`, add `truncated_text_test.exs` porting all 9 upstream tests.",
+      "timestamp": "2026-04-24T21:42:28Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream truncated-text.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:41:44Z"
+  "updated_at": "2026-04-24T21:42:28Z"
 }
