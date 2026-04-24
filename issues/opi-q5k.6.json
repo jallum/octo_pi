@@ -9,9 +9,15 @@
   "id": "opi-q5k.6",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/fuzzy.test.ts (12 assertions across 2 describes)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/fuzzy_test.exs (16 tests)\n\n## MAPPED\n\n| Upstream | Elixir |\n|---|---|\n| empty query matches everything with score 0 | \"empty query matches everything\" (asserts score 0.0) |\n| query longer than text does not match | \"query longer than text never matches\" |\n| characters must appear in order (incl. negative \"cba\") | \"subsequence match\" + \"no match when characters not in order\" |\n| case insensitive matching | \"case insensitive by default\" |\n| consecutive matches score better than scattered | \"consecutive matches score better than gaps\" |\n| word boundary matches score better | \"word boundary matches score better\" |\n| matches swapped alpha-numeric tokens (\"codex52\" vs \"gpt-5.2-codex\") | \"swapped alpha-numeric query\" |\n| fuzzyFilter empty query returns all items unchanged | \"filter/3 empty query returns all items\" |\n| fuzzyFilter filters out non-matching items | \"filters non-matching items\" |\n| fuzzyFilter sorts results by match quality | \"sorts by score ascending (best first)\" |\n| fuzzyFilter works with custom getText function | \"accepts custom text extractor\" |\n\n## UNMAPPED\n\n- Upstream \"exact match has good score\" asserts `score \u003c 0` (signed bonus for consecutive chars). Our \"exact match\" test only asserts `matches: true` — does not verify the sign of the score. Indirectly covered by the consecutive/gap comparison, but the explicit invariant (exact-match score is strictly negative) is not asserted.\n\n## N/A / EXTRA\n\nElixir adds: whitespace-only query handling, swapped numeric-alpha direction, swapped-vs-direct penalty, space-separated tokens must all match. All beyond upstream scope; no action.\n\n## Action\n\nCreating one compliance ticket for the single missing assertion.",
+      "timestamp": "2026-04-24T21:34:42Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream fuzzy.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:34:14Z"
+  "updated_at": "2026-04-24T21:34:42Z"
 }
