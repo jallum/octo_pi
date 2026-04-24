@@ -5,14 +5,13 @@
   ],
   "blocks": [],
   "created": "2026-04-24T01:29:54.100363Z",
-  "defer_until": "2026-07-01",
   "description": "When `send_session_affinity_headers: true` and a session_id is available, send `session_id`, `x-client-request-id`, `x-session-affinity` headers for load-balancer stickiness.\n\nUpstream: openai-completions.ts L441-445\nPort map: §8",
   "id": "opi-kds.9",
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "deferred",
+  "status": "open",
   "title": "Session affinity headers",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:01Z"
+  "updated_at": "2026-04-24T01:30:42Z"
 }
