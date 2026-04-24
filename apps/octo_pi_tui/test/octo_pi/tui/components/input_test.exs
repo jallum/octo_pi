@@ -35,8 +35,16 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert [""] = Input.render(%Input{value: ""}, 80)
     end
 
-    test "truncates to width" do
-      assert ["he"] = Input.render(%Input{value: "hello"}, 2)
+    test "wraps value at display width" do
+      assert ["he", "ll", "o"] = Input.render(%Input{value: "hello"}, 2)
+    end
+
+    test "wraps CJK characters respecting display width" do
+      assert ["abc日", "本"] = Input.render(%Input{value: "abc日本"}, 5)
+    end
+
+    test "CJK char that does not fit wraps to next line" do
+      assert ["abcd", "日"] = Input.render(%Input{value: "abcd日"}, 5)
     end
   end
 
@@ -50,6 +58,37 @@ defmodule OctoPi.TUI.Components.InputTest do
     test "inserts backslash as regular character" do
       input = %Input{} |> type("\\") |> type("x")
       assert input.value == "\\x"
+    end
+  end
+
+  describe "cursor_rc/2" do
+    test "cursor at start is {0, 0}" do
+      assert {0, 0} = Input.cursor_rc(%Input{value: "hello", cursor: 0}, 80)
+    end
+
+    test "cursor tracks display columns" do
+      assert {0, 3} = Input.cursor_rc(%Input{value: "hello", cursor: 3}, 80)
+    end
+
+    test "cursor wraps to next line at width boundary" do
+      assert {1, 0} = Input.cursor_rc(%Input{value: "hello", cursor: 5}, 5)
+    end
+
+    test "cursor on second wrapped line" do
+      assert {1, 1} = Input.cursor_rc(%Input{value: "helloworld", cursor: 6}, 5)
+    end
+
+    test "CJK chars are two display columns" do
+      assert {0, 4} = Input.cursor_rc(%Input{value: "日本", cursor: 2}, 80)
+    end
+
+    test "CJK wrap: cursor after wrapped CJK" do
+      # "abcd日" width=5: 'abcd' fills 4 cols, '日' (2 wide) wraps
+      assert {1, 2} = Input.cursor_rc(%Input{value: "abcd日", cursor: 5}, 5)
+    end
+
+    test "empty value cursor at {0, 0}" do
+      assert {0, 0} = Input.cursor_rc(%Input{value: "", cursor: 0}, 80)
     end
   end
 
@@ -87,6 +126,38 @@ defmodule OctoPi.TUI.Components.InputTest do
       s = %Input{value: "xyz", cursor: 1}
       assert %Input{cursor: 0} = press(s, key(:home))
       assert %Input{cursor: 3} = press(s, key(:end))
+    end
+  end
+
+  describe "handle_key/2 — word movement" do
+    test "Alt+B moves cursor backward one word" do
+      s = %Input{value: "hello world", cursor: 11}
+      assert %Input{cursor: 6} = press(s, alt(?b))
+    end
+
+    test "Alt+B skips whitespace then word" do
+      s = %Input{value: "hello   world", cursor: 8}
+      assert %Input{cursor: 0} = press(s, alt(?b))
+    end
+
+    test "Alt+B at start stays at 0" do
+      s = %Input{value: "hello", cursor: 0}
+      assert %Input{cursor: 0} = press(s, alt(?b))
+    end
+
+    test "Alt+F moves cursor forward one word" do
+      s = %Input{value: "hello world", cursor: 0}
+      assert %Input{cursor: 5} = press(s, alt(?f))
+    end
+
+    test "Alt+F skips whitespace then word" do
+      s = %Input{value: "hello   world", cursor: 5}
+      assert %Input{cursor: 13} = press(s, alt(?f))
+    end
+
+    test "Alt+F at end stays at end" do
+      s = %Input{value: "hello", cursor: 5}
+      assert %Input{cursor: 5} = press(s, alt(?f))
     end
   end
 

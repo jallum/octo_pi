@@ -1,12 +1,12 @@
 defmodule OctoPi.TUI.Components.Input do
   @moduledoc """
-  Single-line editable input with Emacs-style kill ring, undo
-  stack, and word-boundary navigation.
+  Editable text input with display-width-aware wrapping, Emacs-style
+  kill ring, undo stack, and word-boundary navigation.
   """
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.{Key, WrapAnsi}
 
   @type t :: %__MODULE__{
           value: String.t(),
@@ -25,7 +25,27 @@ defmodule OctoPi.TUI.Components.Input do
   # --- render ---
 
   @impl true
-  def render(%__MODULE__{value: value}, width), do: [truncate(value, width)]
+  def render(%__MODULE__{value: value}, width), do: wrap_input(value, width)
+
+  @doc "Cursor position within the wrapped output as `{row, col}` (0-indexed, display-width columns)."
+  @spec cursor_rc(t(), pos_integer()) :: {non_neg_integer(), non_neg_integer()}
+  def cursor_rc(%__MODULE__{value: value, cursor: cursor}, width) do
+    {row, col} =
+      value
+      |> String.graphemes()
+      |> Enum.take(cursor)
+      |> Enum.reduce({0, 0}, fn g, {row, col} ->
+        w = WrapAnsi.grapheme_width(g)
+
+        if col > 0 and col + w > width do
+          {row + 1, w}
+        else
+          {row, col + w}
+        end
+      end)
+
+    if col >= width, do: {row + 1, 0}, else: {row, col}
+  end
 
   # --- public API ---
 
@@ -96,6 +116,12 @@ defmodule OctoPi.TUI.Components.Input do
 
   def handle_key(%__MODULE__{} = s, %Key{key: ?y, modifiers: [:ctrl]}), do: yank(s)
   def handle_key(%__MODULE__{} = s, %Key{key: ?y, modifiers: [:alt]}), do: yank_pop(s)
+
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?b, modifiers: [:alt]}),
+    do: %{s | cursor: word_boundary_backward(v, c), last_action: nil}
+
+  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?f, modifiers: [:alt]}),
+    do: %{s | cursor: word_boundary_forward(v, c), last_action: nil}
 
   def handle_key(%__MODULE__{cursor: c} = s, %Key{key: :left}),
     do: %{s | cursor: max(c - 1, 0), last_action: nil}
@@ -281,6 +307,19 @@ defmodule OctoPi.TUI.Components.Input do
     {Enum.join(before), Enum.join(rest)}
   end
 
-  defp truncate(line, width) when byte_size(line) <= width, do: line
-  defp truncate(line, width), do: String.slice(line, 0, width)
+  defp wrap_input(value, width) do
+    value
+    |> String.graphemes()
+    |> Enum.reduce({[""], 0}, fn g, {[line | rest], col} ->
+      w = WrapAnsi.grapheme_width(g)
+
+      if col > 0 and col + w > width do
+        {[g, line | rest], w}
+      else
+        {[line <> g | rest], col + w}
+      end
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
 end

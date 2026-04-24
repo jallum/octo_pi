@@ -204,9 +204,10 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  defp cursor_position(%__MODULE__{input: %{cursor: c}}, input_lines, lines) do
-    input_row = length(lines) - length(input_lines) + 1
-    "\e[#{input_row};#{c + 1}H"
+  defp cursor_position(%__MODULE__{input: input, width: width}, input_lines, lines) do
+    {crow, ccol} = Components.Input.cursor_rc(input, width)
+    input_start = length(lines) - length(input_lines) + 1
+    "\e[#{input_start + crow};#{ccol + 1}H"
   end
 
   # Shut down children in reverse start order. Terminal goes last
