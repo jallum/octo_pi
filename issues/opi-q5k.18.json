@@ -9,9 +9,15 @@
   "id": "opi-q5k.18",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/truncate-to-width.test.ts (8 tests for truncateToWidth + 1 test for visibleWidth)\nOurs: no `truncate_to_width` equivalent — grep of apps/octo_pi_tui/lib turns up only component-local helpers (select_list, text, tool_execution, footer) that use `byte_size` / `String.slice`. None of these are ANSI-aware or grapheme-aware.\n\n## MAPPED\n\nThe `visibleWidth(\"\\\\t\\\\x1b[31m界\\\\x1b[0m\") == 5` upstream assertion is indirectly covered by:\n- wrap_ansi_test.exs: \"ignores CSI SGR codes\" (tests visible_width strips CSI SGR)\n- wrap_ansi_test.exs: \"CJK characters are width 2\"\n\nbut there is no single assertion that combines tab + ANSI + wide grapheme into the same width call. Mild gap.\n\n## UNMAPPED\n\nZero coverage for the `truncateToWidth` function family. Upstream invariants not tested:\n- output within width for very large unicode (100k repeats of \"🙂界\")\n- ANSI styling preserved for kept text; `\\\\x1b[0m` inserted before AND after ellipsis\n- malformed ANSI prefixes don't hang\n- wide ellipsis clipping: `truncateToWidth(\"abcdef\", 1, \"🙂\") == \"\"`; with width 2 returns `\"\\\\x1b[0m🙂\\\\x1b[0m\"`\n- fitting text returns original even when ellipsis is too wide\n- padding mode fills to exact visible width\n- no-ellipsis mode appends trailing reset\n- contiguous prefix (does not skip wide grapheme and resume): `truncateToWidth(\"🙂\\\\t界 \\\\x1b_abc\\\\x07\", 7, \"…\", true) == \"🙂\\\\t\\\\x1b[0m…\\\\x1b[0m \"`\n\n## Implementation gap (not just test)\n\nThere is no shared `OctoPi.TUI.WrapAnsi.truncate_to_width` (or equivalent). The project has 4+ local truncation helpers that each use byte or grapheme slicing without ANSI or wide-grapheme awareness — they will:\n- corrupt ANSI sequences by slicing mid-escape\n- double-count bytes for multi-byte graphemes\n- produce wrong widths for wide (CJK/emoji) content\n\nUpstream tests are the acceptance criteria for a correct implementation.\n\n## Action\n\nCompliance ticket: implement `WrapAnsi.truncate_to_width/4` (or similar) and port all 8 upstream tests. Optionally unify the component-local truncate helpers to use it.",
+      "timestamp": "2026-04-24T21:41:39Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream truncate-to-width.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:40:42Z"
+  "updated_at": "2026-04-24T21:41:39Z"
 }
