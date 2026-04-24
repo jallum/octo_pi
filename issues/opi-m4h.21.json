@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.7"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:38:27Z",
   "description": "Connect the extension tool rendering system (ToolRender from Phase 6) to the ToolExecution component.\n\nImplement:\n- When rendering a tool call, check Dispatcher.get_tool_definition for custom renderCall/renderResult\n- If present, delegate to the extension's render function instead of default display\n- Pass ToolRender.Context with args, state, tool_call_id, invalidate callback\n- Support render_shell: :self (extension controls full framing) vs :default (standard border)\n\nUpstream: tool-execution.ts lines 72-76 (shell selection), renderCall/renderResult delegation\nDepends on: ToolExecution component, Extension.ToolRender (Phase 6), Extension.Dispatcher",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Custom tool renderers: wire ToolRender into ToolExecution",
   "type": "task",
-  "updated_at": "2026-04-24T10:38:27Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
