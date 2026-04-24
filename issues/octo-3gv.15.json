@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:33:13Z",
+  "description": "Port the advanced extension loading mechanisms. Upstream loader.ts 355-606. Features: loadExtensionFromFactory (load from inline factory function, 406-417), resolveExtensionEntries (resolve entry points from directory, 481-511), readPiManifest / package.json pi.extensions[] field for declaring entry points (455-497), three-tier discovery with deduplication via seen set (569-606), Mix dependency extensions (subdirectories with mix.exs treated as dependency). The basic loader in .3 covers standard file/directory discovery — this ticket covers the remaining loader surface.",
+  "id": "octo-3gv.15",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 3,
+  "status": "open",
+  "title": "Advanced loader: factory loading, manifest discovery, Mix deps",
+  "type": "task",
+  "updated_at": "2026-04-24T09:33:13Z"
+}
