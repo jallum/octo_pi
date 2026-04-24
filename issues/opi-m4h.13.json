@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:38Z",
+  "description": "Upgrade Input component to support multiline editing, or create a new Editor component.\n\nImplement:\n- Shift+Enter or paste to create newlines\n- Vertical scrolling when content exceeds viewport height\n- Page Up/Down for large viewport jumps\n- Proper cursor tracking across wrapped lines\n- Line-aware kill/yank (Ctrl+K kills to end of line, not end of all text)\n\nUpstream: packages/tui/src/components/editor.ts (2280 LOC — we need the core, not everything)\nDepends on: existing Input component (extend or wrap)",
+  "id": "opi-m4h.13",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 2,
+  "status": "open",
+  "title": "Multiline editor: line wrapping, scroll viewport, page navigation",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:38Z"
+}
