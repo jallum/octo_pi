@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.7",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Covered by input_test.exs 'Kill ring' (13 tests) + 'line-aware kill operations' (6 tests for multiline Ctrl+K/Ctrl+U/Home/End in logical-line context) + 'backspace at line boundary'. Kill ring accumulation, rotation, yank/yank-pop, Alt+D forward-word, yank in middle all covered. The 20 upstream editor tests are split between our 'Kill ring' and 'line-aware kill operations' describes with equivalent semantics. No new tests required.",
+      "timestamp": "2026-04-24T22:46:40Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Kill ring (editor) (20 upstream tests)",
