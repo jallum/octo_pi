@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.6"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port 5 UI/rendering/provider extensions:\n- message-renderer.ts → MessageRenderer: registerMessageRenderer for custom entry types\n- custom-header.ts → CustomHeader: UI widget registration in header zone\n- custom-footer.ts → CustomFooter: UI widget registration in footer zone  \n- status-line.ts → StatusLine: status widget updates\n- provider-payload.ts → ProviderPayload: provider registration, model config\n\nExercises UIContext, message renderer registration, and provider config. Heaviest overlap with TUI layer — may surface UIContext gaps.",
+  "id": "opi-hix.10",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Example extensions wave 4: UI, rendering & providers (message-renderer, custom-header, custom-footer, status-line, provider-payload)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

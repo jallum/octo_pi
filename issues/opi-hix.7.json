@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.2",
+    "opi-hix.3"
+  ],
+  "blocks": [
+    "opi-hix.8"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port 4 foundational example extensions that exercise the core API:\n- hello.ts → Hello: basic tool registration via registerTool\n- commands.ts → Commands: registerCommand with handler(args, ctx), branch entry access\n- event-bus.ts → EventBus: pi.events.on/emit for inter-extension communication\n- session-name.ts → SessionName: session metadata access\n\nEach extension gets a test file exercising init + handler behaviour. These are the simplest — if they don't work cleanly, the API surface has fundamental gaps.",
+  "id": "opi-hix.7",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Example extensions wave 1: basic API surface (hello, commands, event-bus, session-name)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

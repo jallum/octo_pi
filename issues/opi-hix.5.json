@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.1"
+  ],
+  "blocks": [
+    "opi-hix.9"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port test/compaction-extensions.test.ts (~10 test cases) + test/compaction-extensions-example.test.ts. Exercises:\n- session_before_compact event with preparation data\n- session_compact event with compaction entry result\n- Extension cancellation of compaction\n- Custom compaction provision (replaces default)\n- Error handling (falls back to default on extension error)\n- Multiple extension ordering\n- Context access (sessionManager, modelRegistry)\n\nRequires the test harness (ticket 1). Compaction events may not yet exist in the Elixir extension event types.",
+  "id": "opi-hix.5",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Port compaction extension tests (cancel, custom compaction, error fallback)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

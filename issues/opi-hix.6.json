@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.1"
+  ],
+  "blocks": [
+    "opi-hix.10"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port test/suite/agent-session-model-extension.test.ts (~12 test cases) + 2835-tools-allowlist-filters-extension-tools.test.ts (~4 cases). Exercises:\n- Tool execution blocking via tool_call event → {block, reason}\n- Tool result modification via tool_result event\n- Message context rewriting before LLM call (context event)\n- Input transformation and handling in live session\n- before_agent_start injection (custom messages, system prompt modification)\n- Session lifecycle events (startup, reload, shutdown)\n- Model selection tracking\n- Dynamic tool registration on session_start\n- Tool allowlist filtering for both built-in and extension tools\n\nRequires the test harness (ticket 1). This is the heaviest integration test — expect the most issues here.",
+  "id": "opi-hix.6",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Port agent-session integration tests (tool blocking, result modification, context rewriting)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

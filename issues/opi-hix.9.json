@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.8",
+    "opi-hix.5"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port 4 lifecycle extensions:\n- trigger-compact.ts → TriggerCompact: turn_end handler, ctx.getContextUsage, ctx.compact\n- custom-compaction.ts → CustomCompaction: session_before_compact handler, LLM-based summarization\n- auto-commit-on-exit.ts → AutoCommitOnExit: session_shutdown handler, git operations\n- git-checkpoint.ts → GitCheckpoint: turn_end handler, automatic git stash/checkpoint\n\nExercises lifecycle events, context usage APIs, and the compaction extension points.",
+  "id": "opi-hix.9",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Example extensions wave 3: lifecycle & compaction (trigger-compact, custom-compaction, auto-commit-on-exit, git-checkpoint)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-hix.2",
+    "opi-hix.3",
+    "opi-hix.5",
+    "opi-hix.6"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port the upstream test-harness.ts into an ExUnit support module. Provides:\n- A faux Model with declarative response sequencing (text, tool calls, thinking, errors)\n- A one-call factory that wires up AgentSession with in-memory deps (SessionManager, ModelRegistry, SettingsManager)\n- Event capture helpers for assertions\n- Extension factory injection\n\nUpstream: test/test-harness.ts (446 lines) + test/test-harness.test.ts.\nThis is the foundation — all integration test tickets depend on it.",
+  "id": "opi-hix.1",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Test harness: faux model + session factory for extension integration tests",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

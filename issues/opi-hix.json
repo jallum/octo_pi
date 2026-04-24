@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port the upstream pi-mono extension test suite and example extensions into octo_pi. The extension infrastructure (Extension behaviour, Dispatcher, API, EventBus, Loader, etc.) was built in Phase 6 (octo-3gv) with two reference extensions (DirtyRepoGuard, InputTransform). This epic stress-tests that infrastructure by porting the upstream's full test battery and a representative set of example extensions, flushing out gaps and incompatibilities.\n\nUpstream sources:\n- Test machinery: tmp/pi-mono/packages/coding-agent/test/test-harness.ts (446 lines, faux model + session factory)\n- 6 extension test files (~1400 lines, ~100 test cases)\n- 2 integration/regression test files (~420 lines)\n- ~60 example extensions in tmp/pi-mono/packages/coding-agent/examples/extensions/\n\nAlready ported: DirtyRepoGuard, InputTransform (octo-3gv.6). Existing Elixir extension infra: Extension, API, Dispatcher, Context, EventBus, Loader, RuntimeState, TelemetryHandler, ToolRender, UIContext, CommandContext, ProviderConfig.",
+  "id": "opi-hix",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "[EPIC] Port extension examples + test machinery from upstream",
+  "type": "epic",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

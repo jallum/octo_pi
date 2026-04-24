@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.7"
+  ],
+  "blocks": [
+    "opi-hix.9"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port 4 tool-management extensions:\n- tools.ts → Tools: getAllTools, setActiveTools, getActiveTools, appendEntry for custom entries\n- dynamic-tools.ts → DynamicTools: runtime tool registration on session_start, promptSnippet/promptGuidelines fields\n- permission-gate.ts → PermissionGate: tool_call event blocking with interactive ctx.ui.select\n- protected-paths.ts → ProtectedPaths: tool_call blocking based on file path patterns\n\nExercises the tool management and interactive UI context APIs. Expect issues around setActiveTools/getActiveTools and ui.select.",
+  "id": "opi-hix.8",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Example extensions wave 2: tools & permissions (tools, dynamic-tools, permission-gate, protected-paths)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.1"
+  ],
+  "blocks": [
+    "opi-hix.7"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port test/extensions-input-event.test.ts (~10 test cases). Exercises:\n- Input transformation (text modification preserving images)\n- Image replacement when provided\n- Handler chaining (transforms accumulate across handlers)\n- Short-circuit behaviour (handled stops subsequent handlers)\n- Source field handling (interactive, rpc, extension)\n- Error handling (catches and continues)\n- Handler existence detection\n\nInputTransform reference extension already ported — this tests the dispatcher-level chaining logic that underlies it.",
+  "id": "opi-hix.3",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Port extensions-input-event tests (transform, handled, chaining)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

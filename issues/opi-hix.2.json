@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hix.1"
+  ],
+  "blocks": [
+    "opi-hix.7"
+  ],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port test/extensions-runner.test.ts (~41 test cases). Exercises:\n- Shortcut conflict detection (reserved vs non-reserved keybindings)\n- Tool collection + deduplication (first-registration-wins)\n- Command collection with duplicate naming (name:1, name:2)\n- Flag collection and value management\n- Event chaining for before_agent_start and tool_result\n- Context creation (AbortSignal/abort_ref exposure)\n- Error listener callbacks\n- Message renderer registration\n- Provider registration\n- Command context creation and method forwarding\n\nExpect gaps: shortcuts, flags, message renderers, runner introspection may need Extension/API additions.",
+  "id": "opi-hix.2",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Port extensions-runner tests (collection, deduplication, conflicts, chaining)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}

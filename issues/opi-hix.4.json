@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-24T10:30:58.625858Z",
+  "description": "Port test/extensions-discovery.test.ts (~29 test cases). Exercises:\n- Direct .ex file discovery in extensions/ directory\n- Subdirectory discovery via index module\n- mix.exs / config-based extension paths\n- Fallback hierarchy for entry points\n- Error reporting (invalid code, missing exports, init failures)\n- Non-recursive discovery (one level only)\n- Tool, command, renderer, handler, shortcut, flag registration from discovered extensions\n- Mixed discovery (direct files + subdirectories)\n\nUpstream uses tmp dirs with .ts/.js files; Elixir equivalent uses compiled modules or Code.eval_file. Loader.ex exists but likely needs filesystem discovery additions.",
+  "id": "opi-hix.4",
+  "labels": [],
+  "parent": "opi-hix",
+  "priority": 2,
+  "status": "open",
+  "title": "Port extensions-discovery tests (filesystem loading, fallback hierarchy)",
+  "type": "task",
+  "updated_at": "2026-04-24T10:30:58.625858Z"
+}
