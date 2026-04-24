@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:27:11Z",
+  "description": "Shared normalization layer for cross-provider differences: tool-id regex differences, thinking block coercion, image-downgrade for non-vision models. This supplements the existing TransformMessages module (opi-kds.2) with provider-specific edge cases discovered when running multiple providers side by side. Upstream ref: the normalize/coerce paths in each provider's shared module.",
+  "id": "octo-l8r.4",
+  "labels": [],
+  "parent": "octo-l8r",
+  "priority": 2,
+  "status": "open",
+  "title": "Cross-provider message normalization",
+  "type": "task",
+  "updated_at": "2026-04-24T09:27:11Z"
+}
