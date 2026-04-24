@@ -64,11 +64,13 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
     req_spec = Request.build(args.model, args.context, args.opts, compat)
 
+    body = apply_on_payload(req_spec.body, args.opts, args.model)
+
     req_opts =
       [
         url: req_spec.url,
         headers: req_spec.headers,
-        json: req_spec.body,
+        json: body,
         receive_timeout: :infinity,
         into: :self
       ] ++ Map.get(args, :req_overrides, [])
@@ -76,6 +78,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
     state =
       try do
         resp = Req.post!(req_opts)
+        apply_on_response(resp, args.opts, args.model)
         state = drain_body(resp, state)
         state = flush_sse(state)
 
@@ -165,6 +168,25 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
         dstate
     end
   end
+
+  # --- callbacks ---
+
+  defp apply_on_payload(body, %{on_payload: fun}, model) when is_function(fun, 2) do
+    case fun.(body, model) do
+      result when is_map(result) -> result
+      _ -> body
+    end
+  end
+
+  defp apply_on_payload(body, _opts, _model), do: body
+
+  defp apply_on_response(%Req.Response{} = resp, %{on_response: fun}, model) when is_function(fun, 2) do
+    headers = Map.new(resp.headers, fn {k, v} -> {k, v} end)
+    fun.(%{status: resp.status, headers: headers}, model)
+    :ok
+  end
+
+  defp apply_on_response(_resp, _opts, _model), do: :ok
 
   # --- terminal events ---
 

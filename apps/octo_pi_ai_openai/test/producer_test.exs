@@ -342,4 +342,81 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       assert text == "hi\xF0\x9F\x9A\x80"
     end
   end
+
+  describe "on_payload / on_response callbacks" do
+    defp simple_chunks do
+      [
+        Fake.sse(%{
+          "id" => "chatcmpl-test",
+          "choices" => [%{"delta" => %{"content" => "ok"}, "finish_reason" => nil}]
+        }),
+        Fake.sse(%{
+          "id" => "chatcmpl-test",
+          "choices" => [%{"delta" => %{}, "finish_reason" => "stop"}]
+        }),
+        Fake.done()
+      ]
+    end
+
+    test "on_payload can modify the request body" do
+      test_pid = self()
+
+      opts = %StreamOptions{
+        on_payload: fn body, model ->
+          send(test_pid, {:payload, body, model})
+          Map.put(body, "custom_field", true)
+        end
+      }
+
+      caller = self()
+      ref = make_ref()
+
+      {:ok, _pid} =
+        Producer.start(%{
+          model: model(),
+          context: user_context(),
+          opts: opts,
+          caller: caller,
+          ref: ref,
+          req_overrides: [plug: Fake.serve(simple_chunks())]
+        })
+
+      _events = collect_events(ref)
+
+      assert_receive {:payload, body, m}
+      assert body["model"] == "gpt-4o"
+      assert m.id == "gpt-4o"
+    end
+
+    test "on_response receives status and headers" do
+      test_pid = self()
+
+      opts = %StreamOptions{
+        on_response: fn info, model ->
+          send(test_pid, {:response, info, model})
+          :ok
+        end
+      }
+
+      caller = self()
+      ref = make_ref()
+
+      {:ok, _pid} =
+        Producer.start(%{
+          model: model(),
+          context: user_context(),
+          opts: opts,
+          caller: caller,
+          ref: ref,
+          req_overrides: [plug: Fake.serve(simple_chunks())]
+        })
+
+      _events = collect_events(ref)
+
+      assert_receive {:response, info, m}
+      assert info.status == 200
+      assert is_map(info.headers)
+      assert m.id == "gpt-4o"
+    end
+  end
 end
