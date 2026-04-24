@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-m4h.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-m4h.7"
+  ],
   "created": "2026-04-24T10:38:57Z",
   "description": "Port box.ts (~137 LOC) and dynamic-border.ts. Used by tool execution, bash execution, and dialogs.\n\nImplement:\n- Box drawing with Unicode box chars (─│┌┐└┘)\n- Title in top border\n- Color/style from theme\n- Content padding\n- Optional rounded corners (╭╮╰╯)\n\nUpstream: packages/tui/src/components/box.ts, interactive/components/dynamic-border.ts\nDepends on: theme",
   "id": "opi-m4h.26",
