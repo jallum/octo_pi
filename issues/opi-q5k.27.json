@@ -9,9 +9,15 @@
   "id": "opi-q5k.27",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Path B (decline) taken. TerminalImage moduledoc now records the rationale. The 2 upstream tui-cell-size-input.test.ts tests are N/A for our architecture; no tests ported. If/when an interactive TUI runtime with startup handshake is built, re-open this ticket to implement the feature.",
+      "timestamp": "2026-04-24T22:18:55Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port tui-cell-size-input.test.ts: decide fate of startup cell-size query",
   "type": "task",
-  "updated_at": "2026-04-24T22:18:23Z"
+  "updated_at": "2026-04-24T22:18:55Z"
 }
