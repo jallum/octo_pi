@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-m4h.4"
+  ],
   "blocks": [],
   "created": "2026-04-24T10:38:57Z",
   "description": "Add language-aware syntax highlighting to markdown code blocks.\n\nImplement:\n- Detect language from fence info string (```elixir, ```python, etc.)\n- Apply syntax coloring via NimbleOptions/Makeup or similar Elixir lib\n- Theme-based color scheme\n- Graceful fallback to plain monochrome for unknown languages\n\nUpstream: theme.ts highlightCode, markdown.ts code block rendering\nDepends on: markdown renderer, theme",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Syntax highlighting in fenced code blocks",
   "type": "task",
-  "updated_at": "2026-04-24T10:38:57Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
