@@ -10,7 +10,9 @@ defmodule OctoPi.Coder.CLI do
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Modes.{Print, Rpc}
 
-  @default_model "claude-haiku-4-5"
+  # Sonnet 4.6 is the default for coding work — Haiku is too small
+  # to reliably use the tool surface. Override with `--model`.
+  @default_model "claude-sonnet-4-6"
 
   @switches [
     print: :boolean,
