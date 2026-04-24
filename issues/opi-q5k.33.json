@@ -11,9 +11,15 @@
   "id": "opi-q5k.33",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. SelectList.Item struct + two-column layout + truncate_primary hook. All 5 upstream parity tests pass alongside existing 10 keyboard tests. Natural width formula matches upstream (visible_width + PRIMARY_COLUMN_GAP(2)) clamped to [min, max].",
+      "timestamp": "2026-04-24T22:30:04Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Upgrade SelectList to {value,label,description} items + port select-list.test.ts (5 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:27:11Z"
+  "updated_at": "2026-04-24T22:30:04Z"
 }
