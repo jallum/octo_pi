@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-q5k.31"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-q5k",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Implement Components.TruncatedText + port truncated-text.test.ts (9 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T21:42:29Z"
+  "updated_at": "2026-04-24T22:16:51Z"
 }
