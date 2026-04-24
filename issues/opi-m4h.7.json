@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-m4h.1",
     "opi-m4h.26",
@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-m4h",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "ToolExecution component: call/result display with expansion",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:16Z"
+  "updated_at": "2026-04-24T11:09:57Z"
 }
