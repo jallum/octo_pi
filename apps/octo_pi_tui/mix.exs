@@ -29,7 +29,8 @@ defmodule OctoPi.TUI.MixProject do
   defp deps do
     [
       {:octo_pi_coder, in_umbrella: true},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:earmark_parser, "~> 1.4"}
     ]
   end
 end
