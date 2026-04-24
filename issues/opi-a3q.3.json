@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:13:16Z",
+  "description": "provider_config.ex:7 — models field references ModelConfig.t() before the nested module is defined. Use __MODULE__.ModelConfig.t() to be explicit and avoid breakage if the nested module is ever extracted.",
+  "id": "opi-a3q.3",
+  "labels": [],
+  "parent": "opi-a3q",
+  "priority": 3,
+  "status": "open",
+  "title": "Use full module path for ModelConfig type reference in ProviderConfig",
+  "type": "task",
+  "updated_at": "2026-04-24T10:13:16Z"
+}
