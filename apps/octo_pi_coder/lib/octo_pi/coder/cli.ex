@@ -10,9 +10,12 @@ defmodule OctoPi.Coder.CLI do
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Modes.{Print, Rpc}
 
-  # Sonnet 4.6 is the default for coding work — Haiku is too small
-  # to reliably use the tool surface. Override with `--model`.
-  @default_model "claude-sonnet-4-6"
+  # Matches upstream pi-mono's per-provider default for Anthropic
+  # (see `tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`
+  # `defaultModelPerProvider.anthropic`). Override with `--model`.
+  # The full resolver (scoped models, saved settings, provider
+  # priority with valid-auth fallback) is a Phase 8 follow-up.
+  @default_model "claude-opus-4-6"
 
   @switches [
     print: :boolean,
