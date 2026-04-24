@@ -143,20 +143,18 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
   @spec get_all_commands([Extension.t()]) :: [{String.t(), map(), String.t()}]
   def get_all_commands(extensions) do
-    seen = MapSet.new()
-
     {cmds, _} =
-      Enum.reduce(extensions, {[], seen}, fn ext, {acc, seen} ->
+      Enum.reduce(extensions, {[], MapSet.new()}, fn ext, {acc, seen} ->
         Enum.reduce(ext.commands, {acc, seen}, fn {name, cmd}, {acc, seen} ->
           if MapSet.member?(seen, name) do
             {acc, seen}
           else
-            {acc ++ [{name, cmd, ext.id}], MapSet.put(seen, name)}
+            {[{name, cmd, ext.id} | acc], MapSet.put(seen, name)}
           end
         end)
       end)
 
-    cmds
+    Enum.reverse(cmds)
   end
 
   @spec get_command([Extension.t()], String.t()) :: {map(), String.t()} | nil

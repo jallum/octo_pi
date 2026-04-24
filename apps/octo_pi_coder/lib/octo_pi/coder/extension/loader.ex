@@ -41,12 +41,12 @@ defmodule OctoPi.Coder.Extension.Loader do
           if MapSet.member?(seen, basename) do
             {acc, seen}
           else
-            {acc ++ [path], MapSet.put(seen, basename)}
+            {[path | acc], MapSet.put(seen, basename)}
           end
         end)
       end)
 
-    paths
+    Enum.reverse(paths)
   end
 
   @spec load(String.t()) :: {:ok, OctoPi.Coder.Extension.t()} | {:error, term()}
