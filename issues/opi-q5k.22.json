@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-q5k.2"
+  ],
   "created": "2026-04-24T21:33:12Z",
   "description": "# Check: upstream tui-render.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/tui-render.test.ts\n\n## Subject\nTUI rendering, resizing, and shrinkage behavior — including Termux-specific accommodations.\n\n## Upstream test count (approx)\n16 (though catalog enumerates ~8 distinct behaviors; re-enumerate when processing)\n\n## Behaviors asserted upstream\n- triggers full re-render when terminal height changes\n- skips full re-render on height changes in Termux\n- does not clear screen on height change in Termux\n- does not clear scrollback on height change in Termux\n- latest content remains visible after resize in Termux\n- triggers full re-render when terminal width changes\n- clears empty rows when content shrinks significantly\n- handles shrink to single line\n\n## Upstream dependencies\nComponent, TUI, VirtualTerminal, Terminal from @xterm/headless\n\n## Upstream notes\nTermux detected via TERMUX_VERSION env var; skips full re-render on height changes to avoid flicker. setClearOnShrink(true) enables clearing empty rows when content shrinks. fullRedraws counter tracks redraw count. LoggingVirtualTerminal captures writes for debugging.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/tui_render_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/renderer_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/render_throttle_test.exs\n- apps/octo_pi_tui/test/octo_pi/tui/terminal_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.22",
