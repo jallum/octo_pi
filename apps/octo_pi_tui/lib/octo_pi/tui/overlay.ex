@@ -249,7 +249,7 @@ defmodule OctoPi.TUI.Overlay do
     if rw > term_w, do: slice_visible(result, 0, term_w), else: result
   end
 
-  defp slice_visible(str, start, len) when len <= 0 and start == 0, do: ""
+  defp slice_visible(_str, start, len) when len <= 0 and start == 0, do: ""
   defp slice_visible(_str, _start, len) when len <= 0, do: ""
 
   defp slice_visible(str, start, len) do

@@ -265,7 +265,7 @@ defmodule OctoPi.TUI.KeyParser do
     end
   end
 
-  defp build_kitty_key(raw_cp, _base, modifiers, event) do
+  defp build_kitty_key(raw_cp, base, modifiers, event) do
     case keypad_map(raw_cp) do
       {:char_key, c} when modifiers == [] and event == :press ->
         {:char, <<c::utf8>>}
@@ -277,7 +277,7 @@ defmodule OctoPi.TUI.KeyParser do
         {:key, %Key{key: name, modifiers: modifiers, event_type: event}}
 
       nil ->
-        resolved = resolve_key_with_base(raw_cp, _base)
+        resolved = resolve_key_with_base(raw_cp, base)
         key = csi_u_named_key(resolved)
         {:key, %Key{key: key, modifiers: modifiers, event_type: event}}
     end

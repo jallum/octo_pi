@@ -31,12 +31,20 @@ defmodule OctoPi.Coder.Extension.ProviderConfig do
             oauth: nil
 
   defimpl Inspect do
+    import Inspect.Algebra
+
     def inspect(%{api_key: nil} = config, opts) do
-      Inspect.Map.inspect(config, opts)
+      render(config, opts)
     end
 
     def inspect(config, opts) do
-      Inspect.Map.inspect(%{config | api_key: "[REDACTED]"}, opts)
+      render(%{config | api_key: "[REDACTED]"}, opts)
+    end
+
+    defp render(config, opts) do
+      pairs = config |> Map.from_struct() |> Enum.to_list()
+      fun = fn {k, v}, o -> concat([Atom.to_string(k), ": ", to_doc(v, o)]) end
+      container_doc("%OctoPi.Coder.Extension.ProviderConfig{", pairs, "}", opts, fun)
     end
   end
 
