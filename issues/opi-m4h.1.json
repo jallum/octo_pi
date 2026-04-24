@@ -3,6 +3,7 @@
   "blocked_by": [],
   "blocks": [
     "opi-m4h.19",
+    "opi-m4h.20",
     "opi-m4h.26",
     "opi-m4h.4",
     "opi-m4h.5",
@@ -19,5 +20,5 @@
   "status": "open",
   "title": "Theme system: color palette, JSON schema, runtime switching",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:15Z"
+  "updated_at": "2026-04-24T10:39:16Z"
 }
