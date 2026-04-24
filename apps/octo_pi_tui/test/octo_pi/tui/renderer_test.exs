@@ -152,6 +152,68 @@ defmodule OctoPi.TUI.RendererTest do
     end
   end
 
+  describe "content shrink triggers full redraw" do
+    test "shrinking from N to M<N lines triggers full redraw with stale-row clearance" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
+
+      assert bytes =~ "\e[2J"
+      text = strip_csi(bytes)
+      assert text =~ "a"
+      assert text =~ "b"
+    end
+  end
+
+  describe "content transitions" do
+    test "content → empty → content each triggers full redraw" do
+      pid = new()
+      {:ok, bytes1} = Renderer.render(pid, ["hello"])
+      assert bytes1 =~ "\e[2J"
+
+      {:ok, bytes2} = Renderer.render(pid, [])
+      assert bytes2 =~ "\e[2J"
+
+      {:ok, bytes3} = Renderer.render(pid, ["back"])
+      assert bytes3 =~ "\e[2J"
+      assert strip_csi(bytes3) =~ "back"
+    end
+
+    test "completely different layout triggers full redraw" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
+      {:ok, bytes} = Renderer.render(pid, ["x", "y", "z", "w"])
+      assert bytes =~ "\e[2J"
+    end
+  end
+
+  describe "each line ends with clear-to-eol" do
+    test "every rendered line has \\e[K to clear stale content" do
+      pid = new()
+      {:ok, bytes} = Renderer.render(pid, ["short", "longer line here"])
+
+      lines = String.split(bytes, "\r\n")
+
+      for line <- lines, strip_csi(line) != "" do
+        assert line =~ "\e[K",
+               "Line should end with clear-to-eol: #{inspect(line)}"
+      end
+    end
+  end
+
+  describe "resize then render" do
+    test "resize invalidates previous frame so next render is full redraw" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b"])
+      {:ok, no_diff} = Renderer.render(pid, ["a", "b"])
+      assert no_diff == ""
+
+      :ok = Renderer.resize(pid, 120, 40)
+      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
+      assert bytes =~ "\e[2J"
+    end
+  end
+
   describe "find_diff_range/2" do
     test "no changes → {first > last}" do
       {first, last} = Renderer.find_diff_range(["a", "b", "c"], ["a", "b", "c"])
