@@ -22,10 +22,13 @@ defmodule OctoPi.TUI.Terminal do
       `feed_chunk/2` instead.
     * `:dimensions` — `{width, height}` override for tests.
 
-  `Events` is a Registry keyed on topic atoms. Subscribers register
-  via `Registry.register(OctoPi.TUI.Events, :stdin_chunk, nil)` or
-  `:resize`; Terminal dispatches via
-  `Registry.dispatch(Events, topic, fn entries -> ... end)`.
+  `Events` is a Registry keyed on `{topic, scope}` tuples.
+  Subscribers register via
+  `Registry.register(Events, {:stdin_chunk, terminal_pid}, nil)`;
+  Terminal dispatches via
+  `Registry.dispatch(Events, {:stdin_chunk, scope}, fn entries -> ... end)`.
+  The scope defaults to `self()` (the Terminal pid), isolating
+  concurrent Interactive sessions from each other's events.
   """
 
   use GenServer
@@ -89,7 +92,8 @@ defmodule OctoPi.TUI.Terminal do
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
       reader_pid: nil,
-      write_fn: Keyword.get(opts, :write_fn, &IO.write/1)
+      write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
+      scope: self()
     }
 
     state =
@@ -105,7 +109,7 @@ defmodule OctoPi.TUI.Terminal do
   def handle_call(:state, _from, state), do: {:reply, state, state}
 
   def handle_call({:feed_chunk, bin}, _from, state) do
-    broadcast(:stdin_chunk, {:stdin_chunk, bin})
+    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
     {:reply, :ok, state}
   end
 
@@ -115,20 +119,20 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_call({:resize, w, h}, _from, state) do
-    broadcast(:resize, {:resize, w, h})
+    broadcast(state, :resize, {:resize, w, h})
     {:reply, :ok, %{state | width: w, height: h}}
   end
 
   @impl true
   def handle_info({:stdin_chunk, bin}, state) do
-    broadcast(:stdin_chunk, {:stdin_chunk, bin})
+    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
     {:noreply, state}
   end
 
   def handle_info({:signal, :sigwinch}, state) do
     w = term_cols(state.width)
     h = term_rows(state.height)
-    broadcast(:resize, {:resize, w, h})
+    broadcast(state, :resize, {:resize, w, h})
     {:noreply, %{state | width: w, height: h}}
   end
 
@@ -147,8 +151,8 @@ defmodule OctoPi.TUI.Terminal do
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
 
-  defp broadcast(topic, msg) do
-    Registry.dispatch(Events, topic, fn subscribers ->
+  defp broadcast(state, topic, msg) do
+    Registry.dispatch(Events, {topic, state.scope}, fn subscribers ->
       for {pid, _} <- subscribers, do: send(pid, msg)
     end)
   end

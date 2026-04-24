@@ -83,8 +83,8 @@ defmodule OctoPi.TUI.Interactive do
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
     {:ok, renderer} = Renderer.start_link(width: w, height: h)
 
-    {:ok, _} = Registry.register(Events, :stdin_chunk, nil)
-    {:ok, _} = Registry.register(Events, :resize, nil)
+    {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
+    {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
     state = %__MODULE__{session: session, width: w, height: h}
@@ -183,9 +183,10 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp render_frame(state, renderer, terminal) do
-    lines = render(state)
+    input_lines = Components.Input.render(state.input, state.width)
+    lines = render(state, input_lines)
     {:ok, bytes} = Renderer.render(renderer, lines)
-    cursor_seq = cursor_position(state, lines)
+    cursor_seq = cursor_position(state, input_lines, lines)
 
     payload =
       case {bytes, cursor_seq} do
@@ -197,13 +198,7 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  # CSI H positions the hardware cursor at (row, col) — both
-  # 1-indexed. Row = index of the Input's line in the rendered
-  # frame + 1. Col = 1 + the Input's grapheme cursor offset
-  # (plus the `"> "` prefix width if the input ever sprouts
-  # one; for MVP it's plain).
-  defp cursor_position(%__MODULE__{input: %{cursor: c} = input}, lines) do
-    input_lines = Components.Input.render(input, 1_000_000)
+  defp cursor_position(%__MODULE__{input: %{cursor: c}}, input_lines, lines) do
     input_row = length(lines) - length(input_lines) + 1
     "\e[#{input_row};#{c + 1}H"
   end
@@ -350,9 +345,13 @@ defmodule OctoPi.TUI.Interactive do
   the whole frame is windowed to `height` via the Viewport.
   """
   @spec render(t()) :: [binary()]
-  def render(%{transcript: transcript, input: input, width: width, height: height}) do
+  def render(%{input: input, width: width} = state) do
+    render(state, Components.Input.render(input, width))
+  end
+
+  @spec render(t(), [binary()]) :: [binary()]
+  def render(%{transcript: transcript, width: width, height: height}, input_lines) do
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
-    input_lines = Components.Input.render(input, width)
     all = transcript_lines ++ [""] ++ input_lines
     Viewport.window(all, height)
   end
