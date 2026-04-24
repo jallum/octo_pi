@@ -789,4 +789,87 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert offset > 0
     end
   end
+
+  # ── Input history ──────────────────────────────────────────────
+
+  describe "history" do
+    test "Up at top of input recalls previous entry" do
+      input = %Input{value: "", history: ["older", "recent"], history_index: nil}
+      input = press(input, key(:up))
+      assert input.value == "recent"
+      assert input.history_index == 1
+    end
+
+    test "successive Up walks further back" do
+      input = %Input{value: "", history: ["first", "second", "third"], history_index: nil}
+      input = input |> press(key(:up)) |> press(key(:up))
+      assert input.value == "second"
+      assert input.history_index == 1
+    end
+
+    test "Up stops at oldest entry" do
+      input = %Input{value: "", history: ["only"], history_index: nil}
+      input = input |> press(key(:up)) |> press(key(:up))
+      assert input.value == "only"
+      assert input.history_index == 0
+    end
+
+    test "Down after Up walks forward" do
+      input = %Input{value: "", history: ["a", "b", "c"], history_index: nil}
+      input = input |> press(key(:up)) |> press(key(:up)) |> press(key(:down))
+      assert input.value == "c"
+      assert input.history_index == 2
+    end
+
+    test "Down past newest restores saved input" do
+      input = %Input{value: "draft", history: ["old"], history_index: nil}
+      input = input |> press(key(:up)) |> press(key(:down))
+      assert input.value == "draft"
+      assert input.history_index == nil
+    end
+
+    test "current input is preserved when entering history" do
+      input = %Input{value: "wip", history: ["prev"], history_index: nil}
+      input = press(input, key(:up))
+      assert input.saved_input == "wip"
+      assert input.value == "prev"
+    end
+
+    test "empty history is a no-op for Up" do
+      input = %Input{value: "hi", history: [], history_index: nil}
+      input = press(input, key(:up))
+      assert input.value == "hi"
+      assert input.history_index == nil
+    end
+
+    test "push_history adds entry and resets index" do
+      input = %Input{value: "done", history: ["old"]}
+      input = Input.push_history(input, "done")
+      assert input.history == ["old", "done"]
+      assert input.history_index == nil
+      assert input.saved_input == nil
+    end
+
+    test "push_history deduplicates consecutive entries" do
+      input = %Input{history: ["a", "b"]}
+      input = Input.push_history(input, "b")
+      assert input.history == ["a", "b"]
+    end
+
+    test "push_history respects max size" do
+      history = Enum.map(1..1000, &to_string/1)
+      input = %Input{history: history}
+      input = Input.push_history(input, "new")
+      assert length(input.history) == 1000
+      assert List.last(input.history) == "new"
+      assert hd(input.history) == "2"
+    end
+
+    test "typing after recalling resets history browsing" do
+      input = %Input{value: "", history: ["old"], history_index: nil}
+      input = input |> press(key(:up)) |> Input.insert("x")
+      assert input.history_index == nil
+      assert input.value == "oldx"
+    end
+  end
 end

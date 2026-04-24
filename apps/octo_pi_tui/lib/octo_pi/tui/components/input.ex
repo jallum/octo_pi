@@ -12,6 +12,8 @@ defmodule OctoPi.TUI.Components.Input do
 
   @page_size 10
 
+  @max_history 1000
+
   @type t :: %__MODULE__{
           value: String.t(),
           cursor: non_neg_integer(),
@@ -23,7 +25,10 @@ defmodule OctoPi.TUI.Components.Input do
           autocomplete_provider: struct() | nil,
           autocomplete_suggestions: [Suggestion.t()],
           autocomplete_selected: non_neg_integer(),
-          autocomplete_active: boolean()
+          autocomplete_active: boolean(),
+          history: [String.t()],
+          history_index: non_neg_integer() | nil,
+          saved_input: String.t() | nil
         }
 
   defstruct value: "",
@@ -36,7 +41,10 @@ defmodule OctoPi.TUI.Components.Input do
             autocomplete_provider: nil,
             autocomplete_suggestions: [],
             autocomplete_selected: 0,
-            autocomplete_active: false
+            autocomplete_active: false,
+            history: [],
+            history_index: nil,
+            saved_input: nil
 
   # --- render ---
 
@@ -76,7 +84,8 @@ defmodule OctoPi.TUI.Components.Input do
       s
       | value: before <> char <> after_cursor,
         cursor: c + String.length(char),
-        last_action: :type_word
+        last_action: :type_word,
+        history_index: nil
     }
     |> refresh_autocomplete()
   end
@@ -392,10 +401,10 @@ defmodule OctoPi.TUI.Components.Input do
 
     cond do
       target_row < 0 ->
-        %{s | last_action: nil}
+        history_up(s)
 
       target_row >= total_rows ->
-        %{s | last_action: nil}
+        history_down(s)
 
       true ->
         new_cursor = cursor_from_visual(value, width, target_row, target_col)
@@ -488,6 +497,65 @@ defmodule OctoPi.TUI.Components.Input do
     graphemes = String.graphemes(str)
     {before, rest} = Enum.split(graphemes, n)
     {Enum.join(before), Enum.join(rest)}
+  end
+
+  # --- history ---
+
+  @doc "Add an entry to history, deduplicating consecutive repeats and capping at #{@max_history}."
+  @spec push_history(t(), String.t()) :: t()
+  def push_history(%__MODULE__{history: history} = s, entry) do
+    history =
+      case List.last(history) do
+        ^entry -> history
+        _ -> history ++ [entry]
+      end
+      |> Enum.take(-@max_history)
+
+    %{s | history: history, history_index: nil, saved_input: nil}
+  end
+
+  defp history_up(%__MODULE__{history: []} = s), do: %{s | last_action: nil}
+
+  defp history_up(%__MODULE__{history: history, history_index: nil} = s) do
+    idx = length(history) - 1
+    entry = Enum.at(history, idx)
+
+    %{
+      s
+      | value: entry,
+        cursor: String.length(entry),
+        history_index: idx,
+        saved_input: s.value,
+        last_action: nil
+    }
+  end
+
+  defp history_up(%__MODULE__{history: history, history_index: idx} = s) do
+    new_idx = max(idx - 1, 0)
+    entry = Enum.at(history, new_idx)
+    %{s | value: entry, cursor: String.length(entry), history_index: new_idx, last_action: nil}
+  end
+
+  defp history_down(%__MODULE__{history_index: nil} = s), do: %{s | last_action: nil}
+
+  defp history_down(%__MODULE__{history: history, history_index: idx} = s) do
+    new_idx = idx + 1
+
+    if new_idx >= length(history) do
+      restored = s.saved_input || ""
+
+      %{
+        s
+        | value: restored,
+          cursor: String.length(restored),
+          history_index: nil,
+          saved_input: nil,
+          last_action: nil
+      }
+    else
+      entry = Enum.at(history, new_idx)
+      %{s | value: entry, cursor: String.length(entry), history_index: new_idx, last_action: nil}
+    end
   end
 
   # --- autocomplete ---
