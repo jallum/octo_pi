@@ -31,9 +31,13 @@ defmodule OctoPi.Coder.Modes.Print do
     tools = Map.get(opts, :tools, OctoPi.Coder.default_tools(cwd))
     transport = Map.get(opts, :transport)
 
+    system_prompt =
+      Map.get_lazy(opts, :system_prompt, fn ->
+        OctoPi.Coder.SystemPrompt.render(cwd: cwd, tools: tools)
+      end)
+
     session_opts =
-      [model: model, tools: tools, system_prompt: opts[:system_prompt]]
-      |> Keyword.reject(fn {_, v} -> is_nil(v) end)
+      [model: model, tools: tools, system_prompt: system_prompt]
       |> maybe_put(:transport, transport)
 
     {:ok, session} = OctoPi.Agent.start_session(session_opts)

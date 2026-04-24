@@ -111,10 +111,14 @@ defmodule OctoPi.TUI.Interactive do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
     tools = Keyword.get_lazy(opts, :tools, fn -> OctoPi.Coder.default_tools(cwd) end)
 
+    system_prompt =
+      Keyword.get_lazy(opts, :system_prompt, fn ->
+        OctoPi.Coder.SystemPrompt.render(cwd: cwd, tools: tools)
+      end)
+
     session_opts =
-      [model: Keyword.fetch!(opts, :model), tools: tools]
+      [model: Keyword.fetch!(opts, :model), tools: tools, system_prompt: system_prompt]
       |> put_if_present(:transport, opts[:transport])
-      |> put_if_present(:system_prompt, opts[:system_prompt])
 
     {:ok, pid} = OctoPi.Agent.start_session(session_opts)
     pid
