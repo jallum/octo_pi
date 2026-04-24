@@ -45,7 +45,18 @@ defmodule OctoPi.TUI.KeyParser do
   def parse("\n"), do: {:key, %Key{key: :enter}}
   def parse("\t"), do: {:key, %Key{key: :tab}}
   def parse("\e"), do: {:key, %Key{key: :escape}}
-  def parse("\b"), do: {:key, %Key{key: :backspace}}
+  # Raw 0x08 normally means backspace. Windows Terminal is an
+  # outlier: in a local session it maps 0x08 to Ctrl+Backspace. When
+  # forwarded over SSH (any of SSH_CONNECTION/SSH_CLIENT/SSH_TTY
+  # present) it reverts to plain backspace.
+  def parse("\b") do
+    if windows_terminal_local?() do
+      {:key, %Key{key: :backspace, modifiers: [:ctrl]}}
+    else
+      {:key, %Key{key: :backspace}}
+    end
+  end
+
   def parse("\x7f"), do: {:key, %Key{key: :backspace}}
 
   # Ctrl+Space (NUL).
@@ -381,4 +392,14 @@ defmodule OctoPi.TUI.KeyParser do
 
   defp put_if(list, true, mod), do: [mod | list]
   defp put_if(list, false, _), do: list
+
+  # Local Windows Terminal: WT_SESSION set and no SSH_* env vars.
+  # Over SSH, Windows Terminal re-maps 0x08 so the raw byte becomes
+  # a plain backspace again.
+  defp windows_terminal_local? do
+    System.get_env("WT_SESSION") != nil and
+      System.get_env("SSH_CONNECTION") == nil and
+      System.get_env("SSH_CLIENT") == nil and
+      System.get_env("SSH_TTY") == nil
+  end
 end

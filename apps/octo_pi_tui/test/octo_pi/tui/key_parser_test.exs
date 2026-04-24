@@ -1,7 +1,27 @@
 defmodule OctoPi.TUI.KeyParserTest do
-  use ExUnit.Case, async: true
+  # async: false — "Windows Terminal 0x08" tests mutate WT/SSH env vars.
+  use ExUnit.Case, async: false
 
   alias OctoPi.TUI.{Key, KeyParser}
+
+  @wt_env_keys ~w(WT_SESSION SSH_CONNECTION SSH_CLIENT SSH_TTY)
+
+  defp with_wt_env(overrides, fun) do
+    saved = Map.new(@wt_env_keys, fn k -> {k, System.get_env(k)} end)
+    for k <- @wt_env_keys, do: System.delete_env(k)
+    for {k, v} <- overrides, v != nil, do: System.put_env(k, v)
+
+    try do
+      fun.()
+    after
+      for k <- @wt_env_keys do
+        case saved[k] do
+          nil -> System.delete_env(k)
+          v -> System.put_env(k, v)
+        end
+      end
+    end
+  end
 
   describe "printable chars" do
     test "ASCII letter", do: assert({:char, "a"} = KeyParser.parse("a"))
@@ -22,7 +42,37 @@ defmodule OctoPi.TUI.KeyParserTest do
     test "backspace (DEL 0x7f)",
       do: assert({:key, %Key{key: :backspace}} = KeyParser.parse("\x7f"))
 
-    test "backspace (BS  0x08)", do: assert({:key, %Key{key: :backspace}} = KeyParser.parse("\b"))
+    test "backspace (BS  0x08) outside Windows Terminal" do
+      with_wt_env(%{}, fn ->
+        assert {:key, %Key{key: :backspace, modifiers: []}} = KeyParser.parse("\b")
+      end)
+    end
+  end
+
+  describe "Windows Terminal 0x08 handling" do
+    # Upstream keys.test.ts verifies three cases: default, local WT
+    # (WT_SESSION set, no SSH), WT over SSH (WT_SESSION + SSH_*).
+
+    test "raw 0x08 → plain backspace outside Windows Terminal" do
+      with_wt_env(%{}, fn ->
+        assert {:key, %Key{key: :backspace, modifiers: []}} = KeyParser.parse("\b")
+      end)
+    end
+
+    test "raw 0x08 → ctrl+backspace in local Windows Terminal" do
+      with_wt_env(%{"WT_SESSION" => "abc"}, fn ->
+        assert {:key, %Key{key: :backspace, modifiers: [:ctrl]}} = KeyParser.parse("\b")
+      end)
+    end
+
+    test "raw 0x08 → plain backspace in Windows Terminal over SSH" do
+      for ssh_key <- ~w(SSH_CONNECTION SSH_CLIENT SSH_TTY) do
+        with_wt_env(%{"WT_SESSION" => "abc", ssh_key => "..."}, fn ->
+          assert {:key, %Key{key: :backspace, modifiers: []}} = KeyParser.parse("\b"),
+                 "ssh var #{ssh_key} did not override WT mapping"
+        end)
+      end
+    end
   end
 
   describe "Ctrl+letter (C0 controls)" do
