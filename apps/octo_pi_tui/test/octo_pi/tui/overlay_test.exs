@@ -207,6 +207,89 @@ defmodule OctoPi.TUI.OverlayTest do
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to plain INPUT row"
     end
 
+    # --- upstream overlay-options.test.ts integration parity ---
+
+    test "overlay lines wider than declared width are clipped" do
+      base = base_grid(80, 24)
+      ov = ov(lines: [String.duplicate("X", 100)], width: 20, anchor: :top_left)
+      result = Overlay.composite(base, [ov], 80, 24)
+      line0 = Enum.at(result, 0)
+
+      alias OctoPi.TUI.WrapAnsi
+      # Overlay cannot introduce more than 20 overlaid cells over the
+      # base row (each base row starts at 80 visible cols).
+      assert WrapAnsi.visible_width(line0) == 80
+    end
+
+    test "overlay with complex ANSI + OSC sequences does not crash" do
+      base = base_grid(80, 24)
+
+      complex =
+        "\e[48;2;40;50;40m \e[38;2;128;128;128mstyled\e[39m\e[49m" <>
+          "\e]8;;http://example.com\x07link\e]8;;\x07" <>
+          " content"
+
+      ov = ov(lines: [complex, complex, complex], width: 60, anchor: :center)
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert is_list(result)
+    end
+
+    test "overlay composited on styled base content remains visible" do
+      styled = "\e[1m\e[38;2;255;0;0m" <> String.duplicate("X", 80) <> "\e[0m"
+      base = List.duplicate(styled, 24)
+
+      ov = ov(lines: ["OVERLAY"], width: 20, anchor: :center)
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert Enum.any?(result, &String.contains?(&1, "OVERLAY"))
+    end
+
+    test "wide CJK characters at overlay boundary do not crash" do
+      base = base_grid(80, 24)
+      wide = "中文日本語한글テスト漢字"
+      ov = ov(lines: [wide], width: 15, anchor: :center)
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert is_list(result)
+    end
+
+    test "overlay positioned at terminal right edge does not crash" do
+      base = base_grid(80, 24)
+      ov = ov(lines: [String.duplicate("X", 50)], col: 60, width: 20, anchor: :top_left)
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert is_list(result)
+    end
+
+    test "rowPercent 0 places overlay at the top" do
+      base = base_grid(80, 24)
+      ov = ov(lines: ["TOP"], width: 10, row: {0, :percent})
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert Enum.at(result, 0) =~ "TOP"
+    end
+
+    test "rowPercent 100 places overlay at the bottom" do
+      base = base_grid(80, 24)
+      ov = ov(lines: ["BOTTOM"], width: 10, row: {100, :percent})
+      result = Overlay.composite(base, [ov], 80, 24)
+      assert List.last(result) =~ "BOTTOM"
+    end
+
+    test "higher z overlay covers lower z overlay at same anchor" do
+      base = base_grid(80, 24)
+      ov_lo = ov(lines: ["LOWWWWWW"], width: 8, anchor: :top_left, z: 0)
+      ov_hi = ov(lines: ["HI"], width: 2, anchor: :top_left, z: 1)
+      result = Overlay.composite(base, [ov_lo, ov_hi], 80, 24)
+      line0 = Enum.at(result, 0)
+      assert line0 =~ "HI"
+    end
+
+    test "overlays at different anchors render without interference" do
+      base = base_grid(80, 24)
+      ov_tl = ov(lines: ["TOP_LEFT"], width: 10, anchor: :top_left)
+      ov_br = ov(lines: ["BOTTOM_RIGHT"], width: 15, anchor: :bottom_right)
+      result = Overlay.composite(base, [ov_tl, ov_br], 80, 24)
+      assert Enum.at(result, 0) =~ "TOP_LEFT"
+      assert List.last(result) =~ "BOTTOM_RIGHT"
+    end
+
     test "italic does not leak when overlay slicing drops trailing resets" do
       alias OctoPi.TUI.Renderer
       alias OctoPi.TUI.VirtualTerminal, as: VT
