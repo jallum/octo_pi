@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.7",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done.",
+      "timestamp": "2026-04-24T22:40:53Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Spacing after headings (2 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:40:39Z"
+  "updated_at": "2026-04-24T22:40:53Z"
 }
