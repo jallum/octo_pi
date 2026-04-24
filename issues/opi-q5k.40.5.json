@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.5",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Covered by input_test.exs 'grapheme-aware wrapping render' describe (6 tests: wraps emoji content, CJK split boundary, mixed ASCII+wide, emoji at wrap boundary, single word exact-fit, empty input) + wrap_ansi_test.exs 'wraps CJK at grapheme boundaries'. Semantic parity with upstream's 7 tests achieved. No new tests required.",
+      "timestamp": "2026-04-24T22:46:26Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Grapheme-aware text wrapping (7 upstream tests)",
