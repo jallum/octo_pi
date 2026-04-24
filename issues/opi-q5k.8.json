@@ -9,9 +9,15 @@
   "id": "opi-q5k.8",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/keybindings.test.ts (3 assertions)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/keybindings_test.exs (13 tests across 5 describes)\n\nThe upstream file is narrowly focused on a single invariant: **user rebinds must not evict unrelated default bindings**. All three upstream tests verify this invariant in different shapes.\n\n## MAPPED (partial only)\n\n| Upstream | Elixir |\n|---|---|\n| \"still reports direct user binding conflicts\" (conflict detection half) | \"detects user-introduced conflicts\" |\n\n## UNMAPPED\n\n- **Upstream #1** \"does not evict selector confirm when input submit is rebound\": after rebinding `tui.input.submit` to [\"enter\", \"ctrl+enter\"], `tui.select.confirm` must still return [\"enter\"]. Elixir \"user bindings override defaults\" confirms the override takes effect but does NOT assert other bindings are preserved. **Gap: no-eviction-of-sibling invariant untested.**\n- **Upstream #2** \"does not evict cursor bindings when another action reuses the same key\": rebinding `tui.select.up` to [\"up\", \"ctrl+p\"] must leave `tui.editor.cursorUp` at [\"up\"]. No Elixir equivalent. **Gap.**\n- **Upstream #3** \"still reports direct user binding conflicts without evicting defaults\": the second assertion — that `tui.editor.cursorLeft` still returns [\"left\", \"ctrl+b\"] even while a conflict exists — has no Elixir equivalent. Elixir asserts conflict shape, not default preservation under conflict. **Gap.**\n\n## N/A / EXTRA\n\nElixir adds API-surface tests (matches?/3, get_keys/2 unknown binding, set_user_bindings/2, no-conflicts baseline). Useful but not relevant to upstream scope.\n\n## Action\n\nAll three upstream tests probe the same eviction invariant — creating one compliance ticket covering all three.",
+      "timestamp": "2026-04-24T21:35:44Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream keybindings.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:35:06Z"
+  "updated_at": "2026-04-24T21:35:44Z"
 }
