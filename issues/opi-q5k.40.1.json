@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:52:38Z",
+  "description": "# Compliance child for opi-q5k.40 (opi-q5k.5 / editor.test.ts)\n\n## Scope\n\nUpstream describes (editor.test.ts L42-282). 15 tests on history stack navigation: Up recalls most recent when empty editor, cycles on repeat Up, Down walks forward, exits history on typing, exits on setText, no empty entries, no consecutive dupes, non-consecutive dupes allowed, cursor movement vs history when editor has content, limit 100 entries, multi-line entry cursor nav, (unsaved) marker added/removed/cleared. Compare against Input 'history' describe (11 tests) in input_test.exs. Fill gaps (esp. editor-empty-vs-nonempty Up distinction, (unsaved) marker semantics).\n\n## Protocol\n\n1. Read tmp/pi-mono/packages/tui/test/editor.test.ts; locate the \"Prompt history navigation\" describe.\n2. Enumerate every it(...) under that describe.\n3. For each, find or confirm absent an equivalent Elixir assertion in apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs (grep if unsure).\n4. Implement any missing behavior in OctoPi.TUI.Components.Input (or related modules).\n5. Port the missing tests to input_test.exs (under a new describe \"editor-parity: Prompt history navigation\" or integrated with existing describes where they fit).\n6. Re-read tmp/pi-mono editor.test.ts \"Prompt history navigation\" top-to-bottom and confirm every it(...) has an Elixir equivalent.\n7. Post a final comment documenting the mapping (upstream test → Elixir test).\n8. Close this child.\n\n## Deps\nBlocks opi-q5k.40 (which blocks opi-q5k.1).",
+  "id": "opi-q5k.40.1",
+  "labels": [],
+  "parent": "opi-q5k.40",
+  "priority": 2,
+  "status": "open",
+  "title": "editor.test.ts / Prompt history navigation (15 upstream tests)",
+  "type": "task",
+  "updated_at": "2026-04-24T21:52:38Z"
+}
