@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:13:30Z",
+  "description": "ui_context.ex — confirm is listed in @one_arity_fields but its type signature is (String.t(), keyword() -\u003e boolean()), a 2-arity function. The stub generates a 1-arity function, so ctx.confirm.('msg', title: 'X') would fail at runtime. Move to @two_arity_fields.",
+  "id": "opi-a3q.8",
+  "labels": [],
+  "parent": "opi-a3q",
+  "priority": 1,
+  "status": "open",
+  "title": "Move confirm from @one_arity_fields to @two_arity_fields in UIContext",
+  "type": "bug",
+  "updated_at": "2026-04-24T10:13:30Z"
+}
