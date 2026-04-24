@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T03:13:49Z",
+  "description": "Simple pub/sub channel for extensions to communicate with each other.\nExposed via ExtensionAPI as api.events.\n\n**API:**\n- emit(channel :: String.t(), data :: term()) :: :ok\n- on(channel :: String.t(), handler :: (term() -\u003e :ok)) :: unsubscribe_fn\n- clear() :: :ok\n\n**Implementation:** GenServer or Registry-based. Handlers execute\nasynchronously (fire-and-forget). Errors in handlers logged, don't\npropagate.\n\n**Usage pattern (from upstream examples/extensions/event-bus.ts):**\n```\n# Extension A:\napi.events.on(\"my:notification\", fn data -\u003e notify(data) end)\n\n# Extension B:\napi.events.emit(\"my:notification\", %{message: \"hello\", from: \"ext-b\"})\n```\n\n**Upstream ref:** event-bus.ts (34 lines)",
+  "id": "octo-3gv.4",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 2,
+  "status": "open",
+  "title": "EventBus: inter-extension pub/sub",
+  "type": "task",
+  "updated_at": "2026-04-24T03:13:49Z"
+}
