@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-j50.2",
     "opi-j50.4"
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-j50",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Welcome banner with ExpandableText",
   "type": "task",
-  "updated_at": "2026-04-24T14:48:49Z"
+  "updated_at": "2026-04-24T15:51:54Z"
 }
