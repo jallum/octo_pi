@@ -35,14 +35,14 @@ defmodule OctoPi.Coder.Extension.UIContext do
     :set_hidden_thinking_label, :set_widget, :set_footer, :set_header,
     :set_title, :paste_to_editor, :set_editor_text,
     :add_autocomplete_provider, :set_editor_component,
-    :set_theme, :set_tools_expanded, :confirm
+    :set_theme, :set_tools_expanded
   ]
 
   @zero_arity_fields [
     :get_editor_text, :get_all_themes, :get_theme, :get_tools_expanded
   ]
 
-  @two_arity_fields [:custom, :editor]
+  @two_arity_fields [:custom, :editor, :confirm]
 
   @var_arity_fields [:select, :input]
 

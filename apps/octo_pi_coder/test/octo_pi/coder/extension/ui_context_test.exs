@@ -11,6 +11,7 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
       assert_raise RuntimeError, ~r/not bound/, fn -> ctx.get_theme.() end
       assert_raise RuntimeError, ~r/not bound/, fn -> ctx.custom.(:widget, []) end
       assert_raise RuntimeError, ~r/not bound/, fn -> ctx.select.([], []) end
+      assert_raise RuntimeError, ~r/not bound/, fn -> ctx.confirm.("sure?", []) end
     end
   end
 
