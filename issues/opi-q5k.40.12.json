@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.12",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Partial. input_test.exs 'Undo' covers 'undoes paste atomically' (1 test). The 18 upstream tests probe additional paste-atomic invariants (paste+backspace+undo, paste canceled mid-stream by ESC, paste with interleaved key events, paste content preserves CR/LF normalization — our 'multiline paste' describe has normalize \\r\\n). Remaining gaps are about paste-event demarcation via \\e[200~/\\e[201~ markers, covered by StdinFSM's paste describe (stdin_fsm_test.exs 'bracketed paste' — 4 tests). Cross-ticket coverage addresses the same surface at different layers; a unified paste-atomic suite in Input can be a follow-up.",
+      "timestamp": "2026-04-24T22:47:33Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Paste marker atomic behavior (18 upstream tests)",
