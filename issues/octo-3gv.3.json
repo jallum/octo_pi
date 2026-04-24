@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T03:13:40Z",
+  "description": "Load extensions from the filesystem and register them with the dispatcher.\n\n**Discovery order (upstream loader.ts lines 560-606):**\n1. Project-local: cwd/.pi/extensions/ (or .octo_pi/extensions/)\n2. Global: ~/.octo_pi/extensions/\n3. Explicitly configured paths from settings\n\n**Discovery rules (loader.ts lines 523-555):**\n- Direct .ex files: extensions/*.ex → load directly\n- Subdirectories with index: extensions/*/index.ex\n- Subdirectories with mix.exs: load as dependency\n\n**ExtensionAPI — the API object passed to extension init:**\n```elixir\n%ExtensionAPI{\n  on: fn(event_type, handler_fn) -\u003e :ok,\n  register_tool: fn(tool) -\u003e :ok,\n  register_command: fn(command) -\u003e :ok,\n  events: EventBus (inter-extension pub/sub),\n  # Action callbacks (bound later via bind_core):\n  send_message: fn(text) -\u003e :ok,\n  get_model: fn() -\u003e Model.t(),\n  set_model: fn(Model.t()) -\u003e :ok,\n  get_thinking_level: fn() -\u003e String.t() | nil,\n  abort: fn() -\u003e :ok,\n  compact: fn(opts) -\u003e :ok,\n  get_system_prompt: fn() -\u003e String.t(),\n}\n```\n\n**Loading process:**\n1. Discover extension modules\n2. For each: create empty Extension struct + ExtensionAPI\n3. Call extension's init(api) — extension registers handlers via api.on()\n4. Collect into ordered list\n5. On bind_core(): replace action stubs with real implementations\n\n**Error handling:** Extension load failures logged + skipped, don't crash.\n\n**Upstream ref:** loader.ts (606 lines), types.ts ExtensionAPI (lines 1071-1350)",
+  "id": "octo-3gv.3",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 1,
+  "status": "open",
+  "title": "Extension loading + registration + ExtensionAPI",
+  "type": "task",
+  "updated_at": "2026-04-24T03:13:40Z"
+}
