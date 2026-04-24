@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T09:57:47Z",
   "created": "2026-04-24T09:32:20Z",
   "description": "Port the three Extension struct fields dropped from the initial port: messageRenderers (custom message type rendering), flags (CLI flag registration per extension), and shortcuts (keybinding registration with conflict detection vs built-ins). Upstream: types.ts lines 1513-1543. Runner introspection: getFlags, getFlagValues, setFlagValue, getShortcuts, getShortcutDiagnostics (runner.ts 392-459). TUI-bound — needs the overlay compositor from Phase 4.",
   "id": "octo-3gv.7",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Extension struct: messageRenderers, flags, and shortcuts",
   "type": "task",
-  "updated_at": "2026-04-24T09:56:18Z"
+  "updated_at": "2026-04-24T09:57:47Z"
 }
