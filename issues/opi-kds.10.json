@@ -5,14 +5,13 @@
   ],
   "blocks": [],
   "created": "2026-04-24T01:29:54.100363Z",
-  "defer_until": "2026-07-01",
   "description": "Two related caching features:\n\n1. **OpenAI prompt caching**: `prompt_cache_key` and `prompt_cache_retention: \"24h\"` params, only for `api.openai.com` hosts.\n\n2. **Anthropic-style cache control** (via OpenRouter): when `cache_control_format: :anthropic`, add `cache_control: {type: \"ephemeral\"}` markers to system prompt, last tool definition, and last conversation message. TTL `\"1h\"` only for `api.anthropic.com`.\n\nUpstream: openai-completions.ts L475-477, L567-681\nPort map: §8",
   "id": "opi-kds.10",
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "deferred",
+  "status": "open",
   "title": "Prompt caching + Anthropic-style cache control",
   "type": "task",
-  "updated_at": "2026-04-24T01:30:01Z"
+  "updated_at": "2026-04-24T01:30:42Z"
 }
