@@ -24,7 +24,7 @@ defmodule OctoPi.Coder.CLI do
   @aliases [p: :print, m: :model, h: :help]
 
   @type opts :: %{
-          mode: :print | :rpc,
+          mode: :print | :rpc | :interactive,
           prompt: String.t() | nil,
           model: Model.t(),
           cwd: String.t()
@@ -34,8 +34,7 @@ defmodule OctoPi.Coder.CLI do
   Parse an argv list into a validated `opts` map, a help sentinel,
   or an error tuple.
   """
-  @spec parse_args([String.t()]) ::
-          {:ok, opts()} | {:help, String.t()} | {:error, String.t()}
+  @spec parse_args([String.t()]) :: {:ok, opts()} | {:help, String.t()}
   def parse_args(argv) do
     {switches, positional, _invalid} =
       OptionParser.parse(argv, switches: @switches, aliases: @aliases)
@@ -48,7 +47,9 @@ defmodule OctoPi.Coder.CLI do
         {:ok, base_opts(switches) |> Map.put(:mode, :rpc) |> Map.put(:prompt, nil)}
 
       positional == [] and switches[:print] != true ->
-        {:error, "missing prompt argument.\n\n" <> usage_text()}
+        # No prompt + no --print = interactive mode (the default
+        # when a user runs `mix pi` with nothing).
+        {:ok, base_opts(switches) |> Map.put(:mode, :interactive) |> Map.put(:prompt, nil)}
 
       true ->
         prompt = Enum.join(positional, " ")
@@ -74,10 +75,6 @@ defmodule OctoPi.Coder.CLI do
         IO.write(usage)
         0
 
-      {:error, msg} ->
-        IO.puts(:stderr, msg)
-        1
-
       {:ok, %{mode: :print} = opts} ->
         case Print.run(opts) do
           {:ok, _reason} -> 0
@@ -86,6 +83,25 @@ defmodule OctoPi.Coder.CLI do
 
       {:ok, %{mode: :rpc} = opts} ->
         run_rpc(opts)
+
+      {:ok, %{mode: :interactive} = opts} ->
+        run_interactive(opts)
+    end
+  end
+
+  defp run_interactive(opts) do
+    # `octo_pi_tui` is an umbrella sibling; depending on it from
+    # `octo_pi_coder` would create a cycle with the TUI's dep on
+    # us. Instead, resolve the module at runtime — if the TUI app
+    # wasn't built into this release, gracefully tell the user.
+    case Code.ensure_loaded(OctoPi.TUI.Interactive) do
+      {:module, mod} ->
+        mod.run(Map.to_list(opts))
+        0
+
+      {:error, _} ->
+        IO.puts(:stderr, "interactive mode requires the octo_pi_tui app")
+        1
     end
   end
 

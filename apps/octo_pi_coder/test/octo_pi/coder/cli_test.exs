@@ -30,8 +30,8 @@ defmodule OctoPi.Coder.CLITest do
       assert {:help, _usage} = CLI.parse_args(["--help"])
     end
 
-    test "print mode without a prompt yields :error" do
-      assert {:error, _} = CLI.parse_args([])
+    test "no args defaults to interactive mode" do
+      assert {:ok, %{mode: :interactive, prompt: nil}} = CLI.parse_args([])
     end
   end
 
