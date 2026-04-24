@@ -206,11 +206,9 @@ defmodule OctoPi.TUI.Interactive do
   # Shut down children in reverse start order. Terminal goes last
   # because its `terminate/2` restores the tty.
   defp shutdown(terminal, fsm, renderer) do
-    for pid <- [renderer, fsm, terminal], Process.alive?(pid) do
-      GenServer.stop(pid, :normal)
-    end
-
-    :ok
+    Enum.each([renderer, fsm, terminal], fn pid ->
+      if Process.alive?(pid), do: GenServer.stop(pid, :normal)
+    end)
   end
 
   # --- pure state-machine ---

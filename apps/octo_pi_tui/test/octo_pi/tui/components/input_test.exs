@@ -123,10 +123,6 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert %Input{value: "日", cursor: 1} = Input.insert(s, "日")
     end
 
-    test "insert respects focused=false (no-op)" do
-      s = %Input{value: "abc", cursor: 1, focused: false}
-      assert %Input{value: "abc", cursor: 1} = Input.insert(s, "X")
-    end
   end
 
   describe "handle_key/2 — submit/cancel" do
@@ -138,14 +134,6 @@ defmodule OctoPi.TUI.Components.InputTest do
     test "Escape yields :cancel event" do
       s = %Input{value: "hi"}
       assert {%Input{}, [:cancel]} = Input.handle_key(s, key(:escape))
-    end
-  end
-
-  describe "handle_key/2 — unfocused" do
-    test "any key is a no-op when unfocused" do
-      s = %Input{value: "hi", focused: false}
-      assert ^s = press(s, key(:enter))
-      assert ^s = press(s, key(:left))
     end
   end
 

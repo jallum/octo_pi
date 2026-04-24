@@ -54,8 +54,8 @@ defmodule OctoPi.TUI.Terminal do
   def write(pid, bytes), do: GenServer.call(pid, {:write, bytes})
 
   @doc false
-  @spec state(GenServer.server()) :: map()
-  def state(pid), do: GenServer.call(pid, :state)
+  @spec info(GenServer.server()) :: map()
+  def info(pid), do: GenServer.call(pid, :info)
 
   @doc false
   @spec feed_chunk(GenServer.server(), binary()) :: :ok
@@ -76,32 +76,28 @@ defmodule OctoPi.TUI.Terminal do
     auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
 
-    unless skip_raw_mode, do: raw_mode_fn.(:enter)
-    unless skip_sigwinch, do: :os.set_signal(:sigwinch, :handle)
+    if not skip_raw_mode, do: raw_mode_fn.(:enter)
+    if not skip_sigwinch, do: :os.set_signal(:sigwinch, :handle)
 
     reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
+
+    reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
 
     state = %{
       width: w,
       height: h,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
-      reader_pid: nil,
+      reader_pid: reader_pid,
       write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
       scope: self()
     }
-
-    state =
-      case auto_start_reader do
-        true -> %{state | reader_pid: spawn_reader(reader_fn)}
-        false -> state
-      end
 
     {:ok, state}
   end
 
   @impl true
-  def handle_call(:state, _from, state), do: {:reply, state, state}
+  def handle_call(:info, _from, state), do: {:reply, state, state}
 
   def handle_call({:feed_chunk, bin}, _from, state) do
     broadcast(state, :stdin_chunk, {:stdin_chunk, bin})

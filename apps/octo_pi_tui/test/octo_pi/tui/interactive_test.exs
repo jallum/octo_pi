@@ -352,7 +352,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "produces transcript lines + blank + input" do
       s = %Interactive{
         transcript: [{:user, "hi"}, {:assistant, "hello!", :done}],
-        input: %Input{value: "next", cursor: 4, focused: true},
+        input: %Input{value: "next", cursor: 4},
         width: 80
       }
 

@@ -11,7 +11,6 @@ defmodule OctoPi.TUI.Components.Input do
   @type t :: %__MODULE__{
           value: String.t(),
           cursor: non_neg_integer(),
-          focused: boolean(),
           kill_ring: [String.t()],
           last_action: :kill | :yank | :type_word | nil,
           undo_stack: [{String.t(), non_neg_integer()}]
@@ -19,7 +18,6 @@ defmodule OctoPi.TUI.Components.Input do
 
   defstruct value: "",
             cursor: 0,
-            focused: true,
             kill_ring: [],
             last_action: nil,
             undo_stack: []
@@ -38,8 +36,6 @@ defmodule OctoPi.TUI.Components.Input do
 
   @doc "Insert a char at the cursor (from KeyParser {:char, _} events)."
   @spec insert(t(), String.t()) :: t()
-  def insert(%__MODULE__{focused: false} = s, _), do: s
-
   def insert(%__MODULE__{value: v, cursor: c} = s, char) do
     s = if whitespace?(char) or s.last_action != :type_word, do: push_undo(s), else: s
     {before, after_cursor} = split_at_grapheme(v, c)
@@ -64,8 +60,6 @@ defmodule OctoPi.TUI.Components.Input do
   # --- handle_key: multi-head dispatch ---
 
   @impl true
-  def handle_key(%__MODULE__{focused: false} = s, _), do: s
-
   def handle_key(%__MODULE__{} = s, %Key{key: ?-, modifiers: [:ctrl]}), do: undo(s)
 
   def handle_key(%__MODULE__{} = s, %Key{key: :enter}), do: {s, [{:submit, s.value}]}

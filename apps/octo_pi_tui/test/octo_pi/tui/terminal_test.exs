@@ -26,7 +26,7 @@ defmodule OctoPi.TUI.TerminalTest do
   describe "start_link / dimensions" do
     test "records initial width and height from opts" do
       pid = start_terminal(dimensions: {100, 30})
-      assert %{width: 100, height: 30} = Terminal.state(pid)
+      assert %{width: 100, height: 30} = Terminal.info(pid)
     end
   end
 
@@ -58,7 +58,7 @@ defmodule OctoPi.TUI.TerminalTest do
       :ok = Terminal.simulate_resize(pid, 120, 40)
 
       assert_receive {:resize, 120, 40}, 500
-      assert %{width: 120, height: 40} = Terminal.state(pid)
+      assert %{width: 120, height: 40} = Terminal.info(pid)
     end
   end
 
