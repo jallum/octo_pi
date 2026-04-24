@@ -2,6 +2,7 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T22:44:20Z",
   "created": "2026-04-24T21:55:55Z",
   "description": "# Compliance child for opi-q5k.42 (opi-q5k.10 / markdown.test.ts)\n\n## Scope\n\nUpstream describe 'Tables' (13 tests). Implementation gap: grep of apps/octo_pi_tui/lib/octo_pi/tui/components/markdown.ex returns no 'table' match. Implement table parser + renderer + port all 13 tests. Tests cover: simple table, row dividers, column width \u003e= longest word, alignment (left/center/right), varying column widths, cell wrapping when table exceeds width, long cell content wrapping, long unbroken tokens inside cells (not only at line start), styled inline code inside cells without breaking borders, narrow width graceful handling, natural fit, paddingX respected, no trailing blank line when last block.\n\n## Protocol\n\n1. Read tmp/pi-mono/packages/tui/test/markdown.test.ts; locate the \"Tables\" describe.\n2. Enumerate every it(...) under that describe.\n3. For each, find or confirm absent an equivalent Elixir assertion in apps/octo_pi_tui/test/octo_pi/tui/components/markdown_test.exs.\n4. Implement missing behavior in OctoPi.TUI.Components.Markdown.\n5. Port missing tests.\n6. Re-read upstream \"Tables\" top-to-bottom; confirm mapping.\n7. Post a final mapping comment.\n8. Close.\n\nUpstream uses VirtualTerminal + Chalk for rendering assertions and relies on defaultMarkdownTheme fixture. Elixir equivalent: our Theme module (OctoPi.TUI.Theme.load_builtin(:dark, :truecolor)) + WrapAnsi helpers for strip/visible-width.\n\n## Deps\nParent opi-q5k.42 (which blocks opi-q5k.1).",
   "id": "opi-q5k.42.1",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "markdown.test.ts / Tables (13 upstream tests)",
   "type": "task",
   "updated_at": "2026-04-24T22:44:20Z"
