@@ -8,7 +8,7 @@ defmodule OctoPi.Coder.Extensions.InputTransform do
     API.on(api, :input, &handle_input/2)
   end
 
-  defp handle_input(%{text: text} = _event, _ctx) do
+  defp handle_input(%{text: text}, _ctx) do
     case expand(text) do
       ^text -> %{action: :continue}
       expanded -> %{action: :transform, text: expanded, images: nil}
