@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:32:35Z",
+  "description": "# Check: upstream terminal-image.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/terminal-image.test.ts\n\n## Subject\nImage-protocol detection (iTerm2, Kitty) and terminal-capability detection (hyperlinks).\n\n## Upstream test count (approx)\n35\n\n## Behaviors asserted upstream\n- detects iTerm2 image escape sequence at start/middle/end/in-long-line/minimal form\n- detects Kitty image escape sequence at start/with padding/with text before\n- detects image sequences in very long lines (304k+ chars)\n- detects image sequences when terminal does not support images\n- detects sequences with ANSI codes before and after\n- does not detect in plain text, ANSI-only, cursor-movement-only, partial iTerm2, partial Kitty, empty, or newline-only lines\n- detects both Kitty and iTerm2 in same line; multiple text/image segments\n- does not falsely detect image in file-path lines containing keywords\n- defaults hyperlinks:false for unknown terminals\n- forces hyperlinks:false under tmux even if outer terminal supports OSC 8\n- forces hyperlinks:false when TERM starts with 'tmux' or 'screen'\n- enables hyperlinks for Ghostty, Kitty, WezTerm, iTerm2, VSCode\n- hyperlink(text, url) wraps text in OSC 8 open and close sequences\n- preserves ANSI styling inside the hyperlink\n- works with empty text and file:// URIs\n\n## Upstream dependencies\ndetectCapabilities, hyperlink, isImageLine from ../src/terminal-image.js\n\n## Upstream notes\nisImageLine uses includes() (not startsWith). detectCapabilities() checks env vars (TERM, TERM_PROGRAM, KITTY_WINDOW_ID, WEZTERM_PANE, GHOSTTY_RESOURCES_DIR, ITERM_SESSION_ID, TMUX). Hyperlink format: \\\\x1b]8;;URL\\\\x1b\\\\text\\\\x1b]8;;\\\\x1b\\\\. tmux and screen always disable hyperlinks regardless of TERM_PROGRAM.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/terminal_image_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
+  "id": "opi-q5k.17",
+  "labels": [],
+  "parent": "opi-q5k",
+  "priority": 2,
+  "status": "open",
+  "title": "Check: upstream terminal-image.test.ts",
+  "type": "task",
+  "updated_at": "2026-04-24T21:32:35Z"
+}
