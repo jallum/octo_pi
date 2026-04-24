@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:38Z",
+  "description": "Add command history to the input/editor component:\n- Up arrow recalls previous input, Down returns toward current\n- History persisted to ~/.octo_pi/history (one entry per line)\n- Max history size (e.g., 1000 entries)\n- Current input preserved while browsing\n\nUpstream: editor.ts history management\nDepends on: input/editor component",
+  "id": "opi-m4h.14",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 3,
+  "status": "open",
+  "title": "Input history: up/down arrow navigation through prior inputs",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:38Z"
+}
