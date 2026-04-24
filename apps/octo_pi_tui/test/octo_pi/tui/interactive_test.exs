@@ -229,6 +229,100 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "crash-safe tty restoration" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Event, as: AIEvent
+    alias OctoPi.AI.Model
+    alias OctoPi.TUI.Terminal, as: TUITerminal
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    defp crash_safety_model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    defp counting_raw_mode(test_pid) do
+      fn action ->
+        send(test_pid, {:raw_mode, action})
+        :ok
+      end
+    end
+
+    test "normal exit path calls raw_mode_fn.(:exit)" do
+      test_pid = self()
+      raw_mode_fn = counting_raw_mode(test_pid)
+      terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
+
+      write_fn = fn _ -> send(test_pid, :frame_rendered); :ok end
+
+      runner =
+        Task.async(fn ->
+          Interactive.run(
+            model: crash_safety_model(),
+            transport: FakeTransport,
+            tools: [],
+            write_fn: write_fn,
+            raw_mode_fn: raw_mode_fn,
+            skip_sigwinch: true,
+            auto_start_reader: false,
+            dimensions: {80, 24},
+            terminal_name: terminal_name
+          )
+        end)
+
+      assert_receive {:raw_mode, :enter}, 1_000
+      assert_receive :frame_rendered, 1_000
+
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x03>>)
+      assert :ok = Task.await(runner, 2_000)
+
+      assert_receive {:raw_mode, :exit}, 1_000
+    end
+
+    test "child crash still restores tty via the after block" do
+      test_pid = self()
+      raw_mode_fn = counting_raw_mode(test_pid)
+      terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
+
+      write_fn = fn _ -> send(test_pid, :frame_rendered); :ok end
+
+      runner =
+        Task.async(fn ->
+          Interactive.run(
+            model: crash_safety_model(),
+            transport: FakeTransport,
+            tools: [],
+            write_fn: write_fn,
+            raw_mode_fn: raw_mode_fn,
+            skip_sigwinch: true,
+            auto_start_reader: false,
+            dimensions: {80, 24},
+            terminal_name: terminal_name
+          )
+        end)
+
+      assert_receive {:raw_mode, :enter}, 1_000
+      assert_receive :frame_rendered, 1_000
+
+      # Hard-kill Terminal so its terminate/2 can't restore the tty.
+      Process.exit(Process.whereis(terminal_name), :kill)
+
+      assert :ok = Task.await(runner, 2_000)
+      assert_receive {:raw_mode, :exit}, 1_000
+    end
+  end
+
   describe "render/1" do
     test "produces transcript lines + blank + input" do
       s = %Interactive{

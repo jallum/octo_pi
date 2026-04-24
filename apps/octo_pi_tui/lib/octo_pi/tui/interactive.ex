@@ -60,6 +60,19 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec run(keyword()) :: :ok
   def run(opts) do
+    raw_mode_fn = Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1)
+    skip_raw_mode = Keyword.get(opts, :skip_raw_mode, false)
+    old_trap = Process.flag(:trap_exit, true)
+
+    try do
+      do_run(opts)
+    after
+      safe_raw_mode_exit(raw_mode_fn, skip_raw_mode)
+      Process.flag(:trap_exit, old_trap)
+    end
+  end
+
+  defp do_run(opts) do
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
 
@@ -79,6 +92,19 @@ defmodule OctoPi.TUI.Interactive do
 
     shutdown(terminal, fsm, renderer)
     :ok
+  end
+
+  defp default_raw_mode(:enter), do: OctoPi.TUI.RawMode.enter()
+  defp default_raw_mode(:exit), do: OctoPi.TUI.RawMode.exit()
+
+  defp safe_raw_mode_exit(_fun, true), do: :ok
+
+  defp safe_raw_mode_exit(fun, false) do
+    fun.(:exit)
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
   end
 
   defp start_agent_session(opts) do
@@ -139,6 +165,9 @@ defmodule OctoPi.TUI.Interactive do
         state
         |> handle_event(msg)
         |> advance(fsm, renderer, terminal)
+
+      {:EXIT, _pid, _reason} ->
+        loop(%{state | exit: true}, fsm, renderer, terminal)
     end
   end
 
