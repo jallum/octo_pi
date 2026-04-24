@@ -4,30 +4,30 @@ defmodule OctoPi.Coder.Extension.UIContext do
   @type select_option :: %{label: String.t(), value: term()}
 
   @type t :: %__MODULE__{
-          select: ([select_option()], keyword() -> {:ok, term()} | :cancelled),
-          confirm: (String.t(), keyword() -> boolean()),
-          input: (String.t(), keyword() -> {:ok, String.t()} | :cancelled),
-          notify: (String.t() -> :ok),
-          set_status: (String.t() -> :ok),
-          set_working_message: (String.t() | nil -> :ok),
-          set_working_indicator: (boolean() -> :ok),
-          set_hidden_thinking_label: (String.t() | nil -> :ok),
-          set_widget: (term() -> :ok),
-          set_footer: (term() -> :ok),
-          set_header: (term() -> :ok),
-          set_title: (String.t() -> :ok),
-          custom: (term(), keyword() -> term()),
-          paste_to_editor: (String.t() -> :ok),
-          set_editor_text: (String.t() -> :ok),
-          get_editor_text: (-> String.t()),
-          editor: (String.t(), keyword() -> {:ok, String.t()} | :cancelled),
-          add_autocomplete_provider: ((String.t() -> [String.t()]) -> :ok),
-          set_editor_component: (term() -> :ok),
-          get_all_themes: (-> [String.t()]),
-          get_theme: (-> String.t()),
-          set_theme: (String.t() -> :ok),
-          get_tools_expanded: (-> boolean()),
-          set_tools_expanded: (boolean() -> :ok)
+          select: ([select_option()], keyword() -> {:ok, term()} | :cancelled | no_return()),
+          confirm: (String.t(), keyword() -> boolean() | no_return()),
+          input: (String.t(), keyword() -> {:ok, String.t()} | :cancelled | no_return()),
+          notify: (String.t() -> :ok | no_return()),
+          set_status: (String.t() -> :ok | no_return()),
+          set_working_message: (String.t() | nil -> :ok | no_return()),
+          set_working_indicator: (boolean() -> :ok | no_return()),
+          set_hidden_thinking_label: (String.t() | nil -> :ok | no_return()),
+          set_widget: (term() -> :ok | no_return()),
+          set_footer: (term() -> :ok | no_return()),
+          set_header: (term() -> :ok | no_return()),
+          set_title: (String.t() -> :ok | no_return()),
+          custom: (term(), keyword() -> term() | no_return()),
+          paste_to_editor: (String.t() -> :ok | no_return()),
+          set_editor_text: (String.t() -> :ok | no_return()),
+          get_editor_text: (-> String.t() | no_return()),
+          editor: (String.t(), keyword() -> {:ok, String.t()} | :cancelled | no_return()),
+          add_autocomplete_provider: ((String.t() -> [String.t()]) -> :ok | no_return()),
+          set_editor_component: (term() -> :ok | no_return()),
+          get_all_themes: (-> [String.t()] | no_return()),
+          get_theme: (-> String.t() | no_return()),
+          set_theme: (String.t() -> :ok | no_return()),
+          get_tools_expanded: (-> boolean() | no_return()),
+          set_tools_expanded: (boolean() -> :ok | no_return())
         }
 
   @one_arity_fields [
@@ -63,6 +63,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
 
   defstruct Enum.map(@all_fields, &{&1, nil})
 
+  @dialyzer {:no_return, new: 0}
   @spec new() :: t()
   def new do
     stubs =
@@ -84,6 +85,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
     end)
   end
 
+  @spec stub_raise(atom()) :: no_return()
   defp stub_raise(field) do
     raise RuntimeError, "UIContext.#{field} not bound — no UI available"
   end

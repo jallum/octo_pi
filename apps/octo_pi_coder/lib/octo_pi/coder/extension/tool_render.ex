@@ -19,6 +19,21 @@ defmodule OctoPi.Coder.Extension.ToolRender do
   defmodule Context do
     @moduledoc false
 
+    @type t :: %__MODULE__{
+            args: map(),
+            tool_call_id: String.t() | nil,
+            cwd: String.t(),
+            execution_started: boolean(),
+            args_complete: boolean(),
+            is_partial: boolean(),
+            expanded: boolean(),
+            show_images: boolean(),
+            is_error: boolean(),
+            state: term(),
+            invalidate: (-> :ok) | nil,
+            last_component: term()
+          }
+
     defstruct args: %{},
               tool_call_id: nil,
               cwd: ".",
