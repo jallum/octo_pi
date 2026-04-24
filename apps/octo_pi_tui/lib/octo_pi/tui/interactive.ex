@@ -27,7 +27,8 @@ defmodule OctoPi.TUI.Interactive do
           transcript: [transcript_entry()],
           width: pos_integer(),
           height: pos_integer(),
-          exit: boolean()
+          exit: boolean(),
+          paste_buffer: String.t() | nil
         }
 
   defstruct session: nil,
@@ -35,7 +36,8 @@ defmodule OctoPi.TUI.Interactive do
             transcript: [],
             width: 80,
             height: 24,
-            exit: false
+            exit: false,
+            paste_buffer: nil
 
   @doc """
   Entry point for the CLI. Wires up the full pipeline — Session,
@@ -227,9 +229,16 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec handle_event(t(), term()) :: t()
 
-  # Ctrl+C always exits immediately (no double-press for MVP).
+  # Ctrl+C always exits immediately.
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}),
     do: %{state | exit: true}
+
+  # Escape: clear input if non-empty, exit if already empty.
+  def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: :escape}}),
+    do: %{state | exit: true}
+
+  def handle_event(%{input: input} = state, {:key, %Key{key: :escape}}),
+    do: %{state | input: %{input | value: "", cursor: 0}}
 
   # Enter submits the prompt.
   def handle_event(%{input: input, session: session} = state, {:key, %Key{key: :enter}}) do
@@ -256,13 +265,22 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  # Paste buffering: accumulate chars between markers, flush atomically.
+  def handle_event(state, :paste_start),
+    do: %{state | paste_buffer: ""}
+
+  def handle_event(%{paste_buffer: buf} = state, {:char, c}) when is_binary(buf),
+    do: %{state | paste_buffer: buf <> c}
+
+  def handle_event(%{paste_buffer: buf, input: input} = state, :paste_end) when is_binary(buf),
+    do: %{state | input: Components.Input.paste(input, buf), paste_buffer: nil}
+
+  def handle_event(state, :paste_end),
+    do: %{state | paste_buffer: nil}
+
   # Printable chars insert into the Input.
   def handle_event(%{input: input} = state, {:char, c}),
     do: %{state | input: Components.Input.insert(input, c)}
-
-  # Paste markers — MVP doesn't do bracketed paste semantics yet.
-  def handle_event(state, :paste_start), do: state
-  def handle_event(state, :paste_end), do: state
 
   # Agent events drive the transcript.
   def handle_event(state, {:octo_pi_agent_event, event}),

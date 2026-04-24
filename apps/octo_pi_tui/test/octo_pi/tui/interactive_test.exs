@@ -41,6 +41,31 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.input.value == ""
       assert s.input.cursor == 0
     end
+
+    test "Escape clears non-empty input" do
+      s = %Interactive{input: %Input{value: "draft", cursor: 5}}
+      s = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      assert s.input.value == ""
+      assert s.input.cursor == 0
+      refute s.exit
+    end
+
+    test "Escape with empty input exits (double-Escape pattern)" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}}
+      s = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      assert s.exit
+    end
+
+    test "paste markers buffer chars and insert atomically" do
+      s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
+      s = Interactive.handle_event(s, :paste_start)
+      s = Interactive.handle_event(s, {:char, "b"})
+      s = Interactive.handle_event(s, {:char, "o"})
+      s = Interactive.handle_event(s, {:char, "o"})
+      s = Interactive.handle_event(s, :paste_end)
+      assert s.input.value == "helloboo world"
+      assert s.paste_buffer == nil
+    end
   end
 
   describe "handle_event — agent events" do
