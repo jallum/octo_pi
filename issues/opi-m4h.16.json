@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:58Z",
+  "description": "Port session-selector.ts (~1026 LOC). Overlay for session management.\n\nImplement:\n- List saved sessions from storage directory\n- Show session metadata (date, message count, model used)\n- Resume selected session\n- Delete sessions\n- Search/filter by name or content\n- Create new session\n\nUpstream: interactive/components/session-selector.ts, session-selector-search.ts\nDepends on: overlay system, select_list, theme",
+  "id": "opi-m4h.16",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 2,
+  "status": "open",
+  "title": "SessionSelector dialog: browse and switch sessions",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:58Z"
+}
