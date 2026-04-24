@@ -369,5 +369,70 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert text =~ "hello!"
       assert text =~ "next"
     end
+
+    test "includes footer lines at the bottom" do
+      alias OctoPi.TUI.Components.Footer
+
+      footer = %Footer{
+        cwd: "/tmp/test",
+        model_id: "claude-opus-4-6",
+        context_window: 200_000
+      }
+
+      s = %Interactive{
+        transcript: [{:user, "hi"}],
+        input: %Input{value: "", cursor: 0},
+        footer: footer,
+        width: 80,
+        height: 24
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+
+      assert text =~ "/tmp/test"
+      assert text =~ "claude-opus-4-6"
+    end
+  end
+
+  describe "footer updates from agent events" do
+    test "MessageEnd accumulates usage into footer" do
+      alias OctoPi.TUI.Components.Footer
+
+      footer = %Footer{
+        cwd: "/tmp",
+        model_id: "test-model",
+        context_window: 100_000,
+        input_tokens: 100,
+        output_tokens: 50,
+        cost: 0.001
+      }
+
+      s = %Interactive{footer: footer}
+
+      msg = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "test-model",
+        timestamp: 0,
+        content: [%Content.Text{text: "reply"}],
+        stop_reason: :stop,
+        usage: %OctoPi.AI.Usage{
+          input: 200,
+          output: 100,
+          cache_read: 50,
+          cache_write: 25,
+          cost: %OctoPi.AI.Usage.Cost{total: 0.002}
+        }
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+
+      assert s.footer.input_tokens == 300
+      assert s.footer.output_tokens == 150
+      assert s.footer.cache_read == 50
+      assert s.footer.cache_write == 25
+      assert_in_delta s.footer.cost, 0.003, 0.0001
+    end
   end
 end

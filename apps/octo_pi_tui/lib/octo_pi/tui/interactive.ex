@@ -36,6 +36,8 @@ defmodule OctoPi.TUI.Interactive do
           session: pid() | nil,
           input: Components.Input.t(),
           transcript: [transcript_entry()],
+          footer: Components.Footer.t(),
+          footer_data: pid() | nil,
           width: pos_integer(),
           height: pos_integer(),
           exit: boolean(),
@@ -45,6 +47,8 @@ defmodule OctoPi.TUI.Interactive do
   defstruct session: nil,
             input: %Components.Input{},
             transcript: [],
+            footer: %Components.Footer{},
+            footer_data: nil,
             width: 80,
             height: 24,
             exit: false,
@@ -88,22 +92,39 @@ defmodule OctoPi.TUI.Interactive do
   defp do_run(opts) do
     {w, h} = Keyword.get_lazy(opts, :dimensions, &detect_dimensions/0)
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
+    cwd = Keyword.get(opts, :cwd, File.cwd!())
+    model = Keyword.fetch!(opts, :model)
 
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
     {:ok, renderer} = Renderer.start_link(width: w, height: h)
+    {:ok, footer_data} = OctoPi.TUI.FooterData.start_link(cwd: cwd)
 
     {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
-    state = %__MODULE__{session: session, width: w, height: h}
+    footer = %Components.Footer{
+      cwd: cwd,
+      model_id: model.id,
+      context_window: model.context_window,
+      git_branch: OctoPi.TUI.FooterData.get_git_branch(footer_data)
+    }
+
+    state = %__MODULE__{
+      session: session,
+      width: w,
+      height: h,
+      footer: footer,
+      footer_data: footer_data
+    }
+
     render_frame(state, renderer, terminal)
 
     loop(state, fsm, renderer, terminal)
 
-    shutdown(terminal, fsm, renderer)
+    shutdown(terminal, fsm, renderer, footer_data)
     :ok
   end
 
@@ -233,8 +254,10 @@ defmodule OctoPi.TUI.Interactive do
 
   # Shut down children in reverse start order. Terminal goes last
   # because its `terminate/2` restores the tty.
-  defp shutdown(terminal, fsm, renderer) do
-    Enum.each([renderer, fsm, terminal], fn pid ->
+  defp shutdown(terminal, fsm, renderer, footer_data \\ nil) do
+    pids = [footer_data, renderer, fsm, terminal] |> Enum.reject(&is_nil/1)
+
+    Enum.each(pids, fn pid ->
       if Process.alive?(pid), do: GenServer.stop(pid, :normal)
     end)
   end
@@ -303,9 +326,14 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{input: input} = state, {:char, c}),
     do: %{state | input: Components.Input.insert(input, c)}
 
-  # Agent events drive the transcript.
-  def handle_event(state, {:octo_pi_agent_event, event}),
-    do: %{state | transcript: update_transcript(state.transcript, event)}
+  # Agent events drive the transcript and footer stats.
+  def handle_event(state, {:octo_pi_agent_event, event}) do
+    %{
+      state
+      | transcript: update_transcript(state.transcript, event),
+        footer: update_footer(state.footer, event)
+    }
+  end
 
   # Resize.
   def handle_event(state, {:resize, w, h}), do: %{state | width: w, height: h}
@@ -330,6 +358,22 @@ defmodule OctoPi.TUI.Interactive do
     do: finalize_assistant(transcript, msg)
 
   defp update_transcript(transcript, _), do: transcript
+
+  defp update_footer(footer, %{__struct__: OctoPi.Agent.Event.MessageEnd, message: msg}) do
+    usage = Map.get(msg, :usage, %{})
+    cost_struct = Map.get(usage, :cost, %{})
+
+    %{
+      footer
+      | input_tokens: footer.input_tokens + Map.get(usage, :input, 0),
+        output_tokens: footer.output_tokens + Map.get(usage, :output, 0),
+        cache_read: footer.cache_read + Map.get(usage, :cache_read, 0),
+        cache_write: footer.cache_write + Map.get(usage, :cache_write, 0),
+        cost: footer.cost + Map.get(cost_struct, :total, 0.0)
+    }
+  end
+
+  defp update_footer(footer, _), do: footer
 
   defp apply_partial(transcript, partial) do
     text = extract_text(partial)
@@ -376,10 +420,13 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
-  def render(%{transcript: transcript, width: width, height: height}, input_lines) do
+  def render(%{transcript: transcript, footer: footer, width: width, height: height}, input_lines) do
+    footer_lines = Components.Footer.render(footer, width)
+    content_height = max(1, height - length(footer_lines))
+
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
     all = transcript_lines ++ [""] ++ input_lines
-    Viewport.window(all, height)
+    Viewport.window(all, content_height) ++ footer_lines
   end
 
   defp render_entry({:user, text}, width), do: WrapAnsi.wrap("> #{text}", width)
