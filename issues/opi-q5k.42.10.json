@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.10",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Done. ~~x~~ strikethrough + ~x~ plain (single tilde) tests pass against existing impl.",
+      "timestamp": "2026-04-24T22:39:26Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Strikethrough syntax (2 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:39:01Z"
+  "updated_at": "2026-04-24T22:39:26Z"
 }
