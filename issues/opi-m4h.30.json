@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T12:32:49Z",
   "created": "2026-04-24T10:38:57Z",
   "description": "Port keybindings.ts. Allow users to customize key bindings.\n\nImplement:\n- Keybinding registry: action → key chord mapping\n- Default bindings (matching upstream defaults)\n- Config file loading (~/.octo_pi/keybindings.json)\n- Conflict detection (warn on duplicate bindings)\n- Integration with input/editor handle_key dispatch\n\nUpstream: packages/tui/src/keybindings.ts\nDepends on: key_parser, input/editor component",
   "id": "opi-m4h.30",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Keybinding configuration: runtime rebinding",
   "type": "task",
-  "updated_at": "2026-04-24T12:28:04Z"
+  "updated_at": "2026-04-24T12:32:49Z"
 }
