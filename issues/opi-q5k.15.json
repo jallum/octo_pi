@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:43:28Z",
   "created": "2026-04-24T21:28:15Z",
   "description": "# Check: upstream select-list.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/select-list.test.ts\n\n## Subject\nSelectList component: rendering selectable items with descriptions and alignment.\n\n## Upstream test count (approx)\n6\n\n## Behaviors asserted upstream\n- normalizes multiline descriptions to single line\n- keeps descriptions aligned when primary text is truncated\n- uses configured minimum primary column width\n- uses configured maximum primary column width\n- allows overriding primary truncation while preserving description alignment\n\n## Upstream dependencies\nSelectList from ../src/components/select-list.js; visibleWidth; testTheme (selectedPrefix, selectedText, description, scrollInfo, noMatch)\n\n## Upstream notes\nSelectList({value, label, description}[], selectedIndex, theme, options). Options: minPrimaryColumnWidth, maxPrimaryColumnWidth, truncatePrimary function. Description alignment computed after primary column width is determined; columns padded to align descriptions.\n\n## Candidate Elixir counterpart(s)\n- grep apps/octo_pi_tui/test for select_list or select tests (no obvious match in current listing)\n- apps/octo_pi_tui/lib/octo_pi/tui/components/select_list.* (implementation location — check for co-located or component/ test dir)\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.15",
@@ -16,8 +17,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream select-list.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:43:27Z"
+  "updated_at": "2026-04-24T21:43:28Z"
 }
