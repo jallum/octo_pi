@@ -96,6 +96,10 @@ defmodule OctoPi.Coder.CLI do
     # wasn't built into this release, gracefully tell the user.
     case Code.ensure_loaded(OctoPi.TUI.Interactive) do
       {:module, mod} ->
+        # Ensure the TUI app's supervision tree (Events Registry
+        # etc.) is up before Interactive.run/1 tries to register
+        # subscribers against it.
+        {:ok, _} = Application.ensure_all_started(:octo_pi_tui)
         mod.run(Map.to_list(opts))
         0
 
