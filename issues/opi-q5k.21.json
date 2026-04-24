@@ -9,9 +9,15 @@
   "id": "opi-q5k.21",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/tui-overlay-style-leak.test.ts (2 tests)\nOurs: overlay_test.exs (compositing unit tests) + tui_render_test.exs (integration renders) + test/support/virtual_terminal.ex (helper)\n\n## Analysis\n\nUpstream asserts a specific cell-level SGR invariant: after rendering an italic-styled line that spans the full width followed by an unstyled line, the cells on the unstyled line must NOT report `isItalic() == 1` in the backing terminal buffer. The test uses `getCellItalic(terminal, row, col)` which walks into `terminal.xterm.buffer.active.getLine(...).getCell(...).isItalic()` from @xterm/headless.\n\nTwo scenarios:\n1. No overlay — trailing reset `\\x1b[23m` sits beyond the last visible column.\n2. With overlay — overlay slicing drops trailing SGR resets mid-line.\n\nOur apps/octo_pi_tui/test/support/virtual_terminal.ex exposes no per-cell SGR attribute API (grep: no italic/sgr/attribute/cell match). Our overlay_test.exs verifies composite output as strings, not as attribute state; tui_render_test.exs compares viewport text, not attribute flags.\n\n## UNMAPPED\n\n- Regression: italic attribute does not leak to the line below when the trailing `\\x1b[23m` reset sits beyond width (no overlay case).\n- Regression: italic attribute does not leak to the line below when overlay compositing slices the base line and drops the trailing reset.\n\nBoth require new test-infrastructure (per-cell attribute inspection) before a port is possible.\n\n## N/A / EXTRA\n\nOur tests do cover overlay-composite output strings and general render flows, but none probe the SGR-attribute state of cells; these two upstream tests are therefore uncovered.\n\n## Action\n\nCompliance ticket will include two parts: (a) extend the VT helper with an attribute-inspection API; (b) port both tests.",
+      "timestamp": "2026-04-24T21:38:25Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream tui-overlay-style-leak.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:37:33Z"
+  "updated_at": "2026-04-24T21:38:25Z"
 }
