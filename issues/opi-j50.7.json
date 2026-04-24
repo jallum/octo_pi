@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T15:56:41Z",
   "created": "2026-04-24T14:48:45Z",
   "description": "pi-mono shows keybinding hints in the startup banner, not the footer. However, octo_pi's footer currently has no shortcut hints at all. Add a condensed hint line to the footer showing the most important shortcuts: Esc (interrupt), Ctrl+C (exit), /help (commands). Style with dimmed text, right-aligned or centered. This is a simple addition to OctoPi.TUI.Components.Footer.render/2.",
   "id": "opi-j50.7",
   "labels": [],
   "parent": "opi-j50",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Footer shortcut hints",
   "type": "task",
-  "updated_at": "2026-04-24T15:55:20Z"
+  "updated_at": "2026-04-24T15:56:41Z"
 }
