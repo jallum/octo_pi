@@ -4,14 +4,15 @@
     "octo-3gv.2"
   ],
   "blocks": [],
+  "closed_at": "2026-04-24T09:49:55Z",
   "created": "2026-04-24T03:14:02Z",
   "description": "Instrument the extension system with telemetry events and provide a\ndefault log handler for debugging.\n\n**Telemetry events to emit:**\n\n[:octo_pi_coder, :extension, :loaded]\n  measurements: %{count: 1}\n  metadata: %{id: ext_id, path: ext_path, handler_count: n, tool_count: n}\n\n[:octo_pi_coder, :extension, :load_error]\n  measurements: %{}\n  metadata: %{path: path, error: reason}\n\n[:octo_pi_coder, :extension, :emit]\n  measurements: %{duration: native_time}\n  metadata: %{event_type: atom, pattern: atom, handler_count: n}\n\n[:octo_pi_coder, :extension, :handler_error]\n  measurements: %{}\n  metadata: %{extension_id: id, event_type: atom, error: message, stacktrace: st}\n\n[:octo_pi_coder, :extension, :handler_cancel]\n  measurements: %{}\n  metadata: %{extension_id: id, event_type: atom, reason: reason}\n\n**Log handler module:** OctoPi.Coder.Extension.TelemetryHandler\n- Attaches to all extension telemetry events\n- Logs at :debug for emit, :warning for errors, :info for load\n- Suitable for `mix pi --debug-extensions` flag\n\n**Error handling upstream (runner.ts lines 474-483, 691-700):**\nEach handler wrapped in try/catch. On error, emits ExtensionError with:\n- extensionPath, event type, error message, stack trace\n- Error listeners notified (we use telemetry instead)\n- Handler continues to next; error doesn't stop dispatch\n\n**Upstream ref:** runner.ts error handling, types.ts ExtensionError",
   "id": "octo-3gv.5",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Telemetry + log handler for extension events",
   "type": "task",
-  "updated_at": "2026-04-24T09:47:15Z"
+  "updated_at": "2026-04-24T09:49:55Z"
 }
