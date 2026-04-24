@@ -11,9 +11,15 @@
   "id": "opi-q5k.31",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. WrapAnsi.truncate_to_width/4 implemented + all 8 upstream tests ported (plus visible_width tab == 3 case). Re-comparison: every upstream it(...) in truncate-to-width.test.ts has an Elixir equivalent. 977 tests pass (no regressions). Unblocks opi-q5k.32 and opi-q5k.33.",
+      "timestamp": "2026-04-24T22:16:46Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Implement WrapAnsi.truncate_to_width + port truncate-to-width.test.ts (8 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:12:19Z"
+  "updated_at": "2026-04-24T22:16:46Z"
 }
