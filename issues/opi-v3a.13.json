@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-v3a.11"
+  ],
   "blocks": [],
   "created": "2026-04-24T00:33:28Z",
   "description": "Analogous to\n`apps/octo_pi_coder/test/octo_pi/coder/integration_test.exs`\nbut drives the Interactive main loop against live Anthropic.\n\nGated `:integration` tag — excluded by default, opt in via\n`ANTHROPIC_API_KEY=... mix test --only integration`.\n\nFlow:\n- Start Interactive in a Task with skip_raw_mode/sigwinch,\n  auto_start_reader: false, a write_fn that forwards to the\n  test pid.\n- Feed a trivial prompt: \"Reply with exactly 'pong'\".\n- Use the test-support `feed_chunk` helper (see .11) to drive\n  stdin.\n- Assert the rendered output contains \"pong\".\n- Ctrl+C to exit cleanly.\n\nAlso consider a tool-exercising variant (opt-in):\n- Prompt: \"Use the ls tool to list the current directory\".\n- Assert a ToolExecutionEnd event comes through for the ls tool.\n- Gates real-world regression of the default-tools wiring.\n\nDepends on .11 (Terminal.feed_chunk scoping) to use the test\nhelper cleanly.",

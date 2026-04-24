@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-v3a.13"
+  ],
   "created": "2026-04-24T00:33:28Z",
   "description": "`Terminal.feed_chunk/2` is public in production. Tests use it\nto inject stdin bytes without a real tty, but there's nothing\nstopping production callers from synthesizing input.\n\nOptions:\n1. Mark `@doc false` + move the test uses behind a\n   `OctoPi.TUI.TestSupport.Terminal` helper module (pattern\n   matches `OctoPi.Agent.TestSupport.FakeTransport`).\n2. Keep public, add a clear moduledoc paragraph on intended\n   use.\n\nPrefer (1) — same as the FakeTransport precedent. Minor\nrefactor, ~30 LOC test-side.\n\nTDD:\n- Existing tests keep passing after the helper move.",
   "id": "opi-v3a.11",
