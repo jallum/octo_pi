@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T14:47:57Z",
+  "description": "Address visual and behavioral deficiencies found during hands-on comparison of octo_pi TUI against the production Claude CLI (pi-mono). Covers: Ctrl+C handling, DynamicBorder separators, prompt prefix, welcome banner, user message styling, and footer shortcut hints.",
+  "id": "opi-j50",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "TUI visual parity with pi-mono",
+  "type": "epic",
+  "updated_at": "2026-04-24T14:47:57Z"
+}
