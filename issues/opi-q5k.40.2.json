@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.2",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Our Input exposes state via direct struct field access (input.cursor, input.value, input.history) — Elixir idiom. Upstream's 'returns cursor position' and 'returns lines as defensive copy' are accessor-function tests; struct access in Elixir is already immutable and doesn't need a defensive-copy test. No new tests required.",
+      "timestamp": "2026-04-24T22:46:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / public state accessors (2 upstream tests)",
