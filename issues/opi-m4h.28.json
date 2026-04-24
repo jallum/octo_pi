@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T12:27:57Z",
   "created": "2026-04-24T10:38:57Z",
   "description": "Add clipboard support for copying text from the TUI.\n\nImplement:\n- Copy last assistant message (keybinding, e.g., Ctrl+Shift+C)\n- Copy specific code block (select and copy)\n- Use OSC 52 escape sequence for terminal clipboard access\n- Fallback to pbcopy/xclip/xsel based on platform\n\nUpstream: interactive-mode.ts clipboard handling\nDepends on: terminal module",
   "id": "opi-m4h.28",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Clipboard integration: copy message/code blocks",
   "type": "task",
-  "updated_at": "2026-04-24T12:25:55Z"
+  "updated_at": "2026-04-24T12:27:57Z"
 }
