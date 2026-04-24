@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:32:31Z",
+  "description": "Port the custom tool rendering system. Extensions can define renderCall (custom tool call display) and renderResult (custom tool result display) on registered tools. ToolRenderContext (types.ts 391-416) provides args, toolCallId, invalidate, lastComponent, state, cwd, executionStarted, argsComplete, isPartial, expanded, showImages, isError. Also: renderShell (control rendering mode), prepareArguments (compatibility shim), executionMode (per-tool sequential/parallel override), promptSnippet and promptGuidelines (tool-specific system prompt additions). Upstream: types.ts 391-468.",
+  "id": "octo-3gv.9",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 3,
+  "status": "open",
+  "title": "Tool rendering: renderCall, renderResult, ToolRenderContext",
+  "type": "task",
+  "updated_at": "2026-04-24T09:32:31Z"
+}
