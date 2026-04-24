@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T03:05:40Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "OpenAI Responses provider (octo_pi_ai_openai_responses)",
   "type": "task",
-  "updated_at": "2026-04-24T03:05:40Z"
+  "updated_at": "2026-04-24T03:06:21Z"
 }
