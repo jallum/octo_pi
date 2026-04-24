@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:32:47Z",
+  "description": "Port ExtensionCommandContext — the extended context available only in interactive-mode command handlers. Upstream types.ts 328-359, runner.ts bindCommandContext (333-350), createCommandContext (629-662). Methods: waitForIdle (wait for agent streaming to complete), newSession (start new session with setup callback), fork (fork from session entry), navigateTree (navigate session tree with summarization), switchSession (switch to different session file), reload (reload extensions, skills, prompts, themes). Also port ReplacedSessionContext (types.ts 366-376) for post-replacement sendMessage/sendUserMessage.",
+  "id": "octo-3gv.11",
+  "labels": [],
+  "parent": "octo-3gv",
+  "priority": 2,
+  "status": "open",
+  "title": "Command context: session control methods",
+  "type": "task",
+  "updated_at": "2026-04-24T09:32:47Z"
+}
