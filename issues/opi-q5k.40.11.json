@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.11",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Declined. Upstream's sticky-column feature remembers the cursor's preferred column when vertical navigation visits shorter lines so horizontal movement does not 'lose' that column. Our Input clamps to shorter lines without a sticky-column memory. The 19 upstream tests probe a feature our Input does not implement; porting them is deferred until the UX for multi-line editing in Interactive surfaces a regression. Input's 'vertical navigation — Up/Down' describe (6 tests) covers the base clamp behavior in the meantime.",
+      "timestamp": "2026-04-24T22:47:15Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Sticky column (19 upstream tests)",
