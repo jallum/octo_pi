@@ -9,9 +9,15 @@
   "id": "opi-q5k.28",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. VT grew per-cell SGR tracking (italic/bold/underline) with cell_italic?/3 + cell_attrs/3 helpers. Added 2 regression tests in overlay_test.exs covering both upstream scenarios (trailing reset beyond visible column, overlay slicing drops trailing SGR). 996 tests pass.",
+      "timestamp": "2026-04-24T22:22:57Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Port tui-overlay-style-leak.test.ts: per-cell SGR inspection + 2 regression tests",
   "type": "task",
-  "updated_at": "2026-04-24T22:20:42Z"
+  "updated_at": "2026-04-24T22:22:57Z"
 }
