@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.4",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Deferred — same root cause as opi-q5k.42.3 (fg re-emit in nested inline styling). Fix requires render_inline SGR stack refactor. Empty-commit records the deferral; tests not added since they would fail against current impl.",
+      "timestamp": "2026-04-24T22:44:34Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Pre-styled text (thinking traces) (3 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:44:24Z"
+  "updated_at": "2026-04-24T22:44:34Z"
 }
