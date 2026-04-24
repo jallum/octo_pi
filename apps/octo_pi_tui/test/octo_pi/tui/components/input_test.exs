@@ -1141,4 +1141,62 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert line =~ "1234567890"
     end
   end
+
+  # ── CJK / fullwidth overflow invariant (upstream input.test.ts) ──
+
+  describe "wide-character overflow invariant" do
+    alias OctoPi.TUI.WrapAnsi
+
+    test "CJK and fullwidth text never overflows terminal width at any cursor position" do
+      cases = [
+        "가나다라마바사아자차카타파하 한글 텍스트가 터미널 너비를 초과하면 크래시가 발생합니다 이것은 재현용 테스트입니다",
+        "これはテスト文章です。日本語のテキストが正しく表示されるかどうかを確認するためのサンプルテキストです。あいうえお",
+        "这是一段测试文本，用于验证中文字符在终端中的显示宽度是否被正确计算，如果不正确就会导致用户界面崩溃的问题",
+        "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ０１２３４５６７８９ａｂｃｄｅｆｇｈｉｊｋｌｍ"
+      ]
+
+      width = 93
+
+      cursor_positions = [
+        {"start", fn input -> input end},
+        {"middle",
+         fn input ->
+           Enum.reduce(1..10, input, fn _, s -> press(s, key(:right)) end)
+         end},
+        {"end", fn input -> press(input, ctrl(?e)) end}
+      ]
+
+      for text <- cases, {label, move} <- cursor_positions do
+        input =
+          %Input{}
+          |> Input.set_value(text)
+          |> move.()
+
+        lines = Input.render(input, width)
+
+        for line <- lines do
+          assert WrapAnsi.visible_width(line) <= width,
+                 "rendered line overflowed at cursor #{label} for #{text}: #{inspect(line)}"
+        end
+      end
+    end
+
+    test "cursor stays visible during horizontal scroll with wide text" do
+      width = 20
+      text = "가나다라마바사아자차카타파하"
+
+      input =
+        %Input{}
+        |> Input.set_value(text)
+        |> press(ctrl(?a))
+        |> move_right(5)
+        |> Input.update_scroll(width)
+
+      lines = Input.render(input, width)
+
+      for line <- lines do
+        assert WrapAnsi.visible_width(line) <= width
+      end
+    end
+  end
 end
