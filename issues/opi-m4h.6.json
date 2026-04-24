@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-m4h.1"
+    "opi-m4h.1",
+    "opi-m4h.3"
   ],
   "blocks": [],
   "created": "2026-04-24T10:37:09Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "UserMessage component: styled user input display",
   "type": "task",
-  "updated_at": "2026-04-24T10:39:14Z"
+  "updated_at": "2026-04-24T10:39:15Z"
 }
