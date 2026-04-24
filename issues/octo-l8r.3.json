@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T09:27:04Z",
+  "description": "Port upstream bedrock.ts + bedrock-shared.ts as new umbrella app octo_pi_ai_bedrock. Amazon Bedrock uses the Converse Stream API. Main complexity is auth: SigV4 signing with credential chain (env vars, profile, static, ECS, IRSA). Scope: request builder (ConverseStream format), decoder (ConverseStream events to canonical events), AWS auth, thinking/reasoning support (budgetTokens), Producer + Provider + Application wiring. Upstream ref: bedrock.ts (~350 lines), bedrock-shared.ts (~400 lines)",
+  "id": "octo-l8r.3",
+  "labels": [],
+  "parent": "octo-l8r",
+  "priority": 2,
+  "status": "open",
+  "title": "Amazon Bedrock provider (octo_pi_ai_bedrock)",
+  "type": "task",
+  "updated_at": "2026-04-24T09:27:04Z"
+}
