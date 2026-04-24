@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T00:24:30Z",
+  "description": "Match upstream pi-mono's 5-step model resolution (see\n`tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`\n`resolveInitialModel`):\n\n1. CLI flags (`--provider X --model Y`) win everything.\n2. Scoped models from per-project config (minimatch pattern →\n   provider + model). Skipped when resuming a session.\n3. Saved default from ~/.pi/settings.json (defaultProvider +\n   defaultModelId).\n4. First available model with configured API-key auth, walked\n   in the provider-declaration order from the\n   `defaultModelPerProvider` table. Inside each provider, picks\n   that provider's default id.\n5. Errors out when no configured auth found.\n\nPlus: alias-vs-dated-id preference for reproducibility on\nresumed sessions (prefer `claude-sonnet-4-5-20250929` over the\nalias `claude-sonnet-4-5`).\n\nWhat we have now (`OctoPi.Coder.CLI.resolve_model/1`):\n- Hardcoded `claude-opus-4-6` (matches upstream's anthropic\n  default).\n- `--model` flag override.\n- Nothing else.\n\nSubscope:\n- Port the provider table (we currently only have anthropic, so\n  this grows as Phase 5 providers land — align with octo-l8r).\n- ~/.pi/settings.json read/write (persistent defaultProvider +\n  defaultModelId).\n- Scoped-model per-project config (RESEARCH.md §? — check).\n- \"First available with valid auth\" fallback — requires knowing\n  which providers have auth configured; ties into OAuth phase\n  (opi-y1y).\n\nLanding priority: after the core provider set (Phase 5) is in\nplace. Interim: the hardcoded default is sufficient for dev.",
+  "id": "octo-4x7.1",
+  "labels": [],
+  "parent": "octo-4x7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port model resolver: settings, scoped models, provider priority",
+  "type": "task",
+  "updated_at": "2026-04-24T00:24:30Z"
+}
