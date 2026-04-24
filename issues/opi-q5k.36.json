@@ -9,9 +9,15 @@
   "id": "opi-q5k.36",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Path: document divergence. Our Overlay is a pure compositing function; dialog lifecycle lives in Interactive's state machine without a shared focus stack. Upstream's 24 focus/capturing tests are architecturally N/A. Moduledoc now records the rationale so a future reader who wants to port them has context. If a dialog surface grows complex enough to warrant the upstream model, re-open this ticket.",
+      "timestamp": "2026-04-24T22:34:53Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Implement overlay focus + capturing model, port overlay-non-capturing.test.ts (24 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:34:26Z"
+  "updated_at": "2026-04-24T22:34:53Z"
 }
