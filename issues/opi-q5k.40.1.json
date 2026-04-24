@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.1",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Covered by input_test.exs 'history' describe (11 tests): Up-at-top-of-input recalls prev, successive Up walks back, Up stops at oldest, Down after Up walks forward, Down past newest restores saved input, current-input-preserved-when-entering-history, empty-history no-op, push_history add+index-reset, push_history deduplicates consecutive, push_history max-size, typing-after-recall resets browsing. Upstream's 15 tests include a multi-line-cursor-navigation-in-history case + (unsaved) marker semantics that our Input does not expose; these are tracked as a follow-up if history UX regressions surface.",
+      "timestamp": "2026-04-24T22:46:58Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Prompt history navigation (15 upstream tests)",
