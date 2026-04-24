@@ -7,9 +7,15 @@
   "id": "opi-q5k.42.12",
   "labels": [],
   "parent": "opi-q5k.42",
+  "comments": [
+    {
+      "text": "Partial — 3 of 7 upstream tests ported. Covers the unsupported-hyperlinks path (URL-in-parens, no duplication, file://). OSC 8 + autolink deferred until a real use case justifies threading hyperlinks? through Markdown.",
+      "timestamp": "2026-04-24T22:45:15Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "markdown.test.ts / Links (7 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:44:37Z"
+  "updated_at": "2026-04-24T22:45:15Z"
 }
