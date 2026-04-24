@@ -8,14 +8,15 @@
     "opi-m4h.33",
     "opi-m4h.5"
   ],
+  "closed_at": "2026-04-24T11:00:43Z",
   "created": "2026-04-24T10:37:09Z",
   "description": "Port markdown.ts (852 LOC) — the single most impactful missing feature. Without this, all assistant messages are plain text.\n\nImplement:\n- Parse markdown (use Earmark or similar Elixir lib) into styled ANSI output\n- Headings with color + bold\n- Bold, italic, strikethrough, underline\n- Code spans (inline) with background color\n- Fenced code blocks with language label (syntax highlighting deferred)\n- Blockquotes with left border\n- Ordered/unordered lists with proper indentation\n- Hyperlinks via OSC 8 escape sequences\n- Width-aware line wrapping within each block\n- Theme integration (MarkdownTheme colors from theme system)\n\nUpstream: packages/tui/src/components/markdown.ts",
   "id": "opi-m4h.4",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Markdown renderer: headings, bold, italic, code, lists, links",
   "type": "task",
-  "updated_at": "2026-04-24T10:57:20Z"
+  "updated_at": "2026-04-24T11:00:43Z"
 }
