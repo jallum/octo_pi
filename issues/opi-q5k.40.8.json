@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.8",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Covered by input_test.exs 'Undo' describe (13 tests): empty-stack no-op, word coalescence, undo spaces one-at-a-time, undo backspace/forward-delete, undo Ctrl+W/K/U, undo yank, undo paste atomically, undo Alt+D, cursor movement starts new undo unit. Upstream's 23 tests are split across additional edge cases (selection-based undo, multi-line undo boundaries, explicit-separator undo) — the core invariants are mirrored. No new tests required.",
+      "timestamp": "2026-04-24T22:46:49Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Undo (editor) (23 upstream tests)",
