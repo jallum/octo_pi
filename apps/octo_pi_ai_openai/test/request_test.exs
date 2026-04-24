@@ -457,4 +457,74 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       refute Map.has_key?(req.body, "providerOptions")
     end
   end
+
+  describe "GitHub Copilot headers" do
+    test "adds X-Initiator user when last message is user" do
+      m = model(%{provider: :github_copilot})
+      msgs = [%Message.User{content: "hello", timestamp: 0}]
+      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+
+      assert {"x-initiator", "user"} in req.headers
+      assert {"openai-intent", "conversation-edits"} in req.headers
+    end
+
+    test "adds X-Initiator agent when last message is not user" do
+      m = model(%{provider: :github_copilot})
+      msgs = [
+        %Message.User{content: "hi", timestamp: 0},
+        assistant_msg([%Content.Text{text: "hello"}])
+      ]
+
+      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      assert {"x-initiator", "agent"} in req.headers
+    end
+
+    test "adds Copilot-Vision-Request when images present" do
+      m = model(%{provider: :github_copilot})
+      msgs = [
+        %Message.User{
+          content: [
+            %Content.Text{text: "look"},
+            %Content.Image{data: "abc", mime_type: "image/png"}
+          ],
+          timestamp: 0
+        }
+      ]
+
+      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      assert {"copilot-vision-request", "true"} in req.headers
+    end
+
+    test "omits copilot headers for non-copilot providers" do
+      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+
+      refute Enum.any?(req.headers, fn {k, _} -> k == "x-initiator" end)
+      refute Enum.any?(req.headers, fn {k, _} -> k == "openai-intent" end)
+    end
+  end
+
+  describe "session affinity headers" do
+    test "includes session headers when compat flag set and session_id present" do
+      compat = %{Compat.detect(model()) | send_session_affinity_headers: true}
+      opts = %StreamOptions{metadata: %{"session_id" => "sess-123"}}
+      req = Request.build(model(), context([]), opts, compat)
+
+      assert {"session_id", "sess-123"} in req.headers
+      assert {"x-client-request-id", "sess-123"} in req.headers
+      assert {"x-session-affinity", "sess-123"} in req.headers
+    end
+
+    test "omits session headers when compat flag is false" do
+      req = Request.build(model(), context([]), %StreamOptions{metadata: %{"session_id" => "s"}}, Compat.detect(model()))
+
+      refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
+    end
+
+    test "omits session headers when no session_id in metadata" do
+      compat = %{Compat.detect(model()) | send_session_affinity_headers: true}
+      req = Request.build(model(), context([]), %StreamOptions{}, compat)
+
+      refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
+    end
+  end
 end

@@ -36,7 +36,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     %{
       url: url(model),
       method: :post,
-      headers: headers(opts),
+      headers: headers(model, context, opts, compat),
       body: body(model, context, opts, compat)
     }
   end
@@ -46,13 +46,64 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp url(%Model{base_url: base}),
     do: String.trim_trailing(base, "/") <> "/chat/completions"
 
-  defp headers(%StreamOptions{headers: nil}),
-    do: [{"content-type", "application/json"}, {"accept", "application/json"}]
-
-  defp headers(%StreamOptions{headers: extra}) do
+  defp headers(model, context, opts, compat) do
     base = [{"content-type", "application/json"}, {"accept", "application/json"}]
-    base ++ Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
+
+    base
+    |> copilot_headers(model, context)
+    |> session_affinity_headers(opts, compat)
+    |> extra_headers(opts)
   end
+
+  defp copilot_headers(hdrs, %Model{provider: :github_copilot}, %Context{messages: messages}) do
+    initiator = if match?(%Message.User{}, List.last(messages)), do: "user", else: "agent"
+    has_images = has_vision_input?(messages)
+
+    hdrs = hdrs ++ [{"x-initiator", initiator}, {"openai-intent", "conversation-edits"}]
+    if has_images, do: hdrs ++ [{"copilot-vision-request", "true"}], else: hdrs
+  end
+
+  defp copilot_headers(hdrs, _model, _context), do: hdrs
+
+  defp has_vision_input?([]), do: false
+
+  defp has_vision_input?([msg | rest]) do
+    has_image =
+      case msg do
+        %Message.User{content: blocks} when is_list(blocks) ->
+          Enum.any?(blocks, &match?(%Content.Image{}, &1))
+
+        %Message.ToolResult{content: blocks} ->
+          Enum.any?(blocks, &match?(%Content.Image{}, &1))
+
+        _ ->
+          false
+      end
+
+    has_image or has_vision_input?(rest)
+  end
+
+  defp session_affinity_headers(hdrs, %StreamOptions{} = opts, %Compat{send_session_affinity_headers: true}) do
+    session_id = get_in(opts.metadata || %{}, ["session_id"])
+
+    if session_id do
+      hdrs ++
+        [
+          {"session_id", session_id},
+          {"x-client-request-id", session_id},
+          {"x-session-affinity", session_id}
+        ]
+    else
+      hdrs
+    end
+  end
+
+  defp session_affinity_headers(hdrs, _opts, _compat), do: hdrs
+
+  defp extra_headers(hdrs, %StreamOptions{headers: nil}), do: hdrs
+
+  defp extra_headers(hdrs, %StreamOptions{headers: extra}),
+    do: hdrs ++ Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
 
   # --- Body ---
 
