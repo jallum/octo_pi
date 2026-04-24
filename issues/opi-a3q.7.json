@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:13:27Z",
+  "description": "reference_extensions_test.exs — DirtyRepoGuard tests call File.rm_rf!(dir) at end of test body. If an assertion fails, cleanup is skipped and temp git repos leak. Use on_exit(fn -\u003e File.rm_rf!(dir) end) instead.",
+  "id": "opi-a3q.7",
+  "labels": [],
+  "parent": "opi-a3q",
+  "priority": 2,
+  "status": "open",
+  "title": "Use on_exit for DirtyRepoGuard test cleanup",
+  "type": "bug",
+  "updated_at": "2026-04-24T10:13:27Z"
+}
