@@ -31,9 +31,15 @@
   "id": "opi-q5k.2",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Check-completion gate closed\n\nAll 21 per-file check tickets processed. Summary:\n\n## Closed clean (no compliance work required)\n- opi-q5k.23 — wrap-ansi.test.ts: 100% upstream behaviors covered; no gaps\n- opi-q5k.4 — bug-regression-isimageline: behaviors folded into opi-q5k.34 compliance (terminal-image.test.ts)\n\n## Closed with compliance ticket(s)\n\nDirect compliance tickets (one per gap area):\n- opi-q5k.24 — fuzzy exact-match score assertion\n- opi-q5k.25 — keybindings no-evict-defaults invariants\n- opi-q5k.26 — overlay short-content integration test\n- opi-q5k.27 — startup cell-size query: decide implement vs decline\n- opi-q5k.28 — per-cell SGR inspection helper + style-leak regression\n- opi-q5k.29 — tui-render Termux + full_redraws counter + strict shrink/append\n- opi-q5k.30 — regional-indicator full U+1F1E6–U+1F1FF range + flag pairs + streaming emoji\n- opi-q5k.31 — WrapAnsi.truncate_to_width implementation + 8 tests\n- opi-q5k.32 — TruncatedText component implementation + 9 tests\n- opi-q5k.33 — SelectList upgrade to {value,label,description} + 5 tests\n- opi-q5k.34 — terminal-image isImageLine/detectCapabilities/hyperlink gaps (~26 tests) + isimageline regressions\n- opi-q5k.35 — overlay-options integration tests (width overflow, edges, stacked)\n- opi-q5k.36 — overlay focus + capturing model (major subsystem, 24 tests)\n- opi-q5k.37 — stdin-buffer empty-input, destroy cleanup, decide paste-event API\n- opi-q5k.38 — input CJK overflow sweeps (2 invariant tests)\n- opi-q5k.39 — Autocomplete file-path provider (major subsystem, 32 tests)\n- opi-q5k.41 — keys matchesKey function + Windows Terminal 0x08 + decoder tests\n\nMaster compliance tickets with per-describe children:\n- opi-q5k.40 — editor.test.ts master (13 children: prompt history, public accessors, Kitty, Unicode editing, grapheme wrap, word wrap, kill ring, undo, autocomplete integration, character jump, sticky column, paste atomicity, backslash+Enter divergence doc)\n- opi-q5k.42 — markdown.test.ts master (13 children: tables, nested lists, heading+code, thinking traces, spacing × 4, blockquotes multiline, strikethrough, HTML tags, links, combined)\n\n## Statistics\n- Upstream tests audited: ~800+ across 21 files\n- Direct compliance tickets: 17\n- Sub-children under master compliance: 26 (editor 13 + markdown 13)\n- Acceptance gate (opi-q5k.1) blocked by: 19 direct compliance deps + both master epics\n\n## Next\nProcessing agents can now work compliance tickets via `bw ready` under opi-q5k. Once all compliance is closed, opi-q5k.1 (acceptance gate) unblocks.",
+      "timestamp": "2026-04-24T21:56:28Z"
+    }
+  ],
   "priority": 1,
   "status": "open",
   "title": "Check-completion gate: all per-file check tickets processed",
   "type": "task",
-  "updated_at": "2026-04-24T21:33:13Z"
+  "updated_at": "2026-04-24T21:56:28Z"
 }
