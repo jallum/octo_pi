@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T10:18:36Z",
   "created": "2026-04-24T10:13:24Z",
   "description": "api.ex — register_provider/2 has @spec returning {:ok, t()} but the bound?=true clause returns {:error, String.t()}. Either update the spec to include the error tuple, or raise instead of returning an error.",
   "id": "opi-a3q.6",
   "labels": [],
   "parent": "opi-a3q",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Fix register_provider spec to include error return",
   "type": "bug",
-  "updated_at": "2026-04-24T10:17:34Z"
+  "updated_at": "2026-04-24T10:18:36Z"
 }
