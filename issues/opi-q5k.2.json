@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-q5k.3"
+  ],
   "blocks": [
     "opi-q5k.1"
   ],
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Check-completion gate: all per-file check tickets processed",
   "type": "task",
-  "updated_at": "2026-04-24T21:25:07Z"
+  "updated_at": "2026-04-24T21:26:28Z"
 }
