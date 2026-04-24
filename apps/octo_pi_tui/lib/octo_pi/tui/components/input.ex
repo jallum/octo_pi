@@ -10,6 +10,10 @@ defmodule OctoPi.TUI.Components.Input do
   alias OctoPi.TUI.Autocomplete.Suggestion
   alias OctoPi.TUI.{Key, WrapAnsi}
 
+  @prefix "> "
+  @prefix_width 2
+  @indent String.duplicate(" ", @prefix_width)
+
   @page_size 10
 
   @max_history 1000
@@ -50,21 +54,28 @@ defmodule OctoPi.TUI.Components.Input do
 
   @impl true
   def render(%__MODULE__{value: value}, width) do
+    content_width = max(width - @prefix_width, 1)
+
     value
     |> String.split("\n")
-    |> Enum.flat_map(&wrap_input(&1, width))
+    |> Enum.flat_map(&wrap_input(&1, content_width))
+    |> prepend_prefix()
   end
 
-  @doc "Cursor position within the wrapped output as `{row, col}` (0-indexed, display-width columns)."
+  @doc "Cursor position within the wrapped output as `{row, col}` (0-indexed, display-width columns). Column includes the prompt prefix offset."
   @spec cursor_rc(t(), pos_integer()) :: {non_neg_integer(), non_neg_integer()}
   def cursor_rc(%__MODULE__{value: value, cursor: cursor}, width) do
+    content_width = max(width - @prefix_width, 1)
+
     {row, col} =
       value
       |> String.graphemes()
       |> Enum.take(cursor)
-      |> Enum.reduce({0, 0}, &advance_rc(&1, &2, width))
+      |> Enum.reduce({0, 0}, &advance_rc(&1, &2, content_width))
 
-    if col >= width, do: {row + 1, 0}, else: {row, col}
+    if col >= content_width,
+      do: {row + 1, @prefix_width},
+      else: {row, col + @prefix_width}
   end
 
   # --- public API ---
@@ -413,15 +424,19 @@ defmodule OctoPi.TUI.Components.Input do
   end
 
   defp count_visual_rows(value, width) do
+    content_width = max(width - @prefix_width, 1)
+
     value
     |> String.split("\n")
-    |> Enum.map(&length(wrap_input(&1, width)))
+    |> Enum.map(&length(wrap_input(&1, content_width)))
     |> Enum.sum()
   end
 
   defp cursor_from_visual(value, width, target_row, target_col) do
+    content_width = max(width - @prefix_width, 1)
+    content_col = max(target_col - @prefix_width, 0)
     graphemes = String.graphemes(value)
-    do_cursor_from_visual(graphemes, width, target_row, target_col, 0, 0, 0)
+    do_cursor_from_visual(graphemes, content_width, target_row, content_col, 0, 0, 0)
   end
 
   defp do_cursor_from_visual([], _width, target_row, _target_col, row, _col, pos) do
@@ -633,6 +648,12 @@ defmodule OctoPi.TUI.Components.Input do
   defp dismiss_autocomplete(%__MODULE__{} = s) do
     %{s | autocomplete_active: false, autocomplete_suggestions: [], autocomplete_selected: 0}
   end
+
+  defp prepend_prefix([first | rest]) do
+    [@prefix <> first | Enum.map(rest, &(@indent <> &1))]
+  end
+
+  defp prepend_prefix([]), do: [@prefix]
 
   defp wrap_input(value, width) do
     value

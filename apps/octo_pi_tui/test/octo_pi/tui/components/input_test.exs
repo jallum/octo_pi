@@ -28,24 +28,28 @@ defmodule OctoPi.TUI.Components.InputTest do
   # --- tests ---
 
   describe "render/2" do
-    test "renders the plain value as a single line" do
-      assert ["hello"] = Input.render(%Input{value: "hello"}, 80)
+    test "renders the plain value with prompt prefix" do
+      assert ["> hello"] = Input.render(%Input{value: "hello"}, 80)
     end
 
-    test "renders empty value as an empty line" do
-      assert [""] = Input.render(%Input{value: ""}, 80)
+    test "renders empty value with prompt prefix only" do
+      assert ["> "] = Input.render(%Input{value: ""}, 80)
     end
 
-    test "wraps value at display width" do
-      assert ["he", "ll", "o"] = Input.render(%Input{value: "hello"}, 2)
+    test "wraps value at display width minus prefix, indents continuation" do
+      # width=4, content width=2: "he" "ll" "o"
+      assert ["> he", "  ll", "  o"] = Input.render(%Input{value: "hello"}, 4)
     end
 
     test "wraps CJK characters respecting display width" do
-      assert ["abc日", "本"] = Input.render(%Input{value: "abc日本"}, 5)
+      # width=7, content width=5: "abc日" (4+2=6>5 → "abc" then "日") hmm
+      # Actually content_width=5: a(1)+b(1)+c(1)+日(2)=5, fits. 本(2)=2, new line
+      assert ["> abc日", "  本"] = Input.render(%Input{value: "abc日本"}, 7)
     end
 
     test "CJK char that does not fit wraps to next line" do
-      assert ["abcd", "日"] = Input.render(%Input{value: "abcd日"}, 5)
+      # width=7, content width=5: "abcd"(4) + 日(2) = 6 > 5, wraps
+      assert ["> abcd", "  日"] = Input.render(%Input{value: "abcd日"}, 7)
     end
   end
 
@@ -63,33 +67,36 @@ defmodule OctoPi.TUI.Components.InputTest do
   end
 
   describe "cursor_rc/2" do
-    test "cursor at start is {0, 0}" do
-      assert {0, 0} = Input.cursor_rc(%Input{value: "hello", cursor: 0}, 80)
+    test "cursor at start is after prefix" do
+      assert {0, 2} = Input.cursor_rc(%Input{value: "hello", cursor: 0}, 80)
     end
 
-    test "cursor tracks display columns" do
-      assert {0, 3} = Input.cursor_rc(%Input{value: "hello", cursor: 3}, 80)
+    test "cursor tracks display columns with prefix offset" do
+      assert {0, 5} = Input.cursor_rc(%Input{value: "hello", cursor: 3}, 80)
     end
 
-    test "cursor wraps to next line at width boundary" do
-      assert {1, 0} = Input.cursor_rc(%Input{value: "hello", cursor: 5}, 5)
+    test "cursor wraps to next line at content width boundary" do
+      # width=7, content width=5: "hello" fills 5 cols → wraps
+      assert {1, 2} = Input.cursor_rc(%Input{value: "hello", cursor: 5}, 7)
     end
 
     test "cursor on second wrapped line" do
-      assert {1, 1} = Input.cursor_rc(%Input{value: "helloworld", cursor: 6}, 5)
+      # width=7, content width=5: "hello" wraps, "world" on line 2
+      # cursor at grapheme 6 → row 1, col 1 + 2 prefix = 3
+      assert {1, 3} = Input.cursor_rc(%Input{value: "helloworld", cursor: 6}, 7)
     end
 
-    test "CJK chars are two display columns" do
-      assert {0, 4} = Input.cursor_rc(%Input{value: "日本", cursor: 2}, 80)
+    test "CJK chars are two display columns plus prefix" do
+      assert {0, 6} = Input.cursor_rc(%Input{value: "日本", cursor: 2}, 80)
     end
 
     test "CJK wrap: cursor after wrapped CJK" do
-      # "abcd日" width=5: 'abcd' fills 4 cols, '日' (2 wide) wraps
-      assert {1, 2} = Input.cursor_rc(%Input{value: "abcd日", cursor: 5}, 5)
+      # "abcd日" width=7, content width=5: 'abcd' fills 4, '日' (2) wraps
+      assert {1, 4} = Input.cursor_rc(%Input{value: "abcd日", cursor: 5}, 7)
     end
 
-    test "empty value cursor at {0, 0}" do
-      assert {0, 0} = Input.cursor_rc(%Input{value: "", cursor: 0}, 80)
+    test "empty value cursor after prefix" do
+      assert {0, 2} = Input.cursor_rc(%Input{value: "", cursor: 0}, 80)
     end
   end
 
@@ -629,37 +636,38 @@ defmodule OctoPi.TUI.Components.InputTest do
   describe "multiline render/2" do
     test "splits on newlines and renders each logical line" do
       lines = Input.render(%Input{value: "hello\nworld"}, 80)
-      assert lines == ["hello", "world"]
+      assert lines == ["> hello", "  world"]
     end
 
     test "wraps each logical line separately" do
-      lines = Input.render(%Input{value: "abcde\nfg"}, 3)
-      assert lines == ["abc", "de", "fg"]
+      # width=5, content width=3
+      lines = Input.render(%Input{value: "abcde\nfg"}, 5)
+      assert lines == ["> abc", "  de", "  fg"]
     end
 
     test "empty lines preserved" do
       lines = Input.render(%Input{value: "a\n\nb"}, 80)
-      assert lines == ["a", "", "b"]
+      assert lines == ["> a", "  ", "  b"]
     end
   end
 
   describe "multiline cursor_rc/2" do
     test "cursor on second logical line" do
-      assert {1, 2} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 8}, 80)
+      assert {1, 4} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 8}, 80)
     end
 
     test "cursor at start of second line" do
-      assert {1, 0} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 6}, 80)
+      assert {1, 2} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 6}, 80)
     end
 
     test "cursor on newline character itself" do
-      assert {0, 5} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 5}, 80)
+      assert {0, 7} = Input.cursor_rc(%Input{value: "hello\nworld", cursor: 5}, 80)
     end
 
     test "cursor after wrapping + newline" do
-      # "abcde\nfg" at width 3: "abc" "de" "fg"
-      # cursor at 'f' = grapheme 6, should be row 2 col 0
-      assert {2, 0} = Input.cursor_rc(%Input{value: "abcde\nfg", cursor: 6}, 3)
+      # "abcde\nfg" at width 5, content width 3: "abc" "de" "fg"
+      # cursor at 'f' = grapheme 6, should be row 2 col 2 (prefix offset)
+      assert {2, 2} = Input.cursor_rc(%Input{value: "abcde\nfg", cursor: 6}, 5)
     end
   end
 
@@ -695,8 +703,8 @@ defmodule OctoPi.TUI.Components.InputTest do
     end
 
     test "down navigates through wrapped lines" do
-      # "abcde" at width 3: "abc" "de"
-      input = %Input{value: "abcde", cursor: 1, width: 3}
+      # "abcde" at width 5 (content width 3): "abc" "de"
+      input = %Input{value: "abcde", cursor: 1, width: 5}
       input = press(input, key(:down))
       assert input.cursor == 4
     end
