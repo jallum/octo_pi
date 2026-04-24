@@ -8,7 +8,7 @@ defmodule OctoPi.Coder.Extension.ProviderConfig do
           api: :anthropic | :openai_completions | :openai_responses | :google | :bedrock,
           headers: %{String.t() => String.t()},
           auth_header: String.t() | nil,
-          models: [ModelConfig.t()],
+          models: [__MODULE__.ModelConfig.t()],
           stream_simple: (map() -> term()) | nil,
           oauth: oauth_config() | nil
         }
@@ -17,7 +17,7 @@ defmodule OctoPi.Coder.Extension.ProviderConfig do
           login: (map() -> term()),
           refresh_token: (String.t() -> term()),
           get_api_key: (-> String.t()),
-          modify_models: ([ModelConfig.t()] -> [ModelConfig.t()]) | nil
+          modify_models: ([__MODULE__.ModelConfig.t()] -> [__MODULE__.ModelConfig.t()]) | nil
         }
 
   defstruct id: nil,
