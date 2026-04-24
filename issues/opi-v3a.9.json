@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T01:53:22Z",
   "created": "2026-04-24T00:32:49Z",
   "description": "The Interactive state machine renders assistant message text\ndirectly to the terminal. An assistant response containing\nANSI escape sequences (accidentally or via prompt injection\nfrom a malicious tool result) gets written through — potentially\nmoving the cursor outside the TUI region, clearing the screen,\nor changing the terminal title via OSC 0.\n\nUpstream matches this behavior (no sanitization), but defensive\nprogramming matters for a CLI that lets users paste tool\noutput from arbitrary sources into the conversation.\n\nDesign:\n- `OctoPi.TUI.Safe.sanitize/1` — strips CSI/OSC/DCS/APC/PM/SS3\n  sequences from a string. Pure function.\n- Apply to transcript text before rendering. Input + status\n  UI is trusted and skips the filter.\n- Escape sequences explicitly whitelisted? E.g. allow SGR\n  (colors, bold) but strip cursor/screen/title. Probably\n  yes — markdown rendering in the future will want colors.\n\nTDD:\n- SGR codes pass through (`\\e[31mred\\e[0m`).\n- Cursor positioning stripped (`\\e[5;5H` disappears).\n- OSC 0 title change stripped.\n- DCS / APC / PM stripped.\n- Nested / incomplete sequences handled.\n- Upstream has no direct equivalent test; this is a fresh\n  suite.",
   "id": "opi-v3a.9",
   "labels": [],
   "parent": "opi-v3a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "CSI sanitization for rendered content",
   "type": "task",
-  "updated_at": "2026-04-24T01:52:01Z"
+  "updated_at": "2026-04-24T01:53:22Z"
 }
