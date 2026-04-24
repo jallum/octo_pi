@@ -51,7 +51,8 @@ defmodule OctoPi.TUI.Interactive do
           working_message: String.t() | nil,
           notification: String.t() | nil,
           ui_overrides: map(),
-          dialog: tuple() | nil
+          dialog: tuple() | nil,
+          extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}]
         }
 
   defstruct session: nil,
@@ -68,7 +69,8 @@ defmodule OctoPi.TUI.Interactive do
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
-            dialog: nil
+            dialog: nil,
+            extension_shortcuts: []
 
   @doc """
   Build a `UIContext` whose functions send messages to `interactive_pid`.
@@ -495,41 +497,15 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}),
     do: %{state | exit: true}
 
-  def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: :escape}}),
-    do: %{state | exit: true}
-
-  def handle_event(%{input: input} = state, {:key, %Key{key: :escape}}),
-    do: %{state | input: %{input | value: "", cursor: 0}}
-
-  def handle_event(%{input: input, session: session} = state, {:key, %Key{key: :enter}}) do
-    case Components.Input.handle_key(input, %Key{key: :enter}) do
-      {new_input, [{:submit, value}]} when value != "" ->
-        if session, do: OctoPi.Agent.prompt(session, value)
-
-        user_msg =
-          if state.theme do
-            UserMessage.new(value, state.theme)
-          else
-            {:user, value}
-          end
-
-        %{
-          state
-          | input: %{new_input | value: "", cursor: 0},
-            transcript: state.transcript ++ [user_msg]
-        }
-
-      _ ->
-        state
+  def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key})
+      when shortcuts != [] do
+    case try_extension_shortcut(shortcuts, key, state) do
+      {:consumed, new_state} -> new_state
+      :pass -> handle_event_key(state, key)
     end
   end
 
-  def handle_event(%{input: input} = state, {:key, %Key{} = key}) do
-    case Components.Input.handle_key(input, key) do
-      {new_input, _events} -> %{state | input: new_input}
-      new_input -> %{state | input: new_input}
-    end
-  end
+  def handle_event(state, {:key, %Key{} = key}), do: handle_event_key(state, key)
 
   def handle_event(state, :paste_start),
     do: %{state | paste_buffer: ""}
@@ -558,6 +534,52 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | width: w, height: h, input: %{state.input | width: w}}
 
   def handle_event(state, _), do: state
+
+  defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}),
+    do: %{state | exit: true}
+
+  defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
+    do: %{state | input: %{input | value: "", cursor: 0}}
+
+  defp handle_event_key(%{input: input, session: session} = state, %Key{key: :enter}) do
+    case Components.Input.handle_key(input, %Key{key: :enter}) do
+      {new_input, [{:submit, value}]} when value != "" ->
+        if session, do: OctoPi.Agent.prompt(session, value)
+
+        user_msg =
+          if state.theme do
+            UserMessage.new(value, state.theme)
+          else
+            {:user, value}
+          end
+
+        %{
+          state
+          | input: %{new_input | value: "", cursor: 0},
+            transcript: state.transcript ++ [user_msg]
+        }
+
+      _ ->
+        state
+    end
+  end
+
+  defp handle_event_key(%{input: input} = state, %Key{} = key) do
+    case Components.Input.handle_key(input, key) do
+      {new_input, _events} -> %{state | input: new_input}
+      new_input -> %{state | input: new_input}
+    end
+  end
+
+  defp try_extension_shortcut([], _key, _state), do: :pass
+
+  defp try_extension_shortcut([{match_fn, handler} | rest], key, state) do
+    if match_fn.(key) do
+      {:consumed, handler.(state)}
+    else
+      try_extension_shortcut(rest, key, state)
+    end
+  end
 
   # --- transcript updates ---
 

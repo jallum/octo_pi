@@ -675,4 +675,75 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.dialog == {:custom, ref, :my_ext, []}
     end
   end
+
+  # ── Extension shortcuts ─────────────────────────────────────────
+
+  describe "extension shortcuts" do
+    test "matching shortcut consumes the key" do
+      match_fn = fn
+        %Key{key: ?x, modifiers: [:ctrl]} -> true
+        _ -> false
+      end
+
+      handler = fn state -> %{state | notification: "shortcut fired"} end
+
+      s = %Interactive{extension_shortcuts: [{match_fn, handler}]}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?x, modifiers: [:ctrl]}})
+      assert s.notification == "shortcut fired"
+    end
+
+    test "non-matching shortcut falls through to normal handling" do
+      match_fn = fn
+        %Key{key: ?x, modifiers: [:ctrl]} -> true
+        _ -> false
+      end
+
+      handler = fn state -> %{state | notification: "consumed"} end
+
+      s = %Interactive{
+        input: %Input{value: "abc", cursor: 3},
+        extension_shortcuts: [{match_fn, handler}]
+      }
+
+      s = Interactive.handle_event(s, {:key, %Key{key: :left}})
+      assert s.input.cursor == 2
+      assert s.notification == nil
+    end
+
+    test "first matching shortcut wins" do
+      m1 = fn
+        %Key{key: ?a, modifiers: [:ctrl]} -> true
+        _ -> false
+      end
+
+      h1 = fn state -> %{state | notification: "first"} end
+
+      m2 = fn
+        %Key{key: ?a, modifiers: [:ctrl]} -> true
+        _ -> false
+      end
+
+      h2 = fn state -> %{state | notification: "second"} end
+
+      s = %Interactive{extension_shortcuts: [{m1, h1}, {m2, h2}]}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?a, modifiers: [:ctrl]}})
+      assert s.notification == "first"
+    end
+
+    test "Ctrl+C always exits regardless of shortcuts" do
+      match_fn = fn _ -> true end
+      handler = fn state -> %{state | notification: "blocked"} end
+
+      s = %Interactive{extension_shortcuts: [{match_fn, handler}]}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      assert s.exit
+      assert s.notification == nil
+    end
+
+    test "empty shortcuts list behaves normally" do
+      s = %Interactive{input: %Input{value: "hi", cursor: 2}}
+      s = Interactive.handle_event(s, {:key, %Key{key: :left}})
+      assert s.input.cursor == 1
+    end
+  end
 end
