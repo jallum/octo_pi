@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:48:25Z",
   "created": "2026-04-24T21:32:35Z",
   "description": "# Check: upstream stdin-buffer.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/stdin-buffer.test.ts\n\n## Subject\nStdinBuffer: accumulates incomplete escape sequences, emits completed sequences and bracketed-paste events.\n\n## Upstream test count (approx)\n45\n\n## Behaviors asserted upstream\n- passes through regular/multiple/unicode characters immediately\n- passes through complete mouse SGR, arrow, function, meta, SS3 sequences\n- buffers incomplete mouse SGR and CSI; split across many chunks\n- flushes incomplete sequence after timeout\n- chars followed by escape sequence; escape followed by chars\n- multiple complete sequences; partial sequence with preceding chars\n- Kitty CSI-u press and release events; batched press+release; multiple batched; arrows and functional keys with event type\n- plain characters mixed with Kitty sequences (before and after); rapid typing simulation\n- mouse press/release/move; split mouse; multiple mouse events\n- old-style mouse sequence (ESC[M + 3 bytes); buffers incomplete old-style mouse\n- empty input\n- lone escape character with timeout and explicit flush\n- Buffer.from input handled\n- very long sequences\n- flushes incomplete sequences; empty array if nothing to flush; emits flushed data via timeout\n- clears buffered content without emitting\n- emits 'paste' event for complete bracketed paste; handles paste in chunks, paste with surrounding input, paste with newlines, paste with unicode\n- clears buffer on destroy; clears pending timeouts on destroy\n\n## Upstream dependencies\nStdinBuffer from ../src/stdin-buffer.js\n\n## Upstream notes\nStdinBuffer({timeout}) ms. Emits 'data' per complete sequence; 'paste' for bracketed paste (ESC[200~ ... ESC[201~). Methods: getBuffer(), flush(), clear(), destroy(). Based on OpenTUI (MIT).\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/stdin_fsm_test.exs\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.16",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream stdin-buffer.test.ts",
   "type": "task",
   "updated_at": "2026-04-24T21:48:25Z"
