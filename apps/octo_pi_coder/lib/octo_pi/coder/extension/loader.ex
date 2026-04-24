@@ -93,6 +93,45 @@ defmodule OctoPi.Coder.Extension.Loader do
     end)
   end
 
+  @spec load_from_factory(String.t(), (API.t() -> {:ok, API.t()} | :ok)) ::
+          {:ok, OctoPi.Coder.Extension.t()} | {:error, term()}
+  def load_from_factory(id, factory) when is_binary(id) and is_function(factory, 1) do
+    api = API.new(id)
+
+    case factory.(api) do
+      {:ok, %API{} = api} -> {:ok, API.build_extension(api, "factory:#{id}")}
+      :ok -> {:ok, API.build_extension(api, "factory:#{id}")}
+      other -> {:error, "factory returned unexpected: #{inspect(other)}"}
+    end
+  rescue
+    e -> {:error, "factory raised: #{Exception.message(e)}"}
+  end
+
+  @spec discover_mix_deps(String.t()) :: [String.t()]
+  def discover_mix_deps(dir) do
+    case File.ls(dir) do
+      {:ok, entries} ->
+        entries
+        |> Enum.sort()
+        |> Enum.filter(fn entry ->
+          full = Path.join(dir, entry)
+          File.dir?(full) && File.exists?(Path.join(full, "mix.exs"))
+        end)
+        |> Enum.map(&Path.join(dir, &1))
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  @spec standard_dirs(String.t()) :: [String.t()]
+  def standard_dirs(cwd) do
+    [
+      Path.join(cwd, ".octo_pi/extensions"),
+      Path.expand("~/.octo_pi/extensions")
+    ]
+  end
+
   defp extension_id(path) do
     path
     |> Path.basename()

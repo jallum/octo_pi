@@ -155,6 +155,63 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
     end
   end
 
+  describe "load_from_factory/2" do
+    test "loads extension from inline factory function" do
+      factory = fn api ->
+        {:ok, api} = OctoPi.Coder.Extension.API.on(api, :session_start, fn _e, _c -> nil end)
+        {:ok, api}
+      end
+
+      assert {:ok, ext} = Loader.load_from_factory("inline-ext", factory)
+      assert ext.id == "inline-ext"
+      assert ext.path == "factory:inline-ext"
+      assert length(ext.handlers[:session_start] || []) == 1
+    end
+
+    test "returns error when factory raises" do
+      factory = fn _api -> raise "factory boom" end
+      assert {:error, reason} = Loader.load_from_factory("bad", factory)
+      assert reason =~ "factory boom"
+    end
+
+    test "handles :ok return (no state)" do
+      factory = fn _api -> :ok end
+      assert {:ok, ext} = Loader.load_from_factory("simple", factory)
+      assert ext.id == "simple"
+    end
+  end
+
+  describe "discover_mix_deps/1" do
+    test "finds subdirectories with mix.exs", %{dir: dir} do
+      dep = Path.join(dir, "my_dep")
+      File.mkdir_p!(dep)
+      File.write!(Path.join(dep, "mix.exs"), "defmodule MyDep.MixProject do end")
+
+      deps = Loader.discover_mix_deps(dir)
+      assert length(deps) == 1
+      assert hd(deps) =~ "my_dep"
+    end
+
+    test "ignores directories without mix.exs", %{dir: dir} do
+      sub = Path.join(dir, "no_mix")
+      File.mkdir_p!(sub)
+
+      assert [] = Loader.discover_mix_deps(dir)
+    end
+
+    test "returns empty for missing directory" do
+      assert [] = Loader.discover_mix_deps("/nonexistent/nowhere")
+    end
+  end
+
+  describe "standard_dirs/1" do
+    test "returns local and global extension dirs" do
+      dirs = Loader.standard_dirs("/my/project")
+      assert Enum.at(dirs, 0) == "/my/project/.octo_pi/extensions"
+      assert Enum.at(dirs, 1) =~ ".octo_pi/extensions"
+    end
+  end
+
   defp sample_extension(module_suffix) do
     """
     defmodule OctoPi.Extensions.#{module_suffix} do
