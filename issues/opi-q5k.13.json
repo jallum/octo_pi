@@ -9,9 +9,15 @@
   "id": "opi-q5k.13",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/overlay-short-content.test.ts (1 integration test)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs (25 tests — all pure unit tests)\n\n## Analysis\n\nUpstream is a **regression integration test**: construct a TUI with a 24-row terminal, add a 3-line child, call showOverlay(), start(), waitForRender(), then assert the overlay is visible in the viewport. It verifies the TUI render pipeline renders overlays when child content is shorter than terminal height.\n\nOur overlay_test.exs tests Overlay.anchor_row/anchor_col/resolve_and_clip/composite/composite_line at the pure-function level. It does not exercise the TUI → child → overlay render path end-to-end. Short-vs-tall-content is not a distinguishing variable at the function level.\n\n## UNMAPPED\n\n- Regression: overlay is visible through the full TUI render pipeline when child content is shorter than terminal height (24 rows terminal, 3 lines content, overlay centered around row 10). No Elixir integration test covers this.\n\nNote: tui_render_test.exs exists (untracked file listed in git status) — may or may not cover this; the processing agent should verify.\n\n## N/A / EXTRA\n\nElixir unit tests are strictly broader than upstream at the function level; the upstream file only tests integration behavior.\n\n## Action\n\nCreating a compliance ticket for an integration-level regression test.",
+      "timestamp": "2026-04-24T21:36:23Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream overlay-short-content.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:35:51Z"
+  "updated_at": "2026-04-24T21:36:23Z"
 }
