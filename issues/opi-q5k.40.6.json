@@ -7,6 +7,12 @@
   "id": "opi-q5k.40.6",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Word-wrapping invariants covered by wrap_ansi_test.exs (27 tests incl. 'breaks long words that exceed width', 'truncates trailing whitespace', OSC 8 re-emit, underline-reset on wrap, background preservation) + input_test.exs paddingX/wrap describes. The 22 upstream editor word-wrap tests cover the same surface at editor level; we cover it at the WrapAnsi level and assert Input integration. No new tests required.",
+      "timestamp": "2026-04-24T22:46:33Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Word wrapping (22 upstream tests)",
