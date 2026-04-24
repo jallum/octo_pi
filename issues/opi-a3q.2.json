@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T10:13:13Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-a3q",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Fix stale test name '26 event types' → '28 event types'",
   "type": "bug",
-  "updated_at": "2026-04-24T10:13:13Z"
+  "updated_at": "2026-04-24T10:19:16Z"
 }
