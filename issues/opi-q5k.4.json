@@ -9,9 +9,15 @@
   "id": "opi-q5k.4",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "# Audit findings\n\nUpstream: tmp/pi-mono/packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts (13 behavior assertions in 5 describes)\nOurs: apps/octo_pi_tui/test/octo_pi/tui/terminal_image_test.exs (3 image_line? tests)\n\n## Overlap with opi-q5k.17\n\nThis file's behaviors overlap almost entirely with terminal-image.test.ts (see opi-q5k.17 audit). The regression story is:\n\n\u003e Old `isImageLine` used `startsWith()` and returned false for lines where the image escape sequence was not at the start. That caused TUI to run a width check on 300k+ char lines and crash with \"Rendered line exceeds terminal width\". The fix uses `includes()`.\n\nEvery observable behavior in this file — detection of Kitty/iTerm2 sequences anywhere in a line, ANSI-prefix tolerance, very long lines, negative cases on plain text or file paths — is covered by the compliance work already spawned under opi-q5k.34.\n\n## Specific additions pushed to opi-q5k.34\n\nI added a comment on opi-q5k.17 extending opi-q5k.34 with three regression-specific cases from this file:\n- 58_649-char line (exact crash-log dimension)\n- File-path false-positive set (4 variants)\n- ANSI-styled prefixes before image sequence (3 variants)\n\n## Historical \"old implementation\" test\n\nThe upstream test \"old implementation would return false, causing crash\" is a meta-test that reconstructs the buggy implementation inline to demonstrate the bug. It is not an invariant to enforce in our test suite — the correct current behavior is already asserted elsewhere. Deliberately skipped.\n\n## Action\n\nNo separate compliance ticket — coverage folded into opi-q5k.34. Closing clean.",
+      "timestamp": "2026-04-24T21:45:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Check: upstream bug-regression-isimageline-startswith-bug.test.ts",
   "type": "task",
-  "updated_at": "2026-04-24T21:44:26Z"
+  "updated_at": "2026-04-24T21:45:01Z"
 }
