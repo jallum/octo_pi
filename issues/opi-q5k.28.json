@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-q5k.1"
+  ],
   "created": "2026-04-24T21:38:25Z",
   "description": "# Compliance ticket for opi-q5k.21\n\nSource check: opi-q5k.21 (tui-overlay-style-leak.test.ts audit)\n\n## Gap\n\nUpstream tmp/pi-mono/packages/tui/test/tui-overlay-style-leak.test.ts asserts that italic SGR state does not leak from one line to the next:\n\n1. No-overlay case: a line `\\x1b[3m{X*width}\\x1b[23m` followed by `\"INPUT\"` — the INPUT line must have isItalic==0 in the terminal buffer.\n2. With-overlay case: same base line with a tiny overlay (`\"OVR\"`) painted over columns 5-7 via `tui.showOverlay(overlay, { row: 0, col: 5, width: 3 })` — the INPUT line below must still have isItalic==0.\n\nOur apps/octo_pi_tui/test/support/virtual_terminal.ex has no per-cell SGR attribute API — grep returns no matches for italic/sgr/attribute/cell. Therefore no Elixir test can currently verify this.\n\n## Work\n\n### Part A — extend VT helper with per-cell SGR inspection\n\nAdd to apps/octo_pi_tui/test/support/virtual_terminal.ex a function that returns the effective SGR attributes for a given cell, at minimum:\n\n    VT.cell_italic?(vt, row, col) :: boolean\n\nImplementation must track SGR state as bytes are written (at least bold/italic/underline + color for later extensibility). Consider whether xterm.js-like cell attribute accumulation is already modeled elsewhere in the project; if so, reuse. If not, implement minimally to cover italic on/off (SGR 3 / SGR 23), since that is what the upstream test exercises. Leave room in the API to add further attribute queries later.\n\nAdd unit tests for this helper (bold, italic, underline, reset, mid-line transitions).\n\n### Part B — port the two upstream tests\n\nAdd to apps/octo_pi_tui/test/octo_pi/tui/overlay_test.exs (or tui_render_test.exs, whichever fits project convention best — the upstream file is named tui-overlay-style-leak so either is justifiable):\n\n1. Test \"style does not leak past trailing reset beyond visible column\":\n   - 20×6 virtual terminal\n   - Base line: `\"\\e[3m\" \u003c\u003e String.duplicate(\"X\", 20) \u003c\u003e \"\\e[23m\"`\n   - Second line: `\"INPUT\"`\n   - Render; assert `VT.cell_italic?(vt, 1, 0)` is false\n2. Test \"style does not leak when overlay slicing drops trailing SGR resets\":\n   - Same base + INPUT lines\n   - Show overlay \"OVR\" at row 0, col 5, width 3\n   - Render; assert `VT.cell_italic?(vt, 1, 0)` is false\n\nFollow project convention for synchronization (telemetry subscription or equivalent; NO Process.sleep — per memory feedback_no_process_sleep_in_tests).\n\n## Re-comparison (required)\n\nAfter both parts land, re-read tmp/pi-mono/packages/tui/test/tui-overlay-style-leak.test.ts top-to-bottom and confirm both tests have equivalent Elixir tests with the same invariant. Post a final comment on this ticket with that re-comparison before closing.\n\n## Deps\nBlocks opi-q5k.1 (acceptance gate).",
   "id": "opi-q5k.28",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Port tui-overlay-style-leak.test.ts: per-cell SGR inspection + 2 regression tests",
   "type": "task",
-  "updated_at": "2026-04-24T21:38:25Z"
+  "updated_at": "2026-04-24T21:38:26Z"
 }
