@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T10:37:58Z",
+  "description": "Port model-selector.ts (~338 LOC). Overlay dialog for choosing the active model.\n\nImplement:\n- List available models from all registered providers\n- Group by provider\n- Show model metadata (context window, cost, capabilities)\n- Fuzzy search/filter\n- Scope awareness (which models support current task)\n- Triggered by /model command or Ctrl+M keybinding\n\nUpstream: interactive/components/model-selector.ts, scoped-models-selector.ts\nDepends on: overlay system, select_list, theme, autocomplete (for /model trigger)",
+  "id": "opi-m4h.15",
+  "labels": [],
+  "parent": "opi-m4h",
+  "priority": 2,
+  "status": "open",
+  "title": "ModelSelector dialog: pick model from available providers",
+  "type": "task",
+  "updated_at": "2026-04-24T10:37:58Z"
+}
