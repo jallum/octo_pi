@@ -4,7 +4,8 @@
     "opi-q5k.3",
     "opi-q5k.4",
     "opi-q5k.5",
-    "opi-q5k.6"
+    "opi-q5k.6",
+    "opi-q5k.7"
   ],
   "blocks": [
     "opi-q5k.1"
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "Check-completion gate: all per-file check tickets processed",
   "type": "task",
-  "updated_at": "2026-04-24T21:26:29Z"
+  "updated_at": "2026-04-24T21:27:28Z"
 }
