@@ -7,9 +7,15 @@
   "id": "opi-q5k.40.9",
   "labels": [],
   "parent": "opi-q5k.40",
+  "comments": [
+    {
+      "text": "Deferred. Upstream's 15 tests exercise Editor\u003c-\u003eAutocompleteProvider integration inside Editor.handleInput: Tab to trigger, typing filters suggestions, arrow keys navigate, Enter applies, Escape cancels, preview inserts. Our Autocomplete module (SlashCommandProvider, CombinedProvider, FilePathProvider, ExtensionProvider) is tested at the provider level (autocomplete_test.exs + provider-specific test files); the wiring into Input is handled by Interactive's key dispatch. Integration tests belong in interactive_test.exs and should be written as a follow-up once Input exposes an autocomplete hook in its public API.",
+      "timestamp": "2026-04-24T22:47:25Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "editor.test.ts / Autocomplete (editor integration) (15 upstream tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:47:24Z"
+  "updated_at": "2026-04-24T22:47:25Z"
 }
