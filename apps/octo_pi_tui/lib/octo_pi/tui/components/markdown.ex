@@ -134,6 +134,17 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space([line], next)
   end
 
+  # Tables: EarmarkParser emits `{"table", _, [thead, tbody], _}`.
+  # Upstream renders a bordered grid with alignment, per-cell
+  # wrapping, and column-width clamping. We deliberately fall
+  # through to the generic no-op renderer for now — markdown tables
+  # have not surfaced in coding-agent output frequently enough to
+  # justify the implementation cost. When a real use case appears,
+  # port tmp/pi-mono/packages/tui/src/components/markdown.ts table
+  # rendering and the 13 upstream markdown.test.ts "Tables" tests
+  # (tracked under opi-q5k.42.1).
+  defp render_node({"table", _, _, _}, _width, _theme, _next), do: []
+
   defp render_node(_node, _width, _theme, _next), do: []
 
   # ── Inline rendering ───────────────────────────────────────────
