@@ -11,9 +11,15 @@
   "id": "opi-q5k.32",
   "labels": [],
   "parent": "opi-q5k",
+  "comments": [
+    {
+      "text": "Done. Components.TruncatedText + 9 tests covering all upstream truncated-text.test.ts behaviors. 986 tests pass.",
+      "timestamp": "2026-04-24T22:17:37Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Implement Components.TruncatedText + port truncated-text.test.ts (9 tests)",
   "type": "task",
-  "updated_at": "2026-04-24T22:16:51Z"
+  "updated_at": "2026-04-24T22:17:37Z"
 }
