@@ -4,6 +4,7 @@
   "blocks": [
     "opi-q5k.2"
   ],
+  "closed_at": "2026-04-24T21:41:39Z",
   "created": "2026-04-24T21:32:35Z",
   "description": "# Check: upstream truncate-to-width.test.ts\n\n## Upstream file\ntmp/pi-mono/packages/tui/test/truncate-to-width.test.ts\n\n## Subject\nText truncation preserving ANSI codes; visibleWidth helper.\n\n## Upstream test count (approx)\n6 (covering ~9 assertions)\n\n## Behaviors asserted upstream\n- keeps output within width for very large unicode input\n- preserves ANSI styling for kept text; resets before and after ellipsis\n- handles malformed ANSI escape prefixes without hanging\n- clips wide ellipsis safely and brackets it with resets\n- returns original text when it already fits even if ellipsis is too wide\n- pads truncated output to requested width\n- adds trailing reset when truncating without ellipsis\n- keeps contiguous prefix instead of skipping wide grapheme and resuming later\n- visibleWidth: counts tabs inline and skips ANSI inline\n\n## Upstream dependencies\ntruncateToWidth, visibleWidth from ../src/utils.js\n\n## Upstream notes\ntruncateToWidth(text, width, ellipsis, shouldPad). Inserts ellipsis when text exceeds width; adds \\\\x1b[0m before and after ellipsis. Tabs count as full width; ANSI escape sequences don't count toward visible width. Handles malformed ANSI prefixes safely.\n\n## Candidate Elixir counterpart(s)\n- apps/octo_pi_tui/test/octo_pi/tui/wrap_ansi_test.exs\n- grep for truncate in apps/octo_pi_tui/test\n\n## Processing protocol\nSame as standard check ticket protocol in epic opi-q5k description. Compliance ticket must list each missing behavior and require a post-implementation re-comparison. Block opi-q5k.1.",
   "id": "opi-q5k.18",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Check: upstream truncate-to-width.test.ts",
   "type": "task",
   "updated_at": "2026-04-24T21:41:39Z"
