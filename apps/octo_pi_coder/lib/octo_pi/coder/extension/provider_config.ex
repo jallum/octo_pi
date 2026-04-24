@@ -30,6 +30,16 @@ defmodule OctoPi.Coder.Extension.ProviderConfig do
             stream_simple: nil,
             oauth: nil
 
+  defimpl Inspect do
+    def inspect(%{api_key: nil} = config, opts) do
+      Inspect.Map.inspect(config, opts)
+    end
+
+    def inspect(config, opts) do
+      Inspect.Map.inspect(%{config | api_key: "[REDACTED]"}, opts)
+    end
+  end
+
   defmodule ModelConfig do
     @moduledoc false
 

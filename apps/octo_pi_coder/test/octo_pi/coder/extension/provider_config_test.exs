@@ -49,6 +49,21 @@ defmodule OctoPi.Coder.Extension.ProviderConfigTest do
     end
   end
 
+  describe "Inspect redaction" do
+    test "api_key is redacted in inspect output" do
+      config = %ProviderConfig{id: "p1", api_key: "sk-secret-key-123"}
+      inspected = inspect(config)
+      refute inspected =~ "sk-secret-key-123"
+      assert inspected =~ "\"[REDACTED]\""
+    end
+
+    test "nil api_key shows nil" do
+      config = %ProviderConfig{id: "p1", api_key: nil}
+      inspected = inspect(config)
+      assert inspected =~ "api_key: nil"
+    end
+  end
+
   describe "API.register_provider/2" do
     test "queues provider before bind_core" do
       api = API.new("x")
