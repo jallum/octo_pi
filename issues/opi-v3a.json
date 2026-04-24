@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "octo-l8r"
+  ],
   "created": "2026-04-24T00:31:00Z",
   "description": "Addresses findings from the /review on the Phase 4 branch\n(review/octo-3di, commits 5f56554..0ac4fff). Phase 4 MVP\nshipped an end-to-end interactive TUI on top of OTP 28 raw\nmode, but several gaps stand between that and a real match\nfor upstream pi-mono.\n\nThree themes across the children:\n\n  1. **Upstream parity** — port the specific test scenarios\n     from pi-mono's keys/stdin-buffer/input/tui-render suites\n     (cataloged in docs/port-map/tui.md §14). Match both the\n     quality and intent, not just the surface.\n  2. **OTP correctness** — crash-safe tty restoration, per-\n     session Registry scoping, proper test coverage of\n     GenServer lifecycles.\n  3. **Pure-first, multi-head-first** — tighten the remaining\n     places where we're carrying imperative / convenience\n     shortcuts over cleaner pattern-matched alternatives.\n\nAlso ports upstream's system prompt — the single biggest lever\nfor the model's tool-use behavior in Interactive mode.\n\nBlocks Phase 5+ so the TUI foundation is solid before we grow\nthe provider set.",
   "id": "opi-v3a",
