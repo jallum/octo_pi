@@ -382,6 +382,22 @@ defmodule OctoPi.TUI.StdinFSMTest do
       assert drain() == []
       assert StdinFSM.flush(fsm) == ["\e"]
     end
+
+    test "empty binary is a no-op (no events, no buffer)", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "")
+      assert drain() == []
+      assert StdinFSM.get_buffer(fsm) == ""
+    end
+  end
+
+  describe "lifecycle cleanup" do
+    test "stopping the FSM does not emit buffered partial after stop" do
+      {:ok, pid} = StdinFSM.start_link(subscriber: self(), flush_ms: 20)
+      :ok = StdinFSM.process(pid, "\e[<35")
+      assert StdinFSM.get_buffer(pid) == "\e[<35"
+      GenServer.stop(pid)
+      refute_receive {:stdin_event, _}, 60
+    end
   end
 
   describe "flush/1" do

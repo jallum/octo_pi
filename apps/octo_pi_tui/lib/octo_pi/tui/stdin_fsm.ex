@@ -18,6 +18,17 @@ defmodule OctoPi.TUI.StdinFSM do
   ms}` return tuple — no `Process.send_after/3`, no timer refs.
   When the buffer is empty, we return `:infinity` so an idle FSM
   doesn't wake every 10ms for nothing.
+
+  ## Divergence from upstream: bracketed paste as data events
+
+  Upstream pi-mono's StdinBuffer exposes a separate `paste` event
+  whose payload is the content between `\\e[200~` and `\\e[201~`
+  and suppresses `data` events during a paste. StdinFSM does not
+  replicate that: paste markers and content are emitted through the
+  same `{:stdin_event, binary}` channel. Consumers that need paste
+  atomicity collect events between the two markers (see the Input
+  component's paste handling). Keeping one channel avoids a second
+  subscription surface and matches existing caller code.
   """
 
   use GenServer
