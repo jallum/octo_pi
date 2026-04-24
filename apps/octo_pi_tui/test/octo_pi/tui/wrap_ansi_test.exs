@@ -58,6 +58,82 @@ defmodule OctoPi.TUI.WrapAnsiTest do
     test "fullwidth forms are width 2" do
       assert WrapAnsi.visible_width("ＡＢ") == 4
     end
+
+    test "tab is width 3 inline (matches upstream normalization)" do
+      assert WrapAnsi.visible_width("\t") == 3
+      assert WrapAnsi.visible_width("\t\e[31m界\e[0m") == 5
+    end
+  end
+
+  describe "truncate_to_width/4" do
+    test "returns empty string when max_width <= 0" do
+      assert WrapAnsi.truncate_to_width("hello", 0, "...", false) == ""
+    end
+
+    test "empty input returns empty string when not padded" do
+      assert WrapAnsi.truncate_to_width("", 5, "...", false) == ""
+    end
+
+    test "empty input pads to max_width when pad is true" do
+      assert WrapAnsi.truncate_to_width("", 5, "...", true) == "     "
+    end
+
+    test "returns original text when it already fits" do
+      assert WrapAnsi.truncate_to_width("hello", 10, "...", false) == "hello"
+    end
+
+    test "returns original text that fits even if ellipsis is wider than width" do
+      assert WrapAnsi.truncate_to_width("a", 2, "🙂", false) == "a"
+      assert WrapAnsi.truncate_to_width("界", 2, "🙂", false) == "界"
+    end
+
+    test "wide ellipsis clipping when ellipsis wider than max_width" do
+      assert WrapAnsi.truncate_to_width("abcdef", 1, "🙂", false) == ""
+      assert WrapAnsi.truncate_to_width("abcdef", 2, "🙂", false) == "\e[0m🙂\e[0m"
+      assert WrapAnsi.visible_width(WrapAnsi.truncate_to_width("abcdef", 2, "🙂", false)) <= 2
+    end
+
+    test "keeps output within width for very large unicode input" do
+      text = String.duplicate("🙂界", 100_000)
+      result = WrapAnsi.truncate_to_width(text, 40, "…", false)
+      assert WrapAnsi.visible_width(result) <= 40
+      assert String.ends_with?(result, "…\e[0m")
+    end
+
+    test "preserves ANSI styling for kept text and resets before/after ellipsis" do
+      text = "\e[31m" <> String.duplicate("hello ", 1000) <> "\e[0m"
+      result = WrapAnsi.truncate_to_width(text, 20, "…", false)
+      assert WrapAnsi.visible_width(result) <= 20
+      assert String.contains?(result, "\e[31m")
+      assert String.ends_with?(result, "\e[0m…\e[0m")
+    end
+
+    test "handles malformed ANSI prefixes without hanging" do
+      text = "abc\enot-ansi " <> String.duplicate("🙂", 1000)
+      result = WrapAnsi.truncate_to_width(text, 20, "…", false)
+      assert WrapAnsi.visible_width(result) <= 20
+    end
+
+    test "pads truncated output to requested width" do
+      result = WrapAnsi.truncate_to_width("🙂界🙂界🙂界", 8, "…", true)
+      assert WrapAnsi.visible_width(result) == 8
+    end
+
+    test "no-ellipsis mode adds trailing reset after truncation" do
+      text = "\e[31m" <> String.duplicate("hello", 100)
+      result = WrapAnsi.truncate_to_width(text, 10, "", false)
+      assert WrapAnsi.visible_width(result) <= 10
+      assert String.ends_with?(result, "\e[0m")
+    end
+
+    test "keeps contiguous prefix (does not skip wide grapheme and resume)" do
+      # "🙂" (2) + "\t" (3) + "界" (2) = 7 kept-or-rejected; "界" fits
+      # in visible budget but breaks contiguous prefix after "🙂\t"
+      # since kept(5) + 2 > targetWidth(6). Ellipsis "…" (1) is added
+      # with reset brackets; padded to 7 with trailing space.
+      assert WrapAnsi.truncate_to_width("🙂\t界 \e_abc\x07", 7, "…", true) ==
+               "🙂\t\e[0m…\e[0m "
+    end
   end
 
   describe "basic wrapping" do

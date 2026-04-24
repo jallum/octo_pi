@@ -19,6 +19,177 @@ defmodule OctoPi.TUI.WrapAnsi do
     |> Enum.reduce(0, fn g, acc -> acc + grapheme_width(g) end)
   end
 
+  @reset "\e[0m"
+
+  @doc """
+  Truncate `text` so that its visible width does not exceed `max_width`,
+  appending `ellipsis` (bracketed by SGR resets) when truncation occurs.
+
+  Preserves ANSI styling within the kept prefix; tolerates malformed
+  escape prefixes; never slices a wide grapheme in half (keeps a
+  contiguous prefix). When `pad` is true, right-pads with spaces so
+  `visible_width(result) == max_width`.
+  """
+  @spec truncate_to_width(String.t(), non_neg_integer(), String.t(), boolean()) :: String.t()
+  def truncate_to_width(text, max_width, ellipsis \\ "...", pad \\ false)
+
+  def truncate_to_width(_text, max_width, _ellipsis, _pad) when max_width <= 0, do: ""
+
+  def truncate_to_width("", max_width, _ellipsis, true), do: String.duplicate(" ", max_width)
+  def truncate_to_width("", _max_width, _ellipsis, false), do: ""
+
+  def truncate_to_width(text, max_width, ellipsis, pad) do
+    ellipsis_width = visible_width(ellipsis)
+
+    if ellipsis_width >= max_width do
+      truncate_with_wide_ellipsis(text, max_width, ellipsis, pad)
+    else
+      do_truncate(text, max_width, ellipsis, ellipsis_width, pad)
+    end
+  end
+
+  defp truncate_with_wide_ellipsis(text, max_width, ellipsis, pad) do
+    text_width = visible_width(text)
+
+    cond do
+      text_width <= max_width ->
+        if pad,
+          do: text <> String.duplicate(" ", max_width - text_width),
+          else: text
+
+      true ->
+        {clipped_text, clipped_width} = truncate_fragment(ellipsis, max_width)
+
+        if clipped_width == 0 do
+          if pad, do: String.duplicate(" ", max_width), else: ""
+        else
+          finalize_truncated("", 0, clipped_text, clipped_width, max_width, pad)
+        end
+    end
+  end
+
+  defp do_truncate(text, max_width, ellipsis, ellipsis_width, pad) do
+    target_width = max_width - ellipsis_width
+
+    state = %{
+      kept: "",
+      kept_width: 0,
+      visible: 0,
+      pending_ansi: "",
+      keep_prefix: true,
+      overflowed: false
+    }
+
+    {state, exhausted} = walk_truncate(text, target_width, max_width, state)
+
+    cond do
+      exhausted and not state.overflowed and state.visible <= max_width ->
+        if pad,
+          do: text <> String.duplicate(" ", max(0, max_width - state.visible)),
+          else: text
+
+      true ->
+        finalize_truncated(state.kept, state.kept_width, ellipsis, ellipsis_width, max_width, pad)
+    end
+  end
+
+  defp walk_truncate("", _target, _max, state), do: {state, true}
+
+  defp walk_truncate(<<"\e", _::binary>> = input, target, max, state) do
+    {code, rest} = extract_escape_seq(input)
+    state = %{state | pending_ansi: state.pending_ansi <> code}
+    walk_truncate(rest, target, max, state)
+  end
+
+  defp walk_truncate(<<"\t", rest::binary>>, target, max, state) do
+    width = 3
+    state = consume_segment("\t", width, target, max, state)
+    if state.overflowed, do: {state, false}, else: walk_truncate(rest, target, max, state)
+  end
+
+  defp walk_truncate(bin, target, max, state) do
+    case String.next_grapheme(bin) do
+      {grapheme, rest} ->
+        width = grapheme_width(grapheme)
+        state = consume_segment(grapheme, width, target, max, state)
+        if state.overflowed, do: {state, false}, else: walk_truncate(rest, target, max, state)
+
+      nil ->
+        {state, true}
+    end
+  end
+
+  defp consume_segment(segment, width, target, max, state) do
+    state =
+      if state.keep_prefix and state.kept_width + width <= target do
+        %{
+          state
+          | kept: state.kept <> state.pending_ansi <> segment,
+            kept_width: state.kept_width + width,
+            pending_ansi: ""
+        }
+      else
+        %{state | keep_prefix: false, pending_ansi: ""}
+      end
+
+    visible = state.visible + width
+
+    if visible > max do
+      %{state | visible: visible, overflowed: true}
+    else
+      %{state | visible: visible}
+    end
+  end
+
+  defp truncate_fragment("", _max_width), do: {"", 0}
+  defp truncate_fragment(_text, max_width) when max_width <= 0, do: {"", 0}
+
+  defp truncate_fragment(text, max_width) do
+    walk_fragment(text, max_width, "", 0, "")
+  end
+
+  defp walk_fragment("", _max, kept, kept_w, _pending), do: {kept, kept_w}
+
+  defp walk_fragment(<<"\e", _::binary>> = input, max, kept, kept_w, pending) do
+    {code, rest} = extract_escape_seq(input)
+    walk_fragment(rest, max, kept, kept_w, pending <> code)
+  end
+
+  defp walk_fragment(<<"\t", rest::binary>>, max, kept, kept_w, pending) do
+    if kept_w + 3 > max do
+      {kept, kept_w}
+    else
+      walk_fragment(rest, max, kept <> pending <> "\t", kept_w + 3, "")
+    end
+  end
+
+  defp walk_fragment(bin, max, kept, kept_w, pending) do
+    case String.next_grapheme(bin) do
+      {g, rest} ->
+        gw = grapheme_width(g)
+
+        if kept_w + gw > max do
+          {kept, kept_w}
+        else
+          walk_fragment(rest, max, kept <> pending <> g, kept_w + gw, "")
+        end
+
+      nil ->
+        {kept, kept_w}
+    end
+  end
+
+  defp finalize_truncated(prefix, prefix_width, ellipsis, ellipsis_width, max_width, pad) do
+    visible = prefix_width + ellipsis_width
+
+    result =
+      if ellipsis == "",
+        do: prefix <> @reset,
+        else: prefix <> @reset <> ellipsis <> @reset
+
+    if pad, do: result <> String.duplicate(" ", max(0, max_width - visible)), else: result
+  end
+
   @doc "Wrap text at `width` columns. Handles embedded newlines and preserves ANSI codes."
   @spec wrap(String.t(), pos_integer()) :: [String.t()]
   def wrap(text, width) when width > 0 do
@@ -249,6 +420,10 @@ defmodule OctoPi.TUI.WrapAnsi do
   # --- grapheme width (East Asian Width + emoji heuristic) ---
 
   @doc false
+  # Tab is normalized to 3 columns inline (matches upstream
+  # pi-mono/packages/tui/src/utils.ts visibleWidth).
+  def grapheme_width("\t"), do: 3
+
   def grapheme_width(<<cp::utf8>>) do
     cond do
       cp <= 0x1F -> 0
