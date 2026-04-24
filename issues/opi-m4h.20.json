@@ -5,14 +5,15 @@
     "opi-m4h.2"
   ],
   "blocks": [],
+  "closed_at": "2026-04-24T11:53:43Z",
   "created": "2026-04-24T10:38:27Z",
   "description": "Bind the Extension.UIContext stubs to real TUI implementations in Interactive mode.\n\nWire up all 24 UIContext methods:\n- Dialogs: select → overlay+select_list, confirm → overlay+yes/no, input → overlay+input\n- Notifications: notify → flash message, set_status → footer update\n- Working indicators: set_working_message/indicator → spinner in footer\n- UI customization: set_widget (inject component), set_footer/header (override)\n- Editor control: paste_to_editor, set/get_editor_text\n- Theme: get/set_theme, get_all_themes\n- Tool expansion: get/set_tools_expanded\n\nThis makes extensions able to interact with the TUI.\nUpstream: interactive-mode.ts lines 1900-1955\nDepends on: overlay, theme, UIContext (from Phase 6), footer wiring",
   "id": "opi-m4h.20",
   "labels": [],
   "parent": "opi-m4h",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire UIContext into Interactive mode",
   "type": "task",
-  "updated_at": "2026-04-24T11:46:16Z"
+  "updated_at": "2026-04-24T11:53:43Z"
 }
