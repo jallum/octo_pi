@@ -29,18 +29,15 @@ defmodule OctoPi.TUI.Components.Input do
   defstruct value: "", cursor: 0, focused: true
 
   # --- render ---
+  #
+  # Render just the value as a single line. The terminal's own
+  # hardware cursor (positioned by the Interactive loop after the
+  # renderer flush) marks the insertion point — no painted block.
+  # This matches upstream's approach and avoids the "fat cursor"
+  # artifact you'd see from a reverse-video marker on every
+  # render.
 
   @impl true
-  def render(%__MODULE__{value: value, cursor: c, focused: true}, width) do
-    # Insert a reverse-video cursor marker at position `c`. Rough
-    # approximation; a full grapheme-aware version will follow in
-    # the editor ticket.
-    {before, rest} = split_at_grapheme(value, c)
-    {cursor_char, after_cursor} = first_grapheme(rest)
-    line = "#{before}\e[7m#{cursor_char}\e[27m#{after_cursor}"
-    [truncate(line, width)]
-  end
-
   def render(%__MODULE__{value: value}, width), do: [truncate(value, width)]
 
   # --- handle_key: multi-head dispatch, one clause per key ---

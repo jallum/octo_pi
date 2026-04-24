@@ -147,8 +147,27 @@ defmodule OctoPi.TUI.Interactive do
   defp render_frame(state, renderer, terminal) do
     lines = render(state)
     {:ok, bytes} = Renderer.render(renderer, lines)
-    if bytes != "", do: Terminal.write(terminal, bytes)
+    cursor_seq = cursor_position(state, lines)
+
+    payload =
+      case {bytes, cursor_seq} do
+        {"", ""} -> ""
+        {b, c} -> b <> c
+      end
+
+    if payload != "", do: Terminal.write(terminal, payload)
     :ok
+  end
+
+  # CSI H positions the hardware cursor at (row, col) — both
+  # 1-indexed. Row = index of the Input's line in the rendered
+  # frame + 1. Col = 1 + the Input's grapheme cursor offset
+  # (plus the `"> "` prefix width if the input ever sprouts
+  # one; for MVP it's plain).
+  defp cursor_position(%__MODULE__{input: %{cursor: c} = input}, lines) do
+    input_lines = Components.Input.render(input, 1_000_000)
+    input_row = length(lines) - length(input_lines) + 1
+    "\e[#{input_row};#{c + 1}H"
   end
 
   # Shut down children in reverse start order. Terminal goes last

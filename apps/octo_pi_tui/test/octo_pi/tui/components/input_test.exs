@@ -5,20 +5,23 @@ defmodule OctoPi.TUI.Components.InputTest do
   alias OctoPi.TUI.Key
 
   describe "render/2" do
-    test "unfocused renders plain value" do
-      assert ["hello"] = Input.render(%Input{value: "hello", focused: false}, 80)
+    test "renders the plain value as a single line" do
+      assert ["hello"] = Input.render(%Input{value: "hello"}, 80)
     end
 
-    test "focused inserts reverse-video cursor marker at cursor" do
-      [line] = Input.render(%Input{value: "abc", cursor: 1, focused: true}, 80)
-      assert line =~ "\e[7m"
-      assert line =~ "\e[27m"
+    test "renders empty value as an empty line" do
+      assert [""] = Input.render(%Input{value: ""}, 80)
     end
 
-    test "cursor at end of value shows reverse-video space" do
-      [line] = Input.render(%Input{value: "abc", cursor: 3, focused: true}, 80)
-      assert line =~ "\e[7m \e[27m"
+    test "truncates to width" do
+      assert ["he"] = Input.render(%Input{value: "hello"}, 2)
     end
+
+    # The cursor is painted by the terminal itself — Interactive
+    # emits a CSI H positioning command after the renderer flush
+    # so the hardware cursor lands at the right spot. Input.render
+    # intentionally doesn't paint its own marker (avoids the
+    # double-cursor artifact).
   end
 
   describe "handle_key/2 — cursor movement" do
