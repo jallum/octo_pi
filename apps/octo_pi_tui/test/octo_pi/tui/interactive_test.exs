@@ -4,8 +4,9 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.Agent.Event
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
+  alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components.{AssistantMessage, Input, ToolExecution}
-  alias OctoPi.TUI.{Interactive, Key}
+  alias OctoPi.TUI.{Interactive, Key, Theme}
 
   describe "handle_event — keyboard input" do
     test "printable char is inserted into the Input" do
@@ -492,6 +493,186 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.footer.cache_read == 50
       assert s.footer.cache_write == 25
       assert_in_delta s.footer.cost, 0.003, 0.0001
+    end
+  end
+
+  # ── UIContext wiring ────────────────────────────────────────────
+
+  describe "build_ui_context/1" do
+    test "all UIContext fields are bound functions" do
+      ctx = Interactive.build_ui_context(self())
+      fields = Map.from_struct(ctx)
+
+      for {key, val} <- fields do
+        assert is_function(val), "#{key} should be a function"
+      end
+    end
+
+    test "returns a UIContext struct" do
+      ctx = Interactive.build_ui_context(self())
+      assert %UIContext{} = ctx
+    end
+  end
+
+  describe "handle_ui_request — getters" do
+    test "get_editor_text returns input value" do
+      s = %Interactive{input: %Input{value: "hello"}}
+      assert {^s, "hello"} = Interactive.handle_ui_request(s, :get_editor_text)
+    end
+
+    test "get_tools_expanded returns current value" do
+      s = %Interactive{tools_expanded: true}
+      assert {^s, true} = Interactive.handle_ui_request(s, :get_tools_expanded)
+    end
+
+    test "get_theme returns theme name" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{theme: theme}
+      assert {^s, "dark"} = Interactive.handle_ui_request(s, :get_theme)
+    end
+
+    test "get_all_themes returns available theme names" do
+      s = %Interactive{}
+      {_s, themes} = Interactive.handle_ui_request(s, :get_all_themes)
+      assert is_list(themes)
+      assert "dark" in themes
+    end
+  end
+
+  describe "handle_ui_request — setters" do
+    test "set_editor_text replaces input value" do
+      s = %Interactive{input: %Input{value: "old", cursor: 3}}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_editor_text, "new text"})
+      assert s.input.value == "new text"
+      assert s.input.cursor == 8
+    end
+
+    test "paste_to_editor inserts at cursor" do
+      s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
+      {s, :ok} = Interactive.handle_ui_request(s, {:paste_to_editor, " there"})
+      assert s.input.value == "hello there world"
+    end
+
+    test "set_tools_expanded updates state" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_tools_expanded, true})
+      assert s.tools_expanded
+    end
+
+    test "set_theme reloads theme by name" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{theme: theme}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_theme, "light"})
+      assert s.theme.name == "light"
+    end
+
+    test "notify sets notification text" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:notify, "saved!"})
+      assert s.notification == "saved!"
+    end
+
+    test "set_working_message updates state" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_working_message, "thinking..."})
+      assert s.working_message == "thinking..."
+    end
+
+    test "set_working_message nil clears it" do
+      s = %Interactive{working_message: "old"}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_working_message, nil})
+      assert s.working_message == nil
+    end
+
+    test "set_status stores status text" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "indexing..."})
+      assert s.ui_overrides.status == "indexing..."
+    end
+
+    test "set_title stores title" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_title, "My Session"})
+      assert s.ui_overrides.title == "My Session"
+    end
+
+    test "set_working_indicator updates state" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_working_indicator, true})
+      assert s.ui_overrides.working_indicator
+    end
+
+    test "set_widget stores widget" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_widget, {:custom, "w"}})
+      assert s.ui_overrides.widget == {:custom, "w"}
+    end
+
+    test "set_header stores header override" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_header, "custom header"})
+      assert s.ui_overrides.header == "custom header"
+    end
+
+    test "set_footer stores footer override" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_footer, "custom footer"})
+      assert s.ui_overrides.footer == "custom footer"
+    end
+
+    test "set_hidden_thinking_label stores label" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_hidden_thinking_label, "Reasoning"})
+      assert s.ui_overrides.hidden_thinking_label == "Reasoning"
+    end
+
+    test "set_editor_component stores component" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_editor_component, :vim_input})
+      assert s.ui_overrides.editor_component == :vim_input
+    end
+
+    test "add_autocomplete_provider appends to list" do
+      s = %Interactive{}
+      provider = fn _text -> ["suggestion"] end
+      {s, :ok} = Interactive.handle_ui_request(s, {:add_autocomplete_provider, provider})
+      assert [^provider] = s.ui_overrides.autocomplete_providers
+    end
+  end
+
+  describe "handle_ui_request — blocking dialogs" do
+    test "select stores pending dialog" do
+      options = [%{label: "A", value: :a}, %{label: "B", value: :b}]
+      ref = make_ref()
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:select, ref, options, []})
+      assert s.dialog == {:select, ref, options, []}
+    end
+
+    test "confirm stores pending dialog" do
+      ref = make_ref()
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:confirm, ref, "Sure?", []})
+      assert s.dialog == {:confirm, ref, "Sure?", []}
+    end
+
+    test "input stores pending dialog" do
+      ref = make_ref()
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:input, ref, "Name:", []})
+      assert s.dialog == {:input, ref, "Name:", []}
+    end
+
+    test "editor stores pending dialog" do
+      ref = make_ref()
+
+      {s, :pending} =
+        Interactive.handle_ui_request(%Interactive{}, {:editor, ref, "initial", []})
+
+      assert s.dialog == {:editor, ref, "initial", []}
+    end
+
+    test "custom stores pending dialog" do
+      ref = make_ref()
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:custom, ref, :my_ext, []})
+      assert s.dialog == {:custom, ref, :my_ext, []}
     end
   end
 end
