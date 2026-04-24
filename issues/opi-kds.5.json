@@ -1,19 +1,17 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-kds.6"
   ],
-  "comments": [],
   "created": "2026-04-24T01:29:54.100363Z",
   "description": "Extract the upstream inline stream loop into a pure state machine: `OctoPi.AI.Providers.OpenAI.Decoder` with `new/1`, `handle/2`, `finalize/1`, `error/3` — matching the Anthropic decoder pattern.\n\nHandles:\n- Text deltas (delta.content)\n- Reasoning deltas (3 field variants: reasoning_content, reasoning, reasoning_text — use first non-empty)\n- Tool calls with index-based multiplexing (delta.tool_calls[] with stream_index)\n- Reasoning details (encrypted, matched to tool calls by ID → thought_signature)\n- Usage parsing (standard chunk.usage + Moonshot choice.usage fallback; cache read normalization for OpenRouter double-count)\n- Stop reason mapping (stop/end→:stop, length→:length, tool_calls/function_call→:tool_use, content_filter/network_error/unknown→:error)\n- Block lifecycle (finish current block on type switch)\n- Response ID capture\n\nTDD: write fresh tests (upstream tests this inline via mock SDK).\n\nUpstream: openai-completions.ts L198-391, L935-997\nPort map: §4",
   "id": "opi-kds.5",
   "labels": [],
   "parent": "opi-kds",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Decoder: ChatCompletionChunk → canonical events",
   "type": "task",
-  "updated_at": "2026-04-24T01:29:54.100363Z"
+  "updated_at": "2026-04-24T01:43:25Z"
 }
