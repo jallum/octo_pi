@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-24T09:58:51Z",
   "created": "2026-04-24T09:32:26Z",
   "description": "Port the 27 UIContext methods that let extensions interact with the TUI. Upstream types.ts lines 123-270. Includes: dialog methods (select, confirm, input), notifications (notify, setStatus), working indicators (setWorkingMessage, setWorkingIndicator, setHiddenThinkingLabel), UI customization (setWidget, setFooter, setHeader, setTitle), custom components (custom with overlay support), editor control (pasteToEditor, setEditorText, getEditorText, editor), autocomplete (addAutocompleteProvider), custom editor (setEditorComponent), theme system (theme, getAllThemes, getTheme, setTheme), tool expansion (getToolsExpanded, setToolsExpanded). Binding via runner.ts setUIContext (line 352). TUI-bound — needs the overlay compositor and Interactive mode wiring.",
   "id": "octo-3gv.8",
   "labels": [],
   "parent": "octo-3gv",
   "priority": 3,
-  "status": "in_progress",
+  "status": "closed",
   "title": "UI Context: extension interaction with TUI",
   "type": "task",
-  "updated_at": "2026-04-24T09:57:51Z"
+  "updated_at": "2026-04-24T09:58:51Z"
 }
