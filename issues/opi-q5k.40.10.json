@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-24T21:52:40Z",
+  "description": "# Compliance child for opi-q5k.40 (opi-q5k.5 / editor.test.ts)\n\n## Scope\n\nUpstream L2585-2805: 14 tests for Vim-style Ctrl+] jump-to-char (press Ctrl+], wait for char input, jump cursor to next/previous occurrence). Elixir has NO such feature. Implementation + full test port required. Decide whether to implement or document as a non-goal — if declined, document divergence and close the child explicitly.\n\n## Protocol\n\n1. Read tmp/pi-mono/packages/tui/test/editor.test.ts; locate the \"Character jump (Ctrl+])\" describe.\n2. Enumerate every it(...) under that describe.\n3. For each, find or confirm absent an equivalent Elixir assertion in apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs (grep if unsure).\n4. Implement any missing behavior in OctoPi.TUI.Components.Input (or related modules).\n5. Port the missing tests to input_test.exs (under a new describe \"editor-parity: Character jump (Ctrl+])\" or integrated with existing describes where they fit).\n6. Re-read tmp/pi-mono editor.test.ts \"Character jump (Ctrl+])\" top-to-bottom and confirm every it(...) has an Elixir equivalent.\n7. Post a final comment documenting the mapping (upstream test → Elixir test).\n8. Close this child.\n\n## Deps\nBlocks opi-q5k.40 (which blocks opi-q5k.1).",
+  "id": "opi-q5k.40.10",
+  "labels": [],
+  "parent": "opi-q5k.40",
+  "priority": 2,
+  "status": "open",
+  "title": "editor.test.ts / Character jump (Ctrl+]) (14 upstream tests)",
+  "type": "task",
+  "updated_at": "2026-04-24T21:52:40Z"
+}
