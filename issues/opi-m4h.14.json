@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T10:37:38Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-m4h",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Input history: up/down arrow navigation through prior inputs",
   "type": "task",
-  "updated_at": "2026-04-24T10:37:38Z"
+  "updated_at": "2026-04-24T12:00:51Z"
 }
