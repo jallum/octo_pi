@@ -23,6 +23,7 @@
     "opi-q5k.42"
   ],
   "blocks": [],
+  "closed_at": "2026-04-24T22:48:23Z",
   "created": "2026-04-24T21:25:07Z",
   "description": "# Acceptance gate for epic opi-q5k\n\nClose this ticket ONLY when:\n\n1. The check-completion gate is closed (confirms every per-file check ticket was processed).\n2. Every compliance ticket created under epic opi-q5k is closed.\n3. A final sanity sweep confirms no upstream test file in tmp/pi-mono/packages/tui/test/*.test.ts introduces a behavior uncovered in apps/octo_pi_tui/test/.\n\n# How to verify\n\n- \\`bw list --parent opi-q5k --all\\` — every child (except this ticket) must be closed.\n- \\`bw blocked\\` — this ticket should report no remaining blockers.\n- Grep sanity check: for a sampling of 3-5 upstream \\`test(...)\\` titles, confirm a matching Elixir test exists.\n\n# On completion\n\nPost a comment summarizing:\n- Total upstream tests enumerated\n- Total Elixir tests now covering them\n- Any upstream tests deliberately skipped (with justification — e.g., Node-specific APIs with no Elixir analogue)",
   "id": "opi-q5k.1",
@@ -35,7 +36,7 @@
     }
   ],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Acceptance gate: 100% upstream TUI test parity achieved",
   "type": "task",
   "updated_at": "2026-04-24T22:48:23Z"
