@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port extensions-runner tests (collection, deduplication, conflicts, chaining)",
   "type": "task",
-  "updated_at": "2026-04-25T15:27:57.741649Z"
+  "updated_at": "2026-04-25T15:35:25.223545Z"
 }
