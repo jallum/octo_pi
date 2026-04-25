@@ -948,35 +948,21 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
 
-  defp handle_event_key(%{input: input, session: session} = state, %Key{key: :enter}) do
-    case Components.Input.handle_key(input, %Key{key: :enter}) do
-      {new_input, [{:submit, value}]} when value != "" ->
-        prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-        if session, do: OctoPi.Agent.prompt(session, prompt)
-
-        user_msg =
-          if state.theme do
-            UserMessage.new(value, state.theme)
-          else
-            {:user, value}
-          end
-
-        %{
-          state
-          | input: %{new_input | value: "", cursor: 0},
-            transcript: state.transcript ++ [user_msg]
-        }
-
-      _ ->
-        state
-    end
-  end
-
   defp handle_event_key(%{input: input} = state, %Key{} = key) do
-    case Components.Input.handle_key(input, key) do
+    kb = get_keybindings(state)
+
+    case Components.Input.handle_key(input, key, kb) do
+      {new_input, [{:submit, value}]} when value != "" -> handle_submit(state, new_input, value)
       {new_input, _events} -> %{state | input: new_input}
       new_input -> %{state | input: new_input}
     end
+  end
+
+  defp handle_submit(state, new_input, value) do
+    prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
+    if state.session, do: OctoPi.Agent.prompt(state.session, prompt)
+    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
 
   defp try_extension_shortcut([], _key, _state), do: :pass

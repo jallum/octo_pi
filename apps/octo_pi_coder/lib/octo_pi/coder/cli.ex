@@ -10,6 +10,7 @@ defmodule OctoPi.Coder.CLI do
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
+  alias OctoPi.Coder.PromptTemplates
   alias OctoPi.Coder.ResourceLoader
 
   # Matches upstream pi-mono's per-provider default for Anthropic
@@ -126,7 +127,19 @@ defmodule OctoPi.Coder.CLI do
         tools = OctoPi.Coder.default_tools(opts.cwd)
         loader = ResourceLoader.load(opts.cwd, nil)
         system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
-        mod.run(Map.to_list(Map.merge(opts, %{system_prompt: system_prompt, tools: tools, resource_loader: loader})))
+        expand_fn = fn text -> PromptTemplates.expand(text, loader.prompt_templates) end
+
+        mod.run(
+          Map.to_list(
+            Map.merge(opts, %{
+              system_prompt: system_prompt,
+              tools: tools,
+              resource_loader: loader,
+              expand_prompt_fn: expand_fn
+            })
+          )
+        )
+
         0
 
       {:error, _} ->
