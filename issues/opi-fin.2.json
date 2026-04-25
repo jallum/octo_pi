@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:56Z",
+  "description": "Additive phase -- no existing files change. Introduces the author-facing API that all future phases build on: a behaviour with typed callbacks and a 'use OctoPi.Coder.Extension' macro that auto-wires handle_* functions. Old manual API.on/3 pattern continues to work unchanged.",
+  "id": "opi-fin.2",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 2: Add Extension.Behaviour and use macro",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:56Z"
+}
