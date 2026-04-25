@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Input: use Keybindings instead of hardcoded Key patterns",
   "type": "task",
-  "updated_at": "2026-04-25T14:40:31.870316Z"
+  "updated_at": "2026-04-25T14:51:13.567833Z"
 }
