@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-u6a.3"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-u6a",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Skills XML section in system prompt",
   "type": "task",
-  "updated_at": "2026-04-25T05:47:59Z"
+  "updated_at": "2026-04-25T05:54:18Z"
 }
