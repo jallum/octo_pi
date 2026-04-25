@@ -265,6 +265,78 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "open_editor (opi-0g4.14)" do
+    test "open_editor calls raw_mode exit then enter" do
+      test_pid = self()
+
+      raw_mode_fn = fn action ->
+        send(test_pid, {:raw_mode, action})
+        :ok
+      end
+
+      open_editor_fn = fn _path -> :ok end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: raw_mode_fn,
+          tty_fn: fn _ -> :ok end,
+          open_editor_fn: open_editor_fn
+        )
+
+      assert_receive {:raw_mode, :enter}, 500
+      Terminal.open_editor(pid, "hello")
+
+      assert_received {:raw_mode, :exit}
+      assert_received {:raw_mode, :enter}
+    end
+
+    test "open_editor invokes open_editor_fn with a temp file path" do
+      test_pid = self()
+
+      open_editor_fn = fn path ->
+        send(test_pid, {:editor_path, path})
+        :ok
+      end
+
+      pid = start_terminal(name: nil, open_editor_fn: open_editor_fn)
+      Terminal.open_editor(pid, "initial")
+
+      assert_receive {:editor_path, path}, 500
+      assert is_binary(path)
+    end
+
+    test "open_editor writes initial text to temp file before calling fn" do
+      test_pid = self()
+
+      open_editor_fn = fn path ->
+        send(test_pid, {:file_content, File.read!(path)})
+        :ok
+      end
+
+      pid = start_terminal(name: nil, open_editor_fn: open_editor_fn)
+      Terminal.open_editor(pid, "my initial text")
+
+      assert_receive {:file_content, "my initial text"}, 500
+    end
+
+    test "open_editor returns {:ok, content} written by fn" do
+      open_editor_fn = fn path ->
+        File.write!(path, "edited content")
+        :ok
+      end
+
+      pid = start_terminal(name: nil, open_editor_fn: open_editor_fn)
+      assert {:ok, "edited content"} = Terminal.open_editor(pid, "original")
+    end
+
+    test "open_editor returns {:error, :no_editor} when fn returns {:error, :no_editor}" do
+      pid = start_terminal(name: nil, open_editor_fn: fn _path -> {:error, :no_editor} end)
+      assert {:error, :no_editor} = Terminal.open_editor(pid, "text")
+    end
+  end
+
   describe "suspend (opi-0g4.10)" do
     test "suspend calls raw_mode exit then enter" do
       test_pid = self()

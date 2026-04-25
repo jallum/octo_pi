@@ -57,6 +57,7 @@ defmodule OctoPi.TUI.Interactive do
           height: pos_integer(),
           exit: boolean(),
           suspend_pending: boolean(),
+          editor_pending: boolean(),
           thinking_level: atom(),
           model: Model.t() | nil,
           models: [Model.t()],
@@ -89,6 +90,7 @@ defmodule OctoPi.TUI.Interactive do
             height: 24,
             exit: false,
             suspend_pending: false,
+            editor_pending: false,
             thinking_level: :off,
             model: nil,
             models: [],
@@ -475,7 +477,8 @@ defmodule OctoPi.TUI.Interactive do
         :auto_start_reader,
         :dimensions,
         :raw_mode_fn,
-        :tty_fn
+        :tty_fn,
+        :open_editor_fn
       ])
       |> Keyword.put(:name, Keyword.get(opts, :terminal_name, Terminal))
       |> Keyword.put(:write_fn, write_fn)
@@ -556,6 +559,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp advance(new_state, fsm, renderer, terminal) do
     new_state = maybe_suspend(new_state, terminal)
+    new_state = maybe_launch_editor(new_state, terminal)
     new_state = render_frame(new_state, renderer, terminal)
     loop(new_state, fsm, renderer, terminal)
   end
@@ -566,6 +570,24 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp maybe_suspend(state, _terminal), do: state
+
+  defp maybe_launch_editor(%{editor_pending: false} = state, _terminal), do: state
+
+  defp maybe_launch_editor(%{editor_pending: true} = state, terminal) do
+    state = %{state | editor_pending: false}
+
+    case Terminal.open_editor(terminal, state.input.value) do
+      {:ok, new_text} ->
+        input = %{state.input | value: new_text, cursor: String.length(new_text)}
+        %{state | input: input}
+
+      {:error, :no_editor} ->
+        %{state | notification: "No $EDITOR or $VISUAL configured"}
+
+      {:error, _} ->
+        state
+    end
+  end
 
   defp render_frame(state, renderer, terminal) do
     input = Components.Input.update_scroll(state.input, state.width)
@@ -707,6 +729,8 @@ defmodule OctoPi.TUI.Interactive do
 
     %{state | tools_expanded: expanded, banner: banner}
   end
+
+  def handle_event(state, {:key, %Key{key: ?g, modifiers: [:ctrl]}}), do: %{state | editor_pending: true}
 
   def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl]}}) do
     new_model = cycle_model(state.models, state.model, :next)

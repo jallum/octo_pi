@@ -134,6 +134,20 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Ctrl+G external editor (opi-0g4.14)" do
+    test "Ctrl+G sets editor_pending to true" do
+      s = %Interactive{}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?g, modifiers: [:ctrl]}})
+      assert s2.editor_pending
+    end
+
+    test "Ctrl+G does not set exit" do
+      s = %Interactive{}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?g, modifiers: [:ctrl]}})
+      refute s2.exit
+    end
+  end
+
   describe "handle_event — Ctrl+Z process suspend (opi-0g4.10)" do
     test "Ctrl+Z sets suspend_pending to true" do
       s = %Interactive{}

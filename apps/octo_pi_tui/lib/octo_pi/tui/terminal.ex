@@ -86,6 +86,10 @@ defmodule OctoPi.TUI.Terminal do
   @spec suspend(GenServer.server()) :: :ok
   def suspend(pid), do: GenServer.call(pid, :suspend, :infinity)
 
+  @doc "Open external editor with initial text; return {:ok, new_text} or {:error, reason}."
+  @spec open_editor(GenServer.server(), String.t()) :: {:ok, String.t()} | {:error, atom()}
+  def open_editor(pid, initial_text), do: GenServer.call(pid, {:open_editor, initial_text}, :infinity)
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -99,6 +103,7 @@ defmodule OctoPi.TUI.Terminal do
     drain_idle_ms = Keyword.get(opts, :drain_idle_ms, 50)
     drain_timeout_ms = Keyword.get(opts, :drain_timeout_ms, 1000)
     send_sigtstp_fn = Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0)
+    open_editor_fn = Keyword.get(opts, :open_editor_fn, &default_open_editor/1)
 
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
     tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
@@ -124,6 +129,7 @@ defmodule OctoPi.TUI.Terminal do
       drain_idle_ms: drain_idle_ms,
       drain_timeout_ms: drain_timeout_ms,
       send_sigtstp_fn: send_sigtstp_fn,
+      open_editor_fn: open_editor_fn,
       keyboard_mode: :none,
       probe_start: nil
     }
@@ -152,6 +158,11 @@ defmodule OctoPi.TUI.Terminal do
     state.send_sigtstp_fn.()
     state.raw_mode_fn.(:enter)
     {:reply, :ok, state}
+  end
+
+  def handle_call({:open_editor, initial_text}, _from, state) do
+    result = do_open_editor(initial_text, state)
+    {:reply, result, state}
   end
 
   def handle_call({:feed_chunk, bin}, _from, state) do
@@ -216,6 +227,37 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   # --- helpers ---
+
+  defp do_open_editor(initial_text, state) do
+    path = Path.join(System.tmp_dir!(), "octo_pi_editor_#{System.unique_integer([:positive])}.txt")
+
+    try do
+      File.write!(path, initial_text)
+      state.raw_mode_fn.(:exit)
+
+      result = state.open_editor_fn.(path)
+
+      state.raw_mode_fn.(:enter)
+
+      case result do
+        :ok -> {:ok, File.read!(path)}
+        {:error, reason} -> {:error, reason}
+      end
+    after
+      File.rm(path)
+    end
+  end
+
+  defp default_open_editor(path) do
+    editor = System.get_env("VISUAL") || System.get_env("EDITOR")
+
+    if editor do
+      System.cmd(editor, [path])
+      :ok
+    else
+      {:error, :no_editor}
+    end
+  end
 
   defp default_send_sigtstp do
     if match?({:unix, _}, :os.type()) do
