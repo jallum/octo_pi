@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:15:23.845720Z",
+  "description": "Typing '/' in the input shows nothing. The Input component has a full autocomplete system (autocomplete_provider, suggestions, navigation keys) and Autocomplete.builtin_commands/0 lists /help, /clear, /compact, /cost, /model, /theme, /config. But input.autocomplete_provider is never set during startup in do_run/1 — it remains nil, and refresh_autocomplete returns early.\\n\\nNeeds: create a slash-command autocomplete provider during startup that combines builtin_commands() with loaded prompt templates, and assign it to input.autocomplete_provider.",
+  "id": "opi-7xj.7",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Slash command autocomplete not wired in — no dropdown on /",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:15:23.845720Z"
+}
