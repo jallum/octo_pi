@@ -732,6 +732,22 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{key: ?g, modifiers: [:ctrl]}}), do: %{state | editor_pending: true}
 
+  def handle_event(%{loader: %Components.Loader{}} = state, {:key, %Key{key: :enter, modifiers: [:alt]}}) do
+    text = state.input.value
+
+    if text == "" do
+      state
+    else
+      if state.session, do: OctoPi.Agent.follow_up(state.session, text)
+      input = %{state.input | value: "", cursor: 0}
+      %{state | input: input, notification: "Follow-up queued"}
+    end
+  end
+
+  def handle_event(state, {:key, %Key{key: :enter, modifiers: [:alt]}}) do
+    handle_event_key(state, %Key{key: :enter})
+  end
+
   def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl]}}) do
     new_model = cycle_model(state.models, state.model, :next)
     if state.session, do: OctoPi.Agent.set_model(state.session, new_model)

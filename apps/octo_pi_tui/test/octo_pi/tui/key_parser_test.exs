@@ -253,6 +253,10 @@ defmodule OctoPi.TUI.KeyParserTest do
       assert {:key, %Key{key: :down, modifiers: [:alt]}} = KeyParser.parse("\eq")
     end
 
+    test "alt+enter (ESC + CR, legacy)" do
+      assert {:key, %Key{key: :enter, modifiers: [:alt]}} = KeyParser.parse("\e\r")
+    end
+
     test "ctrl+alt+c" do
       assert {:key, %Key{key: ?c, modifiers: [:alt, :ctrl]}} = KeyParser.parse("\e\x03")
     end

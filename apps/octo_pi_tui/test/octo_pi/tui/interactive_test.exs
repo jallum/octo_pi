@@ -134,6 +134,45 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Alt+Enter follow-up queuing (opi-0g4.15)" do
+    test "Alt+Enter while loader active clears input" do
+      s = %Interactive{
+        input: %Input{value: "my follow up", cursor: 12},
+        loader: %Loader{},
+        session: nil
+      }
+
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      assert s2.input.value == ""
+      assert s2.input.cursor == 0
+    end
+
+    test "Alt+Enter while loader active sets follow-up notification" do
+      s = %Interactive{
+        input: %Input{value: "my follow up", cursor: 12},
+        loader: %Loader{},
+        session: nil
+      }
+
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      assert s2.notification =~ "Follow-up"
+    end
+
+    test "Alt+Enter while idle with non-empty input submits immediately (like Enter)" do
+      s = %Interactive{input: %Input{value: "hello", cursor: 5}, session: nil, loader: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      assert [{:user, "hello"}] = s2.transcript
+      assert s2.input.value == ""
+    end
+
+    test "Alt+Enter while idle with empty input is no-op" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}, session: nil, loader: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      assert s2.transcript == []
+      assert s2.input.value == ""
+    end
+  end
+
   describe "handle_event — Ctrl+G external editor (opi-0g4.14)" do
     test "Ctrl+G sets editor_pending to true" do
       s = %Interactive{}

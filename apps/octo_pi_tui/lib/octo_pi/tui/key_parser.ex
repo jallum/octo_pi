@@ -202,10 +202,12 @@ defmodule OctoPi.TUI.KeyParser do
   defp alt_prefix(?p), do: {:key, %Key{key: :up, modifiers: [:alt]}}
   defp alt_prefix(?q), do: {:key, %Key{key: :down, modifiers: [:alt]}}
 
-  # Alt+Space / Alt+Backspace.
+  # Alt+Space / Alt+Backspace / Alt+Enter.
   defp alt_prefix(?\s), do: {:key, %Key{key: :space, modifiers: [:alt]}}
   defp alt_prefix(?\b), do: {:key, %Key{key: :backspace, modifiers: [:alt]}}
   defp alt_prefix(0x7F), do: {:key, %Key{key: :backspace, modifiers: [:alt]}}
+  defp alt_prefix(?\r), do: {:key, %Key{key: :enter, modifiers: [:alt]}}
+  defp alt_prefix(?\n), do: {:key, %Key{key: :enter, modifiers: [:alt]}}
 
   # Ctrl+Alt: ESC + C0 control.
   defp alt_prefix(b) when b in 0x01..0x1A and b not in [0x08, 0x09, 0x0A, 0x0D] do
