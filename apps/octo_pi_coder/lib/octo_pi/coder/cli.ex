@@ -25,7 +25,8 @@ defmodule OctoPi.Coder.CLI do
     model: :string,
     cwd: :string,
     help: :boolean,
-    debug_render: :boolean
+    debug_render: :boolean,
+    debug_events: :boolean
   ]
 
   @aliases [p: :print, m: :model, h: :help]
@@ -72,7 +73,8 @@ defmodule OctoPi.Coder.CLI do
     %{
       model: resolve_model(switches[:model] || @default_model),
       cwd: switches[:cwd] || File.cwd!(),
-      debug_render: switches[:debug_render] || false
+      debug_render: switches[:debug_render] || false,
+      debug_events: switches[:debug_events] || false
     }
   end
 
@@ -265,6 +267,7 @@ defmodule OctoPi.Coder.CLI do
       --model, -m    model id (default: #{@default_model}; claude* → Anthropic, else → Ollama)
       --cwd          working dir (default: current dir)
       --help, -h     show this message
+      --debug-events log stdin/key pipeline to debug_events.log
     """
   end
 end

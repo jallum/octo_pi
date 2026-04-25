@@ -124,6 +124,7 @@ defmodule OctoPi.TUI.Terminal do
 
   @impl true
   def handle_info({:stdin_chunk, bin}, state) do
+    :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
     broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
     {:noreply, state}
   end

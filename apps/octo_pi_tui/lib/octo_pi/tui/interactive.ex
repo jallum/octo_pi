@@ -24,6 +24,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
+  alias OctoPi.TUI.EventLogger
   alias OctoPi.TUI.Events
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
@@ -336,6 +337,12 @@ defmodule OctoPi.TUI.Interactive do
         fd
       end
 
+    debug_events_log =
+      if Keyword.get(opts, :debug_events, false) do
+        path = Path.join(cwd, "debug_events.log")
+        EventLogger.attach(path)
+      end
+
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
@@ -376,6 +383,7 @@ defmodule OctoPi.TUI.Interactive do
     loop(state, fsm, renderer, terminal)
 
     if debug_render_log, do: File.close(debug_render_log)
+    if debug_events_log, do: EventLogger.detach(debug_events_log)
     shutdown(terminal, fsm, renderer, footer_data)
     :ok
   end
@@ -483,8 +491,11 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp handle_loop_msg(state, {:stdin_event, seq}, fsm, renderer, terminal) do
+    parsed = KeyParser.parse(seq)
+    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
+
     state
-    |> handle_event(KeyParser.parse(seq))
+    |> handle_event(parsed)
     |> advance(fsm, renderer, terminal)
   end
 

@@ -11,7 +11,9 @@ defmodule OctoPi.TUI.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: Mix.compilers(),
+      compilers: [:elixir_make] ++ Mix.compilers(),
+      make_targets: ["all"],
+      make_clean: ["clean"],
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -31,7 +33,8 @@ defmodule OctoPi.TUI.MixProject do
     [
       {:octo_pi_coder, in_umbrella: true},
       {:jason, "~> 1.4"},
-      {:earmark_parser, "~> 1.4"}
+      {:earmark_parser, "~> 1.4"},
+      {:elixir_make, "~> 0.9", runtime: false}
     ]
   end
 end

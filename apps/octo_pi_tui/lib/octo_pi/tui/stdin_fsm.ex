@@ -109,7 +109,10 @@ defmodule OctoPi.TUI.StdinFSM do
   defp flush_timeout("", _ms), do: :infinity
   defp flush_timeout(_buffer, ms), do: ms
 
-  defp emit(subscriber, event), do: send(subscriber, {:stdin_event, event})
+  defp emit(subscriber, event) do
+    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: event})
+    send(subscriber, {:stdin_event, event})
+  end
 
   # --- sequence extraction (multi-head pattern matching) ---
 
