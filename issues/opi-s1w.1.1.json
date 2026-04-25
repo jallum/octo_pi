@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:14:34Z",
+  "description": "Implement Claude OAuth + OpenAI/Google/Bedrock providers",
+  "id": "opi-s1w.1.1",
+  "labels": [],
+  "parent": "opi-s1w.1",
+  "priority": 2,
+  "status": "open",
+  "title": "OAuth \u0026 Additional Providers",
+  "type": "task",
+  "updated_at": "2026-04-25T05:14:34Z"
+}
