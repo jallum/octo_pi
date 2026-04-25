@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T12:13:12.492501Z",
+  "description": "After a streaming response finishes, lines from the last mid-stream partial frame remain visible on screen above the final complete response. The diff renderer paints newly changed lines correctly but does not clear lines that existed in the previous frame and are absent (or have different content) in the final frame.\n\n**Observed example** (two-sentence Elixir description prompt):\n- Mid-stream partial ended with: `on the Erlang VM and is designed to build scalable, fault-tolerant distributed applications…`\n- After stream completed, that partial content remained on screen directly above the identical text in the finalized response — producing a visible duplicate block.\n\n**Likely cause**: When the line count or wrapping of the final frame differs from the partial frame, the diff algorithm skips writing to rows that it considers \"unchanged\" — but those rows may hold stale partial content at wrong character counts. The `\\e[2K` erase-line is only emitted for lines flagged as changed; unchanged-but-stale lines are not cleared.\n\n**Repro**:\n1. `mix pi`\n2. Submit a prompt whose response is multiple lines / multiple sentences\n3. After streaming completes, look for repeated/duplicate lines in the transcript\n\n**Expected**: Each completed response frame fully replaces the partial; no stale content visible.",
+  "id": "opi-e72",
+  "labels": [],
+  "parent": "",
+  "priority": 1,
+  "status": "open",
+  "title": "Render: stale partial-stream content not cleared after response completes",
+  "type": "bug",
+  "updated_at": "2026-04-25T12:13:12.492501Z"
+}
