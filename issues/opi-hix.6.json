@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port agent-session integration tests (tool blocking, result modification, context rewriting)",
   "type": "task",
-  "updated_at": "2026-04-25T15:51:24.150406Z"
+  "updated_at": "2026-04-25T16:33:05.839817Z"
 }
