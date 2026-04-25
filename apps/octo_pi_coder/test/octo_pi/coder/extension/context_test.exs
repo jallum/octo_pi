@@ -45,6 +45,28 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.get_branch.() == entries
     end
 
+    test "find_model defaults to a function returning nil" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.find_model.(:google, "gemini-2.5-flash") == nil
+    end
+
+    test "accepts a custom find_model function" do
+      model = %{id: "test-model", provider: :test}
+      ctx = Context.new(%{cwd: "/tmp", find_model: fn _provider, _id -> model end})
+      assert ctx.find_model.(:test, "test-model") == model
+    end
+
+    test "get_model_auth defaults to returning an error tuple" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert match?({:error, _}, ctx.get_model_auth.(%{}))
+    end
+
+    test "accepts a custom get_model_auth function" do
+      auth = %{api_key: "sk-test"}
+      ctx = Context.new(%{cwd: "/tmp", get_model_auth: fn _model -> {:ok, auth} end})
+      assert ctx.get_model_auth.(%{}) == {:ok, auth}
+    end
+
     test "accepts all fields" do
       ctx =
         Context.new(%{

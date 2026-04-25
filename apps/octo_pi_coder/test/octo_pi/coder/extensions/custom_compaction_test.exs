@@ -23,7 +23,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
     Event.new(:session_before_compact, %{preparation: preparation})
   end
 
-  defp ctx, do: Context.new(%{cwd: "/tmp"})
+  defp ctx(opts \\ []), do: Context.new(Map.merge(%{cwd: "/tmp"}, Map.new(opts)))
 
   describe "init/1" do
     test "registers a session_before_compact handler" do
@@ -86,6 +86,54 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       event = compact_event(messages: [])
       result = handler.(event, ctx())
       assert is_nil(result)
+    end
+
+    test "calls find_model with :google provider and gemini model id" do
+      test_pid = self()
+      find_fn = fn provider, id -> send(test_pid, {:find_model, provider, id}) && nil end
+      ext = load_ext()
+      [handler] = ext.handlers[:session_before_compact]
+      handler.(compact_event(), ctx(find_model: find_fn))
+      assert_receive {:find_model, :google, "gemini-2.5-flash"}
+    end
+
+    test "calls get_model_auth when find_model returns a model" do
+      test_pid = self()
+      model = %{id: "gemini-2.5-flash", provider: :google}
+      find_fn = fn _provider, _id -> model end
+      auth_fn = fn m -> send(test_pid, {:get_model_auth, m}) && {:error, "no key"} end
+      ext = load_ext()
+      [handler] = ext.handlers[:session_before_compact]
+      handler.(compact_event(), ctx(find_model: find_fn, get_model_auth: auth_fn))
+      assert_receive {:get_model_auth, ^model}
+    end
+
+    test "still returns local compaction when find_model returns nil" do
+      find_fn = fn _provider, _id -> nil end
+      ext = load_ext()
+      [handler] = ext.handlers[:session_before_compact]
+      result = handler.(compact_event(), ctx(find_model: find_fn))
+      assert match?({:cancel, %{compaction: _}}, result)
+    end
+
+    test "still returns local compaction when get_model_auth fails" do
+      model = %{id: "gemini-2.5-flash", provider: :google}
+      find_fn = fn _provider, _id -> model end
+      auth_fn = fn _m -> {:error, "unauthorized"} end
+      ext = load_ext()
+      [handler] = ext.handlers[:session_before_compact]
+      result = handler.(compact_event(), ctx(find_model: find_fn, get_model_auth: auth_fn))
+      assert match?({:cancel, %{compaction: _}}, result)
+    end
+
+    test "still returns local compaction when auth succeeds (LLM call deferred)" do
+      model = %{id: "gemini-2.5-flash", provider: :google}
+      find_fn = fn _provider, _id -> model end
+      auth_fn = fn _m -> {:ok, %{api_key: "sk-test"}} end
+      ext = load_ext()
+      [handler] = ext.handlers[:session_before_compact]
+      result = handler.(compact_event(), ctx(find_model: find_fn, get_model_auth: auth_fn))
+      assert match?({:cancel, %{compaction: _}}, result)
     end
   end
 end
