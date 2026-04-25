@@ -17,11 +17,13 @@ defmodule OctoPi.TUI.Interactive do
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
+  alias OctoPi.AI.Model
   alias OctoPi.Coder
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.ModelSelector
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.EventLogger
@@ -29,6 +31,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.KeyParser
+  alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.RawMode
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
@@ -55,6 +58,9 @@ defmodule OctoPi.TUI.Interactive do
           exit: boolean(),
           suspend_pending: boolean(),
           thinking_level: atom(),
+          model: Model.t() | nil,
+          models: [Model.t()],
+          model_selector: ModelSelector.t() | nil,
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -84,6 +90,9 @@ defmodule OctoPi.TUI.Interactive do
             exit: false,
             suspend_pending: false,
             thinking_level: :off,
+            model: nil,
+            models: [],
+            model_selector: nil,
             paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -384,6 +393,8 @@ defmodule OctoPi.TUI.Interactive do
       footer_data: footer_data,
       loaded_resources: loaded_resources,
       expand_prompt_fn: Keyword.get(opts, :expand_prompt_fn),
+      model: model,
+      models: Keyword.get(opts, :models, []),
       debug_render_log: debug_render_log
     }
 
@@ -561,6 +572,7 @@ defmodule OctoPi.TUI.Interactive do
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
     lines = render(state, input_lines)
+    lines = maybe_composite_model_selector(state, lines)
 
     if state.debug_render_log, do: log_overwide(state.debug_render_log, lines, state.width)
 
@@ -569,6 +581,15 @@ defmodule OctoPi.TUI.Interactive do
 
     if bytes != "", do: Terminal.write(terminal, bytes)
     state
+  end
+
+  defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
+
+  defp maybe_composite_model_selector(%{model_selector: ms, width: w, height: h}, lines) do
+    ov_w = min(60, w)
+    ov_lines = ModelSelector.render(ms, ov_w)
+    ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
+    Overlay.composite(lines, [ov], w, h)
   end
 
   defp log_overwide(fd, lines, width) do
@@ -620,6 +641,26 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{event_type: :release}}), do: state
 
+  def handle_event(%{model_selector: ms} = state, {:key, %Key{} = key}) when not is_nil(ms) do
+    case ModelSelector.handle_key(ms, key) do
+      {_new_ms, [:cancel]} ->
+        %{state | model_selector: nil}
+
+      {_new_ms, [{:select_model, model}]} ->
+        if state.session, do: OctoPi.Agent.set_model(state.session, model)
+
+        %{
+          state
+          | model_selector: nil,
+            model: model,
+            footer: %{state.footer | model_id: model.id, provider: model.provider}
+        }
+
+      new_ms ->
+        %{state | model_selector: new_ms}
+    end
+  end
+
   # Ctrl+C: clear non-empty editor; abort running agent; no-op when idle+empty.
   def handle_event(%{input: %{value: v}} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) when v != "" do
     %{state | input: %{state.input | value: "", cursor: 0}}
@@ -665,6 +706,36 @@ defmodule OctoPi.TUI.Interactive do
       end
 
     %{state | tools_expanded: expanded, banner: banner}
+  end
+
+  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl]}}) do
+    new_model = cycle_model(state.models, state.model, :next)
+    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+
+    %{
+      state
+      | model: new_model,
+        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
+        notification: "Model: #{new_model.id}"
+    }
+  end
+
+  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}}) do
+    new_model = cycle_model(state.models, state.model, :prev)
+    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+
+    %{
+      state
+      | model: new_model,
+        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
+        notification: "Model: #{new_model.id}"
+    }
+  end
+
+  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?l, modifiers: [:ctrl]}}) do
+    current_id = state.model && state.model.id
+    ms = ModelSelector.new(state.models, state.theme, current: current_id)
+    %{state | model_selector: ms}
   end
 
   def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key}) when shortcuts != [] do
@@ -966,6 +1037,19 @@ defmodule OctoPi.TUI.Interactive do
 
   defp thinking_level_label(:off), do: nil
   defp thinking_level_label(level), do: to_string(level)
+
+  defp cycle_model(models, current, dir) do
+    idx = Enum.find_index(models, &(&1 == current)) || -1
+    len = length(models)
+
+    new_idx =
+      case dir do
+        :next -> rem(idx + 1, len)
+        :prev -> rem(idx - 1 + len, len)
+      end
+
+    Enum.at(models, new_idx)
+  end
 
   defp render_banner(nil, _width), do: []
 

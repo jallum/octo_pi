@@ -68,6 +68,10 @@ defmodule OctoPi.Agent do
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
 
+  @doc "Change the model for future runs."
+  @spec set_model(session(), OctoPi.AI.Model.t()) :: :ok
+  def set_model(pid, model), do: Session.set_model(pid, model)
+
   @doc """
   Subscribe `listener_pid` to session events. Returns an unsubscribe
   function. The 1- and 2-arity forms default the listener to

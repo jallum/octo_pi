@@ -1117,6 +1117,25 @@ defmodule OctoPi.Agent.LoopTest do
       assert OctoPi.Agent.state(session).thinking_level == :medium
     end
 
+    test "set_model/2 changes session model (opi-0g4.12)" do
+      session = start_session()
+      original_id = OctoPi.Agent.state(session).model.id
+
+      new_model = %Model{
+        id: "new-model",
+        name: "New",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      :ok = OctoPi.Agent.set_model(session, new_model)
+      assert OctoPi.Agent.state(session).model.id == "new-model"
+      assert OctoPi.Agent.state(session).model.id != original_id
+    end
+
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)
 

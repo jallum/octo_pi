@@ -1172,6 +1172,118 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  # ── model cycling / selector (opi-0g4.12) ──────────────────────
+
+  defp make_model(id, provider \\ :fake) do
+    %OctoPi.AI.Model{
+      id: id,
+      name: id,
+      api: :fake,
+      provider: provider,
+      base_url: "http://fake",
+      context_window: 100,
+      max_tokens: 100
+    }
+  end
+
+  describe "handle_event — Ctrl+P/Shift+Ctrl+P model cycling (opi-0g4.12)" do
+    test "Ctrl+P cycles to next model" do
+      m1 = make_model("m1")
+      m2 = make_model("m2")
+      m3 = make_model("m3")
+      s = %Interactive{model: m1, models: [m1, m2, m3], footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      assert s2.model.id == "m2"
+      assert s2.footer.model_id == "m2"
+    end
+
+    test "Ctrl+P wraps from last to first" do
+      m1 = make_model("m1")
+      m2 = make_model("m2")
+      s = %Interactive{model: m2, models: [m1, m2], footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      assert s2.model.id == "m1"
+    end
+
+    test "Ctrl+P with empty models is no-op" do
+      s = %Interactive{model: nil, models: []}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      assert s2.model == nil
+    end
+
+    test "Ctrl+P sets notification with new model id" do
+      m1 = make_model("m1")
+      m2 = make_model("m2")
+      s = %Interactive{model: m1, models: [m1, m2], footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      assert s2.notification =~ "m2"
+    end
+
+    test "Shift+Ctrl+P cycles to previous model" do
+      m1 = make_model("m1")
+      m2 = make_model("m2")
+      m3 = make_model("m3")
+      s = %Interactive{model: m2, models: [m1, m2, m3], footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}})
+      assert s2.model.id == "m1"
+    end
+
+    test "Shift+Ctrl+P wraps from first to last" do
+      m1 = make_model("m1")
+      m2 = make_model("m2")
+      s = %Interactive{model: m1, models: [m1, m2], footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}})
+      assert s2.model.id == "m2"
+    end
+  end
+
+  describe "handle_event — Ctrl+L model selector overlay (opi-0g4.12)" do
+    alias OctoPi.TUI.Components.ModelSelector
+
+    test "Ctrl+L opens model_selector" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      m1 = make_model("m1")
+      s = %Interactive{models: [m1], theme: theme, model: m1}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?l, modifiers: [:ctrl]}})
+      assert %ModelSelector{} = s2.model_selector
+    end
+
+    test "Ctrl+L with empty models is no-op" do
+      s = %Interactive{models: [], theme: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?l, modifiers: [:ctrl]}})
+      assert s2.model_selector == nil
+    end
+
+    test "Escape closes model_selector" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ms = ModelSelector.new([make_model("m1")], theme)
+      s = %Interactive{model_selector: ms}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      assert s2.model_selector == nil
+    end
+
+    test "Enter with model_selector selects model, updates footer and model" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      m1 = make_model("m1", :anthropic)
+      ms = ModelSelector.new([m1], theme)
+      s = %Interactive{model_selector: ms, models: [m1], model: nil, footer: %Footer{}, theme: theme}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s2.model_selector == nil
+      assert s2.model.id == "m1"
+      assert s2.footer.model_id == "m1"
+      assert s2.footer.provider == :anthropic
+    end
+
+    test "Enter with empty model_selector list closes without change" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ms = ModelSelector.new([], theme)
+      s = %Interactive{model_selector: ms, model: nil, footer: %Footer{}, theme: theme}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s2.model_selector == nil
+      assert s2.model == nil
+    end
+  end
+
   # ── loaded_resources rendering ─────────────────────────────────
 
   defp fake_resources(overrides \\ %{}) do
