@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port compaction extension tests (cancel, custom compaction, error fallback)",
   "type": "task",
-  "updated_at": "2026-04-25T15:48:51.277551Z"
+  "updated_at": "2026-04-25T15:51:18.374341Z"
 }
