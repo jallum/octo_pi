@@ -12,8 +12,8 @@
   ],
   "parent": "",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Render: banner hint line corrupted during streaming",
   "type": "bug",
-  "updated_at": "2026-04-25T12:20:00.848658Z"
+  "updated_at": "2026-04-25T14:51:46.195603Z"
 }
