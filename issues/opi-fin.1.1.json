@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:11:11Z",
+  "description": "FILE: apps/octo_pi_coder/lib/octo_pi/coder/extension/dispatcher.ex\n\nCURRENT BEHAVIOR: patch_merge/3 (line ~96) calls all handlers against the original event and merges returned patch maps at the end. Each handler sees the same original event regardless of what prior handlers returned.\n\nREQUIRED BEHAVIOR: true reduce -- each handler receives an event whose payload reflects the accumulated patches from all prior handlers. The running merged map is threaded through, not rebuilt at the end.\n\nCHANGE: In merge_patch/5 (line ~289), instead of passing the original event to handler.(event, ctx), pass an updated event that carries the current accumulated patches. The exact field to update depends on which event type uses patch_merge -- check event.ex for :tool_result (the only patch_merge event). The accumulated map should be merged into event before each handler call.\n\nTEST: Add a test in dispatcher_test.exs with two patch_merge handlers where the second handler asserts it received the first handler's patch in the event payload. Existing tests must continue to pass.",
+  "id": "opi-fin.1.1",
+  "labels": [],
+  "parent": "opi-fin.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Fix patch_merge to true reduce",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:11Z"
+}
