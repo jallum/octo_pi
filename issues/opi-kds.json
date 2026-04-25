@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "OpenAI Completions provider (octo_pi_ai_openai)",
   "type": "epic",
-  "updated_at": "2026-04-24T01:29:54.100363Z"
+  "updated_at": "2026-04-25T12:01:04.047559Z"
 }
