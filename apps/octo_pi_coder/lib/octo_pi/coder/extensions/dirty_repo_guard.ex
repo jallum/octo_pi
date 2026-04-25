@@ -9,9 +9,8 @@ defmodule OctoPi.Coder.Extensions.DirtyRepoGuard do
   end
 
   defp handle_before_switch(_event, ctx) do
-    case git_dirty?(ctx.cwd) do
-      true -> {:cancel, "uncommitted changes in repo"}
-      false -> nil
+    if git_dirty?(ctx.cwd) do
+      {:cancel, "uncommitted changes in repo"}
     end
   end
 

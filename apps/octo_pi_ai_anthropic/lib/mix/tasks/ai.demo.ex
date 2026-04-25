@@ -30,7 +30,14 @@ defmodule Mix.Tasks.Ai.Demo do
 
   use Mix.Task
 
-  alias OctoPi.AI.{Content, Context, Event, Message, Model, StreamOptions, Tool, ToolCall}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.StreamOptions
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
 
   @default_model "claude-haiku-4-5"
   @max_turns 5
@@ -168,7 +175,7 @@ defmodule Mix.Tasks.Ai.Demo do
   end
 
   defp print_tool_result(%Message.ToolResult{tool_name: name, content: content, is_error?: err?}) do
-    text = content |> Enum.map_join("", fn %Content.Text{text: t} -> t end)
+    text = Enum.map_join(content, "", fn %Content.Text{text: t} -> t end)
     marker = if err?, do: "[error]", else: "<-"
     IO.puts("#{marker} [tool_result: #{name}] #{text}\n")
   end

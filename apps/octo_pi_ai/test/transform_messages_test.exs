@@ -1,14 +1,12 @@
 defmodule OctoPi.AI.TransformMessagesTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{
-    Content,
-    Message,
-    Model,
-    ToolCall,
-    TransformMessages,
-    Usage
-  }
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.TransformMessages
+  alias OctoPi.AI.Usage
 
   # Matches Anthropic's tool-call ID normalization
   defp anthropic_normalize(id, _model, _source) do
@@ -102,8 +100,7 @@ defmodule OctoPi.AI.TransformMessagesTest do
             id: "call_123",
             name: "bash",
             arguments: %{"command" => "ls"},
-            thought_signature:
-              Jason.encode!(%{type: "reasoning.encrypted", id: "call_123", data: "encrypted"})
+            thought_signature: Jason.encode!(%{type: "reasoning.encrypted", id: "call_123", data: "encrypted"})
           }
         ]),
         tool_result("call_123", "bash", "output")
@@ -300,7 +297,7 @@ defmodule OctoPi.AI.TransformMessagesTest do
       assistant = Enum.find(result, &match?(%Message.Assistant{}, &1))
 
       thinking = Enum.find(assistant.content, &match?(%Content.Thinking{}, &1))
-      assert thinking != nil
+      assert thinking
       assert thinking.thinking == "deep thought"
       assert thinking.signature == "sig123"
     end

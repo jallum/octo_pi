@@ -49,7 +49,7 @@ defmodule OctoPi.TUI.RenderThrottleTest do
     test "updates last render timestamp" do
       t = RenderThrottle.new()
       t = RenderThrottle.record_render(t)
-      assert t.last_render_at != nil
+      assert t.last_render_at
     end
   end
 

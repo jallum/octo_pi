@@ -35,8 +35,11 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
       to the Task.Supervisor.
   """
 
-  alias OctoPi.AI.{PartialJson, SSE}
-  alias OctoPi.AI.Providers.Anthropic.{Auth, Decoder, Request}
+  alias OctoPi.AI.PartialJson
+  alias OctoPi.AI.Providers.Anthropic.Auth
+  alias OctoPi.AI.Providers.Anthropic.Decoder
+  alias OctoPi.AI.Providers.Anthropic.Request
+  alias OctoPi.AI.SSE
   alias OctoPi.AI.SSE.Event, as: SseEvent
 
   @type start_arg :: %{

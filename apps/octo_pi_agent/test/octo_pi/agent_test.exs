@@ -1,20 +1,18 @@
 defmodule OctoPi.AgentTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{Content, Message.Assistant, Model}
-
-  alias OctoPi.Agent.{
-    AbortRef,
-    Event,
-    Message,
-    MessageLog,
-    PendingMessageQueue,
-    Session,
-    Tool,
-    Transport
-  }
-
+  alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Message
+  alias OctoPi.Agent.MessageLog
+  alias OctoPi.Agent.PendingMessageQueue
+  alias OctoPi.Agent.Session
   alias OctoPi.Agent.TestSupport.EchoTool
+  alias OctoPi.Agent.Tool
+  alias OctoPi.Agent.Transport
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Model
 
   describe "contract structs" do
     test "Message union types include User/Assistant/ToolResult/Custom" do
@@ -135,14 +133,14 @@ defmodule OctoPi.AgentTest do
 
   describe "Transport behaviour" do
     test "Direct implements OctoPi.Agent.Transport" do
-      behaviours = Transport.Direct.module_info(:attributes) |> Keyword.get_values(:behaviour)
+      behaviours = :attributes |> Transport.Direct.module_info() |> Keyword.get_values(:behaviour)
       assert [Transport] in behaviours or Transport in List.flatten(behaviours)
     end
   end
 
   describe "Tool.Handler behaviour" do
     test "EchoTool implements the handler callback" do
-      behaviours = EchoTool.module_info(:attributes) |> Keyword.get_values(:behaviour)
+      behaviours = :attributes |> EchoTool.module_info() |> Keyword.get_values(:behaviour)
 
       assert [Tool.Handler] in behaviours or
                Tool.Handler in List.flatten(behaviours)

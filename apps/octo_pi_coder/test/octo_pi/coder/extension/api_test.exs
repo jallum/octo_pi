@@ -169,7 +169,7 @@ defmodule OctoPi.Coder.Extension.APITest do
 
   describe "register_provider/2 after bind_core" do
     test "returns error when already bound" do
-      api = API.new("x") |> API.bind_core(%{})
+      api = "x" |> API.new() |> API.bind_core(%{})
       config = %OctoPi.Coder.Extension.ProviderConfig{id: "p1", base_url: "https://a.com"}
       assert {:error, _reason} = API.register_provider(api, config)
     end

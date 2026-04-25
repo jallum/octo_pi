@@ -1,6 +1,7 @@
 defmodule OctoPi.Coder.Extension.Loader do
   @moduledoc false
 
+  alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
 
   require Logger
@@ -49,7 +50,7 @@ defmodule OctoPi.Coder.Extension.Loader do
     Enum.reverse(paths)
   end
 
-  @spec load(String.t()) :: {:ok, OctoPi.Coder.Extension.t()} | {:error, term()}
+  @spec load(String.t()) :: {:ok, Extension.t()} | {:error, term()}
   def load(path) do
     id = extension_id(path)
 
@@ -62,7 +63,7 @@ defmodule OctoPi.Coder.Extension.Loader do
     e -> {:error, Exception.message(e)}
   end
 
-  @spec load_all([String.t()]) :: [OctoPi.Coder.Extension.t()]
+  @spec load_all([String.t()]) :: [Extension.t()]
   def load_all(paths) do
     Enum.flat_map(paths, fn path ->
       case load(path) do
@@ -94,7 +95,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   end
 
   @spec load_from_factory(String.t(), (API.t() -> {:ok, API.t()} | :ok)) ::
-          {:ok, OctoPi.Coder.Extension.t()} | {:error, term()}
+          {:ok, Extension.t()} | {:error, term()}
   def load_from_factory(id, factory) when is_binary(id) and is_function(factory, 1) do
     api = API.new(id)
 

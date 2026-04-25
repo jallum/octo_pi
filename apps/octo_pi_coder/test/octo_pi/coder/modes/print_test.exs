@@ -4,7 +4,8 @@ defmodule OctoPi.Coder.Modes.PrintTest do
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Event, as: AIEvent
   alias OctoPi.AI.Message.Assistant
-  alias OctoPi.AI.{Model, Usage}
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Usage
   alias OctoPi.Coder.Modes.Print
 
   setup do

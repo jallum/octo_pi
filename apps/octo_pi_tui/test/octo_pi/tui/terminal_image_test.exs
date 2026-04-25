@@ -81,8 +81,8 @@ defmodule OctoPi.TUI.TerminalImageTest do
   describe "get_png_dimensions/1" do
     test "extracts dimensions from valid PNG header" do
       header =
-        <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
-          0x44, 0x52, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x32>>
+        <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00,
+          0x00, 0x64, 0x00, 0x00, 0x00, 0x32>>
 
       data = Base.encode64(header)
       assert {:ok, %{width: 100, height: 50}} = TerminalImage.get_png_dimensions(data)
@@ -141,9 +141,7 @@ defmodule OctoPi.TUI.TerminalImageTest do
     # --- upstream terminal-image.test.ts image_line? coverage ---
 
     test "detects iTerm2 escape with text before, in middle, and at end" do
-      assert TerminalImage.image_line?(
-               "Some text \e]1337;File=size=100,100;inline=1:base64data==\a more"
-             )
+      assert TerminalImage.image_line?("Some text \e]1337;File=size=100,100;inline=1:base64data==\a more")
 
       assert TerminalImage.image_line?(
                "Text before image..." <>
@@ -151,9 +149,7 @@ defmodule OctoPi.TUI.TerminalImageTest do
                  "...text after"
              )
 
-      assert TerminalImage.image_line?(
-               "Regular text ending with \e]1337;File=inline=1:base64data==\a"
-             )
+      assert TerminalImage.image_line?("Regular text ending with \e]1337;File=inline=1:base64data==\a")
 
       assert TerminalImage.image_line?("\e]1337;File=:\a")
     end

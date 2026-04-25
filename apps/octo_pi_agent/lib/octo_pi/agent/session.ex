@@ -61,9 +61,7 @@ defmodule OctoPi.Agent.Session do
   def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, normalize(msg)})
 
   @doc false
-  def set_queue_mode(pid, queue, mode)
-      when queue in [:steering, :follow_up] and
-             mode in [:one_at_a_time, :all] do
+  def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all] do
     GenServer.call(pid, {:set_queue_mode, queue, mode})
   end
 

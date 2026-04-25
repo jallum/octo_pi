@@ -33,8 +33,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   def resolve(opts \\ nil)
   def resolve(nil), do: resolve(%StreamOptions{})
 
-  def resolve(%StreamOptions{api_key: key}) when is_binary(key) and key != "",
-    do: classify(key, :opts)
+  def resolve(%StreamOptions{api_key: key}) when is_binary(key) and key != "", do: classify(key, :opts)
 
   def resolve(%StreamOptions{}) do
     with {:env_oauth, nil} <- {:env_oauth, get_env("ANTHROPIC_OAUTH_TOKEN")},

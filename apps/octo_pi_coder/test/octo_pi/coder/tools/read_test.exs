@@ -19,8 +19,7 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref, cwd),
-    do: Read.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd), do: Read.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "reads full file", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "hello.txt")

@@ -17,7 +17,10 @@ defmodule OctoPi.AI do
   See `docs/port-map/anthropic.md` for the Anthropic reference port.
   """
 
-  alias OctoPi.AI.{Context, Model, ProviderRegistry, StreamOptions}
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.ProviderRegistry
+  alias OctoPi.AI.StreamOptions
 
   @doc """
   Open a streaming request against the provider for `model.api`.

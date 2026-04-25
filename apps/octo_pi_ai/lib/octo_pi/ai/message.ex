@@ -8,7 +8,9 @@ defmodule OctoPi.AI.Message do
     model on the next turn.
   """
 
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
 
   @type t :: User.t() | Assistant.t() | ToolResult.t()
 end

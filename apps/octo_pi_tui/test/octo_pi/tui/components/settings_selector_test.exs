@@ -41,12 +41,12 @@ defmodule OctoPi.TUI.Components.SettingsSelectorTest do
 
   describe "navigation" do
     test "Down moves selection" do
-      sel = SettingsSelector.new(@theme) |> press(key(:down))
+      sel = @theme |> SettingsSelector.new() |> press(key(:down))
       assert sel.selected == 1
     end
 
     test "Up wraps" do
-      sel = SettingsSelector.new(@theme) |> press(key(:up))
+      sel = @theme |> SettingsSelector.new() |> press(key(:up))
       assert sel.selected == length(sel.items) - 1
     end
   end

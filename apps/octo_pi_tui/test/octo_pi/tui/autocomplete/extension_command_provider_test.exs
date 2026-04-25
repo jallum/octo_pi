@@ -2,7 +2,8 @@ defmodule OctoPi.TUI.Autocomplete.ExtensionCommandProviderTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Autocomplete
-  alias OctoPi.TUI.Autocomplete.{ExtensionCommandProvider, Suggestion}
+  alias OctoPi.TUI.Autocomplete.ExtensionCommandProvider
+  alias OctoPi.TUI.Autocomplete.Suggestion
 
   defp test_commands do
     [

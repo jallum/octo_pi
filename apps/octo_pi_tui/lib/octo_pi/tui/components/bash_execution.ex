@@ -105,13 +105,13 @@ defmodule OctoPi.TUI.Components.BashExecution do
   defp build_output(%{output_lines: []}), do: []
 
   defp build_output(%{output_lines: lines, expanded: true, theme: theme}) do
-    text = lines |> Enum.map_join("\n", &Theme.fg(theme, :muted, &1))
+    text = Enum.map_join(lines, "\n", &Theme.fg(theme, :muted, &1))
     [%Text{content: text}]
   end
 
   defp build_output(%{output_lines: lines, theme: theme}) do
     preview = Enum.slice(lines, -@preview_lines, @preview_lines)
-    text = preview |> Enum.map_join("\n", &Theme.fg(theme, :muted, &1))
+    text = Enum.map_join(preview, "\n", &Theme.fg(theme, :muted, &1))
     [%Text{content: text}]
   end
 

@@ -29,11 +29,10 @@ defmodule OctoPi.TUI.Autocomplete.FilePathProvider do
   into the input; `label` is the unquoted display path.
   """
 
-  alias OctoPi.TUI.Autocomplete
+  @behaviour OctoPi.TUI.Autocomplete
+
   alias OctoPi.TUI.Autocomplete.Suggestion
   alias OctoPi.TUI.Fuzzy
-
-  @behaviour Autocomplete
 
   @type t :: %__MODULE__{cwd: String.t(), max_results: pos_integer()}
 
@@ -48,8 +47,7 @@ defmodule OctoPi.TUI.Autocomplete.FilePathProvider do
   end
 
   @impl true
-  def get_suggestions(%__MODULE__{cwd: cwd, max_results: limit}, input)
-      when is_binary(input) do
+  def get_suggestions(%__MODULE__{cwd: cwd, max_results: limit}, input) when is_binary(input) do
     case extract_query(input) do
       {:at, query} -> suggest_from_cwd(cwd, query, limit)
       {:abs, query} -> suggest_absolute(query, limit)
@@ -108,8 +106,7 @@ defmodule OctoPi.TUI.Autocomplete.FilePathProvider do
 
     ranked =
       if trimmed == "" do
-        entries
-        |> Enum.sort_by(fn {rel, is_dir} ->
+        Enum.sort_by(entries, fn {rel, is_dir} ->
           {if(is_dir, do: 0, else: 1), String.downcase(rel)}
         end)
       else

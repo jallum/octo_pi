@@ -23,7 +23,7 @@ defmodule OctoPi.TUI.Components.ContainerTest do
   describe "add_child/2" do
     test "appends a child" do
       t = %Text{content: "hi"}
-      c = Container.new() |> Container.add_child(t)
+      c = Container.add_child(Container.new(), t)
       assert c.children == [t]
     end
 
@@ -40,7 +40,7 @@ defmodule OctoPi.TUI.Components.ContainerTest do
       t1 = %Text{content: "a"}
       t2 = %Text{content: "b"}
       t3 = %Text{content: "c"}
-      c = Container.new([t1, t2, t3]) |> Container.remove_child(1)
+      c = [t1, t2, t3] |> Container.new() |> Container.remove_child(1)
       assert c.children == [t1, t3]
     end
 
@@ -61,7 +61,7 @@ defmodule OctoPi.TUI.Components.ContainerTest do
     test "replaces child at index" do
       t1 = %Text{content: "old"}
       t2 = %Text{content: "new"}
-      c = Container.new([t1]) |> Container.update_child(0, t2)
+      c = [t1] |> Container.new() |> Container.update_child(0, t2)
       assert c.children == [t2]
     end
   end

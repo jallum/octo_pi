@@ -3,9 +3,9 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
   # Tests that exercise bad-syntax/crashing-init paths log warnings
   # by design; capture them so test output stays clean.
-  @moduletag capture_log: true
-
   alias OctoPi.Coder.Extension.Loader
+
+  @moduletag capture_log: true
 
   @fixtures_dir Path.join(__DIR__, "fixtures")
 

@@ -53,7 +53,7 @@ defmodule OctoPi.TUI.RenderThrottle do
       lines
       |> Enum.with_index()
       |> Enum.reduce([], fn {line, idx}, acc ->
-        visible_len = strip_ansi(line) |> String.length()
+        visible_len = line |> strip_ansi() |> String.length()
 
         if visible_len > width do
           [{idx, visible_len} | acc]

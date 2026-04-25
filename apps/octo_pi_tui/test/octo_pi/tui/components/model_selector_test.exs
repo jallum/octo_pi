@@ -47,18 +47,19 @@ defmodule OctoPi.TUI.Components.ModelSelectorTest do
 
   describe "navigation" do
     test "Down moves selection" do
-      selector = ModelSelector.new(test_models(), @theme) |> press(key(:down))
+      selector = test_models() |> ModelSelector.new(@theme) |> press(key(:down))
       assert selector.selected == 1
     end
 
     test "Up wraps to last item" do
-      selector = ModelSelector.new(test_models(), @theme) |> press(key(:up))
+      selector = test_models() |> ModelSelector.new(@theme) |> press(key(:up))
       assert selector.selected == 2
     end
 
     test "Down wraps to first item" do
       selector =
-        ModelSelector.new(test_models(), @theme)
+        test_models()
+        |> ModelSelector.new(@theme)
         |> press(key(:down))
         |> press(key(:down))
         |> press(key(:down))

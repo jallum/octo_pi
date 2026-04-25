@@ -38,14 +38,14 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
 
   describe "handle_char/2" do
     test "typing appends characters" do
-      d = LoginDialog.new(@theme) |> type("sk-ant-")
+      d = @theme |> LoginDialog.new() |> type("sk-ant-")
       assert d.value == "sk-ant-"
     end
   end
 
   describe "handle_key/2" do
     test "backspace removes last character" do
-      d = LoginDialog.new(@theme) |> type("abc")
+      d = @theme |> LoginDialog.new() |> type("abc")
       {d, _} = LoginDialog.handle_key(d, key(:backspace))
       assert d.value == "ab"
     end
@@ -67,7 +67,7 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
 
   describe "submit" do
     test "valid key emits api_key_entered" do
-      d = LoginDialog.new(@theme) |> type("sk-ant-api03-validkeyhere1234567890abcdef")
+      d = @theme |> LoginDialog.new() |> type("sk-ant-api03-validkeyhere1234567890abcdef")
       {_d, events} = LoginDialog.handle_key(d, key(:enter))
       assert [{:api_key_entered, "sk-ant-api03-validkeyhere1234567890abcdef"}] = events
     end
@@ -75,14 +75,14 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
     test "empty input sets error" do
       d = LoginDialog.new(@theme)
       {d, events} = LoginDialog.handle_key(d, key(:enter))
-      assert d.error != nil
+      assert d.error
       assert events == []
     end
 
     test "invalid format sets error" do
-      d = LoginDialog.new(@theme) |> type("not-a-key")
+      d = @theme |> LoginDialog.new() |> type("not-a-key")
       {d, events} = LoginDialog.handle_key(d, key(:enter))
-      assert d.error != nil
+      assert d.error
       assert events == []
     end
   end
@@ -91,7 +91,7 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
 
   describe "render/2" do
     test "shows masked input" do
-      d = LoginDialog.new(@theme) |> type("sk-ant-api03-secret1234")
+      d = @theme |> LoginDialog.new() |> type("sk-ant-api03-secret1234")
       lines = LoginDialog.render(d, 60)
       stripped = Enum.map(lines, &strip_ansi/1)
       text = Enum.join(stripped, "\n")
@@ -107,7 +107,7 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
     end
 
     test "shows error message when present" do
-      d = LoginDialog.new(@theme) |> type("bad")
+      d = @theme |> LoginDialog.new() |> type("bad")
       {d, _} = LoginDialog.handle_key(d, key(:enter))
       lines = LoginDialog.render(d, 60)
       stripped = Enum.map(lines, &strip_ansi/1)
@@ -115,7 +115,7 @@ defmodule OctoPi.TUI.Components.LoginDialogTest do
     end
 
     test "short input shows all masked" do
-      d = LoginDialog.new(@theme) |> type("ab")
+      d = @theme |> LoginDialog.new() |> type("ab")
       lines = LoginDialog.render(d, 60)
       stripped = Enum.map(lines, &strip_ansi/1)
       text = Enum.join(stripped, "\n")

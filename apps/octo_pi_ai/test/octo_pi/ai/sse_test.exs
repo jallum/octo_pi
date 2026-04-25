@@ -23,7 +23,7 @@ defmodule OctoPi.AI.SSETest do
   describe "decode/2 — basic events" do
     test "emits a single complete event terminated by blank line" do
       assert [%Event{event: "message_start", data: ~s({"hello":"world"})}] =
-               decode_all(["event: message_start\ndata: {\"hello\":\"world\"}\n\n"])
+               decode_all([~s(event: message_start\ndata: {"hello":"world"}\n\n)])
     end
 
     test "emits multiple consecutive events" do

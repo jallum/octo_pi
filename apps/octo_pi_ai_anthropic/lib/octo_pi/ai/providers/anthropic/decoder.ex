@@ -29,27 +29,22 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   L451-633. See `docs/port-map/anthropic.md` §6.
   """
 
-  alias OctoPi.AI.{
-    Content,
-    Event,
-    Message,
-    Model,
-    PartialJson,
-    Tool,
-    ToolCall,
-    Usage
-  }
-
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.PartialJson
   alias OctoPi.AI.Providers.Anthropic.ToolNames
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.Usage
 
   defmodule State do
     @moduledoc "Opaque decoder state — do not pattern-match externally."
 
-    alias OctoPi.AI.{Message, Model, Tool}
-
     @type t :: %__MODULE__{
             model: Model.t(),
-            message: Message.Assistant.t(),
+            message: OctoPi.AI.Message.Assistant.t(),
             index_map: %{non_neg_integer() => non_neg_integer()},
             content_count: non_neg_integer(),
             partial_json: %{non_neg_integer() => binary()},
@@ -127,14 +122,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
     {[], %{state | message: message}}
   end
 
-  def handle(
-        state,
-        %{
-          "type" => "content_block_start",
-          "index" => idx,
-          "content_block" => block
-        }
-      ) do
+  def handle(state, %{"type" => "content_block_start", "index" => idx, "content_block" => block}) do
     content_item = build_content_item(block, state)
     # `content` is reverse-ordered during streaming: prepend in O(1).
     # `position` is the forward-order index of the new block, which
@@ -224,8 +212,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   message and returns the matching `Event.Error`.
   """
   @spec error(State.t(), binary(), :error | :aborted) :: {Event.Error.t(), State.t()}
-  def error(state, reason_message, reason \\ :error)
-      when reason in [:error, :aborted] and is_binary(reason_message) do
+  def error(state, reason_message, reason \\ :error) when reason in [:error, :aborted] and is_binary(reason_message) do
     message = %{state.message | stop_reason: reason, error_message: reason_message}
     {%Event.Error{reason: reason, message: present(message)}, %{state | message: message}}
   end
@@ -260,8 +247,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
           Content.Text.t() | Content.Thinking.t() | ToolCall.t()
   defp build_content_item(%{"type" => "text"}, _state), do: %Content.Text{text: ""}
 
-  defp build_content_item(%{"type" => "thinking"}, _state),
-    do: %Content.Thinking{thinking: "", signature: ""}
+  defp build_content_item(%{"type" => "thinking"}, _state), do: %Content.Thinking{thinking: "", signature: ""}
 
   defp build_content_item(%{"type" => "redacted_thinking"} = block, _state) do
     %Content.Thinking{
@@ -281,14 +267,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
 
   @spec start_event_for(binary(), non_neg_integer(), Message.Assistant.t()) ::
           Event.TextStart.t() | Event.ThinkingStart.t() | Event.ToolCallStart.t()
-  defp start_event_for("text", pos, partial),
-    do: %Event.TextStart{content_index: pos, partial: partial}
+  defp start_event_for("text", pos, partial), do: %Event.TextStart{content_index: pos, partial: partial}
 
   defp start_event_for(type, pos, partial) when type in ["thinking", "redacted_thinking"],
     do: %Event.ThinkingStart{content_index: pos, partial: partial}
 
-  defp start_event_for("tool_use", pos, partial),
-    do: %Event.ToolCallStart{content_index: pos, partial: partial}
+  defp start_event_for("tool_use", pos, partial), do: %Event.ToolCallStart{content_index: pos, partial: partial}
 
   # --- delta application ---
   #
@@ -306,8 +290,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
         %{block | text: existing <> text}
       end)
 
-    {[%Event.TextDelta{content_index: position, delta: text, partial: present(state.message)}],
-     state}
+    {[%Event.TextDelta{content_index: position, delta: text, partial: present(state.message)}], state}
   end
 
   defp apply_delta(%{"type" => "thinking_delta", "thinking" => chunk}, position, state) do
@@ -462,8 +445,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   @spec maybe_set_stop_reason(Message.Assistant.t(), binary() | nil) :: Message.Assistant.t()
   defp maybe_set_stop_reason(message, nil), do: message
 
-  defp maybe_set_stop_reason(message, reason),
-    do: %{message | stop_reason: map_stop_reason(reason)}
+  defp maybe_set_stop_reason(message, reason), do: %{message | stop_reason: map_stop_reason(reason)}
 
   @spec map_stop_reason(binary()) :: Message.Assistant.stop_reason()
   defp map_stop_reason("end_turn"), do: :stop
@@ -474,14 +456,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   defp map_stop_reason("refusal"), do: :error
   defp map_stop_reason("sensitive"), do: :error
 
-  defp map_stop_reason(other),
-    do: raise(ArgumentError, "unknown Anthropic stop_reason: #{inspect(other)}")
+  defp map_stop_reason(other), do: raise(ArgumentError, "unknown Anthropic stop_reason: #{inspect(other)}")
 
   @spec rename_from_wire(String.t(), State.t()) :: String.t()
   defp rename_from_wire(name, %State{oauth?: false}), do: name
 
-  defp rename_from_wire(name, %State{oauth?: true, tools: tools}),
-    do: ToolNames.from_claude_code(name, tools)
+  defp rename_from_wire(name, %State{oauth?: true, tools: tools}), do: ToolNames.from_claude_code(name, tools)
 
   @spec merge_usage(Message.Assistant.t(), map()) :: Message.Assistant.t()
   defp merge_usage(message, usage) do

@@ -25,8 +25,7 @@ defmodule OctoPi.TUI.WrapAnsi.Tracker do
     end
   end
 
-  def process(%__MODULE__{} = t, <<"\e]8;", _::binary>> = code),
-    do: apply_hyperlink(t, code)
+  def process(%__MODULE__{} = t, <<"\e]8;", _::binary>> = code), do: apply_hyperlink(t, code)
 
   def process(%__MODULE__{} = t, _), do: t
 

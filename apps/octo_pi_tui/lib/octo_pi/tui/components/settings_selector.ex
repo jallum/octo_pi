@@ -3,7 +3,8 @@ defmodule OctoPi.TUI.Components.SettingsSelector do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.{Key, Theme}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Theme
 
   defmodule Item do
     @moduledoc false

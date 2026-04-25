@@ -129,8 +129,7 @@ defmodule OctoPi.TUI.Overlay do
 
   def anchor_row(a, _h, _ah, mt) when a in [:top_left, :top_center, :top_right], do: mt
 
-  def anchor_row(a, h, ah, mt) when a in [:bottom_left, :bottom_center, :bottom_right],
-    do: mt + ah - h
+  def anchor_row(a, h, ah, mt) when a in [:bottom_left, :bottom_center, :bottom_right], do: mt + ah - h
 
   def anchor_row(_a, h, ah, mt), do: mt + div(ah - h, 2)
 
@@ -141,8 +140,7 @@ defmodule OctoPi.TUI.Overlay do
 
   def anchor_col(a, _w, _aw, ml) when a in [:top_left, :left_center, :bottom_left], do: ml
 
-  def anchor_col(a, w, aw, ml) when a in [:top_right, :right_center, :bottom_right],
-    do: ml + aw - w
+  def anchor_col(a, w, aw, ml) when a in [:top_right, :right_center, :bottom_right], do: ml + aw - w
 
   def anchor_col(_a, w, aw, ml), do: ml + div(aw - w, 2)
 
@@ -165,11 +163,11 @@ defmodule OctoPi.TUI.Overlay do
 
   defp resolve_width({pct, :percent}, tw, avail_w, min_w) do
     w = div(tw * pct, 100)
-    apply_min_width(w, min_w, avail_w) |> clamp(1, avail_w)
+    w |> apply_min_width(min_w, avail_w) |> clamp(1, avail_w)
   end
 
   defp resolve_width(abs, _tw, avail_w, min_w) when is_integer(abs) do
-    apply_min_width(abs, min_w, avail_w) |> clamp(1, avail_w)
+    abs |> apply_min_width(min_w, avail_w) |> clamp(1, avail_w)
   end
 
   defp apply_min_width(w, nil, _avail_w), do: w
@@ -253,8 +251,7 @@ defmodule OctoPi.TUI.Overlay do
   defp slice_visible(_str, _start, len) when len <= 0, do: ""
 
   defp slice_visible(str, start, len) do
-    str
-    |> do_slice(start, len, 0, "", false)
+    do_slice(str, start, len, 0, "", false)
   end
 
   defp do_slice("", _start, _len, _col, acc, _in_range), do: acc

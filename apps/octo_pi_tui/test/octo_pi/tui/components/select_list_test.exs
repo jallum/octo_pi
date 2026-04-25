@@ -3,7 +3,8 @@ defmodule OctoPi.TUI.Components.SelectListTest do
 
   alias OctoPi.TUI.Components.SelectList
   alias OctoPi.TUI.Components.SelectList.Item
-  alias OctoPi.TUI.{Key, WrapAnsi}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.WrapAnsi
 
   defp visible_index_of(line, needle) do
     case String.split(line, needle, parts: 2) do

@@ -23,8 +23,7 @@ defmodule OctoPi.Coder.Tools.FindTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref, cwd),
-    do: Find.execute("id", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd), do: Find.execute("id", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "glob matches files recursively", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} =

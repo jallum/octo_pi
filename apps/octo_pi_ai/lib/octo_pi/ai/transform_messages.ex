@@ -11,7 +11,10 @@ defmodule OctoPi.AI.TransformMessages do
   Ported from `transform-messages.ts` L64-220.
   """
 
-  alias OctoPi.AI.{Content, Message, Model, ToolCall}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.ToolCall
 
   @type normalize_fn :: (String.t(), Model.t(), Message.Assistant.t() -> String.t())
 
@@ -80,9 +83,9 @@ defmodule OctoPi.AI.TransformMessages do
             normalized_id = Map.get(map, tr.tool_call_id, tr.tool_call_id)
 
             updated =
-              if normalized_id != tr.tool_call_id,
-                do: %{tr | tool_call_id: normalized_id},
-                else: tr
+              if normalized_id == tr.tool_call_id,
+                do: tr,
+                else: %{tr | tool_call_id: normalized_id}
 
             {[updated | acc], map}
 
@@ -124,17 +127,9 @@ defmodule OctoPi.AI.TransformMessages do
   defp transform_block(%Content.Thinking{redacted?: true}, true, _model, _source, _norm, map),
     do: {:keep, %Content.Thinking{redacted?: true}, map}
 
-  defp transform_block(%Content.Thinking{redacted?: true}, false, _model, _source, _norm, map),
-    do: {:drop, map}
+  defp transform_block(%Content.Thinking{redacted?: true}, false, _model, _source, _norm, map), do: {:drop, map}
 
-  defp transform_block(
-         %Content.Thinking{signature: sig} = block,
-         true,
-         _model,
-         _source,
-         _norm,
-         map
-       )
+  defp transform_block(%Content.Thinking{signature: sig} = block, true, _model, _source, _norm, map)
        when is_binary(sig) and sig != "" do
     {:keep, block, map}
   end
@@ -144,20 +139,17 @@ defmodule OctoPi.AI.TransformMessages do
     {:drop, map}
   end
 
-  defp transform_block(%Content.Thinking{} = block, true, _model, _source, _norm, map),
-    do: {:keep, block, map}
+  defp transform_block(%Content.Thinking{} = block, true, _model, _source, _norm, map), do: {:keep, block, map}
 
   defp transform_block(%Content.Thinking{thinking: thinking}, false, _model, _source, _norm, map),
     do: {:keep, %Content.Text{text: thinking}, map}
 
-  defp transform_block(%Content.Text{} = block, true, _model, _source, _norm, map),
-    do: {:keep, block, map}
+  defp transform_block(%Content.Text{} = block, true, _model, _source, _norm, map), do: {:keep, block, map}
 
   defp transform_block(%Content.Text{text: text}, false, _model, _source, _norm, map),
     do: {:keep, %Content.Text{text: text}, map}
 
-  defp transform_block(%ToolCall{} = tc, true, _model, _source, _norm, map),
-    do: {:keep, tc, map}
+  defp transform_block(%ToolCall{} = tc, true, _model, _source, _norm, map), do: {:keep, tc, map}
 
   defp transform_block(%ToolCall{} = tc, false, model, source, normalize_fn, map) do
     tc = %{tc | thought_signature: nil}
@@ -165,10 +157,10 @@ defmodule OctoPi.AI.TransformMessages do
     if normalize_fn do
       normalized_id = normalize_fn.(tc.id, model, source)
 
-      if normalized_id != tc.id do
-        {:keep, %{tc | id: normalized_id}, Map.put(map, tc.id, normalized_id)}
-      else
+      if normalized_id == tc.id do
         {:keep, tc, map}
+      else
+        {:keep, %{tc | id: normalized_id}, Map.put(map, tc.id, normalized_id)}
       end
     else
       {:keep, tc, map}

@@ -1,7 +1,8 @@
 defmodule OctoPi.TUI.KeybindingsTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.TUI.{Key, Keybindings}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Keybindings
 
   describe "new/0" do
     test "creates manager with default bindings" do

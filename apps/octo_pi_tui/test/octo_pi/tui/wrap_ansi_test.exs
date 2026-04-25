@@ -35,7 +35,7 @@ defmodule OctoPi.TUI.WrapAnsiTest do
         grapheme = <<cp::utf8>>
 
         assert WrapAnsi.visible_width(grapheme) == 2,
-               "expected U+#{Integer.to_string(cp, 16) |> String.upcase()} width 2"
+               "expected U+#{cp |> Integer.to_string(16) |> String.upcase()} width 2"
       end
     end
 
@@ -335,10 +335,10 @@ defmodule OctoPi.TUI.WrapAnsiTest do
       assert length(lines) == 1
 
       open_count =
-        Regex.scan(~r/\e\]8;;https:[^\e]+\e\\/, hd(lines)) |> length()
+        ~r/\e\]8;;https:[^\e]+\e\\/ |> Regex.scan(hd(lines)) |> length()
 
       close_count =
-        Regex.scan(~r/\e\]8;;\e\\/, hd(lines)) |> length()
+        ~r/\e\]8;;\e\\/ |> Regex.scan(hd(lines)) |> length()
 
       assert open_count == 1
       assert close_count == 1

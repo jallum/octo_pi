@@ -15,26 +15,26 @@ defmodule OctoPi.TUI.Interactive do
   `handle_event/2`.
   """
 
-  alias OctoPi.TUI.{
-    Components,
-    Events,
-    FooterData,
-    Key,
-    KeyParser,
-    RawMode,
-    Renderer,
-    Safe,
-    StdinFSM,
-    Terminal,
-    Theme,
-    WrapAnsi
-  }
-
-  alias Components.{AssistantMessage, Footer, ToolExecution, UserMessage}
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.Coder
-
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.TUI.Components
+  alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.UserMessage
+  alias OctoPi.TUI.Events
+  alias OctoPi.TUI.FooterData
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.KeyParser
+  alias OctoPi.TUI.RawMode
+  alias OctoPi.TUI.Renderer
+  alias OctoPi.TUI.Safe
+  alias OctoPi.TUI.StdinFSM
+  alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.WrapAnsi
 
   @type t :: %__MODULE__{
           session: pid() | nil,
@@ -177,8 +177,7 @@ defmodule OctoPi.TUI.Interactive do
   def handle_ui_request(state, :get_tools_expanded), do: {state, state.tools_expanded}
   def handle_ui_request(state, :get_theme), do: {state, state.theme && state.theme.name}
 
-  def handle_ui_request(state, :get_all_themes),
-    do: {state, Theme.available_themes()}
+  def handle_ui_request(state, :get_all_themes), do: {state, Theme.available_themes()}
 
   def handle_ui_request(state, {:set_editor_text, text}) do
     input = %{state.input | value: text, cursor: String.length(text)}
@@ -401,8 +400,11 @@ defmodule OctoPi.TUI.Interactive do
       end)
 
     session_opts =
-      [model: Keyword.fetch!(opts, :model), tools: tools, system_prompt: system_prompt]
-      |> put_if_present(:transport, opts[:transport])
+      put_if_present(
+        [model: Keyword.fetch!(opts, :model), tools: tools, system_prompt: system_prompt],
+        :transport,
+        opts[:transport]
+      )
 
     {:ok, pid} = OctoPi.Agent.start_session(session_opts)
     pid
@@ -528,11 +530,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp cursor_position(
-         %__MODULE__{input: input, width: width, height: height, footer: footer},
-         input_lines,
-         lines
-       ) do
+  defp cursor_position(%__MODULE__{input: input, width: width, height: height, footer: footer}, input_lines, lines) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
     footer_height = length(Footer.render(footer, width))
     input_end = length(lines) - footer_height
@@ -543,7 +541,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp shutdown(terminal, fsm, renderer, footer_data) do
-    pids = [footer_data, renderer, fsm, terminal] |> Enum.reject(&is_nil/1)
+    pids = Enum.reject([footer_data, renderer, fsm, terminal], &is_nil/1)
 
     Enum.each(pids, fn pid ->
       if Process.alive?(pid), do: GenServer.stop(pid, :normal)
@@ -561,11 +559,9 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec handle_event(t(), term()) :: t()
 
-  def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}),
-    do: %{state | exit: true}
+  def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: %{state | exit: true}
 
-  def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key})
-      when shortcuts != [] do
+  def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key}) when shortcuts != [] do
     case try_extension_shortcut(shortcuts, key, state) do
       {:consumed, new_state} -> new_state
       :pass -> handle_event_key(state, key)
@@ -574,24 +570,20 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{} = key}), do: handle_event_key(state, key)
 
-  def handle_event(state, :paste_start),
-    do: %{state | paste_buffer: ""}
+  def handle_event(state, :paste_start), do: %{state | paste_buffer: ""}
 
-  def handle_event(%{paste_buffer: buf} = state, {:char, c}) when is_binary(buf),
-    do: %{state | paste_buffer: buf <> c}
+  def handle_event(%{paste_buffer: buf} = state, {:char, c}) when is_binary(buf), do: %{state | paste_buffer: buf <> c}
 
   def handle_event(%{paste_buffer: buf, input: input} = state, :paste_end) when is_binary(buf),
     do: %{state | input: Components.Input.paste(input, buf), paste_buffer: nil}
 
-  def handle_event(state, :paste_end),
-    do: %{state | paste_buffer: nil}
+  def handle_event(state, :paste_end), do: %{state | paste_buffer: nil}
 
   def handle_event(%{input: %{value: ""}, banner: %_{} = banner} = state, {:char, "?"}) do
     %{state | banner: Components.WelcomeBanner.handle_key(banner, %Key{key: ??})}
   end
 
-  def handle_event(%{input: input} = state, {:char, c}),
-    do: %{state | input: Components.Input.insert(input, c)}
+  def handle_event(%{input: input} = state, {:char, c}), do: %{state | input: Components.Input.insert(input, c)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
     message = state.working_message || default_working_message()
@@ -623,8 +615,7 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, _), do: state
 
-  defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}),
-    do: %{state | exit: true}
+  defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}), do: %{state | exit: true}
 
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
@@ -674,23 +665,15 @@ defmodule OctoPi.TUI.Interactive do
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageUpdate} = ev, theme),
     do: apply_partial(transcript, ev.partial, theme)
 
-  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageEnd} = ev, theme),
+  defp update_transcript(transcript, %{__struct__: MessageEnd} = ev, theme),
     do: finalize_assistant(transcript, ev.message, theme)
 
-  defp update_transcript(
-         transcript,
-         %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev,
-         theme
-       ) do
+  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev, theme) do
     te = ToolExecution.new(ev.tool_name, ev.tool_call_id, %{}, theme)
     transcript ++ [te]
   end
 
-  defp update_transcript(
-         transcript,
-         %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev,
-         _theme
-       ) do
+  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev, _theme) do
     update_tool_execution(transcript, ev.tool_call_id, fn te ->
       result_text = extract_tool_result_text(ev.result)
       is_error = Map.get(ev.result, :is_error?, false)
@@ -700,7 +683,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp update_transcript(transcript, _, _theme), do: transcript
 
-  defp update_footer(footer, %{__struct__: OctoPi.Agent.Event.MessageEnd, message: msg}) do
+  defp update_footer(footer, %{__struct__: MessageEnd, message: msg}) do
     usage = Map.get(msg, :usage, %{})
     cost_struct = Map.get(usage, :cost, %{})
 
@@ -841,14 +824,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @spec render(t(), [binary()]) :: [binary()]
   def render(
-        %{
-          transcript: transcript,
-          footer: footer,
-          banner: banner,
-          loader: loader,
-          width: width,
-          height: height
-        } = state,
+        %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width, height: height} = state,
         input_lines
       ) do
     banner_lines = render_banner(banner, width)
@@ -865,8 +841,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_loader(nil, _width, _theme), do: []
 
-  defp render_loader(%Components.Loader{} = loader, width, theme),
-    do: Components.Loader.render(loader, width, theme)
+  defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_banner(nil, _width), do: []
 
@@ -881,7 +856,7 @@ defmodule OctoPi.TUI.Interactive do
     transcript
     |> Enum.with_index()
     |> Enum.flat_map(fn {entry, idx} ->
-      spacer = if idx > 0 and match?(%Components.UserMessage{}, entry), do: [""], else: []
+      spacer = if idx > 0 and match?(%UserMessage{}, entry), do: [""], else: []
       spacer ++ render_entry(entry, width)
     end)
   end

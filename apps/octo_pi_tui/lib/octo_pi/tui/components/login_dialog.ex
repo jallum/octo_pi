@@ -5,7 +5,8 @@ defmodule OctoPi.TUI.Components.LoginDialog do
 
   alias OctoPi.TUI.Components.Box
   alias OctoPi.TUI.Components.Text
-  alias OctoPi.TUI.{Key, Theme}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Theme
 
   @type t :: %__MODULE__{
           value: String.t(),

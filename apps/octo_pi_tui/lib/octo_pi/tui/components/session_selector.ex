@@ -3,7 +3,8 @@ defmodule OctoPi.TUI.Components.SessionSelector do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.{Key, Theme}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Theme
 
   @type t :: %__MODULE__{
           sessions: [map()],
@@ -66,10 +67,7 @@ defmodule OctoPi.TUI.Components.SessionSelector do
     end
   end
 
-  def handle_key(%__MODULE__{filtered_sessions: sessions, selected: sel} = s, %Key{
-        key: ?d,
-        modifiers: [:ctrl]
-      }) do
+  def handle_key(%__MODULE__{filtered_sessions: sessions, selected: sel} = s, %Key{key: ?d, modifiers: [:ctrl]}) do
     case Enum.at(sessions, sel) do
       nil -> s
       session -> {s, [{:delete_session, session}]}

@@ -2,7 +2,8 @@ defmodule OctoPi.TUI.KeyParserTest do
   # async: false — "Windows Terminal 0x08" tests mutate WT/SSH env vars.
   use ExUnit.Case, async: false
 
-  alias OctoPi.TUI.{Key, KeyParser}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.KeyParser
 
   @wt_env_keys ~w(WT_SESSION SSH_CONNECTION SSH_CLIENT SSH_TTY)
 
@@ -349,13 +350,13 @@ defmodule OctoPi.TUI.KeyParserTest do
     test "ctrl+shift+e" do
       result = KeyParser.parse("\e[27;6;69~")
       assert {:key, %Key{key: ?e}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:ctrl, :shift]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "ctrl+alt+h" do
       result = KeyParser.parse("\e[27;7;104~")
       assert {:key, %Key{key: ?h}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:alt, :ctrl]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:alt, :ctrl]
     end
   end
 
@@ -378,7 +379,7 @@ defmodule OctoPi.TUI.KeyParserTest do
     end
 
     test "with Ctrl+Shift: \\e[97;6u" do
-      mods = KeyParser.parse("\e[97;6u") |> elem(1) |> Map.fetch!(:modifiers) |> Enum.sort()
+      mods = "\e[97;6u" |> KeyParser.parse() |> elem(1) |> Map.fetch!(:modifiers) |> Enum.sort()
       assert mods == [:ctrl, :shift]
     end
 
@@ -417,13 +418,13 @@ defmodule OctoPi.TUI.KeyParserTest do
     test "ctrl+super+k" do
       result = KeyParser.parse("\e[107;13u")
       assert {:key, %Key{key: ?k}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:ctrl, :super]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :super]
     end
 
     test "ctrl+shift+super+k" do
       result = KeyParser.parse("\e[107;14u")
       assert {:key, %Key{key: ?k}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:ctrl, :shift, :super]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift, :super]
     end
   end
 
@@ -447,7 +448,7 @@ defmodule OctoPi.TUI.KeyParserTest do
     test "Cyrillic Ctrl+Shift+P with base 'p'" do
       result = KeyParser.parse("\e[1079::112;6u")
       assert {:key, %Key{key: ?p}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:ctrl, :shift]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "Latin Ctrl+C without base (terminal doesn't report it)" do
@@ -482,7 +483,7 @@ defmodule OctoPi.TUI.KeyParserTest do
       # cp=1089, shifted=1057, base=99, mod=6 (ctrl+shift), event=2 (repeat)
       result = KeyParser.parse("\e[1089:1057:99;6:2u")
       assert {:key, %Key{key: ?c, event_type: :repeat}} = result
-      assert Enum.sort(result |> elem(1) |> Map.get(:modifiers)) == [:ctrl, :shift]
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
     end
   end
 

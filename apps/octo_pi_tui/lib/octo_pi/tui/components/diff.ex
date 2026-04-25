@@ -27,7 +27,7 @@ defmodule OctoPi.TUI.Components.Diff do
       {:removed, line_num, content} ->
         {removed, added, rest} = collect_change([{line_num, content}], [], rest)
         new_lines = render_change(removed, added, theme)
-        render_lines(rest, theme, Enum.reverse(new_lines) ++ acc)
+        render_lines(rest, theme, Enum.reverse(new_lines, acc))
 
       {:added, line_num, content} ->
         rendered = Theme.fg(theme, :tool_diff_added, "+#{line_num} #{replace_tabs(content)}")
@@ -104,7 +104,7 @@ defmodule OctoPi.TUI.Components.Diff do
   end
 
   defp split_words(text) do
-    Regex.scan(~r/\S+|\s+/, text) |> List.flatten()
+    ~r/\S+|\s+/ |> Regex.scan(text) |> List.flatten()
   end
 
   defp lcs_words([], _), do: []

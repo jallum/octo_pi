@@ -3,7 +3,9 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.{SyntaxHighlight, Theme, WrapAnsi}
+  alias OctoPi.TUI.SyntaxHighlight
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.WrapAnsi
 
   @type t :: %__MODULE__{
           text: String.t(),
@@ -73,8 +75,7 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space([styled], next)
   end
 
-  defp render_node({"h" <> level, _, children, _}, _width, theme, next)
-       when level in ["3", "4", "5", "6"] do
+  defp render_node({"h" <> level, _, children, _}, _width, theme, next) when level in ["3", "4", "5", "6"] do
     depth = String.to_integer(level)
     prefix = String.duplicate("#", depth) <> " "
     text = render_inline(children, theme)
@@ -350,14 +351,16 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   defp render_table_row(cells, col_widths, _theme, bold?) do
     wrapped =
-      Enum.zip(cells, col_widths)
+      cells
+      |> Enum.zip(col_widths)
       |> Enum.map(fn {text, w} -> WrapAnsi.wrap(text, max(w, 1)) end)
 
     max_lines = wrapped |> Enum.map(&length/1) |> Enum.max(fn -> 1 end)
 
     Enum.map(0..(max_lines - 1), fn line_idx ->
       parts =
-        Enum.zip(wrapped, col_widths)
+        wrapped
+        |> Enum.zip(col_widths)
         |> Enum.map(fn {cell_lines, w} ->
           text = Enum.at(cell_lines, line_idx, "")
           vis_w = WrapAnsi.visible_width(text)

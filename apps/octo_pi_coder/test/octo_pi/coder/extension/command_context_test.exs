@@ -1,7 +1,8 @@
 defmodule OctoPi.Coder.Extension.CommandContextTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.Coder.Extension.{CommandContext, Context}
+  alias OctoPi.Coder.Extension.CommandContext
+  alias OctoPi.Coder.Extension.Context
 
   defp base_ctx, do: Context.new(%{cwd: "/tmp"})
 

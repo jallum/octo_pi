@@ -30,18 +30,17 @@ defmodule OctoPi.Coder.SystemPrompt do
     append = Keyword.get(opts, :append)
     context_files = Keyword.get(opts, :context_files, [])
 
-    date = Date.utc_today() |> Date.to_iso8601()
+    date = Date.to_iso8601(Date.utc_today())
 
     body = build_body(custom_prompt, tools, extra_guidelines)
 
-    [
+    IO.iodata_to_binary([
       body,
       append_section(append),
       context_section(context_files),
       "\nCurrent date: #{date}",
       "\nCurrent working directory: #{cwd}"
-    ]
-    |> IO.iodata_to_binary()
+    ])
   end
 
   defp build_body(custom, _tools, _guidelines) when is_binary(custom), do: custom

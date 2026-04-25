@@ -42,12 +42,9 @@ defmodule OctoPi.Coder.Extension.CommandContext do
     end)
   end
 
-  defp stub(field, 0),
-    do: fn -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+  defp stub(field, 0), do: fn -> raise RuntimeError, "#{field} not bound — interactive mode only" end
 
-  defp stub(field, 1),
-    do: fn _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+  defp stub(field, 1), do: fn _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
 
-  defp stub(field, 2),
-    do: fn _, _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
+  defp stub(field, 2), do: fn _, _ -> raise RuntimeError, "#{field} not bound — interactive mode only" end
 end

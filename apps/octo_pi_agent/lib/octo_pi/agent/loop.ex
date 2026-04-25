@@ -238,7 +238,8 @@ defmodule OctoPi.Agent.Loop do
 
   defp run_sequential(session, state, tool_calls, abort_ref) do
     Enum.map(tool_calls, fn call ->
-      execute_one_tool_call(session, state, call, abort_ref)
+      session
+      |> execute_one_tool_call(state, call, abort_ref)
       |> build_tool_result_message(call)
     end)
   end
@@ -364,8 +365,7 @@ defmodule OctoPi.Agent.Loop do
 
   defp prepare_params(%Tool{prepare_arguments: nil}, args), do: args
 
-  defp prepare_params(%Tool{prepare_arguments: fun}, args) when is_function(fun, 1),
-    do: fun.(args)
+  defp prepare_params(%Tool{prepare_arguments: fun}, args) when is_function(fun, 1), do: fun.(args)
 
   defp build_tool_result_message(%Tool.Result{} = result, %ToolCall{} = call) do
     %OctoPi.AI.Message.ToolResult{

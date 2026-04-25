@@ -22,7 +22,7 @@ defmodule OctoPi.TUI.Components.CustomMessageTest do
     test "accepts custom renderer" do
       renderer = fn _msg, _opts, _theme -> ["custom line"] end
       msg = CustomMessage.new("test", "content", @theme, renderer: renderer)
-      assert msg.renderer != nil
+      assert msg.renderer
     end
   end
 
@@ -70,7 +70,7 @@ defmodule OctoPi.TUI.Components.CustomMessageTest do
       end
 
       msg = CustomMessage.new("test", "x", @theme, renderer: renderer)
-      collapsed = CustomMessage.render(msg, 60) |> Enum.map(&strip_ansi/1)
+      collapsed = msg |> CustomMessage.render(60) |> Enum.map(&strip_ansi/1)
       assert Enum.any?(collapsed, &(&1 =~ "[COLLAPSED]"))
 
       expanded =

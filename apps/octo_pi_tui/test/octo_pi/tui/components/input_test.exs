@@ -550,7 +550,7 @@ defmodule OctoPi.TUI.Components.InputTest do
     end
 
     test "undoes backspace" do
-      input = type(%Input{}, "hello") |> press(key(:backspace))
+      input = %Input{} |> type("hello") |> press(key(:backspace))
       assert input.value == "hell"
 
       input = press(input, undo_key())
@@ -559,7 +559,8 @@ defmodule OctoPi.TUI.Components.InputTest do
 
     test "undoes forward delete" do
       input =
-        type(%Input{}, "hello")
+        %Input{}
+        |> type("hello")
         |> press(ctrl(?a))
         |> press(key(:right))
         |> press(key(:delete))
@@ -571,7 +572,7 @@ defmodule OctoPi.TUI.Components.InputTest do
     end
 
     test "undoes Ctrl+W (delete word backward)" do
-      input = type(%Input{}, "hello world") |> press(ctrl(?w))
+      input = %Input{} |> type("hello world") |> press(ctrl(?w))
       assert input.value == "hello "
 
       input = press(input, undo_key())
@@ -580,7 +581,8 @@ defmodule OctoPi.TUI.Components.InputTest do
 
     test "undoes Ctrl+K (delete to line end)" do
       input =
-        type(%Input{}, "hello world")
+        %Input{}
+        |> type("hello world")
         |> press(ctrl(?a))
         |> move_right(6)
         |> press(ctrl(?k))
@@ -593,7 +595,8 @@ defmodule OctoPi.TUI.Components.InputTest do
 
     test "undoes Ctrl+U (delete to line start)" do
       input =
-        type(%Input{}, "hello world")
+        %Input{}
+        |> type("hello world")
         |> press(ctrl(?a))
         |> move_right(6)
         |> press(ctrl(?u))
@@ -606,7 +609,8 @@ defmodule OctoPi.TUI.Components.InputTest do
 
     test "undoes yank" do
       input =
-        type(%Input{}, "hello ")
+        %Input{}
+        |> type("hello ")
         |> press(ctrl(?w))
         |> press(ctrl(?y))
 
@@ -645,7 +649,8 @@ defmodule OctoPi.TUI.Components.InputTest do
 
     test "cursor movement starts new undo unit" do
       input =
-        type(%Input{}, "abc")
+        %Input{}
+        |> type("abc")
         |> press(ctrl(?a))
         |> press(ctrl(?e))
         |> type("de")
@@ -664,14 +669,14 @@ defmodule OctoPi.TUI.Components.InputTest do
 
   describe "Shift+Enter — newline insertion" do
     test "inserts newline at cursor" do
-      input = type(%Input{}, "hello") |> press(shift_enter())
+      input = %Input{} |> type("hello") |> press(shift_enter())
       assert input.value == "hello\n"
       assert input.cursor == 6
     end
 
     test "inserts newline in middle of text" do
       input =
-        type(%Input{}, "helloworld") |> press(ctrl(?a)) |> move_right(5) |> press(shift_enter())
+        %Input{} |> type("helloworld") |> press(ctrl(?a)) |> move_right(5) |> press(shift_enter())
 
       assert input.value == "hello\nworld"
       assert input.cursor == 6
@@ -775,44 +780,44 @@ defmodule OctoPi.TUI.Components.InputTest do
 
   describe "line-aware kill operations" do
     test "Ctrl+K kills to end of current logical line, not end of all text" do
-      input = %Input{value: "hello\nworld", cursor: 2} |> press(ctrl(?k))
+      input = press(%Input{value: "hello\nworld", cursor: 2}, ctrl(?k))
       assert input.value == "he\nworld"
     end
 
     test "Ctrl+K at end of line kills the newline" do
-      input = %Input{value: "hello\nworld", cursor: 5} |> press(ctrl(?k))
+      input = press(%Input{value: "hello\nworld", cursor: 5}, ctrl(?k))
       assert input.value == "helloworld"
     end
 
     test "Ctrl+U kills to start of current logical line" do
-      input = %Input{value: "hello\nworld", cursor: 8} |> press(ctrl(?u))
+      input = press(%Input{value: "hello\nworld", cursor: 8}, ctrl(?u))
       assert input.value == "hello\nrld"
     end
 
     test "Ctrl+A moves to start of current logical line" do
-      input = %Input{value: "hello\nworld", cursor: 8} |> press(ctrl(?a))
+      input = press(%Input{value: "hello\nworld", cursor: 8}, ctrl(?a))
       assert input.cursor == 6
     end
 
     test "Ctrl+E moves to end of current logical line" do
-      input = %Input{value: "hello\nworld", cursor: 6} |> press(ctrl(?e))
+      input = press(%Input{value: "hello\nworld", cursor: 6}, ctrl(?e))
       assert input.cursor == 11
     end
 
     test "Home moves to start of current logical line" do
-      input = %Input{value: "hello\nworld", cursor: 8} |> press(key(:home))
+      input = press(%Input{value: "hello\nworld", cursor: 8}, key(:home))
       assert input.cursor == 6
     end
 
     test "End moves to end of current logical line" do
-      input = %Input{value: "hello\nworld", cursor: 6} |> press(key(:end))
+      input = press(%Input{value: "hello\nworld", cursor: 6}, key(:end))
       assert input.cursor == 11
     end
   end
 
   describe "backspace at line boundary" do
     test "backspace at start of second line merges lines" do
-      input = %Input{value: "hello\nworld", cursor: 6} |> press(key(:backspace))
+      input = press(%Input{value: "hello\nworld", cursor: 6}, key(:backspace))
       assert input.value == "helloworld"
       assert input.cursor == 5
     end
@@ -820,13 +825,13 @@ defmodule OctoPi.TUI.Components.InputTest do
 
   describe "multiline paste" do
     test "paste preserves newlines" do
-      input = %Input{} |> Input.paste("hello\nworld")
+      input = Input.paste(%Input{}, "hello\nworld")
       assert input.value == "hello\nworld"
       assert input.cursor == 11
     end
 
     test "paste normalizes \\r\\n to \\n" do
-      input = %Input{} |> Input.paste("hello\r\nworld")
+      input = Input.paste(%Input{}, "hello\r\nworld")
       assert input.value == "hello\nworld"
     end
   end

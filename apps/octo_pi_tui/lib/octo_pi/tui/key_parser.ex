@@ -27,9 +27,9 @@ defmodule OctoPi.TUI.KeyParser do
     * Bracketed paste markers: `\\e[200~` / `\\e[201~`
   """
 
-  alias OctoPi.TUI.Key
-
   import Bitwise, only: [band: 2]
+
+  alias OctoPi.TUI.Key
 
   # --- public entry point (multi-head dispatch) ---
 
@@ -284,25 +284,25 @@ defmodule OctoPi.TUI.KeyParser do
   end
 
   # Kitty keypad functional keys (codepoints 57399–57426).
-  defp keypad_map(n) when n in 57399..57408, do: {:char_key, n - 57399 + ?0}
-  defp keypad_map(57409), do: {:char_key, ?.}
-  defp keypad_map(57410), do: {:char_key, ?/}
-  defp keypad_map(57411), do: {:char_key, ?*}
-  defp keypad_map(57412), do: {:char_key, ?-}
-  defp keypad_map(57413), do: {:char_key, ?+}
-  defp keypad_map(57414), do: {:named_key, :enter}
-  defp keypad_map(57415), do: {:char_key, ?=}
-  defp keypad_map(57416), do: {:char_key, ?,}
-  defp keypad_map(57417), do: {:named_key, :left}
-  defp keypad_map(57418), do: {:named_key, :right}
-  defp keypad_map(57419), do: {:named_key, :up}
-  defp keypad_map(57420), do: {:named_key, :down}
-  defp keypad_map(57421), do: {:named_key, :page_up}
-  defp keypad_map(57422), do: {:named_key, :page_down}
-  defp keypad_map(57423), do: {:named_key, :home}
-  defp keypad_map(57424), do: {:named_key, :end}
-  defp keypad_map(57425), do: {:named_key, :insert}
-  defp keypad_map(57426), do: {:named_key, :delete}
+  defp keypad_map(n) when n in 57_399..57_408, do: {:char_key, n - 57_399 + ?0}
+  defp keypad_map(57_409), do: {:char_key, ?.}
+  defp keypad_map(57_410), do: {:char_key, ?/}
+  defp keypad_map(57_411), do: {:char_key, ?*}
+  defp keypad_map(57_412), do: {:char_key, ?-}
+  defp keypad_map(57_413), do: {:char_key, ?+}
+  defp keypad_map(57_414), do: {:named_key, :enter}
+  defp keypad_map(57_415), do: {:char_key, ?=}
+  defp keypad_map(57_416), do: {:char_key, ?,}
+  defp keypad_map(57_417), do: {:named_key, :left}
+  defp keypad_map(57_418), do: {:named_key, :right}
+  defp keypad_map(57_419), do: {:named_key, :up}
+  defp keypad_map(57_420), do: {:named_key, :down}
+  defp keypad_map(57_421), do: {:named_key, :page_up}
+  defp keypad_map(57_422), do: {:named_key, :page_down}
+  defp keypad_map(57_423), do: {:named_key, :home}
+  defp keypad_map(57_424), do: {:named_key, :end}
+  defp keypad_map(57_425), do: {:named_key, :insert}
+  defp keypad_map(57_426), do: {:named_key, :delete}
   defp keypad_map(_), do: nil
 
   # Map well-known codepoints to named key atoms in CSI-u context.

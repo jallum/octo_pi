@@ -5,13 +5,21 @@ defmodule OctoPi.Agent.LoopTest do
   # tests deliberately leave the scripted stream in a state that makes
   # that Task crash (script exhausted / brutal kill). ExUnit prints the
   # Task supervisor's error log by default — capture it.
-  @moduletag capture_log: true
-
   alias OctoPi.Agent.Event
-  alias OctoPi.Agent.TestSupport.{EchoTool, FakeTransport, ProbeTool}
+  alias OctoPi.Agent.TestSupport.EchoTool
+  alias OctoPi.Agent.TestSupport.FakeTransport
+  alias OctoPi.Agent.TestSupport.ProbeTool
+  alias OctoPi.Agent.Tool.Result
+  alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event, as: AIEvent
   alias OctoPi.AI.Message.Assistant
-  alias OctoPi.AI.{Model, ToolCall, Usage}
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.Usage
+
+  @moduletag capture_log: true
 
   setup do
     on_exit(&FakeTransport.clear/0)
@@ -80,7 +88,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "emits Agent/Turn/Message events in order and exits with :stop" do
       final =
         assistant(
-          [%OctoPi.AI.Content.Text{text: "hello"}],
+          [%Text{text: "hello"}],
           :stop
         )
 
@@ -115,7 +123,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "dispatches tool, appends tool_result, runs a follow-up turn until :stop" do
       tool_call = %ToolCall{id: "call_1", name: "echo", arguments: %{"text" => "foo"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -142,8 +150,8 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
                          tool_name: "echo",
-                         result: %OctoPi.Agent.Tool.Result{
-                           content: [%OctoPi.AI.Content.Text{text: "foo"}]
+                         result: %Result{
+                           content: [%Text{text: "foo"}]
                          }
                        }}
 
@@ -165,7 +173,7 @@ defmodule OctoPi.Agent.LoopTest do
       call_a = %ToolCall{id: "a", name: "probe", arguments: %{"sleep_ms" => 100, "label" => "a"}}
       call_b = %ToolCall{id: "b", name: "probe", arguments: %{"sleep_ms" => 100, "label" => "b"}}
       tool_turn = assistant([call_a, call_b], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -207,7 +215,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([call_a, call_b], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -245,7 +253,7 @@ defmodule OctoPi.Agent.LoopTest do
       call_fast = %ToolCall{id: "fast", name: "probe", arguments: %{"label" => "fast"}}
 
       tool_turn = assistant([call_slow, call_fast], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -267,7 +275,7 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
       # user → assistant(tool_use) → tool_result(slow) → tool_result(fast) → assistant(stop)
-      tool_results = Enum.filter(msgs, &match?(%OctoPi.AI.Message.ToolResult{}, &1))
+      tool_results = Enum.filter(msgs, &match?(%ToolResult{}, &1))
       assert Enum.map(tool_results, & &1.tool_call_id) == ["slow", "fast"]
     end
 
@@ -279,7 +287,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+      final_turn = assistant([%Text{text: "ok"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -301,16 +309,16 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionUpdate{
                          tool_call_id: "u1",
-                         partial: %OctoPi.Agent.Tool.Result{
-                           content: [%OctoPi.AI.Content.Text{text: "one"}]
+                         partial: %Result{
+                           content: [%Text{text: "one"}]
                          }
                        }}
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionUpdate{
                          tool_call_id: "u1",
-                         partial: %OctoPi.Agent.Tool.Result{
-                           content: [%OctoPi.AI.Content.Text{text: "two"}]
+                         partial: %Result{
+                           content: [%Text{text: "two"}]
                          }
                        }}
     end
@@ -318,7 +326,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "a raising tool yields an error tool-result, loop continues" do
       call = %ToolCall{id: "boom", name: "probe", arguments: %{"raise" => "kaboom"}}
       tool_turn = assistant([call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "recovered"}], :stop)
+      final_turn = assistant([%Text{text: "recovered"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -340,9 +348,9 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
                          tool_call_id: "boom",
-                         result: %OctoPi.Agent.Tool.Result{
+                         result: %Result{
                            is_error?: true,
-                           content: [%OctoPi.AI.Content.Text{text: msg}]
+                           content: [%Text{text: msg}]
                          }
                        }}
 
@@ -366,7 +374,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -393,15 +401,15 @@ defmodule OctoPi.Agent.LoopTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
-      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["go", "midway note"]
     end
   end
 
   describe "follow-up queue drainage" do
     test "follow_up during a run injects after terminal stop and re-loops" do
-      first = assistant([%OctoPi.AI.Content.Text{text: "first"}], :stop)
-      second = assistant([%OctoPi.AI.Content.Text{text: "second"}], :stop)
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -426,7 +434,7 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 2}}
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
-      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["hi", "and then?"]
     end
 
@@ -437,7 +445,7 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.follow_up(session, "carried over")
       refute_receive {:octo_pi_agent_event, _}, 50
 
-      only = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+      only = assistant([%Text{text: "ok"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -463,13 +471,13 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
-      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["now", "carried over"]
     end
 
     test "set_queue_mode(:all) drains multiple follow_ups in one pass" do
-      first = assistant([%OctoPi.AI.Content.Text{text: "first"}], :stop)
-      second = assistant([%OctoPi.AI.Content.Text{text: "second"}], :stop)
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -499,7 +507,7 @@ defmodule OctoPi.Agent.LoopTest do
       refute_received {:octo_pi_agent_event, %Event.TurnStart{turn: 3}}
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
-      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["hi", "a", "b"]
     end
   end
@@ -513,7 +521,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "unreached"}], :stop)
+      final_turn = assistant([%Text{text: "unreached"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -548,7 +556,7 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted, messages: msgs}}
 
       # Synthesized assistant with :aborted stop reason.
-      assert %OctoPi.AI.Message.Assistant{stop_reason: :aborted} = List.last(msgs)
+      assert %Assistant{stop_reason: :aborted} = List.last(msgs)
 
       # Session should now be idle.
       refute OctoPi.Agent.state(session).is_streaming?
@@ -562,7 +570,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "x"}], :stop)
+      final_turn = assistant([%Text{text: "x"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -595,7 +603,7 @@ defmodule OctoPi.Agent.LoopTest do
     test ":allow runs the tool normally" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "ran"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+      final_turn = assistant([%Text{text: "ok"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -621,8 +629,8 @@ defmodule OctoPi.Agent.LoopTest do
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
-                         result: %OctoPi.Agent.Tool.Result{
-                           content: [%OctoPi.AI.Content.Text{text: "ran"}],
+                         result: %Result{
+                           content: [%Text{text: "ran"}],
                            is_error?: false
                          }
                        }}
@@ -636,7 +644,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "handled"}], :stop)
+      final_turn = assistant([%Text{text: "handled"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -668,9 +676,9 @@ defmodule OctoPi.Agent.LoopTest do
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
-                         result: %OctoPi.Agent.Tool.Result{
+                         result: %Result{
                            is_error?: true,
-                           content: [%OctoPi.AI.Content.Text{text: msg}]
+                           content: [%Text{text: msg}]
                          }
                        }}
 
@@ -682,7 +690,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "{:patch, map} merges into the tool result" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "raw"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+      final_turn = assistant([%Text{text: "ok"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -696,7 +704,7 @@ defmodule OctoPi.Agent.LoopTest do
       ])
 
       patch_fn = fn _ctx ->
-        {:patch, %{content: [%OctoPi.AI.Content.Text{text: "patched"}], details: %{tag: :after}}}
+        {:patch, %{content: [%Text{text: "patched"}], details: %{tag: :after}}}
       end
 
       session =
@@ -712,8 +720,8 @@ defmodule OctoPi.Agent.LoopTest do
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
-                         result: %OctoPi.Agent.Tool.Result{
-                           content: [%OctoPi.AI.Content.Text{text: "patched"}],
+                         result: %Result{
+                           content: [%Text{text: "patched"}],
                            details: %{tag: :after}
                          }
                        }}
@@ -722,7 +730,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "exception in after hook becomes an error result, loop continues" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "x"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "recovered"}], :stop)
+      final_turn = assistant([%Text{text: "recovered"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -748,9 +756,9 @@ defmodule OctoPi.Agent.LoopTest do
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
-                         result: %OctoPi.Agent.Tool.Result{
+                         result: %Result{
                            is_error?: true,
-                           content: [%OctoPi.AI.Content.Text{text: msg}]
+                           content: [%Text{text: msg}]
                          }
                        }}
 
@@ -763,7 +771,7 @@ defmodule OctoPi.Agent.LoopTest do
     test "session + turn + tool events fire with expected metadata" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "ok"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -806,22 +814,19 @@ defmodule OctoPi.Agent.LoopTest do
       assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 1}}
       assert_received {:telemetry, [:octo_pi_agent, :turn, :stop], %{duration: _}, %{turn: 1}}
 
-      assert_received {:telemetry, [:octo_pi_agent, :tool, :start], _,
-                       %{tool_name: "probe", tool_call_id: "c"}}
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :start], _, %{tool_name: "probe", tool_call_id: "c"}}
 
-      assert_received {:telemetry, [:octo_pi_agent, :tool, :stop], %{duration: _},
-                       %{is_error?: false}}
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :stop], %{duration: _}, %{is_error?: false}}
 
       assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 2}}
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _},
-                       %{reason: :stop}}
+      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _}, %{reason: :stop}}
     end
 
     test "tool :error event fires for error results" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"raise" => "boom"}}
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -893,8 +898,7 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.abort(session)
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _},
-                       %{reason: :aborted}}
+      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _}, %{reason: :aborted}}
     end
 
     test "synthesized aborted Assistant carries error_message on both paths" do
@@ -941,7 +945,7 @@ defmodule OctoPi.Agent.LoopTest do
         end
 
       tool_turn = assistant(calls, :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -961,7 +965,7 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.wait_for_idle(session, 5_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
-      tool_results = Enum.filter(msgs, &match?(%OctoPi.AI.Message.ToolResult{}, &1))
+      tool_results = Enum.filter(msgs, &match?(%ToolResult{}, &1))
       assert length(tool_results) == 20
       assert Enum.map(tool_results, & &1.tool_call_id) == Enum.map(1..20, &"c#{&1}")
     end
@@ -1044,7 +1048,7 @@ defmodule OctoPi.Agent.LoopTest do
       }
 
       tool_turn = assistant([tool_call], :tool_use)
-      final_turn = assistant([%OctoPi.AI.Content.Text{text: "done"}], :stop)
+      final_turn = assistant([%Text{text: "done"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -1070,7 +1074,7 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
-      users = Enum.filter(msgs, &match?(%OctoPi.AI.Message.User{}, &1))
+      users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["go", "note a", "note b"]
     end
   end

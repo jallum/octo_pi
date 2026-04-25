@@ -9,7 +9,7 @@ defmodule OctoPi.TUI.Components.HeaderTest do
   describe "render/2" do
     test "compact mode renders logo + single-line hints + onboarding" do
       lines = Header.render(%Header{expanded: false}, 80)
-      text = lines |> Enum.map(&strip_ansi/1) |> Enum.join("\n")
+      text = Enum.map_join(lines, "\n", &strip_ansi/1)
 
       assert text =~ "OctoPi"
       assert text =~ "Ctrl+C"
@@ -19,7 +19,7 @@ defmodule OctoPi.TUI.Components.HeaderTest do
 
     test "expanded mode renders multi-line hints" do
       lines = Header.render(%Header{expanded: true}, 80)
-      text = lines |> Enum.map(&strip_ansi/1) |> Enum.join("\n")
+      text = Enum.map_join(lines, "\n", &strip_ansi/1)
 
       assert text =~ "Ctrl+C to interrupt"
       assert text =~ "Ctrl+L to clear"
@@ -34,7 +34,7 @@ defmodule OctoPi.TUI.Components.HeaderTest do
 
     test "logo includes version" do
       lines = Header.render(%Header{}, 80)
-      text = lines |> Enum.map(&strip_ansi/1) |> Enum.join("\n")
+      text = Enum.map_join(lines, "\n", &strip_ansi/1)
       assert text =~ ~r/OctoPi v\d+\.\d+/
     end
   end

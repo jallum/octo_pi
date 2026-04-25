@@ -1,8 +1,12 @@
 defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{Content, Event, Message, Model, ToolCall}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.Anthropic.Decoder
+  alias OctoPi.AI.ToolCall
 
   defp model do
     %Model{

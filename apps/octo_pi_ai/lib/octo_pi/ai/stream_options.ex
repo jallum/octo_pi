@@ -25,12 +25,14 @@ defmodule OctoPi.AI.StreamOptions do
   `session_id` (tied to prompt caching).
   """
 
+  alias OctoPi.AI.Model
+
   @type thinking_level :: :minimal | :low | :medium | :high | :xhigh
 
   @type thinking_budgets :: %{optional(thinking_level()) => pos_integer()}
 
-  @type on_payload :: (map(), OctoPi.AI.Model.t() -> map() | nil) | nil
-  @type on_response :: (map(), OctoPi.AI.Model.t() -> :ok) | nil
+  @type on_payload :: (map(), Model.t() -> map() | nil) | nil
+  @type on_response :: (map(), Model.t() -> :ok) | nil
 
   @type t :: %__MODULE__{
           temperature: float() | nil,

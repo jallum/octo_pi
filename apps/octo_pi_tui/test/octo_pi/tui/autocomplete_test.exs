@@ -2,7 +2,9 @@ defmodule OctoPi.TUI.AutocompleteTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Autocomplete
-  alias OctoPi.TUI.Autocomplete.{CombinedProvider, SlashCommandProvider, Suggestion}
+  alias OctoPi.TUI.Autocomplete.CombinedProvider
+  alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+  alias OctoPi.TUI.Autocomplete.Suggestion
 
   # ── Suggestion struct ──────────────────────────────────────────
 

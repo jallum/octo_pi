@@ -8,7 +8,9 @@ defmodule OctoPi.TUI.Components.Input do
 
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.Suggestion
-  alias OctoPi.TUI.{Key, Theme, WrapAnsi}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.WrapAnsi
 
   @page_size 10
 
@@ -82,10 +84,7 @@ defmodule OctoPi.TUI.Components.Input do
   # --- render ---
 
   @impl true
-  def render(
-        %__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input,
-        width
-      ) do
+  def render(%__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input, width) do
     {effective_px, content_w, lw} = layout_width(width, px)
     all_lines = layout_lines(value, lw)
 
@@ -162,8 +161,7 @@ defmodule OctoPi.TUI.Components.Input do
 
   @doc "Set the value, clamping cursor. Preserves kill ring, undo, etc."
   @spec set_value(t(), String.t()) :: t()
-  def set_value(%__MODULE__{cursor: c} = s, value),
-    do: %{s | value: value, cursor: min(c, String.length(value))}
+  def set_value(%__MODULE__{cursor: c} = s, value), do: %{s | value: value, cursor: min(c, String.length(value))}
 
   @doc "Insert a char at the cursor (from KeyParser {:char, _} events)."
   @spec insert(t(), String.t()) :: t()
@@ -171,14 +169,13 @@ defmodule OctoPi.TUI.Components.Input do
     s = if whitespace?(char) or s.last_action != :type_word, do: push_undo(s), else: s
     {before, after_cursor} = split_at_grapheme(v, c)
 
-    %{
+    refresh_autocomplete(%{
       s
       | value: before <> char <> after_cursor,
         cursor: c + String.length(char),
         last_action: :type_word,
         history_index: nil
-    }
-    |> refresh_autocomplete()
+    })
   end
 
   @doc "Insert pasted text atomically (single undo unit)."
@@ -206,20 +203,15 @@ defmodule OctoPi.TUI.Components.Input do
   @impl true
   def handle_key(%__MODULE__{} = s, %Key{key: ?-, modifiers: [:ctrl]}), do: undo(s)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :up}),
-    do: autocomplete_navigate(s, -1)
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :up}), do: autocomplete_navigate(s, -1)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :down}),
-    do: autocomplete_navigate(s, 1)
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :down}), do: autocomplete_navigate(s, 1)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :tab}),
-    do: autocomplete_accept(s)
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :tab}), do: autocomplete_accept(s)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :enter}),
-    do: autocomplete_accept(s)
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :enter}), do: autocomplete_accept(s)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :escape}),
-    do: dismiss_autocomplete(s)
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :escape}), do: dismiss_autocomplete(s)
 
   def handle_key(%__MODULE__{} = s, %Key{key: :enter, modifiers: [:shift]}), do: insert(s, "\n")
 
@@ -247,8 +239,7 @@ defmodule OctoPi.TUI.Components.Input do
 
   def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: s
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}),
-    do: delete_word_backward(s)
+  def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: delete_word_backward(s)
 
   def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}) do
     line_start = logical_line_start(s.value, s.cursor)
@@ -394,26 +385,22 @@ defmodule OctoPi.TUI.Components.Input do
 
   # --- kill ring helpers ---
 
-  defp kill_push(%__MODULE__{kill_ring: []} = s, text, _prepend, _accumulate),
-    do: %{s | kill_ring: [text]}
+  defp kill_push(%__MODULE__{kill_ring: []} = s, text, _prepend, _accumulate), do: %{s | kill_ring: [text]}
 
   defp kill_push(%__MODULE__{kill_ring: [head | rest]} = s, text, prepend, true) do
     merged = if prepend, do: text <> head, else: head <> text
     %{s | kill_ring: [merged | rest]}
   end
 
-  defp kill_push(%__MODULE__{} = s, text, _prepend, false),
-    do: %{s | kill_ring: [text | s.kill_ring]}
+  defp kill_push(%__MODULE__{} = s, text, _prepend, false), do: %{s | kill_ring: [text | s.kill_ring]}
 
   defp kill_rotate(%__MODULE__{kill_ring: ring} = s) when length(ring) <= 1, do: s
 
-  defp kill_rotate(%__MODULE__{kill_ring: [head | rest]} = s),
-    do: %{s | kill_ring: rest ++ [head]}
+  defp kill_rotate(%__MODULE__{kill_ring: [head | rest]} = s), do: %{s | kill_ring: rest ++ [head]}
 
   # --- undo ---
 
-  defp push_undo(%__MODULE__{value: v, cursor: c, undo_stack: stack} = s),
-    do: %{s | undo_stack: [{v, c} | stack]}
+  defp push_undo(%__MODULE__{value: v, cursor: c, undo_stack: stack} = s), do: %{s | undo_stack: [{v, c} | stack]}
 
   defp undo(%__MODULE__{undo_stack: []} = s), do: s
 
@@ -448,7 +435,7 @@ defmodule OctoPi.TUI.Components.Input do
 
     if cursor >= len,
       do: cursor,
-      else: cursor + count_forward(value |> String.slice(cursor, len) |> String.graphemes())
+      else: cursor + (value |> String.slice(cursor, len) |> String.graphemes() |> count_forward())
   end
 
   defp count_forward(graphemes) do
@@ -520,9 +507,8 @@ defmodule OctoPi.TUI.Components.Input do
     if row == target_row, do: pos, else: pos
   end
 
-  defp do_cursor_from_visual(["\n" | _rest], _width, target_row, _target_col, row, _col, pos)
-       when row == target_row,
-       do: pos
+  defp do_cursor_from_visual(["\n" | _rest], _width, target_row, _target_col, row, _col, pos) when row == target_row,
+    do: pos
 
   defp do_cursor_from_visual(["\n" | rest], width, target_row, target_col, row, _col, pos) do
     do_cursor_from_visual(rest, width, target_row, target_col, row + 1, 0, pos + 1)
@@ -548,7 +534,7 @@ defmodule OctoPi.TUI.Components.Input do
   defp logical_line_start(value, cursor) do
     before = value |> String.graphemes() |> Enum.take(cursor) |> Enum.join()
 
-    case String.split(before, "\n") |> List.last() do
+    case before |> String.split("\n") |> List.last() do
       nil -> 0
       last_segment -> cursor - String.length(last_segment)
     end
@@ -592,12 +578,13 @@ defmodule OctoPi.TUI.Components.Input do
   @doc "Add an entry to history, deduplicating consecutive repeats and capping at #{@max_history}."
   @spec push_history(t(), String.t()) :: t()
   def push_history(%__MODULE__{history: history} = s, entry) do
-    history =
+    case_result =
       case List.last(history) do
         ^entry -> history
         _ -> history ++ [entry]
       end
-      |> Enum.take(-@max_history)
+
+    history = Enum.take(case_result, -@max_history)
 
     %{s | history: history, history_index: nil, saved_input: nil}
   end
@@ -652,10 +639,7 @@ defmodule OctoPi.TUI.Components.Input do
   @spec render_dropdown(t(), pos_integer()) :: [String.t()]
   def render_dropdown(%__MODULE__{autocomplete_active: false}, _width), do: []
 
-  def render_dropdown(
-        %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel},
-        width
-      ) do
+  def render_dropdown(%__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel}, width) do
     suggestions
     |> Enum.with_index()
     |> Enum.map(fn {%Suggestion{label: label, description: desc}, idx} ->
@@ -693,25 +677,19 @@ defmodule OctoPi.TUI.Components.Input do
     end
   end
 
-  defp autocomplete_navigate(
-         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s,
-         delta
-       ) do
+  defp autocomplete_navigate(%__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s, delta) do
     len = length(suggestions)
     new_sel = rem(sel + delta + len, len)
     %{s | autocomplete_selected: new_sel}
   end
 
-  defp autocomplete_accept(
-         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s
-       ) do
+  defp autocomplete_accept(%__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s) do
     case Enum.at(suggestions, sel) do
       nil ->
         s
 
       %Suggestion{value: value} ->
-        %{s | value: value, cursor: String.length(value)}
-        |> dismiss_autocomplete()
+        dismiss_autocomplete(%{s | value: value, cursor: String.length(value)})
     end
   end
 
@@ -772,8 +750,7 @@ defmodule OctoPi.TUI.Components.Input do
   defp split_at_display_col(rest, target, current, acc) when current >= target,
     do: {acc |> Enum.reverse() |> Enum.join(), rest}
 
-  defp split_at_display_col([], _target, _current, acc),
-    do: {acc |> Enum.reverse() |> Enum.join(), []}
+  defp split_at_display_col([], _target, _current, acc), do: {acc |> Enum.reverse() |> Enum.join(), []}
 
   defp split_at_display_col([g | rest], target, current, acc),
     do: split_at_display_col(rest, target, current + WrapAnsi.grapheme_width(g), [g | acc])

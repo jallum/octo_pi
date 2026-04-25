@@ -49,8 +49,7 @@ defmodule OctoPi.TUI.Renderer do
   @spec render(GenServer.server(), [binary()], binary()) :: {:ok, binary()}
   def render(pid, lines, cursor_seq \\ "")
 
-  def render(pid, lines, cursor_seq) when is_list(lines),
-    do: GenServer.call(pid, {:render, lines, cursor_seq})
+  def render(pid, lines, cursor_seq) when is_list(lines), do: GenServer.call(pid, {:render, lines, cursor_seq})
 
   @doc "Update the terminal dimensions. Next render is a full redraw."
   @spec resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
@@ -70,18 +69,17 @@ defmodule OctoPi.TUI.Renderer do
     do_find_diff(new_lines, old_lines, 0, max_len, -1, -1)
   end
 
-  defp do_find_diff(_new, _old, i, max_len, first, last) when i >= max_len,
-    do: {first, last}
+  defp do_find_diff(_new, _old, i, max_len, first, last) when i >= max_len, do: {first, last}
 
   defp do_find_diff(new, old, i, max_len, first, last) do
     new_line = Enum.at(new, i, "")
     old_line = Enum.at(old, i, "")
 
     {first, last} =
-      if new_line != old_line do
-        {if(first == -1, do: i, else: first), i}
-      else
+      if new_line == old_line do
         {first, last}
+      else
+        {if(first == -1, do: i, else: first), i}
       end
 
     do_find_diff(new, old, i + 1, max_len, first, last)
@@ -129,8 +127,7 @@ defmodule OctoPi.TUI.Renderer do
     {:reply, :ok, new_state}
   end
 
-  def handle_call(:full_redraws, _from, state),
-    do: {:reply, state.full_redraws, state}
+  def handle_call(:full_redraws, _from, state), do: {:reply, state.full_redraws, state}
 
   # --- compute dispatch ---
 
@@ -296,16 +293,7 @@ defmodule OctoPi.TUI.Renderer do
     end
   end
 
-  defp handle_changed_lines(
-         lines,
-         cursor_seq,
-         state,
-         first_changed,
-         last_changed,
-         appended,
-         prev_vp_top,
-         hw_cursor
-       ) do
+  defp handle_changed_lines(lines, cursor_seq, state, first_changed, last_changed, appended, prev_vp_top, hw_cursor) do
     height = state.height
     append_start = appended and first_changed == length(state.previous) and first_changed > 0
     prev_vp_bottom = prev_vp_top + height - 1

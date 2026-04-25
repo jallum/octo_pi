@@ -1,9 +1,14 @@
 defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{Context, Event, Message, Model, StreamOptions, ToolCall}
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.Anthropic.Producer
+  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.TestSupport.FakeAnthropicPlug, as: Fake
+  alias OctoPi.AI.ToolCall
 
   def __telemetry_forward__(name, meas, meta, %{pid: pid, ref: ref}) do
     send(pid, {ref, name, meas, meta})
@@ -153,7 +158,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       {_pid, ref} = start_producer(chunks)
       events = collect_events(ref)
 
-      assert Enum.find(events, &match?(%Event.ToolCallEnd{}, &1))
+      assert Enum.any?(events, &match?(%Event.ToolCallEnd{}, &1))
       assert %Event.Done{reason: :tool_use, message: msg} = List.last(events)
 
       assert [%ToolCall{id: "toolu_1", name: "edit", arguments: %{"path" => "x.md"}}] =
@@ -287,7 +292,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
     end
 
     test "emits stop with http_status on non-2xx response", %{telemetry_ref: tref} do
-      {_pid, ref} = start_producer(["{\"error\":\"boom\"}"], 500)
+      {_pid, ref} = start_producer([~s({"error":"boom"})], 500)
       _events = collect_events(ref)
 
       assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas, meta}
@@ -330,8 +335,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       Process.exit(caller, :kill)
       assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
 
-      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas,
-                      %{stop_reason: :aborted}},
+      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas, %{stop_reason: :aborted}},
                      2_000
     end
   end

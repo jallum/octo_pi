@@ -5,14 +5,15 @@ defmodule OctoPi.Coder.Modes.RpcTest do
   # a test ends we stop the session, but a mid-flight turn Task may
   # still race the GenServer's :drain_follow_up call. That crash is
   # expected teardown noise — capture it.
-  @moduletag capture_log: true
-
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Event, as: AIEvent
   alias OctoPi.AI.Message.Assistant
-  alias OctoPi.AI.{Model, Usage}
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Usage
   alias OctoPi.Coder.Modes.Rpc
+
+  @moduletag capture_log: true
 
   setup do
     on_exit(&FakeTransport.clear/0)
@@ -137,7 +138,6 @@ defmodule OctoPi.Coder.Modes.RpcTest do
   describe "event_to_json/1" do
     alias OctoPi.Agent.Tool.Result
     alias OctoPi.AI.Content
-    alias OctoPi.AI.Message.Assistant
 
     test "AgentStart → empty data" do
       json = Rpc.event_to_json(%Event.AgentStart{})

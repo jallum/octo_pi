@@ -2,6 +2,7 @@ defmodule OctoPi.TUI.OverlayTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Overlay
+  alias OctoPi.TUI.VirtualTerminal
 
   defp ov(fields), do: struct!(Overlay, fields)
 
@@ -173,12 +174,13 @@ defmodule OctoPi.TUI.OverlayTest do
     end
 
     test "overlay clipped to terminal width" do
+      alias OctoPi.TUI.WrapAnsi
+
       base = ["abcde"]
       ov = ov(lines: ["OVERLAY"], width: 5, anchor: :top_left)
       result = Overlay.composite(base, [ov], 5, 1)
 
       line0 = Enum.at(result, 0)
-      alias OctoPi.TUI.WrapAnsi
       assert WrapAnsi.visible_width(line0) <= 5
     end
 
@@ -194,7 +196,7 @@ defmodule OctoPi.TUI.OverlayTest do
       # italic line followed by a plain line must not make the
       # plain line's cells italic in the terminal buffer.
       alias OctoPi.TUI.Renderer
-      alias OctoPi.TUI.VirtualTerminal, as: VT
+      alias VirtualTerminal, as: VT
 
       width = 20
       {:ok, r} = Renderer.start_link(width: width, height: 6)
@@ -202,7 +204,7 @@ defmodule OctoPi.TUI.OverlayTest do
       lines = [base_line, "INPUT", "", "", "", ""]
 
       {:ok, bytes} = Renderer.render(r, lines)
-      vt = VT.new(width, 6) |> VT.write(bytes)
+      vt = width |> VT.new(6) |> VT.write(bytes)
 
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to plain INPUT row"
     end
@@ -210,12 +212,13 @@ defmodule OctoPi.TUI.OverlayTest do
     # --- upstream overlay-options.test.ts integration parity ---
 
     test "overlay lines wider than declared width are clipped" do
+      alias OctoPi.TUI.WrapAnsi
+
       base = base_grid(80, 24)
       ov = ov(lines: [String.duplicate("X", 100)], width: 20, anchor: :top_left)
       result = Overlay.composite(base, [ov], 80, 24)
       line0 = Enum.at(result, 0)
 
-      alias OctoPi.TUI.WrapAnsi
       # Overlay cannot introduce more than 20 overlaid cells over the
       # base row (each base row starts at 80 visible cols).
       assert WrapAnsi.visible_width(line0) == 80
@@ -292,7 +295,7 @@ defmodule OctoPi.TUI.OverlayTest do
 
     test "italic does not leak when overlay slicing drops trailing resets" do
       alias OctoPi.TUI.Renderer
-      alias OctoPi.TUI.VirtualTerminal, as: VT
+      alias VirtualTerminal, as: VT
 
       width = 20
       {:ok, r} = Renderer.start_link(width: width, height: 6)
@@ -302,7 +305,7 @@ defmodule OctoPi.TUI.OverlayTest do
       composed = Overlay.composite(base, [overlay], width, 6)
 
       {:ok, bytes} = Renderer.render(r, composed)
-      vt = VT.new(width, 6) |> VT.write(bytes)
+      vt = width |> VT.new(6) |> VT.write(bytes)
 
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to INPUT row after overlay slice"
     end

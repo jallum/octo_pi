@@ -103,7 +103,7 @@ defmodule OctoPi.Coder.Tools.Grep do
     args = args ++ [pattern, path]
 
     case System.cmd("rg", args, stderr_to_stdout: true) do
-      {out, 0} -> String.split(out, "\n", trim: true) |> Enum.take(@max_matches)
+      {out, 0} -> out |> String.split("\n", trim: true) |> Enum.take(@max_matches)
       # rg exits 1 when no matches, 2+ on real error.
       {_, 1} -> []
       {err, _} -> {:error, err}
@@ -127,12 +127,14 @@ defmodule OctoPi.Coder.Tools.Grep do
   end
 
   defp all_files(path) do
-    case File.stat(path) do
-      {:ok, %File.Stat{type: :regular}} -> [path]
-      {:ok, %File.Stat{type: :directory}} -> Path.wildcard(Path.join(path, "**/*"))
-      _ -> []
-    end
-    |> Enum.filter(&regular?/1)
+    case_result =
+      case File.stat(path) do
+        {:ok, %File.Stat{type: :regular}} -> [path]
+        {:ok, %File.Stat{type: :directory}} -> Path.wildcard(Path.join(path, "**/*"))
+        _ -> []
+      end
+
+    Enum.filter(case_result, &regular?/1)
   end
 
   defp regular?(p) do

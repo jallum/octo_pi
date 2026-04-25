@@ -1,6 +1,8 @@
 defmodule OctoPi.TUITest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.TUI.RawMode
+
   describe "application boot" do
     test "Events registry is started" do
       assert Process.whereis(OctoPi.TUI.Events)
@@ -17,9 +19,9 @@ defmodule OctoPi.TUITest do
     # `.2` will test the full Terminal lifecycle with a mock RawMode.
 
     test "enter/0 and exit/0 are exported" do
-      Code.ensure_loaded!(OctoPi.TUI.RawMode)
-      assert function_exported?(OctoPi.TUI.RawMode, :enter, 0)
-      assert function_exported?(OctoPi.TUI.RawMode, :exit, 0)
+      Code.ensure_loaded!(RawMode)
+      assert function_exported?(RawMode, :enter, 0)
+      assert function_exported?(RawMode, :exit, 0)
     end
   end
 end

@@ -2,7 +2,8 @@ defmodule OctoPi.Coder.Extension.API do
   @moduledoc false
 
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{Event, ProviderConfig}
+  alias OctoPi.Coder.Extension.Event
+  alias OctoPi.Coder.Extension.ProviderConfig
 
   @type t :: %__MODULE__{
           extension_id: String.t(),
@@ -74,7 +75,7 @@ defmodule OctoPi.Coder.Extension.API do
     zero_stubs = Map.new(@zero_arity_actions, fn f -> {f, stub(f, 0)} end)
     two_stubs = Map.new(@two_arity_actions, fn f -> {f, stub(f, 2)} end)
 
-    attrs = Map.merge(one_stubs, zero_stubs) |> Map.merge(two_stubs)
+    attrs = one_stubs |> Map.merge(zero_stubs) |> Map.merge(two_stubs)
     struct!(__MODULE__, Map.put(attrs, :extension_id, extension_id))
   end
 
@@ -123,8 +124,7 @@ defmodule OctoPi.Coder.Extension.API do
   end
 
   @spec unregister_provider(t(), String.t()) :: {:ok, t()}
-  def unregister_provider(%__MODULE__{bound?: false} = api, provider_id)
-      when is_binary(provider_id) do
+  def unregister_provider(%__MODULE__{bound?: false} = api, provider_id) when is_binary(provider_id) do
     {:ok, %{api | pending_providers: api.pending_providers ++ [{:unregister, provider_id}]}}
   end
 
@@ -178,12 +178,9 @@ defmodule OctoPi.Coder.Extension.API do
     %{api | bound?: true}
   end
 
-  defp stub(field, 0),
-    do: fn -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+  defp stub(field, 0), do: fn -> raise RuntimeError, "#{field} not bound — call bind_core first" end
 
-  defp stub(field, 1),
-    do: fn _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+  defp stub(field, 1), do: fn _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
 
-  defp stub(field, 2),
-    do: fn _, _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+  defp stub(field, 2), do: fn _, _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
 end

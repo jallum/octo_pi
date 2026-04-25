@@ -65,12 +65,12 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
 
   describe "navigation" do
     test "Down moves selection" do
-      sel = SessionSelector.new(test_sessions(), @theme) |> press(key(:down))
+      sel = test_sessions() |> SessionSelector.new(@theme) |> press(key(:down))
       assert sel.selected == 1
     end
 
     test "Up wraps" do
-      sel = SessionSelector.new(test_sessions(), @theme) |> press(key(:up))
+      sel = test_sessions() |> SessionSelector.new(@theme) |> press(key(:up))
       assert sel.selected == 2
     end
   end
@@ -131,12 +131,12 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
 
   describe "filtering" do
     test "filters by name" do
-      sel = SessionSelector.new(test_sessions(), @theme) |> SessionSelector.filter("debug")
+      sel = test_sessions() |> SessionSelector.new(@theme) |> SessionSelector.filter("debug")
       assert length(sel.filtered_sessions) == 1
     end
 
     test "empty filter shows all" do
-      sel = SessionSelector.new(test_sessions(), @theme) |> SessionSelector.filter("")
+      sel = test_sessions() |> SessionSelector.new(@theme) |> SessionSelector.filter("")
       assert length(sel.filtered_sessions) == 3
     end
   end

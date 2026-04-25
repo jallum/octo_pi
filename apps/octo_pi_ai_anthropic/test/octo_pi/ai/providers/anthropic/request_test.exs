@@ -1,8 +1,14 @@
 defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{Content, Context, Message, Model, StreamOptions, Tool, ToolCall}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.Anthropic.Request
+  alias OctoPi.AI.StreamOptions
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
 
   setup do
     System.put_env("ANTHROPIC_API_KEY", "test-key-from-env")

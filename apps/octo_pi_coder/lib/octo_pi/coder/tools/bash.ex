@@ -174,9 +174,7 @@ defmodule OctoPi.Coder.Tools.Bash do
 
     {text, truncation} = maybe_truncate(text)
 
-    details =
-      %{exit_status: code, reason: reason}
-      |> Map.merge(truncation)
+    details = Map.merge(%{exit_status: code, reason: reason}, truncation)
 
     {:ok,
      %Result{
@@ -196,8 +194,7 @@ defmodule OctoPi.Coder.Tools.Bash do
   defp render_output(stdout_buf, ""), do: stdout_buf
   defp render_output("", stderr_buf), do: stderr_buf
 
-  defp render_output(stdout_buf, stderr_buf),
-    do: stdout_buf <> "\n--- stderr ---\n" <> stderr_buf
+  defp render_output(stdout_buf, stderr_buf), do: stdout_buf <> "\n--- stderr ---\n" <> stderr_buf
 
   defp maybe_truncate(text) do
     lines = String.split(text, "\n")

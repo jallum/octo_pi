@@ -1,6 +1,8 @@
 defmodule OctoPi.TUI.Autocomplete.CombinedProvider do
   @moduledoc false
 
+  @behaviour OctoPi.TUI.Autocomplete
+
   alias OctoPi.TUI.Autocomplete
 
   @type t :: %__MODULE__{providers: [struct()]}
@@ -8,8 +10,6 @@ defmodule OctoPi.TUI.Autocomplete.CombinedProvider do
 
   @spec new([struct()]) :: t()
   def new(providers), do: %__MODULE__{providers: providers}
-
-  @behaviour Autocomplete
 
   @impl true
   def get_suggestions(%__MODULE__{providers: providers}, input) do

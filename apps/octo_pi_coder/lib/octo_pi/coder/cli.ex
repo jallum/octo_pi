@@ -8,7 +8,8 @@ defmodule OctoPi.Coder.CLI do
   """
 
   alias OctoPi.AI.Model
-  alias OctoPi.Coder.Modes.{Print, Rpc}
+  alias OctoPi.Coder.Modes.Print
+  alias OctoPi.Coder.Modes.Rpc
 
   # Matches upstream pi-mono's per-provider default for Anthropic
   # (see `tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`
@@ -49,16 +50,16 @@ defmodule OctoPi.Coder.CLI do
         {:help, usage_text()}
 
       switches[:mode] == "rpc" ->
-        {:ok, base_opts(switches) |> Map.put(:mode, :rpc) |> Map.put(:prompt, nil)}
+        {:ok, switches |> base_opts() |> Map.put(:mode, :rpc) |> Map.put(:prompt, nil)}
 
       positional == [] and switches[:print] != true ->
         # No prompt + no --print = interactive mode (the default
         # when a user runs `mix pi` with nothing).
-        {:ok, base_opts(switches) |> Map.put(:mode, :interactive) |> Map.put(:prompt, nil)}
+        {:ok, switches |> base_opts() |> Map.put(:mode, :interactive) |> Map.put(:prompt, nil)}
 
       true ->
         prompt = Enum.join(positional, " ")
-        {:ok, base_opts(switches) |> Map.put(:mode, :print) |> Map.put(:prompt, prompt)}
+        {:ok, switches |> base_opts() |> Map.put(:mode, :print) |> Map.put(:prompt, prompt)}
     end
   end
 

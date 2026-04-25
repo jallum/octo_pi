@@ -11,7 +11,8 @@ defmodule OctoPi.AI.Message.Assistant do
   `timestamp` is Unix milliseconds.
   """
 
-  alias OctoPi.AI.{Content, Usage}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Usage
 
   @type stop_reason :: :stop | :length | :tool_use | :error | :aborted
 

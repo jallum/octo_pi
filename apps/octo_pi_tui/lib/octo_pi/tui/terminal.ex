@@ -38,7 +38,9 @@ defmodule OctoPi.TUI.Terminal do
 
   use GenServer
 
-  alias OctoPi.TUI.{Events, RawMode, SigwinchHandler}
+  alias OctoPi.TUI.Events
+  alias OctoPi.TUI.RawMode
+  alias OctoPi.TUI.SigwinchHandler
 
   # --- public API ---
 
@@ -67,8 +69,7 @@ defmodule OctoPi.TUI.Terminal do
 
   @doc false
   @spec simulate_resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
-  def simulate_resize(pid, width, height),
-    do: GenServer.call(pid, {:resize, width, height})
+  def simulate_resize(pid, width, height), do: GenServer.call(pid, {:resize, width, height})
 
   # --- GenServer callbacks ---
 
@@ -190,6 +191,7 @@ defmodule OctoPi.TUI.Terminal do
 
   defp reader_exit(reason, parent) do
     require Logger
+
     Logger.warning("Terminal stdin reader exited: #{inspect(reason)}")
 
     :telemetry.execute(

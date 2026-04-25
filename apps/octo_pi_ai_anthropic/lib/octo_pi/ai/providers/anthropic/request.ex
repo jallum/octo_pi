@@ -20,18 +20,16 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   See `docs/port-map/anthropic.md` §1.
   """
 
-  alias OctoPi.AI.{
-    Content,
-    Context,
-    Message,
-    Model,
-    StreamOptions,
-    Tool,
-    ToolCall
-  }
-
-  alias OctoPi.AI.Providers.Anthropic.{Auth, ToolNames}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Providers.Anthropic.Auth
   alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
+  alias OctoPi.AI.Providers.Anthropic.ToolNames
+  alias OctoPi.AI.StreamOptions
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
 
   @anthropic_version "2023-06-01"
   @claude_code_version "2.1.75"
@@ -95,8 +93,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   @spec extra_headers(StreamOptions.t()) :: [{binary(), binary()}]
   defp extra_headers(%StreamOptions{headers: nil}), do: []
 
-  defp extra_headers(%StreamOptions{headers: extra}),
-    do: Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
+  defp extra_headers(%StreamOptions{headers: extra}), do: Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
 
   # --- Body ---
 
@@ -193,8 +190,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   @spec flush_pending([map()], [map()]) :: [map()]
   defp flush_pending(acc_rev, []), do: acc_rev
 
-  defp flush_pending(acc_rev, pending_rev),
-    do: [%{"role" => "user", "content" => Enum.reverse(pending_rev)} | acc_rev]
+  defp flush_pending(acc_rev, pending_rev), do: [%{"role" => "user", "content" => Enum.reverse(pending_rev)} | acc_rev]
 
   @spec convert_non_tool_result(Message.t(), boolean()) :: map()
   defp convert_non_tool_result(%Message.User{content: content}, _oauth?) do
@@ -206,11 +202,9 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   end
 
   @spec convert_user_content(binary() | [Content.user_block()]) :: [map()]
-  defp convert_user_content(text) when is_binary(text),
-    do: [%{"type" => "text", "text" => text}]
+  defp convert_user_content(text) when is_binary(text), do: [%{"type" => "text", "text" => text}]
 
-  defp convert_user_content(blocks) when is_list(blocks),
-    do: Enum.map(blocks, &user_block/1)
+  defp convert_user_content(blocks) when is_list(blocks), do: Enum.map(blocks, &user_block/1)
 
   @spec user_block(Content.user_block()) :: map()
   defp user_block(%Content.Text{text: text}), do: %{"type" => "text", "text" => text}
@@ -223,8 +217,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   end
 
   @spec assistant_block(Content.assistant_block(), boolean()) :: map()
-  defp assistant_block(%Content.Text{text: text}, _oauth?),
-    do: %{"type" => "text", "text" => text}
+  defp assistant_block(%Content.Text{text: text}, _oauth?), do: %{"type" => "text", "text" => text}
 
   defp assistant_block(%Content.Thinking{redacted?: true} = block, _oauth?) do
     %{"type" => "redacted_thinking", "data" => block.signature || ""}

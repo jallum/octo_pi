@@ -94,8 +94,7 @@ defmodule OctoPi.TUI.Components.Footer do
     line =
       ext
       |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map(fn {_, v} -> sanitize_status(v) end)
-      |> Enum.join(" ")
+      |> Enum.map_join(" ", fn {_, v} -> sanitize_status(v) end)
 
     truncate_dim(line, width)
   end

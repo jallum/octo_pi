@@ -72,8 +72,7 @@ defmodule OctoPi.TUI.VirtualTerminal do
 
   # CR alone
   def write(term, <<"\r", rest::binary>>) do
-    %{term | cursor_col: 0}
-    |> write(rest)
+    write(%{term | cursor_col: 0}, rest)
   end
 
   # LF alone
@@ -105,7 +104,8 @@ defmodule OctoPi.TUI.VirtualTerminal do
   @spec get_viewport(t()) :: [String.t()]
   def get_viewport(%__MODULE__{rows: rows, grid: grid}) do
     Enum.map(0..(rows - 1), fn row ->
-      Map.get(grid, row, "")
+      grid
+      |> Map.get(row, "")
       |> String.trim_trailing()
     end)
   end
@@ -284,7 +284,8 @@ defmodule OctoPi.TUI.VirtualTerminal do
     if new_row >= rows do
       # Scroll: shift all rows up by 1, clear bottom row
       new_grid =
-        Enum.reduce(1..(rows - 1), %{}, fn r, acc ->
+        1..(rows - 1)
+        |> Enum.reduce(%{}, fn r, acc ->
           Map.put(acc, r - 1, Map.get(term.grid, r, ""))
         end)
         |> Map.put(rows - 1, "")

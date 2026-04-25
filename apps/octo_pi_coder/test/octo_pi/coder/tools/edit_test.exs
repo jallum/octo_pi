@@ -19,8 +19,7 @@ defmodule OctoPi.Coder.Tools.EditTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref, cwd),
-    do: Edit.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd), do: Edit.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "replaces a single occurrence", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "code.ex")

@@ -19,8 +19,7 @@ defmodule OctoPi.Coder.Tools.WriteTest do
     {:ok, tmp: tmp, ref: ref}
   end
 
-  defp exec(args, ref, cwd),
-    do: Write.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
+  defp exec(args, ref, cwd), do: Write.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
   test "writes a new file", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "new.txt")

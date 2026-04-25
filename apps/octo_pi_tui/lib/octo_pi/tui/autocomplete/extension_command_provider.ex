@@ -1,7 +1,8 @@
 defmodule OctoPi.TUI.Autocomplete.ExtensionCommandProvider do
   @moduledoc false
 
-  alias OctoPi.TUI.Autocomplete
+  @behaviour OctoPi.TUI.Autocomplete
+
   alias OctoPi.TUI.Autocomplete.Suggestion
 
   @type t :: %__MODULE__{
@@ -10,8 +11,6 @@ defmodule OctoPi.TUI.Autocomplete.ExtensionCommandProvider do
         }
 
   defstruct commands: [], conflicts: []
-
-  @behaviour Autocomplete
 
   @spec new([{String.t(), map(), String.t()}], MapSet.t()) :: t()
   def new(commands, builtin_names) do

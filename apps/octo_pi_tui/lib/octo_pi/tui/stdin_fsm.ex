@@ -177,8 +177,7 @@ defmodule OctoPi.TUI.StdinFSM do
 
   defp find_csi_final(<<>>, _idx), do: :incomplete
 
-  defp find_csi_final(<<b::8, _::binary>>, idx) when b >= 0x40 and b <= 0x7E,
-    do: {:found, idx}
+  defp find_csi_final(<<b::8, _::binary>>, idx) when b >= 0x40 and b <= 0x7E, do: {:found, idx}
 
   defp find_csi_final(<<_::8, rest::binary>>, idx), do: find_csi_final(rest, idx + 1)
 

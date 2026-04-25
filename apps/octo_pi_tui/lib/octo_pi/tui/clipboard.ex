@@ -11,7 +11,7 @@ defmodule OctoPi.TUI.Clipboard do
   def copy(text, opts \\ []) do
     osc = osc52(text)
 
-    unless Keyword.get(opts, :write_osc) == false do
+    if Keyword.get(opts, :write_osc) != false do
       IO.write(osc)
     end
 

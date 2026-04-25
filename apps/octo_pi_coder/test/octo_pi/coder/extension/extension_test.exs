@@ -17,7 +17,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_handler/3" do
     test "registers handler for event type" do
       handler = fn _event, _ctx -> nil end
-      ext = Extension.new("x", "/x") |> Extension.add_handler(:session_start, handler)
+      ext = "x" |> Extension.new("/x") |> Extension.add_handler(:session_start, handler)
 
       assert [^handler] = Extension.get_handlers(ext, :session_start)
     end
@@ -27,7 +27,8 @@ defmodule OctoPi.Coder.ExtensionTest do
       h2 = fn _, _ -> :second end
 
       ext =
-        Extension.new("x", "/x")
+        "x"
+        |> Extension.new("/x")
         |> Extension.add_handler(:turn_start, h1)
         |> Extension.add_handler(:turn_start, h2)
 
@@ -38,7 +39,7 @@ defmodule OctoPi.Coder.ExtensionTest do
       handler = fn _, _ -> nil end
 
       assert_raise ArgumentError, ~r/unknown event type/, fn ->
-        Extension.new("x", "/x") |> Extension.add_handler(:bogus_event, handler)
+        "x" |> Extension.new("/x") |> Extension.add_handler(:bogus_event, handler)
       end
     end
   end
@@ -53,7 +54,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_tool/2" do
     test "registers a tool by name" do
       tool = %{name: "my_tool", description: "test", input_schema: %{}}
-      ext = Extension.new("x", "/x") |> Extension.add_tool(tool)
+      ext = "x" |> Extension.new("/x") |> Extension.add_tool(tool)
 
       assert ext.tools["my_tool"] == tool
     end
@@ -62,7 +63,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_command/3" do
     test "registers a command" do
       cmd = %{description: "do stuff", handler: fn _ -> :ok end}
-      ext = Extension.new("x", "/x") |> Extension.add_command("do-stuff", cmd)
+      ext = "x" |> Extension.new("/x") |> Extension.add_command("do-stuff", cmd)
 
       assert ext.commands["do-stuff"] == cmd
     end
@@ -71,7 +72,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_message_renderer/3" do
     test "registers a renderer by type" do
       renderer = fn _type, _data -> "rendered" end
-      ext = Extension.new("x", "/x") |> Extension.add_message_renderer("custom_msg", renderer)
+      ext = "x" |> Extension.new("/x") |> Extension.add_message_renderer("custom_msg", renderer)
 
       assert ext.message_renderers["custom_msg"] == renderer
     end
@@ -80,7 +81,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_flag/3" do
     test "registers a flag" do
       spec = %{name: "verbose", description: "Enable verbose", default: false}
-      ext = Extension.new("x", "/x") |> Extension.add_flag("verbose", spec)
+      ext = "x" |> Extension.new("/x") |> Extension.add_flag("verbose", spec)
 
       assert ext.flags["verbose"] == spec
     end
@@ -89,7 +90,7 @@ defmodule OctoPi.Coder.ExtensionTest do
   describe "add_shortcut/3" do
     test "registers a shortcut" do
       spec = %{key: "ctrl+shift+p", description: "Command palette", handler: fn _ -> :ok end}
-      ext = Extension.new("x", "/x") |> Extension.add_shortcut("ctrl+shift+p", spec)
+      ext = "x" |> Extension.new("/x") |> Extension.add_shortcut("ctrl+shift+p", spec)
 
       assert ext.shortcuts["ctrl+shift+p"] == spec
     end

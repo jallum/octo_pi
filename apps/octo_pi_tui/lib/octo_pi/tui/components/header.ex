@@ -18,25 +18,29 @@ defmodule OctoPi.TUI.Components.Header do
 
     hints =
       if expanded do
-        [
-          hint("Ctrl+C", "to interrupt"),
-          hint("Ctrl+L", "to clear"),
-          hint("Ctrl+L twice", "to exit"),
-          hint("Esc", "to exit (empty)"),
-          hint("Ctrl+K", "to delete to end"),
-          hint("/", "for commands"),
-          hint("!", "to run bash")
-        ]
-        |> Enum.join("\n")
+        Enum.join(
+          [
+            hint("Ctrl+C", "to interrupt"),
+            hint("Ctrl+L", "to clear"),
+            hint("Ctrl+L twice", "to exit"),
+            hint("Esc", "to exit (empty)"),
+            hint("Ctrl+K", "to delete to end"),
+            hint("/", "for commands"),
+            hint("!", "to run bash")
+          ],
+          "\n"
+        )
       else
-        [
-          hint("Ctrl+C", "interrupt"),
-          hint("Esc", "clear/exit"),
-          hint("/", "commands"),
-          hint("!", "bash"),
-          hint("?", "more")
-        ]
-        |> Enum.join(dim(" · "))
+        Enum.join(
+          [
+            hint("Ctrl+C", "interrupt"),
+            hint("Esc", "clear/exit"),
+            hint("/", "commands"),
+            hint("!", "bash"),
+            hint("?", "more")
+          ],
+          dim(" · ")
+        )
       end
 
     onboarding =

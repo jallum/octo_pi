@@ -41,7 +41,7 @@ defmodule OctoPi.Agent.MessageLogTest do
     end
 
     test "from empty" do
-      log = MessageLog.new() |> MessageLog.push(:only)
+      log = MessageLog.push(MessageLog.new(), :only)
       assert MessageLog.to_list(log) == [:only]
       assert MessageLog.count(log) == 1
     end
@@ -58,7 +58,7 @@ defmodule OctoPi.Agent.MessageLogTest do
     test "preserves invariant: to_list(append_many(log, more)) == to_list(log) ++ more" do
       base = MessageLog.new([:x, :y])
 
-      for more <- [[], [:a], [:a, :b, :c], 1..50 |> Enum.to_list()] do
+      for more <- [[], [:a], [:a, :b, :c], Enum.to_list(1..50)] do
         assert MessageLog.to_list(MessageLog.append_many(base, more)) ==
                  MessageLog.to_list(base) ++ more
       end
@@ -70,7 +70,7 @@ defmodule OctoPi.Agent.MessageLogTest do
     end
 
     test "appending to empty produces the input list" do
-      log = MessageLog.new() |> MessageLog.append_many([:a, :b, :c])
+      log = MessageLog.append_many(MessageLog.new(), [:a, :b, :c])
       assert MessageLog.to_list(log) == [:a, :b, :c]
       assert MessageLog.count(log) == 3
     end
@@ -108,7 +108,8 @@ defmodule OctoPi.Agent.MessageLogTest do
   describe "interleaved operations" do
     test "round-tripping through push + append_many" do
       log =
-        MessageLog.new([:start])
+        [:start]
+        |> MessageLog.new()
         |> MessageLog.push(:two)
         |> MessageLog.append_many([:three, :four])
         |> MessageLog.push(:five)

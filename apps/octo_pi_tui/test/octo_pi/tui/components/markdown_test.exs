@@ -62,7 +62,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     test "long paragraph wraps to multiple lines within width" do
       text = "You could check a site like weather.com or meteored.com for that"
       lines = render(text, 40)
-      stripped = Enum.map(lines, &strip_ansi/1) |> Enum.reject(&(&1 == ""))
+      stripped = lines |> Enum.map(&strip_ansi/1) |> Enum.reject(&(&1 == ""))
 
       assert length(stripped) > 1, "paragraph should wrap at width 40"
 
@@ -75,7 +75,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     test "paragraph wraps at word boundaries, not mid-word" do
       text = "aaa bbb ccc ddd eee fff ggg hhh iii jjj"
       lines = render(text, 15)
-      stripped = Enum.map(lines, &strip_ansi/1) |> Enum.reject(&(&1 == ""))
+      stripped = lines |> Enum.map(&strip_ansi/1) |> Enum.reject(&(&1 == ""))
 
       for line <- stripped do
         refute String.match?(line, ~r/^[a-z]{1,2}\s/),
@@ -132,7 +132,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "```elixir"))
       assert Enum.any?(stripped, &(&1 =~ "IO.puts"))
-      assert Enum.any?(stripped, &(&1 == "```"))
+      assert "```" in stripped
     end
 
     test "code block without language" do
@@ -302,9 +302,9 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       plain = md |> render() |> strip_md()
       numbered = Enum.filter(plain, &(&1 |> String.trim() |> String.match?(~r/^\d+\./)))
       assert length(numbered) == 3
-      assert String.trim(Enum.at(numbered, 0)) |> String.starts_with?("1.")
-      assert String.trim(Enum.at(numbered, 1)) |> String.starts_with?("2.")
-      assert String.trim(Enum.at(numbered, 2)) |> String.starts_with?("3.")
+      assert numbered |> Enum.at(0) |> String.trim() |> String.starts_with?("1.")
+      assert numbered |> Enum.at(1) |> String.trim() |> String.starts_with?("2.")
+      assert numbered |> Enum.at(2) |> String.trim() |> String.starts_with?("3.")
     end
 
     test "renders mixed ordered + unordered nested lists" do
@@ -327,7 +327,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
 
   describe "strikethrough syntax (upstream parity)" do
     test "renders ~~text~~ as strikethrough" do
-      output = render("Use ~~strikethrough~~ here") |> Enum.join("\n")
+      output = "Use ~~strikethrough~~ here" |> render() |> Enum.join("\n")
       plain = strip_ansi(output)
       assert String.contains?(output, "\e[9m")
       assert String.contains?(plain, "strikethrough")
@@ -335,7 +335,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
 
     test "keeps ~text~ as plain text (single tilde)" do
-      output = render("Use ~strikethrough~ literally") |> Enum.join("\n")
+      output = "Use ~strikethrough~ literally" |> render() |> Enum.join("\n")
       plain = strip_ansi(output)
       assert String.contains?(plain, "~strikethrough~")
       refute String.contains?(output, "\e[9m")
@@ -357,7 +357,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       """
 
       plain =
-        md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+        md |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
 
       closing_idx = Enum.find_index(plain, &(&1 == "```"))
       assert is_integer(closing_idx)
@@ -371,7 +371,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
             "```js\nconst hello = 'world';\n```",
             "hello world\n\n```js\nconst hello = 'world';\n```"
           ] do
-        plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+        plain = md |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
 
         refute List.last(plain) == "",
                "code-block-as-last should not end blank: #{inspect(plain)}"
@@ -384,7 +384,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
   describe "spacing after dividers (upstream parity)" do
     test "one blank line between divider and following paragraph" do
       md = "hello world\n\n---\n\nagain, hello world"
-      plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      plain = md |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
       divider_idx = Enum.find_index(plain, &String.contains?(&1, "─"))
       assert is_integer(divider_idx)
       after_div = Enum.drop(plain, divider_idx + 1)
@@ -393,7 +393,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
 
     test "no trailing blank line when divider is the last rendered block" do
-      plain = "---" |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      plain = "---" |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
       refute List.last(plain) == ""
     end
   end
@@ -405,7 +405,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       plain =
         "# Hello\n\nThis is a paragraph"
         |> render()
-        |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+        |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
 
       head_idx = Enum.find_index(plain, &String.contains?(&1, "Hello"))
       assert is_integer(head_idx)
@@ -414,7 +414,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
     end
 
     test "no trailing blank line when heading is the last rendered block" do
-      plain = "# Hello" |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      plain = "# Hello" |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
       refute List.last(plain) == ""
     end
   end
@@ -424,7 +424,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
   describe "spacing after blockquotes (upstream parity)" do
     test "one blank line between blockquote and following paragraph" do
       md = "hello world\n\n> This is a quote\n\nagain, hello world"
-      plain = md |> render() |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+      plain = md |> render() |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
       quote_idx = Enum.find_index(plain, &String.contains?(&1, "This is a quote"))
       assert is_integer(quote_idx)
       after_q = Enum.drop(plain, quote_idx + 1)
@@ -435,7 +435,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       plain =
         "> This is a quote"
         |> render()
-        |> Enum.map(&(strip_ansi(&1) |> String.trim_trailing()))
+        |> Enum.map(&(&1 |> strip_ansi() |> String.trim_trailing()))
 
       refute List.last(plain) == ""
     end
@@ -446,7 +446,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
   describe "html-like tags (upstream parity)" do
     test "renders content with HTML-like tags as text (not hidden)" do
       text = "This is text with <thinking>hidden content</thinking> that should be visible"
-      joined = text |> render() |> Enum.map(&strip_ansi/1) |> Enum.join(" ")
+      joined = text |> render() |> Enum.map_join(" ", &strip_ansi/1)
 
       assert String.contains?(joined, "hidden content") or String.contains?(joined, "<thinking>"),
              "expected HTML-like tag or its content to be visible: #{inspect(joined)}"
@@ -456,8 +456,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       joined =
         "```html\n<div>Some HTML</div>\n```"
         |> render()
-        |> Enum.map(&strip_ansi/1)
-        |> Enum.join("\n")
+        |> Enum.map_join("\n", &strip_ansi/1)
 
       assert String.contains?(joined, "<div>")
       assert String.contains?(joined, "</div>")
@@ -514,7 +513,7 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
   describe "heading with inline code (upstream parity, partial)" do
     test "bold survives across inline code inside a heading" do
       output = "### Why `sourceInfo` should not be optional" |> render() |> Enum.join("\n")
-      after_code = String.split(output, "should not be optional") |> hd()
+      after_code = output |> String.split("should not be optional") |> hd()
       preceding_chunk = String.slice(after_code, -40..-1//1)
 
       assert String.contains?(preceding_chunk, "\e[1m") or

@@ -18,7 +18,8 @@ defmodule Mix.Tasks.Agent.Demo do
   use Mix.Task
 
   alias OctoPi.Agent.Event
-  alias OctoPi.AI.{Content, Model}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Model
 
   @default_model "claude-haiku-4-5"
 
@@ -79,7 +80,7 @@ defmodule Mix.Tasks.Agent.Demo do
         loop_until_end(printed)
 
       {:octo_pi_agent_event, %Event.ToolExecutionEnd{result: result}} ->
-        text = result.content |> Enum.map_join("", fn %Content.Text{text: t} -> t end)
+        text = Enum.map_join(result.content, "", fn %Content.Text{text: t} -> t end)
         IO.write("<- #{text}\n")
         loop_until_end(printed)
 
@@ -158,7 +159,6 @@ defmodule Mix.Tasks.Agent.Demo do
     @behaviour OctoPi.Agent.Tool.Handler
 
     alias OctoPi.Agent.Tool.Result
-    alias OctoPi.AI.Content
 
     @impl true
     def execute(_id, %{"text" => text}, _ref, _on_update) do

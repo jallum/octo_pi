@@ -36,7 +36,8 @@ defmodule OctoPi.Telemetry.Logger do
   end
 
   defp enabled? do
-    Application.get_env(:octo_pi_ai, __MODULE__, [])
+    :octo_pi_ai
+    |> Application.get_env(__MODULE__, [])
     |> Keyword.get(:enabled, false)
   end
 

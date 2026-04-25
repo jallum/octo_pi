@@ -90,8 +90,7 @@ defmodule OctoPi.Coder.Tools.Edit do
 
   defp error_text(:not_found, path), do: "old_string not found in #{path}"
 
-  defp error_text(:not_unique, path),
-    do: "old_string matches multiple locations in #{path} — use replace_all: true"
+  defp error_text(:not_unique, path), do: "old_string matches multiple locations in #{path} — use replace_all: true"
 
   defp error_text(:enoent, path), do: "enoent: no such file or directory: #{path}"
   defp error_text(reason, path), do: "edit failed: #{inspect(reason)} (#{path})"

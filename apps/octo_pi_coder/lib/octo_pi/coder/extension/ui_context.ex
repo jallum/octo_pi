@@ -67,7 +67,8 @@ defmodule OctoPi.Coder.Extension.UIContext do
   @spec new() :: t()
   def new do
     stubs =
-      Map.new(@one_arity_fields, fn f -> {f, fn _ -> stub_raise(f) end} end)
+      @one_arity_fields
+      |> Map.new(fn f -> {f, fn _ -> stub_raise(f) end} end)
       |> Map.merge(Map.new(@zero_arity_fields, fn f -> {f, fn -> stub_raise(f) end} end))
       |> Map.merge(Map.new(@two_arity_fields, fn f -> {f, fn _, _ -> stub_raise(f) end} end))
       |> Map.merge(Map.new(@var_arity_fields, fn f -> {f, fn _, _ -> stub_raise(f) end} end))

@@ -3,7 +3,9 @@ defmodule OctoPi.TUI.Components.CustomMessage do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.Components.{Box, Markdown, Text}
+  alias OctoPi.TUI.Components.Box
+  alias OctoPi.TUI.Components.Markdown
+  alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Theme
 
   @type renderer :: (t(), keyword(), Theme.t() -> [String.t()])

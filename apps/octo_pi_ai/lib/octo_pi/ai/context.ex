@@ -5,7 +5,8 @@ defmodule OctoPi.AI.Context do
   call.
   """
 
-  alias OctoPi.AI.{Message, Tool}
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Tool
 
   @type t :: %__MODULE__{
           system_prompt: String.t() | nil,

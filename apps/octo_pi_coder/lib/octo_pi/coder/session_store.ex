@@ -136,5 +136,5 @@ defmodule OctoPi.Coder.SessionStore do
 
   defp encode_line(entry) when is_map(entry), do: Jason.encode!(entry) <> "\n"
 
-  defp iso8601_now, do: DateTime.utc_now() |> DateTime.to_iso8601()
+  defp iso8601_now, do: DateTime.to_iso8601(DateTime.utc_now())
 end

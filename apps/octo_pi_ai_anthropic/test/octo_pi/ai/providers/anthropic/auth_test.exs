@@ -2,7 +2,8 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.AI.Providers.Anthropic.Auth
-  alias OctoPi.AI.Providers.Anthropic.Auth.{Credentials, NoopKeychain}
+  alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
+  alias OctoPi.AI.Providers.Anthropic.Auth.NoopKeychain
   alias OctoPi.AI.StreamOptions
 
   # Remote-capture telemetry handler (avoids local-function perf warning).
@@ -12,7 +13,9 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
 
   # Test doubles for the keychain reader.
   defmodule FakeKeychain do
+    @moduledoc false
     @behaviour OctoPi.AI.Providers.Anthropic.Auth.KeychainReader
+
     @impl true
     def read, do: Process.get(:fake_keychain_token)
   end

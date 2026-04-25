@@ -18,7 +18,7 @@ defmodule OctoPi.Coder.SystemPromptTest do
       prompt = SystemPrompt.render(cwd: "/tmp/project", tools: [])
 
       assert prompt =~ "Current working directory: /tmp/project"
-      assert prompt =~ "Current date: #{Date.utc_today() |> Date.to_iso8601()}"
+      assert prompt =~ "Current date: #{Date.to_iso8601(Date.utc_today())}"
     end
 
     test "shows (none) for empty tools list" do

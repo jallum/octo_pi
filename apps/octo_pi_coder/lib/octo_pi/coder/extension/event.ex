@@ -104,7 +104,7 @@ defmodule OctoPi.Coder.Extension.Event do
 
   @spec new(event_type(), map()) :: t()
   def new(type, payload \\ %{}) do
-    unless valid?(type), do: raise(ArgumentError, "unknown event type: #{inspect(type)}")
+    if !valid?(type), do: raise(ArgumentError, "unknown event type: #{inspect(type)}")
     Map.put(payload, :type, type)
   end
 end

@@ -1,7 +1,8 @@
 defmodule OctoPi.TUI.TerminalTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.TUI.{Events, Terminal}
+  alias OctoPi.TUI.Events
+  alias OctoPi.TUI.Terminal
 
   def __reader_exit_forward__(_event, _measurements, meta, %{pid: pid}) do
     send(pid, {:reader_exit, meta.reason})

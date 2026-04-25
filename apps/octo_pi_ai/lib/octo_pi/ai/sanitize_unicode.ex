@@ -18,9 +18,7 @@ defmodule OctoPi.AI.SanitizeUnicode do
 
   defp strip_invalid(<<>>, acc), do: acc
 
-  defp strip_invalid(<<c::utf8, rest::binary>>, acc),
-    do: strip_invalid(rest, <<acc::binary, c::utf8>>)
+  defp strip_invalid(<<c::utf8, rest::binary>>, acc), do: strip_invalid(rest, <<acc::binary, c::utf8>>)
 
-  defp strip_invalid(<<_byte, rest::binary>>, acc),
-    do: strip_invalid(rest, acc)
+  defp strip_invalid(<<_byte, rest::binary>>, acc), do: strip_invalid(rest, acc)
 end

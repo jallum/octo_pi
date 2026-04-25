@@ -25,7 +25,8 @@ defmodule OctoPi.TUI.Components.SelectList do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.{Key, WrapAnsi}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.WrapAnsi
 
   defmodule Item do
     @moduledoc "Entry in a SelectList — value surfaces on submit, label + optional description render."
@@ -116,11 +117,9 @@ defmodule OctoPi.TUI.Components.SelectList do
     end)
   end
 
-  defp render_line(item, true, prefix, _pad, width),
-    do: truncate_line("\e[7m#{prefix}#{item}\e[27m", width)
+  defp render_line(item, true, prefix, _pad, width), do: truncate_line("\e[7m#{prefix}#{item}\e[27m", width)
 
-  defp render_line(item, false, _prefix, pad, width),
-    do: truncate_line("#{pad}#{item}", width)
+  defp render_line(item, false, _prefix, pad, width), do: truncate_line("#{pad}#{item}", width)
 
   defp normalize_item(%Item{} = item), do: item
   defp normalize_item(s) when is_binary(s), do: %Item{value: s, label: s, description: nil}

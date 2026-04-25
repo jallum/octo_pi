@@ -2,7 +2,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.ToolExecution
-  alias OctoPi.TUI.{Theme, WrapAnsi}
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.WrapAnsi
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
@@ -39,7 +40,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   describe "set_result/3" do
     test "success shows result text when expanded" do
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result("file contents here", false)
         |> ToolExecution.set_expanded(true)
 
@@ -50,7 +52,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
     test "success uses success background" do
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result("ok", false)
 
       lines = ToolExecution.render(te, 80)
@@ -59,7 +62,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
     test "error shows error message" do
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result("file not found", true)
 
       lines = ToolExecution.render(te, 80)
@@ -73,7 +77,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   describe "expand/collapse" do
     test "collapsed shows short result as preview" do
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result("short content", false)
         |> ToolExecution.set_expanded(false)
 
@@ -86,7 +91,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       long_result = Enum.map_join(1..20, "\n", &"line #{&1}")
 
       te =
-        ToolExecution.new("Bash", "call-1", %{}, @theme)
+        "Bash"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result(long_result, false)
         |> ToolExecution.set_expanded(false)
 
@@ -100,7 +106,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
     test "expanded shows full result text" do
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme)
         |> ToolExecution.set_result("visible content", false)
         |> ToolExecution.set_expanded(true)
 
@@ -124,7 +131,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   describe "update_partial/2" do
     test "updates partial result text" do
       te =
-        ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+        "Bash"
+        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
         |> ToolExecution.update_partial("partial output...")
         |> ToolExecution.set_expanded(true)
 
@@ -154,9 +162,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       end
 
       te =
-        ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme,
-          render_call: render_call
-        )
+        ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme, render_call: render_call)
 
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
@@ -168,7 +174,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       render_result = fn _ctx -> ["[custom-result]"] end
 
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme,
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme,
           render_call: render_call,
           render_result: render_result
         )
@@ -188,7 +195,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       end
 
       te =
-        ToolExecution.new("Bash", "call-1", %{}, @theme, render_result: render_result)
+        "Bash"
+        |> ToolExecution.new("call-1", %{}, @theme, render_result: render_result)
         |> ToolExecution.set_result("output", false)
 
       lines = ToolExecution.render(te, 80)
@@ -202,9 +210,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       end
 
       te =
-        ToolExecution.new("Bash", "call-1", %{command: "rm -rf"}, @theme,
-          render_result: render_result
-        )
+        "Bash"
+        |> ToolExecution.new("call-1", %{command: "rm -rf"}, @theme, render_result: render_result)
         |> ToolExecution.set_result("denied", true)
 
       lines = ToolExecution.render(te, 80)
@@ -218,10 +225,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       end
 
       te =
-        ToolExecution.new("Read", "call-1", %{}, @theme, render_result: render_result)
+        "Read"
+        |> ToolExecution.new("call-1", %{}, @theme, render_result: render_result)
         |> ToolExecution.set_result("data", false)
 
-      collapsed = ToolExecution.render(te, 80) |> Enum.map(&strip_ansi/1)
+      collapsed = te |> ToolExecution.render(80) |> Enum.map(&strip_ansi/1)
       assert Enum.any?(collapsed, &(&1 =~ "[collapsed-view]"))
 
       expanded =

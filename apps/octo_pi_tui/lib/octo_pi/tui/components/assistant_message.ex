@@ -4,7 +4,8 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.Components.Markdown
-  alias OctoPi.TUI.{Theme, WrapAnsi}
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.WrapAnsi
 
   @osc133_zone_start "\e]133;A\a"
   @osc133_zone_end "\e]133;B\a"

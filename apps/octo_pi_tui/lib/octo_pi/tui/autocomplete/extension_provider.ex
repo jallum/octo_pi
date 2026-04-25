@@ -1,13 +1,13 @@
 defmodule OctoPi.TUI.Autocomplete.ExtensionProvider do
   @moduledoc false
 
-  alias OctoPi.TUI.Autocomplete
-  alias OctoPi.TUI.Autocomplete.{CombinedProvider, Suggestion}
+  @behaviour OctoPi.TUI.Autocomplete
+
+  alias OctoPi.TUI.Autocomplete.CombinedProvider
+  alias OctoPi.TUI.Autocomplete.Suggestion
 
   @type t :: %__MODULE__{suggest_fn: (String.t() -> [String.t()])}
   defstruct [:suggest_fn]
-
-  @behaviour Autocomplete
 
   @spec new((String.t() -> [String.t()])) :: t()
   def new(suggest_fn) when is_function(suggest_fn, 1) do

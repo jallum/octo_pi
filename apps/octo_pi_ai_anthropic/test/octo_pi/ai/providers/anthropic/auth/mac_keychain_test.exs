@@ -59,9 +59,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth.MacKeychainTest do
     test "returns an sk-ant-oat token when Claude Code is logged in" do
       case MacKeychain.read() do
         nil ->
-          flunk(
-            "Expected Claude Code keychain entry to be present. Log in to Claude Code and rerun."
-          )
+          flunk("Expected Claude Code keychain entry to be present. Log in to Claude Code and rerun.")
 
         token ->
           assert String.starts_with?(token, "sk-ant-oat")

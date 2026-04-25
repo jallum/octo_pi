@@ -1,6 +1,8 @@
 defmodule OctoPi.TUI.Autocomplete.SlashCommandProvider do
   @moduledoc false
 
+  @behaviour OctoPi.TUI.Autocomplete
+
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.Suggestion
 
@@ -9,8 +11,6 @@ defmodule OctoPi.TUI.Autocomplete.SlashCommandProvider do
 
   @spec new([Autocomplete.SlashCommand.t()]) :: t()
   def new(commands), do: %__MODULE__{commands: commands}
-
-  @behaviour Autocomplete
 
   @impl true
   def get_suggestions(%__MODULE__{commands: commands}, "/" <> prefix) do

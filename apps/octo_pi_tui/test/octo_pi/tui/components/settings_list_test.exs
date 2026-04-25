@@ -57,18 +57,19 @@ defmodule OctoPi.TUI.Components.SettingsListTest do
 
   describe "navigation" do
     test "Down moves selection" do
-      list = SettingsList.new(radio_items(), @theme) |> press(key(:down))
+      list = radio_items() |> SettingsList.new(@theme) |> press(key(:down))
       assert list.selected == 1
     end
 
     test "Up wraps" do
-      list = SettingsList.new(radio_items(), @theme) |> press(key(:up))
+      list = radio_items() |> SettingsList.new(@theme) |> press(key(:up))
       assert list.selected == 1
     end
 
     test "Down wraps" do
       list =
-        SettingsList.new(radio_items(), @theme)
+        radio_items()
+        |> SettingsList.new(@theme)
         |> press(key(:down))
         |> press(key(:down))
 
@@ -115,7 +116,7 @@ defmodule OctoPi.TUI.Components.SettingsListTest do
     end
 
     test "toggling false to true" do
-      list = SettingsList.new(checkbox_items(), @theme) |> press(key(:down))
+      list = checkbox_items() |> SettingsList.new(@theme) |> press(key(:down))
       {list, events} = SettingsList.handle_key(list, key(:enter))
       item = Enum.find(list.items, &(&1.id == "opt_b"))
       assert item.value == true

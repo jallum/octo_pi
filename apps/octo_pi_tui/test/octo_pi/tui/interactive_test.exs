@@ -2,11 +2,20 @@ defmodule OctoPi.TUI.InteractiveTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Usage
   alias OctoPi.Coder.Extension.UIContext
-  alias OctoPi.TUI.Components.{AssistantMessage, Input, Loader, ToolExecution}
-  alias OctoPi.TUI.{Interactive, Key, Theme}
+  alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.Input
+  alias OctoPi.TUI.Components.Loader
+  alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.WelcomeBanner
+  alias OctoPi.TUI.Interactive
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Theme
 
   describe "handle_event — keyboard input" do
     test "printable char is inserted into the Input" do
@@ -159,7 +168,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       te = ToolExecution.new("Bash", "tc2", %{}, nil)
       s = %Interactive{transcript: [te]}
 
-      result = %OctoPi.Agent.Tool.Result{
+      result = %Result{
         content: [%Content.Text{text: "output here"}],
         is_error?: false
       }
@@ -174,7 +183,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       te = ToolExecution.new("Bash", "tc3", %{}, nil)
       s = %Interactive{transcript: [te]}
 
-      result = %OctoPi.Agent.Tool.Result{
+      result = %Result{
         content: [%Content.Text{text: "permission denied"}],
         is_error?: true
       }
@@ -352,7 +361,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent
     alias OctoPi.AI.Model
-    alias OctoPi.TUI.Terminal, as: TUITerminal
+    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -379,7 +388,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         timestamp: 0,
         content: [%Content.Text{text: text}],
         stop_reason: stop_reason,
-        usage: %OctoPi.AI.Usage{}
+        usage: %Usage{}
       }
     end
 
@@ -444,7 +453,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       Task.await(runner, 1_000)
 
-      all = Agent.get(buffer, & &1) |> Enum.reverse() |> IO.iodata_to_binary()
+      all = buffer |> Agent.get(& &1) |> Enum.reverse() |> IO.iodata_to_binary()
       assert all =~ "hi"
       assert all =~ "pong"
     end
@@ -465,7 +474,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent
     alias OctoPi.AI.Model
-    alias OctoPi.TUI.Terminal, as: TUITerminal
+    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -609,7 +618,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "welcome banner" do
     test "renders banner when present" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+      banner = WelcomeBanner.new(theme, model: "test-model")
 
       s = %Interactive{
         transcript: [],
@@ -627,7 +636,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "? toggles banner when input is empty" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+      banner = WelcomeBanner.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
@@ -637,7 +646,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "? types into input when input is not empty" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = OctoPi.TUI.Components.WelcomeBanner.new(theme, model: "test-model")
+      banner = WelcomeBanner.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, banner: banner, theme: theme}
 
       s2 = Interactive.handle_event(s, {:char, "?"})
@@ -668,7 +677,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         timestamp: 0,
         content: [%Content.Text{text: "reply"}],
         stop_reason: :stop,
-        usage: %OctoPi.AI.Usage{
+        usage: %Usage{
           input: 200,
           output: 100,
           cache_read: 50,

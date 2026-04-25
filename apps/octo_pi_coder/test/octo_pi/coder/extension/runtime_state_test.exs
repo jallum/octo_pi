@@ -18,7 +18,7 @@ defmodule OctoPi.Coder.Extension.RuntimeStateTest do
     end
 
     test "raises when invalidated" do
-      state = RuntimeState.new() |> RuntimeState.invalidate("session replaced")
+      state = RuntimeState.invalidate(RuntimeState.new(), "session replaced")
 
       assert_raise RuntimeError, ~r/stale.*session replaced/, fn ->
         RuntimeState.assert_active!(state)
@@ -26,7 +26,7 @@ defmodule OctoPi.Coder.Extension.RuntimeStateTest do
     end
 
     test "raises with default message when no reason given" do
-      state = RuntimeState.new() |> RuntimeState.invalidate()
+      state = RuntimeState.invalidate(RuntimeState.new())
 
       assert_raise RuntimeError, ~r/stale.*invalidated/, fn ->
         RuntimeState.assert_active!(state)
@@ -36,7 +36,7 @@ defmodule OctoPi.Coder.Extension.RuntimeStateTest do
 
   describe "invalidate/2" do
     test "marks state inactive" do
-      state = RuntimeState.new() |> RuntimeState.invalidate("reload")
+      state = RuntimeState.invalidate(RuntimeState.new(), "reload")
       refute state.active?
       assert state.invalidation_message == "reload"
     end

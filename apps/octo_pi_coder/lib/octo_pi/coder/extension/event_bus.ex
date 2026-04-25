@@ -31,7 +31,7 @@ defmodule OctoPi.Coder.Extension.EventBus do
   end
 
   def handle_call({:off, channel, ref}, _from, state) do
-    subs = Map.get(state, channel, []) |> Enum.reject(fn {r, _} -> r == ref end)
+    subs = state |> Map.get(channel, []) |> Enum.reject(fn {r, _} -> r == ref end)
     {:reply, :ok, Map.put(state, channel, subs)}
   end
 

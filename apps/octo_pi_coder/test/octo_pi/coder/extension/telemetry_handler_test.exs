@@ -4,7 +4,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
   import ExUnit.CaptureLog
 
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{Context, Dispatcher, TelemetryHandler}
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.TelemetryHandler
 
   setup do
     TelemetryHandler.attach()

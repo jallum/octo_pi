@@ -44,20 +44,18 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
 
   describe "dialog methods" do
     test "confirm returns boolean when bound" do
-      ctx = UIContext.new() |> UIContext.bind(%{confirm: fn _msg, _opts -> true end})
+      ctx = UIContext.bind(UIContext.new(), %{confirm: fn _msg, _opts -> true end})
       assert true == ctx.confirm.("Are you sure?", [])
     end
 
     test "input returns {:ok, text} when bound" do
-      ctx =
-        UIContext.new() |> UIContext.bind(%{input: fn _prompt, _opts -> {:ok, "user input"} end})
+      ctx = UIContext.bind(UIContext.new(), %{input: fn _prompt, _opts -> {:ok, "user input"} end})
 
       assert {:ok, "user input"} == ctx.input.("Enter value:", [])
     end
 
     test "editor returns {:ok, text} when bound" do
-      ctx =
-        UIContext.new() |> UIContext.bind(%{editor: fn _initial, _opts -> {:ok, "edited"} end})
+      ctx = UIContext.bind(UIContext.new(), %{editor: fn _initial, _opts -> {:ok, "edited"} end})
 
       assert {:ok, "edited"} == ctx.editor.("initial", [])
     end
@@ -68,8 +66,7 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
       theme = "monokai"
 
       ctx =
-        UIContext.new()
-        |> UIContext.bind(%{
+        UIContext.bind(UIContext.new(), %{
           get_theme: fn -> theme end,
           set_theme: fn _t -> :ok end,
           get_all_themes: fn -> ["dark", "light", "monokai"] end
@@ -84,8 +81,7 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
   describe "editor control" do
     test "paste/get/set editor text" do
       ctx =
-        UIContext.new()
-        |> UIContext.bind(%{
+        UIContext.bind(UIContext.new(), %{
           paste_to_editor: fn _text -> :ok end,
           set_editor_text: fn _text -> :ok end,
           get_editor_text: fn -> "current text" end

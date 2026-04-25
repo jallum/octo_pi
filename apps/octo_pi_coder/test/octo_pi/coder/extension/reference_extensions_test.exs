@@ -2,14 +2,18 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{API, Context, Dispatcher, Event}
-
+  alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.Event
   # --- DirtyRepoGuard ---
+  alias OctoPi.Coder.Extensions.DirtyRepoGuard
+  alias OctoPi.Coder.Extensions.InputTransform
 
   describe "DirtyRepoGuard" do
     setup do
       api = API.new("dirty-repo-guard")
-      {:ok, api} = OctoPi.Coder.Extensions.DirtyRepoGuard.init(api)
+      {:ok, api} = DirtyRepoGuard.init(api)
       ext = API.build_extension(api, "/builtin/dirty_repo_guard.ex")
       {:ok, ext: ext}
     end
@@ -19,7 +23,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     end
 
     test "cancels when repo is dirty", %{ext: ext} do
-      dir = System.tmp_dir!() |> Path.join("drg_dirty_#{:erlang.unique_integer([:positive])}")
+      dir = Path.join(System.tmp_dir!(), "drg_dirty_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -35,7 +39,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     end
 
     test "allows when repo is clean", %{ext: ext} do
-      dir = System.tmp_dir!() |> Path.join("drg_clean_#{:erlang.unique_integer([:positive])}")
+      dir = Path.join(System.tmp_dir!(), "drg_clean_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -63,7 +67,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     end
 
     test "allows in non-git directory", %{ext: ext} do
-      dir = System.tmp_dir!() |> Path.join("drg_nogit_#{:erlang.unique_integer([:positive])}")
+      dir = Path.join(System.tmp_dir!(), "drg_nogit_#{:erlang.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -79,7 +83,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
   describe "InputTransform" do
     setup do
       api = API.new("input-transform")
-      {:ok, api} = OctoPi.Coder.Extensions.InputTransform.init(api)
+      {:ok, api} = InputTransform.init(api)
       ext = API.build_extension(api, "/builtin/input_transform.ex")
       {:ok, ext: ext}
     end
@@ -129,11 +133,11 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
   describe "end-to-end with both extensions" do
     setup do
       api1 = API.new("dirty-repo-guard")
-      {:ok, api1} = OctoPi.Coder.Extensions.DirtyRepoGuard.init(api1)
+      {:ok, api1} = DirtyRepoGuard.init(api1)
       ext1 = API.build_extension(api1, "/builtin/dirty_repo_guard.ex")
 
       api2 = API.new("input-transform")
-      {:ok, api2} = OctoPi.Coder.Extensions.InputTransform.init(api2)
+      {:ok, api2} = InputTransform.init(api2)
       ext2 = API.build_extension(api2, "/builtin/input_transform.ex")
 
       {:ok, extensions: [ext1, ext2]}

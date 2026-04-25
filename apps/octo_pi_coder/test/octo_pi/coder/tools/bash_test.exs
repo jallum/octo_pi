@@ -57,13 +57,14 @@ defmodule OctoPi.Coder.Tools.BashTest do
       # At least two partial updates (streaming, not just one big
       # flush at the end).
       updates =
-        Stream.repeatedly(fn ->
+        fn ->
           receive do
             {:update, _} = m -> m
           after
             0 -> :done
           end
-        end)
+        end
+        |> Stream.repeatedly()
         |> Enum.take_while(&(&1 != :done))
 
       assert length(updates) >= 2

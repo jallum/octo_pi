@@ -2,7 +2,9 @@ defmodule OctoPi.TUI.Autocomplete.ExtensionProviderTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Autocomplete
-  alias OctoPi.TUI.Autocomplete.{CombinedProvider, ExtensionProvider, Suggestion}
+  alias OctoPi.TUI.Autocomplete.CombinedProvider
+  alias OctoPi.TUI.Autocomplete.ExtensionProvider
+  alias OctoPi.TUI.Autocomplete.Suggestion
 
   describe "ExtensionProvider" do
     test "wraps a function into Autocomplete behaviour" do

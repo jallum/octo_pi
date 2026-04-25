@@ -324,6 +324,6 @@ defmodule OctoPi.TUI.ThemeTest do
         {Theme.color_key_to_json(key), "#000000"}
       end)
 
-    Map.merge(base, bg) |> Map.merge(overrides)
+    base |> Map.merge(bg) |> Map.merge(overrides)
   end
 end

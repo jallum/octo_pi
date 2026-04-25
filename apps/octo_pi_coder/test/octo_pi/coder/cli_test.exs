@@ -3,9 +3,9 @@ defmodule OctoPi.Coder.CLITest do
 
   # See RpcTest: agent turn-Task teardown can race session stop and
   # log an expected error.
-  @moduletag capture_log: true
-
   alias OctoPi.Coder.CLI
+
+  @moduletag capture_log: true
 
   describe "parse_args/1" do
     test "defaults to print mode with prompt from positional args" do
@@ -100,7 +100,7 @@ defmodule OctoPi.Coder.CLITest do
   end
 
   describe "bin/pi wrapper" do
-    @wrapper_path Path.join(Mix.Project.deps_path() |> Path.dirname(), "bin/pi")
+    @wrapper_path Mix.Project.deps_path() |> Path.dirname() |> Path.join("bin/pi")
 
     test "wrapper script exists and is executable" do
       assert File.exists?(@wrapper_path)
@@ -155,6 +155,8 @@ defmodule OctoPi.Coder.CLITest do
     end
 
     test "wired into a live session, a full prompt run emits events in order" do
+      alias OctoPi.Agent.TestSupport.FakeTransport, as: FT
+
       final =
         %OctoPi.AI.Message.Assistant{
           api: :fake_api,
@@ -165,8 +167,6 @@ defmodule OctoPi.Coder.CLITest do
           stop_reason: :stop,
           usage: %OctoPi.AI.Usage{}
         }
-
-      alias OctoPi.Agent.TestSupport.FakeTransport, as: FT
 
       FT.set_script([
         [

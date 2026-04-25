@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
       path = SessionStore.path(pid)
       assert File.exists?(path)
 
-      [header_line] = File.read!(path) |> String.split("\n", trim: true)
+      [header_line] = path |> File.read!() |> String.split("\n", trim: true)
       header = Jason.decode!(header_line)
 
       assert header["type"] == "session"
@@ -36,7 +36,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
          %{tmp: tmp} do
       {:ok, pid} = SessionStore.open(id: "ord", cwd: tmp, root: tmp)
       path = SessionStore.path(pid)
-      header_line = File.read!(path) |> String.split("\n", trim: true) |> hd()
+      header_line = path |> File.read!() |> String.split("\n", trim: true) |> hd()
 
       # Verify key order in the raw bytes — regex matches that
       # `type` appears before `version` appears before `id` etc.
@@ -57,7 +57,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
       path = SessionStore.path(pid)
       :ok = SessionStore.close(pid)
 
-      lines = File.read!(path) |> String.split("\n", trim: true)
+      lines = path |> File.read!() |> String.split("\n", trim: true)
       # Header + 2 entries.
       assert length(lines) == 3
 
@@ -80,7 +80,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
       path = SessionStore.path(pid)
       :ok = SessionStore.close(pid)
 
-      lines = File.read!(path) |> String.split("\n", trim: true)
+      lines = path |> File.read!() |> String.split("\n", trim: true)
       # 1 header + 10 entries.
       assert length(lines) == 11
     end
@@ -93,7 +93,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
       path = SessionStore.path(pid)
       :ok = SessionStore.close(pid)
 
-      lines = File.read!(path) |> String.split("\n", trim: true)
+      lines = path |> File.read!() |> String.split("\n", trim: true)
       assert length(lines) == 2
     end
   end

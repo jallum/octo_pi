@@ -239,8 +239,9 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
   describe "Interactive.render end-to-end" do
     test "input with borders always visible after long transcript" do
+      alias OctoPi.TUI.Components.Footer
+      alias OctoPi.TUI.Components.Input
       alias OctoPi.TUI.Interactive
-      alias OctoPi.TUI.Components.{Input, Footer}
 
       # Simulate: long transcript (50 lines) + input with borders
       transcript = Enum.map(1..50, &{:assistant, "Line #{&1}", :done})

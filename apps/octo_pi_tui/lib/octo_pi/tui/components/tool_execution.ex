@@ -82,8 +82,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   defp custom_render_fn(%{status: :pending, render_call: f}) when is_function(f), do: f
 
-  defp custom_render_fn(%{status: s, render_result: f})
-       when s in [:success, :error] and is_function(f), do: f
+  defp custom_render_fn(%{status: s, render_result: f}) when s in [:success, :error] and is_function(f), do: f
 
   defp custom_render_fn(_), do: nil
 

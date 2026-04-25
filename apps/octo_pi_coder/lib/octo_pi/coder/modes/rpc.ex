@@ -95,8 +95,7 @@ defmodule OctoPi.Coder.Modes.Rpc do
 
   defp ok_or_error(id, :ok), do: %{"id" => id, "result" => "ok"}
 
-  defp ok_or_error(id, {:error, reason}),
-    do: %{"id" => id, "error" => %{"message" => to_string(reason)}}
+  defp ok_or_error(id, {:error, reason}), do: %{"id" => id, "error" => %{"message" => to_string(reason)}}
 
   @doc """
   Convert an `OctoPi.Agent.Event.*` struct into a JSON-friendly

@@ -3,10 +3,12 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   # Many tests here intentionally raise inside handlers to exercise
   # error-isolation semantics; the warnings they log are expected.
-  @moduletag capture_log: true
-
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.Event
+
+  @moduletag capture_log: true
 
   defp ctx, do: Context.new(%{cwd: "/tmp"})
 
@@ -473,8 +475,8 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "get_all_tools/1" do
     test "returns deduplicated tools across extensions" do
-      e1 = Extension.new("a", "/a") |> Extension.add_tool(%{name: "t1", description: "d"})
-      e2 = Extension.new("b", "/b") |> Extension.add_tool(%{name: "t2", description: "d"})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_tool(%{name: "t1", description: "d"})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_tool(%{name: "t2", description: "d"})
 
       tools = Dispatcher.get_all_tools([e1, e2])
       assert length(tools) == 2
@@ -482,8 +484,8 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "first extension wins on name conflict" do
-      e1 = Extension.new("a", "/a") |> Extension.add_tool(%{name: "t", description: "from a"})
-      e2 = Extension.new("b", "/b") |> Extension.add_tool(%{name: "t", description: "from b"})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_tool(%{name: "t", description: "from a"})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_tool(%{name: "t", description: "from b"})
 
       tools = Dispatcher.get_all_tools([e1, e2])
       assert length(tools) == 1
@@ -493,7 +495,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "get_tool_definition/2" do
     test "finds tool by name" do
-      e = Extension.new("a", "/a") |> Extension.add_tool(%{name: "mytool", description: "d"})
+      e = "a" |> Extension.new("/a") |> Extension.add_tool(%{name: "mytool", description: "d"})
       assert %{name: "mytool"} = Dispatcher.get_tool_definition([e], "mytool")
     end
 
@@ -504,8 +506,8 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "get_all_commands/1" do
     test "returns deduplicated commands with extension id" do
-      e1 = Extension.new("a", "/a") |> Extension.add_command("cmd1", %{description: "d1"})
-      e2 = Extension.new("b", "/b") |> Extension.add_command("cmd2", %{description: "d2"})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_command("cmd1", %{description: "d1"})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_command("cmd2", %{description: "d2"})
 
       cmds = Dispatcher.get_all_commands([e1, e2])
       assert length(cmds) == 2
@@ -513,8 +515,8 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
 
     test "first extension wins on name conflict" do
-      e1 = Extension.new("a", "/a") |> Extension.add_command("dup", %{description: "a's"})
-      e2 = Extension.new("b", "/b") |> Extension.add_command("dup", %{description: "b's"})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_command("dup", %{description: "a's"})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_command("dup", %{description: "b's"})
 
       cmds = Dispatcher.get_all_commands([e1, e2])
       assert length(cmds) == 1
@@ -524,7 +526,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "get_command/2" do
     test "finds command by name" do
-      e = Extension.new("a", "/a") |> Extension.add_command("run", %{description: "run it"})
+      e = "a" |> Extension.new("/a") |> Extension.add_command("run", %{description: "run it"})
       assert {%{description: "run it"}, "a"} = Dispatcher.get_command([e], "run")
     end
 
@@ -536,7 +538,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
   describe "get_message_renderer/2" do
     test "finds renderer by type" do
       renderer = fn _type, _data -> "rendered" end
-      e = Extension.new("a", "/a") |> Extension.add_message_renderer("custom", renderer)
+      e = "a" |> Extension.new("/a") |> Extension.add_message_renderer("custom", renderer)
       assert ^renderer = Dispatcher.get_message_renderer([e], "custom")
     end
 
@@ -559,16 +561,16 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
 
   describe "get_command_diagnostics/1" do
     test "reports conflicts" do
-      e1 = Extension.new("a", "/a") |> Extension.add_command("dup", %{})
-      e2 = Extension.new("b", "/b") |> Extension.add_command("dup", %{})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_command("dup", %{})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_command("dup", %{})
 
       diags = Dispatcher.get_command_diagnostics([e1, e2])
       assert [%{name: "dup", extensions: ["a", "b"]}] = diags
     end
 
     test "no conflicts returns empty" do
-      e1 = Extension.new("a", "/a") |> Extension.add_command("c1", %{})
-      e2 = Extension.new("b", "/b") |> Extension.add_command("c2", %{})
+      e1 = "a" |> Extension.new("/a") |> Extension.add_command("c1", %{})
+      e2 = "b" |> Extension.new("/b") |> Extension.add_command("c2", %{})
 
       assert [] = Dispatcher.get_command_diagnostics([e1, e2])
     end

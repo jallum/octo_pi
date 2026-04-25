@@ -90,8 +90,7 @@ defmodule OctoPi.Coder.Tools.Read do
       line_count(sliced) > @max_lines ->
         kept = Enum.take(sliced, @max_lines)
 
-        {Enum.join(kept, "\n"),
-         %{truncated: true, truncated_by: :lines, total_lines: total, output_lines: @max_lines}}
+        {Enum.join(kept, "\n"), %{truncated: true, truncated_by: :lines, total_lines: total, output_lines: @max_lines}}
 
       true ->
         {text,

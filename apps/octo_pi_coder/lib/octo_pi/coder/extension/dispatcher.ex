@@ -2,7 +2,8 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   @moduledoc false
 
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{Context, Event}
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Event
 
   require Logger
 
@@ -73,8 +74,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   @spec mutate_in_place([Extension.t()], Event.t(), Context.t()) ::
           {:ok, Event.t()} | {:block, term()}
   def mutate_in_place(extensions, event, ctx) do
-    Enum.reduce_while(all_handlers(extensions, event.type), {:ok, event}, fn {handler, ext},
-                                                                             {:ok, event} ->
+    Enum.reduce_while(all_handlers(extensions, event.type), {:ok, event}, fn {handler, ext}, {:ok, event} ->
       case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
         {:block, reason} ->
           emit_cancel_telemetry(ext, event.type, reason)
@@ -115,7 +115,8 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
   @spec collect_all([Extension.t()], Event.t(), Context.t()) :: [term()]
   def collect_all(extensions, event, ctx) do
-    all_handlers(extensions, event.type)
+    extensions
+    |> all_handlers(event.type)
     |> Enum.reduce([], fn {handler, ext}, acc ->
       case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
         nil -> acc
@@ -219,9 +220,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
         }
       )
 
-      Logger.warning(
-        "Extension #{ext.id} handler error on #{event_type}: #{Exception.message(e)}"
-      )
+      Logger.warning("Extension #{ext.id} handler error on #{event_type}: #{Exception.message(e)}")
 
       nil
   end

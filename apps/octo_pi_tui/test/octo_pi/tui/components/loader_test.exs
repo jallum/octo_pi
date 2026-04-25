@@ -2,6 +2,7 @@ defmodule OctoPi.TUI.Components.LoaderTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.Loader
+  alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
   defp theme, do: Theme.load_builtin(:dark, :truecolor)
@@ -101,19 +102,19 @@ defmodule OctoPi.TUI.Components.LoaderTest do
   describe "handle_key/2" do
     test "escape on cancellable emits :cancel" do
       loader = Loader.new(cancellable: true)
-      escape = %OctoPi.TUI.Key{key: :escape}
+      escape = %Key{key: :escape}
       assert {^loader, [:cancel]} = Loader.handle_key(loader, escape)
     end
 
     test "escape on non-cancellable is ignored" do
       loader = Loader.new(cancellable: false)
-      escape = %OctoPi.TUI.Key{key: :escape}
+      escape = %Key{key: :escape}
       assert ^loader = Loader.handle_key(loader, escape)
     end
 
     test "other keys are ignored" do
       loader = Loader.new(cancellable: true)
-      key = %OctoPi.TUI.Key{key: ?a}
+      key = %Key{key: ?a}
       assert ^loader = Loader.handle_key(loader, key)
     end
   end

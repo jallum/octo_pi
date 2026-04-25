@@ -35,18 +35,18 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
 
   describe "autocomplete triggering" do
     test "typing / triggers suggestions when provider is set" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       assert input.autocomplete_active
       assert length(input.autocomplete_suggestions) == 4
     end
 
     test "no trigger without provider" do
-      input = %Input{} |> type("/")
+      input = type(%Input{}, "/")
       refute input.autocomplete_active
     end
 
     test "suggestions filter as user types" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/c")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/c")
       assert input.autocomplete_active
       labels = Enum.map(input.autocomplete_suggestions, & &1.label)
       assert "/clear" in labels
@@ -55,7 +55,7 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
     end
 
     test "autocomplete deactivates when prefix no longer matches" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/zzz")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/zzz")
       refute input.autocomplete_active
     end
   end
@@ -64,7 +64,7 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
 
   describe "autocomplete navigation" do
     test "Down selects next item" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       assert input.autocomplete_selected == 0
       input = press(input, key(:down))
       assert input.autocomplete_selected == 1
@@ -81,7 +81,7 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
     end
 
     test "Up wraps around" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       input = press(input, key(:up))
       assert input.autocomplete_selected == 3
     end
@@ -91,7 +91,7 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
 
   describe "autocomplete acceptance" do
     test "Tab accepts selected suggestion" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       input = press(input, key(:tab))
       refute input.autocomplete_active
       assert String.starts_with?(input.value, "/")
@@ -99,7 +99,7 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
     end
 
     test "Enter accepts selected suggestion when active" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       input = press(input, key(:enter))
       refute input.autocomplete_active
       assert String.starts_with?(input.value, "/")
@@ -110,14 +110,14 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
 
   describe "autocomplete dismissal" do
     test "Escape dismisses dropdown" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       assert input.autocomplete_active
       input = press(input, key(:escape))
       refute input.autocomplete_active
     end
 
     test "Ctrl+C does not interact with autocomplete" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       result = Input.handle_key(input, ctrl(?c))
       assert result == input or match?({_, _}, result)
     end
@@ -132,13 +132,13 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
     end
 
     test "returns suggestion lines when active" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       lines = Input.render_dropdown(input, 40)
       assert lines != []
     end
 
     test "highlights selected item" do
-      input = %Input{autocomplete_provider: test_provider()} |> type("/")
+      input = type(%Input{autocomplete_provider: test_provider()}, "/")
       lines = Input.render_dropdown(input, 40)
       assert Enum.any?(lines, &(&1 =~ "\e[7m"))
     end

@@ -36,9 +36,7 @@ defmodule OctoPi.Coder.Modes.Print do
         OctoPi.Coder.SystemPrompt.render(cwd: cwd, tools: tools)
       end)
 
-    session_opts =
-      [model: model, tools: tools, system_prompt: system_prompt]
-      |> maybe_put(:transport, transport)
+    session_opts = maybe_put([model: model, tools: tools, system_prompt: system_prompt], :transport, transport)
 
     {:ok, session} = OctoPi.Agent.start_session(session_opts)
     OctoPi.Agent.subscribe(session, self(), :async)

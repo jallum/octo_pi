@@ -1,7 +1,8 @@
 defmodule OctoPi.TUI.SyntaxHighlightTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.TUI.{SyntaxHighlight, Theme}
+  alias OctoPi.TUI.SyntaxHighlight
+  alias OctoPi.TUI.Theme
 
   defp theme, do: Theme.load_builtin(:dark, :truecolor)
 

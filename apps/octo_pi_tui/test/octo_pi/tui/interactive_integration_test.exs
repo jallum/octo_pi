@@ -13,7 +13,8 @@ defmodule OctoPi.TUI.InteractiveIntegrationTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.AI.Model
-  alias OctoPi.TUI.{Interactive, Terminal}
+  alias OctoPi.TUI.Interactive
+  alias OctoPi.TUI.Terminal
 
   @tag :integration
   @tag timeout: 60_000
@@ -72,7 +73,7 @@ defmodule OctoPi.TUI.InteractiveIntegrationTest do
     Terminal.feed_chunk(terminal_name, <<0x03>>)
     assert :ok = Task.await(runner, 5_000)
 
-    all = Agent.get(buffer, & &1) |> Enum.reverse() |> IO.iodata_to_binary()
+    all = buffer |> Agent.get(& &1) |> Enum.reverse() |> IO.iodata_to_binary()
     assert String.downcase(all) =~ "pong"
   end
 

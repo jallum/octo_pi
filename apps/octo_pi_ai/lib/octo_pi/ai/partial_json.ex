@@ -130,15 +130,12 @@ defmodule OctoPi.AI.PartialJson do
   defp do_repair(<<>>, _in_string, acc), do: Enum.reverse(acc)
 
   # Outside a string literal — copy verbatim, track " toggling us into a string.
-  defp do_repair(<<?", rest::binary>>, false, acc),
-    do: do_repair(rest, true, [?" | acc])
+  defp do_repair(<<?", rest::binary>>, false, acc), do: do_repair(rest, true, [?" | acc])
 
-  defp do_repair(<<c, rest::binary>>, false, acc),
-    do: do_repair(rest, false, [c | acc])
+  defp do_repair(<<c, rest::binary>>, false, acc), do: do_repair(rest, false, [c | acc])
 
   # Inside a string literal.
-  defp do_repair(<<?", rest::binary>>, true, acc),
-    do: do_repair(rest, false, [?" | acc])
+  defp do_repair(<<?", rest::binary>>, true, acc), do: do_repair(rest, false, [?" | acc])
 
   # Valid \uXXXX escape — passes through.
   defp do_repair(<<?\\, ?u, h1, h2, h3, h4, rest::binary>>, true, acc)
@@ -147,8 +144,7 @@ defmodule OctoPi.AI.PartialJson do
   end
 
   # Other valid escape (\", \\, \/, \b, \f, \n, \r, \t).
-  defp do_repair(<<?\\, next, rest::binary>>, true, acc)
-       when is_valid_escape(next) do
+  defp do_repair(<<?\\, next, rest::binary>>, true, acc) when is_valid_escape(next) do
     do_repair(rest, true, [<<?\\, next>> | acc])
   end
 
@@ -158,8 +154,7 @@ defmodule OctoPi.AI.PartialJson do
   end
 
   # Lone trailing backslash inside an unterminated string — escape it.
-  defp do_repair(<<?\\>>, true, acc),
-    do: do_repair(<<>>, true, ["\\\\" | acc])
+  defp do_repair(<<?\\>>, true, acc), do: do_repair(<<>>, true, ["\\\\" | acc])
 
   # Raw control char inside a string — escape it.
   defp do_repair(<<c, rest::binary>>, true, acc) when c in 0x00..0x1F do
@@ -167,8 +162,7 @@ defmodule OctoPi.AI.PartialJson do
   end
 
   # Everything else (printable bytes, UTF-8 continuations) passes through.
-  defp do_repair(<<c, rest::binary>>, true, acc),
-    do: do_repair(rest, true, [c | acc])
+  defp do_repair(<<c, rest::binary>>, true, acc), do: do_repair(rest, true, [c | acc])
 
   @spec escape_control(byte()) :: binary()
   defp escape_control(?\b), do: "\\b"
@@ -200,29 +194,21 @@ defmodule OctoPi.AI.PartialJson do
 
   @spec scan_brackets(binary(), boolean(), boolean(), [byte()]) ::
           %{in_string: boolean(), stack: [byte()]}
-  defp scan_brackets(<<>>, in_string, _escape_next, stack),
-    do: %{in_string: in_string, stack: stack}
+  defp scan_brackets(<<>>, in_string, _escape_next, stack), do: %{in_string: in_string, stack: stack}
 
-  defp scan_brackets(<<_c, rest::binary>>, in_string, true, stack),
-    do: scan_brackets(rest, in_string, false, stack)
+  defp scan_brackets(<<_c, rest::binary>>, in_string, true, stack), do: scan_brackets(rest, in_string, false, stack)
 
-  defp scan_brackets(<<?\\, rest::binary>>, true, _escape, stack),
-    do: scan_brackets(rest, true, true, stack)
+  defp scan_brackets(<<?\\, rest::binary>>, true, _escape, stack), do: scan_brackets(rest, true, true, stack)
 
-  defp scan_brackets(<<?", rest::binary>>, true, _escape, stack),
-    do: scan_brackets(rest, false, false, stack)
+  defp scan_brackets(<<?", rest::binary>>, true, _escape, stack), do: scan_brackets(rest, false, false, stack)
 
-  defp scan_brackets(<<_c, rest::binary>>, true, _escape, stack),
-    do: scan_brackets(rest, true, false, stack)
+  defp scan_brackets(<<_c, rest::binary>>, true, _escape, stack), do: scan_brackets(rest, true, false, stack)
 
-  defp scan_brackets(<<?", rest::binary>>, false, _escape, stack),
-    do: scan_brackets(rest, true, false, stack)
+  defp scan_brackets(<<?", rest::binary>>, false, _escape, stack), do: scan_brackets(rest, true, false, stack)
 
-  defp scan_brackets(<<?{, rest::binary>>, false, _escape, stack),
-    do: scan_brackets(rest, false, false, [?} | stack])
+  defp scan_brackets(<<?{, rest::binary>>, false, _escape, stack), do: scan_brackets(rest, false, false, [?} | stack])
 
-  defp scan_brackets(<<?[, rest::binary>>, false, _escape, stack),
-    do: scan_brackets(rest, false, false, [?] | stack])
+  defp scan_brackets(<<?[, rest::binary>>, false, _escape, stack), do: scan_brackets(rest, false, false, [?] | stack])
 
   defp scan_brackets(<<?}, rest::binary>>, false, _escape, [?} | stack_rest]),
     do: scan_brackets(rest, false, false, stack_rest)
@@ -230,8 +216,7 @@ defmodule OctoPi.AI.PartialJson do
   defp scan_brackets(<<?], rest::binary>>, false, _escape, [?] | stack_rest]),
     do: scan_brackets(rest, false, false, stack_rest)
 
-  defp scan_brackets(<<_c, rest::binary>>, false, _escape, stack),
-    do: scan_brackets(rest, false, false, stack)
+  defp scan_brackets(<<_c, rest::binary>>, false, _escape, stack), do: scan_brackets(rest, false, false, stack)
 
   @spec drop_trailing_structural(binary()) :: binary()
   defp drop_trailing_structural(json) do

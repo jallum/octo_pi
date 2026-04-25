@@ -9,7 +9,9 @@ defmodule OctoPi.AI.Content do
   directly in events).
   """
 
-  alias OctoPi.AI.Content.{Image, Text, Thinking}
+  alias OctoPi.AI.Content.Image
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
   alias OctoPi.AI.ToolCall
 
   @type assistant_block :: Text.t() | Thinking.t() | ToolCall.t()

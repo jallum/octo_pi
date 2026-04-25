@@ -39,9 +39,9 @@ defmodule OctoPi.TUI.TerminalImage do
 
   @spec detect_capabilities() :: capabilities()
   def detect_capabilities do
-    term_program = System.get_env("TERM_PROGRAM", "") |> String.downcase()
-    term = System.get_env("TERM", "") |> String.downcase()
-    color_term = System.get_env("COLORTERM", "") |> String.downcase()
+    term_program = "TERM_PROGRAM" |> System.get_env("") |> String.downcase()
+    term = "TERM" |> System.get_env("") |> String.downcase()
+    color_term = "COLORTERM" |> System.get_env("") |> String.downcase()
 
     cond do
       in_tmux_or_screen?(term) ->
@@ -89,9 +89,7 @@ defmodule OctoPi.TUI.TerminalImage do
   @spec get_png_dimensions(String.t()) :: {:ok, dimensions()} | :error
   def get_png_dimensions(base64_data) do
     case Base.decode64(base64_data) do
-      {:ok,
-       <<0x89, 0x50, 0x4E, 0x47, _::binary-size(8), _ihdr::binary-size(4), w::32, h::32,
-         _::binary>>} ->
+      {:ok, <<0x89, 0x50, 0x4E, 0x47, _::binary-size(8), _ihdr::binary-size(4), w::32, h::32, _::binary>>} ->
         {:ok, %{width: w, height: h}}
 
       _ ->

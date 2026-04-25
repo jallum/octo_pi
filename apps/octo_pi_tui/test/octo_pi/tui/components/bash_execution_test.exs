@@ -38,7 +38,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   describe "append_output/2" do
     test "accumulates output lines" do
       be =
-        BashExecution.new("ls", @theme)
+        "ls"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output("file1\nfile2\n")
 
       assert be.output_lines == ["file1", "file2", ""]
@@ -46,7 +47,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
     test "continues incomplete lines across chunks" do
       be =
-        BashExecution.new("cat", @theme)
+        "cat"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output("hel")
         |> BashExecution.append_output("lo\nworld")
 
@@ -55,7 +57,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
     test "normalizes \\r\\n to \\n" do
       be =
-        BashExecution.new("cmd", @theme)
+        "cmd"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output("line1\r\nline2\r\n")
 
       assert be.output_lines == ["line1", "line2", ""]
@@ -67,7 +70,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   describe "set_complete/3" do
     test "exit code 0 sets status to :complete" do
       be =
-        BashExecution.new("ls", @theme)
+        "ls"
+        |> BashExecution.new(@theme)
         |> BashExecution.set_complete(0)
 
       assert be.status == :complete
@@ -76,7 +80,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
     test "non-zero exit code sets status to :error" do
       be =
-        BashExecution.new("false", @theme)
+        "false"
+        |> BashExecution.new(@theme)
         |> BashExecution.set_complete(1)
 
       assert be.status == :error
@@ -85,7 +90,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
     test "cancelled flag sets status to :cancelled" do
       be =
-        BashExecution.new("sleep", @theme)
+        "sleep"
+        |> BashExecution.new(@theme)
         |> BashExecution.set_complete(nil, cancelled: true)
 
       assert be.status == :cancelled
@@ -113,7 +119,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   describe "render/2 — output display" do
     test "shows streaming output when expanded" do
       be =
-        BashExecution.new("ls", @theme)
+        "ls"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output("file1\nfile2")
         |> BashExecution.set_expanded(true)
 
@@ -126,7 +133,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
       output = Enum.map_join(1..30, "\n", &"line-#{&1}")
 
       be =
-        BashExecution.new("cmd", @theme)
+        "cmd"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output(output)
         |> BashExecution.set_complete(0)
 
@@ -139,7 +147,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
       output = Enum.map_join(1..30, "\n", &"line-#{&1}")
 
       be =
-        BashExecution.new("cmd", @theme)
+        "cmd"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output(output)
         |> BashExecution.set_complete(0)
 
@@ -151,7 +160,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   describe "render/2 — exit code display" do
     test "error exit code is shown" do
       be =
-        BashExecution.new("false", @theme)
+        "false"
+        |> BashExecution.new(@theme)
         |> BashExecution.set_complete(127)
 
       lines = render_stripped(be)
@@ -160,7 +170,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
     test "cancelled status is shown" do
       be =
-        BashExecution.new("sleep", @theme)
+        "sleep"
+        |> BashExecution.new(@theme)
         |> BashExecution.set_complete(nil, cancelled: true)
 
       lines = render_stripped(be)
@@ -175,7 +186,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
       output = Enum.map_join(1..30, "\n", &"line-#{&1}")
 
       be =
-        BashExecution.new("cmd", @theme)
+        "cmd"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output(output)
         |> BashExecution.set_complete(0)
         |> BashExecution.set_expanded(true)
@@ -220,7 +232,8 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   describe "get_output/1" do
     test "returns joined output" do
       be =
-        BashExecution.new("cmd", @theme)
+        "cmd"
+        |> BashExecution.new(@theme)
         |> BashExecution.append_output("a\nb\nc")
 
       assert BashExecution.get_output(be) == "a\nb\nc"

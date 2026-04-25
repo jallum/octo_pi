@@ -51,20 +51,18 @@ defmodule OctoPi.TUI.WrapAnsi do
   defp truncate_with_wide_ellipsis(text, max_width, ellipsis, pad) do
     text_width = visible_width(text)
 
-    cond do
-      text_width <= max_width ->
-        if pad,
-          do: text <> String.duplicate(" ", max_width - text_width),
-          else: text
+    if text_width <= max_width do
+      if pad,
+        do: text <> String.duplicate(" ", max_width - text_width),
+        else: text
+    else
+      {clipped_text, clipped_width} = truncate_fragment(ellipsis, max_width)
 
-      true ->
-        {clipped_text, clipped_width} = truncate_fragment(ellipsis, max_width)
-
-        if clipped_width == 0 do
-          if pad, do: String.duplicate(" ", max_width), else: ""
-        else
-          finalize_truncated("", 0, clipped_text, clipped_width, max_width, pad)
-        end
+      if clipped_width == 0 do
+        if pad, do: String.duplicate(" ", max_width), else: ""
+      else
+        finalize_truncated("", 0, clipped_text, clipped_width, max_width, pad)
+      end
     end
   end
 
@@ -82,14 +80,12 @@ defmodule OctoPi.TUI.WrapAnsi do
 
     {state, exhausted} = walk_truncate(text, target_width, max_width, state)
 
-    cond do
-      exhausted and not state.overflowed and state.visible <= max_width ->
-        if pad,
-          do: text <> String.duplicate(" ", max(0, max_width - state.visible)),
-          else: text
-
-      true ->
-        finalize_truncated(state.kept, state.kept_width, ellipsis, ellipsis_width, max_width, pad)
+    if exhausted and not state.overflowed and state.visible <= max_width do
+      if pad,
+        do: text <> String.duplicate(" ", max(0, max_width - state.visible)),
+        else: text
+    else
+      finalize_truncated(state.kept, state.kept_width, ellipsis, ellipsis_width, max_width, pad)
     end
   end
 
@@ -284,8 +280,7 @@ defmodule OctoPi.TUI.WrapAnsi do
 
   # --- build wrapped output lines from tokens ---
 
-  defp build_lines([], _width, tracker, current, _cw, completed),
-    do: {Enum.reverse([current | completed]), tracker}
+  defp build_lines([], _width, tracker, current, _cw, completed), do: {Enum.reverse([current | completed]), tracker}
 
   defp build_lines([{:space, text} | rest], width, tracker, current, cw, completed) do
     sw = visible_width(text)
@@ -333,8 +328,7 @@ defmodule OctoPi.TUI.WrapAnsi do
     do_break(parts, width, tracker, prefix, 0, [])
   end
 
-  defp do_break([], _width, tracker, current, cw, lines),
-    do: {lines, current, cw, tracker}
+  defp do_break([], _width, tracker, current, cw, lines), do: {lines, current, cw, tracker}
 
   defp do_break([{:ansi, code} | rest], width, tracker, current, cw, lines) do
     tracker = Tracker.process(tracker, code)

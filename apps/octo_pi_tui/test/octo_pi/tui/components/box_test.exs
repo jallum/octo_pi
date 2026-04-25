@@ -1,7 +1,8 @@
 defmodule OctoPi.TUI.Components.BoxTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.TUI.Components.{Box, Text}
+  alias OctoPi.TUI.Components.Box
+  alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.WrapAnsi
 
   defp strip_ansi(text) do
@@ -12,7 +13,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
 
   describe "render/2 with border" do
     test "renders bordered box around content" do
-      box = Box.new(border: true) |> Box.add_child(%Text{content: "hello"})
+      box = [border: true] |> Box.new() |> Box.add_child(%Text{content: "hello"})
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
 
@@ -24,14 +25,14 @@ defmodule OctoPi.TUI.Components.BoxTest do
     end
 
     test "title in top border" do
-      box = Box.new(border: true, title: "Title") |> Box.add_child(%Text{content: "body"})
+      box = [border: true, title: "Title"] |> Box.new() |> Box.add_child(%Text{content: "body"})
       lines = Box.render(box, 30)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert hd(stripped) =~ "Title"
     end
 
     test "rounded corners" do
-      box = Box.new(border: true, rounded: true) |> Box.add_child(%Text{content: "x"})
+      box = [border: true, rounded: true] |> Box.new() |> Box.add_child(%Text{content: "x"})
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert hd(stripped) =~ "╭"
@@ -41,7 +42,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
     end
 
     test "content is padded inside border" do
-      box = Box.new(border: true, padding_x: 1) |> Box.add_child(%Text{content: "hi"})
+      box = [border: true, padding_x: 1] |> Box.new() |> Box.add_child(%Text{content: "hi"})
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
       content_line = Enum.find(stripped, &(&1 =~ "hi"))
@@ -53,7 +54,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
 
   describe "render/2 without border" do
     test "renders children with padding" do
-      box = Box.new(padding_x: 2, padding_y: 1) |> Box.add_child(%Text{content: "hi"})
+      box = [padding_x: 2, padding_y: 1] |> Box.new() |> Box.add_child(%Text{content: "hi"})
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
 
@@ -72,7 +73,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
       bg_fn = fn text -> "\e[42m#{text}\e[49m" end
 
       box =
-        Box.new(padding_x: 1, padding_y: 0, bg_fn: bg_fn) |> Box.add_child(%Text{content: "hi"})
+        [padding_x: 1, padding_y: 0, bg_fn: bg_fn] |> Box.new() |> Box.add_child(%Text{content: "hi"})
 
       lines = Box.render(box, 20)
 
@@ -86,7 +87,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
       bg_fn = fn text -> "\e[42m#{text}\e[49m" end
 
       box =
-        Box.new(padding_x: 1, padding_y: 1, bg_fn: bg_fn) |> Box.add_child(%Text{content: "x"})
+        [padding_x: 1, padding_y: 1, bg_fn: bg_fn] |> Box.new() |> Box.add_child(%Text{content: "x"})
 
       lines = Box.render(box, 30)
 
@@ -102,7 +103,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
   describe "background function" do
     test "applies bg_fn to each line" do
       bg_fn = fn text -> "\e[42m#{text}\e[49m" end
-      box = Box.new(bg_fn: bg_fn) |> Box.add_child(%Text{content: "colored"})
+      box = [bg_fn: bg_fn] |> Box.new() |> Box.add_child(%Text{content: "colored"})
       lines = Box.render(box, 20)
       assert Enum.all?(lines, &(&1 =~ "\e[42m"))
     end
@@ -113,7 +114,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
   describe "border color" do
     test "applies color function to border chars" do
       color_fn = fn text -> "\e[34m#{text}\e[39m" end
-      box = Box.new(border: true, border_color: color_fn) |> Box.add_child(%Text{content: "x"})
+      box = [border: true, border_color: color_fn] |> Box.new() |> Box.add_child(%Text{content: "x"})
       lines = Box.render(box, 20)
       assert hd(lines) =~ "\e[34m"
     end
@@ -123,7 +124,7 @@ defmodule OctoPi.TUI.Components.BoxTest do
 
   describe "width" do
     test "border lines fill to width" do
-      box = Box.new(border: true) |> Box.add_child(%Text{content: "x"})
+      box = [border: true] |> Box.new() |> Box.add_child(%Text{content: "x"})
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
       top = hd(stripped)

@@ -16,7 +16,10 @@ defmodule OctoPi.Agent.Transport do
       OctoPi.Agent.start_session(model: model, transport: OctoPi.Agent.Transport.Direct, ...)
   """
 
-  alias OctoPi.AI.{Context, Event, Model, StreamOptions}
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.StreamOptions
 
   @type event_stream :: Enumerable.t(Event.t())
 

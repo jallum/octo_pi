@@ -1,7 +1,11 @@
 defmodule OctoPi.AIStreamTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{Context, Event, Message, Model, StreamOptions}
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.TestSupport.FakeAnthropicPlug, as: Fake
 
   setup do

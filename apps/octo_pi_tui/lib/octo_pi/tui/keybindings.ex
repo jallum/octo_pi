@@ -138,7 +138,7 @@ defmodule OctoPi.TUI.Keybindings do
   end
 
   defp detect_conflicts(bindings, user_bindings, definitions) do
-    user_actions = Map.keys(user_bindings) |> MapSet.new()
+    user_actions = user_bindings |> Map.keys() |> MapSet.new()
 
     bindings
     |> Enum.filter(fn {action, _} ->

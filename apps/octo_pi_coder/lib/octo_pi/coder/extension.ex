@@ -49,7 +49,7 @@ defmodule OctoPi.Coder.Extension do
 
   @spec add_handler(t(), Event.event_type(), handler_fn()) :: t()
   def add_handler(%__MODULE__{} = ext, event_type, handler) when is_function(handler, 2) do
-    unless Event.valid?(event_type),
+    if !Event.valid?(event_type),
       do: raise(ArgumentError, "unknown event type: #{inspect(event_type)}")
 
     update_in(ext.handlers[event_type], fn
@@ -74,8 +74,7 @@ defmodule OctoPi.Coder.Extension do
   end
 
   @spec add_message_renderer(t(), String.t(), message_renderer()) :: t()
-  def add_message_renderer(%__MODULE__{} = ext, type, renderer)
-      when is_binary(type) and is_function(renderer, 2) do
+  def add_message_renderer(%__MODULE__{} = ext, type, renderer) when is_binary(type) and is_function(renderer, 2) do
     put_in(ext.message_renderers[type], renderer)
   end
 

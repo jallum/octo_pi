@@ -44,8 +44,7 @@ defmodule OctoPi.Coder.Tools.Find do
     requested_base = Map.get(args, "path", cwd)
 
     if AbortRef.aborted?(abort_ref) do
-      {:ok,
-       %Result{is_error?: true, content: [%Content.Text{text: "find aborted before execution"}]}}
+      {:ok, %Result{is_error?: true, content: [%Content.Text{text: "find aborted before execution"}]}}
     else
       do_find(requested_base, cwd, pattern)
     end
