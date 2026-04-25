@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Interactive: Ctrl+C should clear editor, not exit",
   "type": "task",
-  "updated_at": "2026-04-25T13:25:51.039865Z"
+  "updated_at": "2026-04-25T13:30:32.592037Z"
 }
