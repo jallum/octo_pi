@@ -673,7 +673,7 @@ defmodule OctoPi.TUI.Interactive do
     do: finalize_assistant(transcript, ev.message, theme)
 
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev, theme) do
-    te = ToolExecution.new(ev.tool_name, ev.tool_call_id, %{}, theme)
+    te = ToolExecution.new(ev.tool_name, ev.tool_call_id, ev.args, theme)
     transcript ++ [te]
   end
 

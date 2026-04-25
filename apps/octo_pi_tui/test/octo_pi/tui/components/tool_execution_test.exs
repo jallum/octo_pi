@@ -11,6 +11,20 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     String.replace(text, ~r/\e\][^\a]*\a|\e\[[0-9;]*m/, "")
   end
 
+  defp header_text(te) do
+    te
+    |> ToolExecution.render(80)
+    |> Enum.map(&strip_ansi/1)
+    |> Enum.find(&(String.trim(&1) != ""))
+  end
+
+  # count non-empty background-colored lines in rendered output
+  defp bg_line_count(te) do
+    te
+    |> ToolExecution.render(80)
+    |> Enum.count(fn line -> line =~ "\e[48;" end)
+  end
+
   # ── Basic rendering ─────────────────────────────────────────────
 
   describe "render/2 pending state" do
@@ -18,7 +32,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       te = ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme)
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
-      assert Enum.any?(stripped, &(&1 =~ "Read"))
+      assert Enum.any?(stripped, &(&1 =~ "read"))
     end
 
     test "shows arguments" do
@@ -32,6 +46,12 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       te = ToolExecution.new("Read", "call-1", %{}, @theme)
       lines = ToolExecution.render(te, 80)
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
+    end
+
+    test "no extra blank line inside box when no result" do
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+      # padding_y=1 gives top + bottom padding = 2 bg lines, plus 1 content line = 3 total
+      assert bg_line_count(te) == 3
     end
   end
 
@@ -142,14 +162,172 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     end
   end
 
-  # ── Tool name formatting ────────────────────────────────────────
+  # ── Per-tool header formatting (upstream parity) ─────────────────
 
-  describe "header formatting" do
-    test "shows tool name in header" do
-      te = ToolExecution.new("Edit", "call-1", %{file: "test.ex"}, @theme)
-      lines = ToolExecution.render(te, 80)
-      stripped = Enum.map(lines, &strip_ansi/1)
-      assert Enum.any?(stripped, &(&1 =~ "Edit"))
+  describe "Bash header" do
+    test "shows $ command" do
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls -la"}, @theme)
+      header = header_text(te)
+      assert header =~ "$ ls -la"
+    end
+
+    test "truncates long commands" do
+      long_cmd = String.duplicate("x", 200)
+      te = ToolExecution.new("Bash", "call-1", %{command: long_cmd}, @theme)
+      header = header_text(te)
+      assert header =~ "$ "
+      assert String.length(header) < 200
+    end
+
+    test "shows timeout suffix" do
+      te = ToolExecution.new("Bash", "call-1", %{command: "sleep 60", timeout: 120}, @theme)
+      header = header_text(te)
+      assert header =~ "$ sleep 60"
+      assert header =~ "timeout 120s"
+    end
+  end
+
+  describe "Read header" do
+    test "shows read path" do
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo/bar.ex"}, @theme)
+      header = header_text(te)
+      assert header =~ "read"
+      assert header =~ "/foo/bar.ex"
+    end
+
+    test "shows line range with offset and limit" do
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 10, limit: 20}, @theme)
+      header = header_text(te)
+      assert header =~ "/foo.ex"
+      assert header =~ ":10-29"
+    end
+
+    test "shows offset only without limit" do
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 5}, @theme)
+      header = header_text(te)
+      assert header =~ ":5"
+    end
+  end
+
+  describe "Edit header" do
+    test "shows edit path" do
+      te = ToolExecution.new("Edit", "call-1", %{file_path: "/src/app.ex"}, @theme)
+      header = header_text(te)
+      assert header =~ "edit"
+      assert header =~ "/src/app.ex"
+    end
+  end
+
+  describe "Write header" do
+    test "shows write path" do
+      te = ToolExecution.new("Write", "call-1", %{file_path: "/src/new.ex", content: "hello"}, @theme)
+      header = header_text(te)
+      assert header =~ "write"
+      assert header =~ "/src/new.ex"
+    end
+  end
+
+  describe "Grep header" do
+    test "shows grep pattern in path" do
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "defmodule", path: "/src"}, @theme)
+      header = header_text(te)
+      assert header =~ "grep"
+      assert header =~ "/defmodule/"
+      assert header =~ "in /src"
+    end
+
+    test "shows glob when present" do
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", glob: "*.ex"}, @theme)
+      header = header_text(te)
+      assert header =~ "*.ex"
+    end
+
+    test "shows limit when present" do
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", limit: 10}, @theme)
+      header = header_text(te)
+      assert header =~ "limit 10"
+    end
+  end
+
+  describe "Find header" do
+    test "shows find pattern in path" do
+      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src"}, @theme)
+      header = header_text(te)
+      assert header =~ "find"
+      assert header =~ "*.ex"
+      assert header =~ "in /src"
+    end
+
+    test "shows limit when present" do
+      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src", limit: 5}, @theme)
+      header = header_text(te)
+      assert header =~ "limit 5"
+    end
+  end
+
+  describe "LS header" do
+    test "shows ls path" do
+      te = ToolExecution.new("ls", "call-1", %{path: "/src"}, @theme)
+      header = header_text(te)
+      assert header =~ "ls"
+      assert header =~ "/src"
+    end
+
+    test "shows limit when present" do
+      te = ToolExecution.new("ls", "call-1", %{path: "/src", limit: 50}, @theme)
+      header = header_text(te)
+      assert header =~ "limit 50"
+    end
+  end
+
+  describe "string-keyed args (JSON decode path)" do
+    test "Bash with string keys" do
+      te = ToolExecution.new("Bash", "call-1", %{"command" => "echo hi"}, @theme)
+      header = header_text(te)
+      assert header =~ "$ echo hi"
+    end
+
+    test "Read with string keys" do
+      te = ToolExecution.new("Read", "call-1", %{"file_path" => "/src/app.ex", "offset" => 5}, @theme)
+      header = header_text(te)
+      assert header =~ "/src/app.ex"
+      assert header =~ ":5"
+    end
+  end
+
+  describe "unknown tool header" do
+    test "falls back to generic key=value format" do
+      te = ToolExecution.new("CustomTool", "call-1", %{foo: "bar", baz: 42}, @theme)
+      header = header_text(te)
+      assert header =~ "CustomTool"
+    end
+  end
+
+  describe "status prefix in header" do
+    test "pending shows spinner" do
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+      header = header_text(te)
+      assert header =~ "⏳"
+    end
+
+    test "success shows checkmark" do
+      te =
+        "Bash"
+        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
+        |> ToolExecution.set_result("ok", false)
+
+      header = header_text(te)
+      assert header =~ "✓"
+    end
+
+    test "error shows x" do
+      te =
+        "Bash"
+        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
+        |> ToolExecution.set_result("fail", true)
+
+      header = header_text(te)
+      assert header =~ "✗"
     end
   end
 
@@ -279,7 +457,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       te = ToolExecution.new("Read", "call-1", %{file_path: "/bar"}, @theme)
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
-      assert Enum.any?(stripped, &(&1 =~ "Read"))
+      assert Enum.any?(stripped, &(&1 =~ "read"))
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
   end
@@ -308,7 +486,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
 
-      header_line = Enum.find(stripped, &(&1 =~ "Bash"))
+      header_line = Enum.find(stripped, &(&1 =~ "$ ls"))
       refute header_line =~ "┌", "header should not be in a border"
       refute header_line =~ "─", "header should not be in a border"
     end

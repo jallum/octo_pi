@@ -96,8 +96,8 @@ defmodule OctoPi.Agent.Event do
   defmodule ToolExecutionStart do
     @moduledoc "A tool call has been dispatched."
     @enforce_keys [:tool_call_id, :tool_name]
-    @type t :: %__MODULE__{tool_call_id: String.t(), tool_name: String.t()}
-    defstruct [:tool_call_id, :tool_name]
+    @type t :: %__MODULE__{tool_call_id: String.t(), tool_name: String.t(), args: map()}
+    defstruct [:tool_call_id, :tool_name, args: %{}]
   end
 
   defmodule ToolExecutionUpdate do

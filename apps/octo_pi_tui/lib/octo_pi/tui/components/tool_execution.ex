@@ -104,8 +104,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp render_in_box(te, content, width) do
     bg_key = status_bg_key(te.status)
     bg_fn = fn text -> Theme.bg(te.theme, bg_key, text) end
-    header_text = format_header(te)
-    styled_header = Theme.fg(te.theme, :tool_title, Theme.bold(header_text))
+    styled_header = format_header(te)
 
     box =
       Box.new(
@@ -138,32 +137,104 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   end
 
   defp format_header(te) do
-    summary = args_summary(te.args)
-
-    case {summary, te.status} do
-      {"", :pending} -> "⏳ #{te.tool_name}"
-      {s, :pending} -> "⏳ #{te.tool_name}: #{s}"
-      {"", :success} -> "✓ #{te.tool_name}"
-      {s, :success} -> "✓ #{te.tool_name}: #{s}"
-      {"", :error} -> "✗ #{te.tool_name}"
-      {s, :error} -> "✗ #{te.tool_name}: #{s}"
-    end
+    prefix = status_prefix(te.status)
+    summary = tool_summary(String.downcase(te.tool_name), te.tool_name, te.args, te.theme)
+    prefix <> summary
   end
 
-  defp args_summary(args) when map_size(args) == 0, do: ""
+  defp status_prefix(:pending), do: "⏳ "
+  defp status_prefix(:success), do: "✓ "
+  defp status_prefix(:error), do: "✗ "
 
-  defp args_summary(args) do
-    args
-    |> Enum.map_join(", ", fn {k, v} -> "#{k}=#{truncate_value(v)}" end)
-    |> String.slice(0, 60)
+  defp tool_summary("bash", _name, args, theme) do
+    command = arg(args, "command", "")
+    timeout = arg(args, "timeout")
+    display = if command == "", do: Theme.fg(theme, :tool_output, "..."), else: truncate(command, 80)
+    suffix = if timeout, do: Theme.fg(theme, :muted, " (timeout #{timeout}s)"), else: ""
+    Theme.fg(theme, :tool_title, Theme.bold("$ #{display}")) <> suffix
   end
 
-  defp truncate_value(v) when is_binary(v) and byte_size(v) > 40 do
-    String.slice(v, 0, 37) <> "..."
+  defp tool_summary("read", _name, args, theme) do
+    path = arg(args, "file_path") || arg(args, "path", "")
+    offset = arg(args, "offset")
+    limit = arg(args, "limit")
+
+    range =
+      case {offset, limit} do
+        {nil, nil} -> ""
+        {o, nil} -> Theme.fg(theme, :warning, ":#{o}")
+        {nil, l} -> Theme.fg(theme, :warning, ":1-#{l}")
+        {o, l} -> Theme.fg(theme, :warning, ":#{o}-#{o + l - 1}")
+      end
+
+    path_display = if path == "", do: Theme.fg(theme, :tool_output, "..."), else: Theme.fg(theme, :accent, path)
+    Theme.fg(theme, :tool_title, Theme.bold("read")) <> " " <> path_display <> range
   end
 
-  defp truncate_value(v) when is_binary(v), do: v
-  defp truncate_value(v), do: inspect(v, limit: 3)
+  defp tool_summary("edit", _name, args, theme) do
+    path = arg(args, "file_path") || arg(args, "path", "")
+    path_display = if path == "", do: Theme.fg(theme, :tool_output, "..."), else: Theme.fg(theme, :accent, path)
+    Theme.fg(theme, :tool_title, Theme.bold("edit")) <> " " <> path_display
+  end
+
+  defp tool_summary("write", _name, args, theme) do
+    path = arg(args, "file_path") || arg(args, "path", "")
+    path_display = if path == "", do: Theme.fg(theme, :tool_output, "..."), else: Theme.fg(theme, :accent, path)
+    Theme.fg(theme, :tool_title, Theme.bold("write")) <> " " <> path_display
+  end
+
+  defp tool_summary("grep", _name, args, theme) do
+    pattern = arg(args, "pattern", "")
+    path = arg(args, "path", ".")
+    glob = arg(args, "glob")
+    limit = arg(args, "limit")
+
+    text =
+      Theme.fg(theme, :tool_title, Theme.bold("grep")) <>
+        " " <>
+        Theme.fg(theme, :accent, "/#{pattern}/") <>
+        Theme.fg(theme, :tool_output, " in #{path}")
+
+    text = if glob, do: text <> Theme.fg(theme, :tool_output, " (#{glob})"), else: text
+    if limit, do: text <> Theme.fg(theme, :tool_output, " limit #{limit}"), else: text
+  end
+
+  defp tool_summary("find", _name, args, theme) do
+    pattern = arg(args, "pattern", "")
+    path = arg(args, "path", ".")
+    limit = arg(args, "limit")
+
+    text =
+      Theme.fg(theme, :tool_title, Theme.bold("find")) <>
+        " " <>
+        Theme.fg(theme, :accent, pattern) <>
+        Theme.fg(theme, :tool_output, " in #{path}")
+
+    if limit, do: text <> Theme.fg(theme, :tool_output, " (limit #{limit})"), else: text
+  end
+
+  defp tool_summary("ls", _name, args, theme) do
+    path = arg(args, "path", ".")
+    limit = arg(args, "limit")
+    text = Theme.fg(theme, :tool_title, Theme.bold("ls")) <> " " <> Theme.fg(theme, :accent, path)
+    if limit, do: text <> Theme.fg(theme, :tool_output, " (limit #{limit})"), else: text
+  end
+
+  defp tool_summary(_normalized, name, args, _theme) when map_size(args) == 0, do: name
+
+  defp tool_summary(_normalized, name, args, _theme) do
+    summary =
+      args
+      |> Enum.map_join(", ", fn {k, v} -> "#{k}=#{truncate(to_string(v), 40)}" end)
+      |> truncate(60)
+
+    "#{name}: #{summary}"
+  end
+
+  defp arg(args, key, default \\ nil), do: Map.get(args, key) || Map.get(args, String.to_atom(key), default)
+
+  defp truncate(s, max) when byte_size(s) > max, do: String.slice(s, 0, max - 3) <> "..."
+  defp truncate(s, _max), do: s
 
   @preview_lines 5
 
@@ -187,9 +258,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
     [%Text{content: Theme.fg(theme, :tool_output, String.slice(partial, -1, 1))}]
   end
 
-  defp build_content(_te) do
-    [%Text{content: ""}]
-  end
+  defp build_content(_te), do: []
 
   defp preview_collapsed(result, theme) do
     lines = String.split(result, "\n")

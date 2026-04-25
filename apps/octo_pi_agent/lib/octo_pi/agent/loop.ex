@@ -266,7 +266,8 @@ defmodule OctoPi.Agent.Loop do
       %Tool{} = tool ->
         dispatch(session, %Event.ToolExecutionStart{
           tool_call_id: call.id,
-          tool_name: call.name
+          tool_name: call.name,
+          args: call.arguments
         })
 
         start_mono = System.monotonic_time()
