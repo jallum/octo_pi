@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-8ee",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Add extension commands to slash-command autocomplete",
   "type": "task",
-  "updated_at": "2026-04-25T21:11:19.196967Z"
+  "updated_at": "2026-04-25T21:51:53.856874Z"
 }
