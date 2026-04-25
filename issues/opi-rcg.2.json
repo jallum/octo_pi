@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.sessionManager.getLeafEntry() — expose current leaf entry ID to Context",
   "type": "task",
-  "updated_at": "2026-04-25T18:02:55.778599Z"
+  "updated_at": "2026-04-25T18:06:00.135680Z"
 }
