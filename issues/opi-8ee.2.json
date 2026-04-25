@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-8ee",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Route extension slash commands in handle_submit",
   "type": "task",
-  "updated_at": "2026-04-25T21:20:09.395668Z"
+  "updated_at": "2026-04-25T21:24:38.301400Z"
 }
