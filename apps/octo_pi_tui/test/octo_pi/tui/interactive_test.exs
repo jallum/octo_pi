@@ -99,6 +99,33 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — key release/repeat filtering (opi-0g4.6)" do
+    test "release event is dropped — state unchanged" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl], event_type: :release}})
+      refute s2.exit
+      assert s2 == s
+    end
+
+    test "release of a printable key does not insert char" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?a, event_type: :release}})
+      assert s2 == s
+    end
+
+    test "repeat event is processed normally" do
+      s = %Interactive{input: %Input{value: "ab", cursor: 2}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :left, event_type: :repeat}})
+      assert s2.input.cursor == 1
+    end
+
+    test "press event is processed normally" do
+      s = %Interactive{}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl], event_type: :press}})
+      assert s2.exit
+    end
+  end
+
   describe "handle_event — agent events" do
     test "MessageUpdate appends a streaming assistant entry" do
       s = %Interactive{}

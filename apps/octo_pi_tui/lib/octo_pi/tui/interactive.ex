@@ -603,6 +603,8 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec handle_event(t(), term()) :: t()
 
+  def handle_event(state, {:key, %Key{event_type: :release}}), do: state
+
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: %{state | exit: true}
 
   def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
