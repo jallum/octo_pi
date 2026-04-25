@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:16:35Z",
+  "description": "Port extension examples test machinery from upstream",
+  "id": "opi-s1w.1.5",
+  "labels": [],
+  "parent": "opi-s1w.1",
+  "priority": 2,
+  "status": "open",
+  "title": "Extension Examples \u0026 Tests",
+  "type": "task",
+  "updated_at": "2026-04-25T05:16:35Z"
+}
