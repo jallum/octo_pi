@@ -82,6 +82,116 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "keyboard protocol negotiation (opi-0g4.1)" do
+    test "sends Kitty probe on init in raw mode" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
+      assert_receive {:tty, "\e[?u"}, 500
+    end
+
+    test "enables Kitty push flags when probe response received" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
+      assert_receive {:tty, "\e[?u"}, 500
+      Terminal.simulate_stdin(pid, "\e[?1u")
+      Terminal.info(pid)
+      assert_receive {:tty, "\e[>7u"}, 500
+      assert Terminal.kitty_protocol_active?(pid)
+    end
+
+    test "falls back to modifyOtherKeys when no response within timeout" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      _pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      assert_receive {:tty, "\e[>4;2m"}, 500
+    end
+
+    test "kitty_protocol_active? returns false with modifyOtherKeys fallback" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10
+        )
+
+      assert_receive {:tty, "\e[>4;2m"}, 500
+      refute Terminal.kitty_protocol_active?(pid)
+    end
+
+    test "disables Kitty on terminate" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
+      assert_receive {:tty, "\e[?u"}, 500
+      Terminal.simulate_stdin(pid, "\e[?1u")
+      Terminal.info(pid)
+      assert_receive {:tty, "\e[>7u"}, 500
+      GenServer.stop(pid, :normal)
+      assert_receive {:tty, "\e[<0u"}, 500
+    end
+
+    test "disables modifyOtherKeys on terminate" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10
+        )
+
+      assert_receive {:tty, "\e[>4;2m"}, 500
+      GenServer.stop(pid, :normal)
+      assert_receive {:tty, "\e[>4m"}, 500
+    end
+
+    test "skip_raw_mode suppresses Kitty probe" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      _pid = start_terminal(name: nil, tty_fn: tty_fn)
+      refute_receive {:tty, "\e[?u"}, 100
+    end
+
+    test "non-Kitty stdin chunk while probing is forwarded normally" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 100
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+      Terminal.simulate_stdin(pid, "a")
+      assert_receive {:stdin_chunk, "a"}, 500
+    end
+  end
+
   describe "bracketed paste mode (opi-0g4.2)" do
     test "sends enable sequence on init" do
       test_pid = self()

@@ -71,6 +71,17 @@ defmodule OctoPi.TUI.Terminal do
   @spec simulate_resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
   def simulate_resize(pid, width, height), do: GenServer.call(pid, {:resize, width, height})
 
+  @doc "Inject a raw stdin chunk as if it arrived from the reader (for tests)."
+  @spec simulate_stdin(GenServer.server(), binary()) :: :ok
+  def simulate_stdin(pid, bin) when is_binary(bin) do
+    send(pid, {:stdin_chunk, bin})
+    :ok
+  end
+
+  @doc "Returns true if the Kitty keyboard protocol is currently active."
+  @spec kitty_protocol_active?(GenServer.server()) :: boolean()
+  def kitty_protocol_active?(pid), do: GenServer.call(pid, :kitty_protocol_active?)
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -80,14 +91,10 @@ defmodule OctoPi.TUI.Terminal do
     skip_sigwinch = Keyword.get(opts, :skip_sigwinch, false)
     auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
+    probe_timeout_ms = Keyword.get(opts, :probe_timeout_ms, 150)
 
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
     tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
-
-    if not skip_raw_mode do
-      raw_mode_fn.(:enter)
-      tty_fn.("\e[?2004h")
-    end
 
     if not skip_sigwinch do
       :gen_event.add_handler(:erl_signal_server, SigwinchHandler, self())
@@ -96,7 +103,7 @@ defmodule OctoPi.TUI.Terminal do
     reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
     reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
 
-    state = %{
+    base_state = %{
       width: w,
       height: h,
       raw_mode_fn: raw_mode_fn,
@@ -105,14 +112,30 @@ defmodule OctoPi.TUI.Terminal do
       tty_fn: tty_fn,
       reader_pid: reader_pid,
       write_fn: write_fn,
-      scope: self()
+      scope: self(),
+      probe_timeout_ms: probe_timeout_ms,
+      keyboard_mode: :none,
+      probe_start: nil
     }
 
-    {:ok, state}
+    if skip_raw_mode do
+      {:ok, base_state}
+    else
+      raw_mode_fn.(:enter)
+      tty_fn.("\e[?2004h")
+      tty_fn.("\e[?u")
+      probe_start = System.monotonic_time(:millisecond)
+      state = %{base_state | keyboard_mode: :probing, probe_start: probe_start}
+      {:ok, state, probe_timeout_ms}
+    end
   end
 
   @impl true
   def handle_call(:info, _from, state), do: {:reply, state, state}
+
+  def handle_call(:kitty_protocol_active?, _from, state) do
+    {:reply, state.keyboard_mode == :kitty, state}
+  end
 
   def handle_call({:feed_chunk, bin}, _from, state) do
     broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
@@ -130,6 +153,10 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   @impl true
+  def handle_info({:stdin_chunk, bin}, %{keyboard_mode: :probing} = state) do
+    handle_probing_stdin(extract_kitty_flags(bin), bin, state)
+  end
+
   def handle_info({:stdin_chunk, bin}, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
     broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
@@ -147,6 +174,11 @@ defmodule OctoPi.TUI.Terminal do
     end
   end
 
+  def handle_info(:timeout, %{keyboard_mode: :probing} = state) do
+    state.tty_fn.("\e[>4;2m")
+    {:noreply, %{state | keyboard_mode: :modify_other_keys, probe_start: nil}}
+  end
+
   def handle_info(_, state), do: {:noreply, state}
 
   @impl true
@@ -156,6 +188,7 @@ defmodule OctoPi.TUI.Terminal do
     end
 
     if not state.skip_raw_mode do
+      disable_keyboard_protocol(state)
       state.tty_fn.("\e[?2004l")
       state.raw_mode_fn.(:exit)
     end
@@ -167,6 +200,36 @@ defmodule OctoPi.TUI.Terminal do
 
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
+
+  defp disable_keyboard_protocol(%{keyboard_mode: :kitty} = state) do
+    state.tty_fn.("\e[<0u")
+  end
+
+  defp disable_keyboard_protocol(%{keyboard_mode: :modify_other_keys} = state) do
+    state.tty_fn.("\e[>4m")
+  end
+
+  defp disable_keyboard_protocol(_state), do: :ok
+
+  # Kitty query response: \e[?<flags>u — starts with \e[? and ends with u.
+  defp extract_kitty_flags(<<"\e[?", rest::binary>>) when byte_size(rest) >= 2 do
+    inner_len = byte_size(rest) - 1
+    if :binary.last(rest) == ?u, do: {:kitty, binary_part(rest, 0, inner_len)}, else: :not_kitty
+  end
+
+  defp extract_kitty_flags(_), do: :not_kitty
+
+  defp handle_probing_stdin({:kitty, _flags}, _bin, state) do
+    state.tty_fn.("\e[>7u")
+    {:noreply, %{state | keyboard_mode: :kitty, probe_start: nil}}
+  end
+
+  defp handle_probing_stdin(:not_kitty, bin, state) do
+    :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
+    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
+    elapsed = System.monotonic_time(:millisecond) - state.probe_start
+    {:noreply, state, max(0, state.probe_timeout_ms - elapsed)}
+  end
 
   defp broadcast(state, topic, msg) do
     Registry.dispatch(Events, {topic, state.scope}, fn subscribers ->
