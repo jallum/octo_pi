@@ -19,7 +19,9 @@ defmodule OctoPi.Coder.Tools.Write do
     %Tool{
       name: "write",
       label: "Write file",
-      description: "Write content to a file, creating parent directories as needed.",
+      description:
+        "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
+      prompt_snippet: "Create or overwrite files",
       parameters: %{
         "type" => "object",
         "properties" => %{

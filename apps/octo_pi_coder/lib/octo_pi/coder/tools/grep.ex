@@ -13,7 +13,8 @@ defmodule OctoPi.Coder.Tools.Grep do
   alias OctoPi.AI.Content
   alias OctoPi.Coder.Tools.PathGuard
 
-  @max_matches 200
+  @default_limit 100
+  @max_context_lines 10
   @rg_cache_key {__MODULE__, :rg_available?}
 
   @doc "Build a `%Tool{}` rooted at `cwd` — path defaults to cwd and must stay inside it."
@@ -22,16 +23,36 @@ defmodule OctoPi.Coder.Tools.Grep do
     %Tool{
       name: "grep",
       label: "Grep",
-      description: "Search file contents for a pattern.",
+      description:
+        "Search file contents for a pattern (regex by default). Honors .gitignore when ripgrep is available. " <>
+          "Returns matching lines with file path and line number. " <>
+          "Output is truncated to the first #{@default_limit} matches.",
+      prompt_snippet: "Search file contents by pattern (respects .gitignore)",
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "pattern" => %{"type" => "string"},
+          "pattern" => %{"type" => "string", "description" => "Search pattern (regex or literal string)."},
           "path" => %{
             "type" => "string",
-            "description" => "Directory or file (defaults to session cwd)."
+            "description" => "Directory or file to search (default: current directory)."
           },
-          "case_insensitive" => %{"type" => "boolean"}
+          "glob" => %{
+            "type" => "string",
+            "description" => "Filter files by glob pattern, e.g. '*.ex' or '**/*.spec.exs'."
+          },
+          "ignoreCase" => %{"type" => "boolean", "description" => "Case-insensitive search (default: false)."},
+          "literal" => %{
+            "type" => "boolean",
+            "description" => "Treat pattern as literal string instead of regex (default: false)."
+          },
+          "context" => %{
+            "type" => "integer",
+            "description" => "Number of lines to show before and after each match (default: 0)."
+          },
+          "limit" => %{
+            "type" => "integer",
+            "description" => "Maximum number of matches to return (default: #{@default_limit})."
+          }
         },
         "required" => ["pattern"]
       },
@@ -44,12 +65,16 @@ defmodule OctoPi.Coder.Tools.Grep do
   def execute(_id, %{"pattern" => pattern} = args, abort_ref, _on_update) do
     cwd = Map.fetch!(args, "_cwd")
     requested_path = Map.get(args, "path", cwd)
-    case_insensitive? = Map.get(args, "case_insensitive", false)
+    ignore_case? = Map.get(args, "ignoreCase", false)
+    literal? = Map.get(args, "literal", false)
+    glob = Map.get(args, "glob")
+    context = args |> Map.get("context", 0) |> min(@max_context_lines)
+    limit = Map.get(args, "limit", @default_limit)
 
     if AbortRef.aborted?(abort_ref) do
       {:ok, aborted_result()}
     else
-      do_search(requested_path, cwd, pattern, case_insensitive?)
+      do_search(requested_path, cwd, pattern, ignore_case?, literal?, glob, context, limit)
     end
   end
 
@@ -60,22 +85,22 @@ defmodule OctoPi.Coder.Tools.Grep do
     }
   end
 
-  defp do_search(requested_path, cwd, pattern, case_insensitive?) do
+  defp do_search(requested_path, cwd, pattern, ignore_case?, literal?, glob, context, limit) do
     case PathGuard.resolve_or_error(requested_path, cwd) do
       {:error, %Result{} = r} ->
         {:ok, r}
 
       {:ok, path} ->
-        matches = search(pattern, path, case_insensitive?)
+        matches = search(pattern, path, ignore_case?, literal?, glob, context, limit)
         finalize(matches)
     end
   end
 
-  defp search(pattern, path, case_insensitive?) do
+  defp search(pattern, path, ignore_case?, literal?, glob, context, limit) do
     if rg_available?() do
-      rg_search(pattern, path, case_insensitive?)
+      rg_search(pattern, path, ignore_case?, literal?, glob, context, limit)
     else
-      fallback_search(pattern, path, case_insensitive?)
+      fallback_search(pattern, path, ignore_case?, limit)
     end
   end
 
@@ -97,33 +122,35 @@ defmodule OctoPi.Coder.Tools.Grep do
   @doc false
   def refresh_rg_cache, do: :persistent_term.erase(@rg_cache_key)
 
-  defp rg_search(pattern, path, case_insensitive?) do
+  defp rg_search(pattern, path, ignore_case?, literal?, glob, context, limit) do
     args = ["--no-heading", "--line-number", "--color", "never"]
-    args = if case_insensitive?, do: ["-i" | args], else: args
+    args = if ignore_case?, do: ["-i" | args], else: args
+    args = if literal?, do: ["-F" | args], else: args
+    args = if context > 0, do: ["-C", to_string(context) | args], else: args
+    args = if glob, do: ["--glob", glob | args], else: args
     args = args ++ [pattern, path]
 
     case System.cmd("rg", args, stderr_to_stdout: true) do
-      {out, 0} -> out |> String.split("\n", trim: true) |> Enum.take(@max_matches)
-      # rg exits 1 when no matches, 2+ on real error.
+      {out, 0} -> out |> String.split("\n", trim: true) |> Enum.take(limit)
       {_, 1} -> []
       {err, _} -> {:error, err}
     end
   end
 
-  defp fallback_search(pattern, path, case_insensitive?) do
-    compile_opts = if case_insensitive?, do: [:caseless], else: []
+  defp fallback_search(pattern, path, ignore_case?, limit) do
+    compile_opts = if ignore_case?, do: [:caseless], else: []
 
     case Regex.compile(Regex.escape(pattern), compile_opts) do
-      {:ok, regex} -> walk_and_match(path, regex)
+      {:ok, regex} -> walk_and_match(path, regex, limit)
       {:error, _} -> []
     end
   end
 
-  defp walk_and_match(path, regex) do
+  defp walk_and_match(path, regex, limit) do
     path
     |> all_files()
     |> Enum.flat_map(&match_file(&1, regex))
-    |> Enum.take(@max_matches)
+    |> Enum.take(limit)
   end
 
   defp all_files(path) do

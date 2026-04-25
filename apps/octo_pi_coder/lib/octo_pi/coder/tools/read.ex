@@ -21,7 +21,11 @@ defmodule OctoPi.Coder.Tools.Read do
     %Tool{
       name: "read",
       label: "Read file",
-      description: "Read a file's contents (optionally a line range).",
+      description:
+        "Read the contents of a file. For text files, output is truncated to #{@max_lines} lines or " <>
+          "#{div(@max_bytes, 1024)}KB (whichever is hit first). Use offset/limit for large files. " <>
+          "When you need the full file, continue with offset until complete.",
+      prompt_snippet: "Read file contents",
       parameters: %{
         "type" => "object",
         "properties" => %{

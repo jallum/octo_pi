@@ -34,7 +34,7 @@ defmodule OctoPi.Coder.Tools.GrepTest do
 
   test "case-insensitive search catches both cases", %{tmp: tmp, ref: ref} do
     assert {:ok, %Result{content: [%Content.Text{text: text}]}} =
-             exec(%{"pattern" => "beta", "path" => tmp, "case_insensitive" => true}, ref, tmp)
+             exec(%{"pattern" => "beta", "path" => tmp, "ignoreCase" => true}, ref, tmp)
 
     assert text =~ "a.txt"
     assert text =~ "b.txt"

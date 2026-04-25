@@ -13,7 +13,7 @@ defmodule OctoPi.Coder.Tools.Find do
   alias OctoPi.AI.Content
   alias OctoPi.Coder.Tools.PathGuard
 
-  @max_matches 500
+  @default_limit 1000
 
   @doc "Build a `%Tool{}` rooted at `cwd` — path defaults to cwd and must stay inside it."
   @spec tool(String.t()) :: Tool.t()
@@ -21,14 +21,24 @@ defmodule OctoPi.Coder.Tools.Find do
     %Tool{
       name: "find",
       label: "Find",
-      description: "Find files matching a glob pattern.",
+      description:
+        "Search for files by glob pattern. Returns matching file paths. Respects .gitignore when ripgrep is available. " <>
+          "Output is truncated to the first #{@default_limit} results.",
+      prompt_snippet: "Find files by glob pattern (respects .gitignore)",
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "pattern" => %{"type" => "string", "description" => "Glob pattern, e.g. '**/*.ex'"},
+          "pattern" => %{
+            "type" => "string",
+            "description" => "Glob pattern to match files, e.g. '*.ex', '**/*.json', or 'src/**/*.spec.exs'."
+          },
           "path" => %{
             "type" => "string",
-            "description" => "Base directory (defaults to session cwd)."
+            "description" => "Directory to search in (default: current directory)."
+          },
+          "limit" => %{
+            "type" => "integer",
+            "description" => "Maximum number of results (default: #{@default_limit})."
           }
         },
         "required" => ["pattern"]
@@ -42,15 +52,16 @@ defmodule OctoPi.Coder.Tools.Find do
   def execute(_id, %{"pattern" => pattern} = args, abort_ref, _on_update) do
     cwd = Map.fetch!(args, "_cwd")
     requested_base = Map.get(args, "path", cwd)
+    limit = Map.get(args, "limit", @default_limit)
 
     if AbortRef.aborted?(abort_ref) do
       {:ok, %Result{is_error?: true, content: [%Content.Text{text: "find aborted before execution"}]}}
     else
-      do_find(requested_base, cwd, pattern)
+      do_find(requested_base, cwd, pattern, limit)
     end
   end
 
-  defp do_find(requested_base, cwd, pattern) do
+  defp do_find(requested_base, cwd, pattern, limit) do
     case PathGuard.resolve_or_error(requested_base, cwd) do
       {:error, %Result{} = r} ->
         {:ok, r}
@@ -60,7 +71,7 @@ defmodule OctoPi.Coder.Tools.Find do
           base
           |> Path.join(pattern)
           |> Path.wildcard(match_dot: true)
-          |> Enum.take(@max_matches)
+          |> Enum.take(limit)
 
         finalize(matches)
     end

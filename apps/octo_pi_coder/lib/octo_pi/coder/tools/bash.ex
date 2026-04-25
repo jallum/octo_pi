@@ -33,18 +33,22 @@ defmodule OctoPi.Coder.Tools.Bash do
     %Tool{
       name: "bash",
       label: "Bash",
-      description: "Run a shell command. Use for file operations, builds, tests, etc.",
+      description:
+        "Execute a bash command in the current working directory. Returns stdout and stderr. " <>
+          "Output is truncated to last #{@max_output_lines} lines or #{div(@max_output_bytes, 1024)}KB " <>
+          "(whichever is hit first). Optionally provide a timeout in milliseconds.",
+      prompt_snippet: "Execute bash commands (ls, grep, find, etc.)",
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "cmd" => %{"type" => "string", "description" => "The shell command line."},
+          "command" => %{"type" => "string", "description" => "Bash command to execute."},
           "cwd" => %{
             "type" => "string",
             "description" => "Working directory (must be within session cwd)."
           },
           "timeout_ms" => %{"type" => "integer", "description" => "Kill after this many ms."}
         },
-        "required" => ["cmd"]
+        "required" => ["command"]
       },
       prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
@@ -52,7 +56,7 @@ defmodule OctoPi.Coder.Tools.Bash do
   end
 
   @impl true
-  def execute(_id, %{"cmd" => cmd} = args, abort_ref, on_update) do
+  def execute(_id, %{"command" => cmd} = args, abort_ref, on_update) do
     session_cwd = Map.fetch!(args, "_cwd")
     timeout_ms = Map.get(args, "timeout_ms", @default_timeout_ms)
 

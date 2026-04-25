@@ -12,17 +12,26 @@ defmodule OctoPi.Coder.Tools.Ls do
   alias OctoPi.AI.Content
   alias OctoPi.Coder.Tools.PathGuard
 
+  @default_limit 500
+
   @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
   @spec tool(String.t()) :: Tool.t()
   def tool(cwd) when is_binary(cwd) do
     %Tool{
       name: "ls",
       label: "List directory",
-      description: "List entries in a directory (non-recursive).",
+      description:
+        "List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. " <>
+          "Includes dotfiles. Output is truncated to #{@default_limit} entries.",
+      prompt_snippet: "List directory contents",
       parameters: %{
         "type" => "object",
         "properties" => %{
-          "path" => %{"type" => "string", "description" => "Path (resolved against session cwd)."}
+          "path" => %{"type" => "string", "description" => "Directory to list (default: current directory)."},
+          "limit" => %{
+            "type" => "integer",
+            "description" => "Maximum number of entries to return (default: #{@default_limit})."
+          }
         },
         "required" => ["path"]
       },
@@ -34,10 +43,12 @@ defmodule OctoPi.Coder.Tools.Ls do
   @impl true
   def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
     cwd = Map.fetch!(args, "_cwd")
+    limit = Map.get(args, "limit", @default_limit)
 
     with {:ok, path} <- PathGuard.resolve_or_error(path, cwd),
          {:ok, %File.Stat{type: :directory}} <- File.stat(path),
          {:ok, entries} <- File.ls(path) do
+      entries = Enum.take(entries, limit)
       text = render(path, entries)
 
       {:ok,

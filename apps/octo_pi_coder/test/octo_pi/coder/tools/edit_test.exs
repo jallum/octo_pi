@@ -29,8 +29,7 @@ defmodule OctoPi.Coder.Tools.EditTest do
              exec(
                %{
                  "path" => path,
-                 "old_string" => ":bar",
-                 "new_string" => ":baz"
+                 "edits" => [%{"old_text" => ":bar", "new_text" => ":baz"}]
                },
                ref,
                tmp
@@ -39,51 +38,85 @@ defmodule OctoPi.Coder.Tools.EditTest do
     assert File.read!(path) == "def foo, do: :baz"
   end
 
-  test "fails when old_string not found", %{tmp: tmp, ref: ref} do
+  test "fails when old_text not found", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "f.txt")
     File.write!(path, "abc")
 
     assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => path, "old_string" => "xyz", "new_string" => "q"}, ref, tmp)
+             exec(
+               %{"path" => path, "edits" => [%{"old_text" => "xyz", "new_text" => "q"}]},
+               ref,
+               tmp
+             )
 
     assert msg =~ "not found"
     assert File.read!(path) == "abc"
   end
 
-  test "fails when old_string is not unique and replace_all is false", %{tmp: tmp, ref: ref} do
+  test "fails when old_text is not unique", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "dup.txt")
     File.write!(path, "cat\ncat\n")
 
     assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => path, "old_string" => "cat", "new_string" => "dog"}, ref, tmp)
+             exec(
+               %{"path" => path, "edits" => [%{"old_text" => "cat", "new_text" => "dog"}]},
+               ref,
+               tmp
+             )
 
     assert msg =~ "multiple"
     assert File.read!(path) == "cat\ncat\n"
   end
 
-  test "replace_all replaces every occurrence", %{tmp: tmp, ref: ref} do
-    path = Path.join(tmp, "multi.txt")
-    File.write!(path, "cat\ncat\ncat\n")
+  test "multiple disjoint edits in one call", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "multi.ex")
+    File.write!(path, "def foo, do: :a\ndef bar, do: :b\n")
 
-    assert {:ok, %Result{is_error?: false}} =
+    assert {:ok, %Result{is_error?: false, details: %{replacements: 2}}} =
              exec(
                %{
                  "path" => path,
-                 "old_string" => "cat",
-                 "new_string" => "dog",
-                 "replace_all" => true
+                 "edits" => [
+                   %{"old_text" => ":a", "new_text" => ":x"},
+                   %{"old_text" => ":b", "new_text" => ":y"}
+                 ]
                },
                ref,
                tmp
              )
 
-    assert File.read!(path) == "dog\ndog\ndog\n"
+    assert File.read!(path) == "def foo, do: :x\ndef bar, do: :y\n"
+  end
+
+  test "overlapping edits are rejected", %{tmp: tmp, ref: ref} do
+    path = Path.join(tmp, "overlap.txt")
+    File.write!(path, "abcdef")
+
+    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
+             exec(
+               %{
+                 "path" => path,
+                 "edits" => [
+                   %{"old_text" => "abcd", "new_text" => "XY"},
+                   %{"old_text" => "cdef", "new_text" => "ZW"}
+                 ]
+               },
+               ref,
+               tmp
+             )
+
+    assert msg =~ "overlap"
+    assert File.read!(path) == "abcdef"
   end
 
   test "missing file yields an error", %{tmp: tmp, ref: ref} do
     path = Path.join(tmp, "none.txt")
 
     assert {:ok, %Result{is_error?: true}} =
-             exec(%{"path" => path, "old_string" => "x", "new_string" => "y"}, ref, tmp)
+             exec(
+               %{"path" => path, "edits" => [%{"old_text" => "x", "new_text" => "y"}]},
+               ref,
+               tmp
+             )
   end
 end

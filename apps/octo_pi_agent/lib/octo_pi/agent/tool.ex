@@ -22,6 +22,7 @@ defmodule OctoPi.Agent.Tool do
           name: String.t(),
           label: String.t() | nil,
           description: String.t(),
+          prompt_snippet: String.t() | nil,
           parameters: map(),
           prepare_arguments: (map() -> map()) | nil,
           handler: module(),
@@ -31,6 +32,7 @@ defmodule OctoPi.Agent.Tool do
   defstruct [
     :name,
     :description,
+    :prompt_snippet,
     :parameters,
     :handler,
     :label,
