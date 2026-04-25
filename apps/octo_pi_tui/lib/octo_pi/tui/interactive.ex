@@ -685,16 +685,17 @@ defmodule OctoPi.TUI.Interactive do
 
     case result do
       {msg, idx} ->
-        has_user_after =
+        has_boundary_after =
           transcript
           |> Enum.drop(idx + 1)
           |> Enum.any?(fn
             %UserMessage{} -> true
             {:user, _} -> true
+            %ToolExecution{} -> true
             _ -> false
           end)
 
-        if has_user_after, do: nil, else: {idx, msg}
+        if has_boundary_after, do: nil, else: {idx, msg}
 
       nil ->
         nil

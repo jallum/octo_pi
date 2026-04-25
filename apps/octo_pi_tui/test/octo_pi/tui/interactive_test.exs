@@ -185,6 +185,35 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert [%ToolExecution{status: :error, result: "permission denied"}] = s.transcript
     end
 
+    test "continuation text after tool execution creates a new AssistantMessage" do
+      # Turn 1: assistant says "let me check" then calls a tool
+      msg1 = AssistantMessage.new(nil, content: [text: "let me check"], has_tool_calls: true)
+      te = ToolExecution.new("bash", "tc1", %{}, nil)
+      te = ToolExecution.set_result(te, "ok", false)
+
+      s = %Interactive{transcript: [msg1, te]}
+
+      # Turn 2: model responds with new text after tool results
+      partial = %Assistant{
+        content: [%Content.Text{text: "here is the answer"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0
+      }
+
+      s =
+        Interactive.handle_event(
+          s,
+          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+        )
+
+      # The continuation text must be a NEW entry BELOW the tool, not
+      # merged into the first AssistantMessage above it.
+      assert [%AssistantMessage{content: [text: "let me check"]}, %ToolExecution{}, %AssistantMessage{content: [text: "here is the answer"]}] =
+               s.transcript
+    end
+
     test "unrelated agent events don't modify the transcript" do
       s = %Interactive{transcript: [{:user, "x"}]}
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
