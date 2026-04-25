@@ -31,6 +31,7 @@ defmodule OctoPi.TUI.Interactive do
   }
 
   alias Components.{AssistantMessage, Footer, ToolExecution, UserMessage}
+  alias OctoPi.Agent.Event
   alias OctoPi.Coder
 
   alias OctoPi.Coder.Extension.UIContext
@@ -47,6 +48,7 @@ defmodule OctoPi.TUI.Interactive do
           exit: boolean(),
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
+          loader: Components.Loader.t() | nil,
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -68,6 +70,7 @@ defmodule OctoPi.TUI.Interactive do
             exit: false,
             paste_buffer: nil,
             tools_expanded: false,
+            loader: nil,
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -201,7 +204,19 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:set_working_message, msg}) do
-    {%{state | working_message: msg}, :ok}
+    state = %{state | working_message: msg}
+
+    state =
+      case state.loader do
+        %Components.Loader{} ->
+          message = msg || default_working_message()
+          %{state | loader: Components.Loader.set_message(state.loader, message)}
+
+        nil ->
+          state
+      end
+
+    {state, :ok}
   end
 
   def handle_ui_request(state, {:set_status, text}) do
@@ -413,10 +428,29 @@ defmodule OctoPi.TUI.Interactive do
 
   # --- main message loop ---
 
+  @loader_interval_ms 80
+
   defp loop(%__MODULE__{exit: true}, _fsm, _renderer, _terminal), do: :ok
+
+  defp loop(%__MODULE__{loader: %Components.Loader{}} = state, fsm, renderer, terminal) do
+    receive do
+      msg -> handle_loop_msg(state, msg, fsm, renderer, terminal)
+    after
+      @loader_interval_ms ->
+        state
+        |> handle_event(:loader_tick)
+        |> advance(fsm, renderer, terminal)
+    end
+  end
 
   defp loop(state, fsm, renderer, terminal) do
     receive do
+      msg -> handle_loop_msg(state, msg, fsm, renderer, terminal)
+    end
+  end
+
+  defp handle_loop_msg(state, msg, fsm, renderer, terminal) do
+    case msg do
       {:stdin_chunk, bin} ->
         :ok = StdinFSM.process(fsm, bin)
         loop(state, fsm, renderer, terminal)
@@ -426,29 +460,32 @@ defmodule OctoPi.TUI.Interactive do
         |> handle_event(KeyParser.parse(seq))
         |> advance(fsm, renderer, terminal)
 
-      {:resize, w, h} = msg ->
+      {:resize, w, h} = resize_msg ->
         Renderer.resize(renderer, w, h)
 
         state
-        |> handle_event(msg)
+        |> handle_event(resize_msg)
         |> advance(fsm, renderer, terminal)
 
-      {:octo_pi_agent_event, _} = msg ->
+      {:octo_pi_agent_event, _} = agent_msg ->
         state
-        |> handle_event(msg)
+        |> handle_event(agent_msg)
         |> advance(fsm, renderer, terminal)
 
-      {:ui_request, from, ref, msg} ->
-        {new_state, reply} = handle_ui_request(state, msg)
+      {:ui_request, from, ref, ui_msg} ->
+        {new_state, reply} = handle_ui_request(state, ui_msg)
         if reply != :pending, do: send(from, {:ui_reply, ref, reply})
         advance(new_state, fsm, renderer, terminal)
 
-      {:ui_fire, msg} ->
-        {new_state, _reply} = handle_ui_request(state, msg)
+      {:ui_fire, ui_msg} ->
+        {new_state, _reply} = handle_ui_request(state, ui_msg)
         advance(new_state, fsm, renderer, terminal)
 
       {:EXIT, _pid, _reason} ->
         loop(%{state | exit: true}, fsm, renderer, terminal)
+
+      _ ->
+        loop(state, fsm, renderer, terminal)
     end
   end
 
@@ -555,6 +592,20 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{input: input} = state, {:char, c}),
     do: %{state | input: Components.Input.insert(input, c)}
 
+  def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
+    message = state.working_message || default_working_message()
+    %{state | loader: Components.Loader.new(message: message)}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.AgentEnd{} = event}) do
+    %{
+      state
+      | loader: nil,
+        working_message: nil,
+        footer: update_footer(state.footer, event)
+    }
+  end
+
   def handle_event(state, {:octo_pi_agent_event, event}) do
     %{
       state
@@ -565,6 +616,9 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:resize, w, h}),
     do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
+
+  def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
+    do: %{state | loader: Components.Loader.advance_frame(loader)}
 
   def handle_event(state, _), do: state
 
@@ -790,19 +844,26 @@ defmodule OctoPi.TUI.Interactive do
           transcript: transcript,
           footer: footer,
           banner: banner,
+          loader: loader,
           width: width,
           height: height
-        },
+        } = state,
         input_lines
       ) do
     banner_lines = render_banner(banner, width)
     transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
+    loader_lines = render_loader(loader, width, state.theme)
     footer_lines = Footer.render(footer, width)
 
-    all = banner_lines ++ transcript_lines ++ input_lines ++ footer_lines
+    all = banner_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ footer_lines
     len = length(all)
     if len < height, do: List.duplicate("", height - len) ++ all, else: all
   end
+
+  defp default_working_message, do: "Thinking…"
+
+  defp render_loader(nil, _width, _theme), do: []
+  defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_banner(nil, _width), do: []
   defp render_banner(banner, width), do: Components.WelcomeBanner.render(banner, width)

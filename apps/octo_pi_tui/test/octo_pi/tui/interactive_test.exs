@@ -5,7 +5,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.Coder.Extension.UIContext
-  alias OctoPi.TUI.Components.{AssistantMessage, Input, ToolExecution}
+  alias OctoPi.TUI.Components.{AssistantMessage, Input, Loader, ToolExecution}
   alias OctoPi.TUI.{Interactive, Key, Theme}
 
   describe "handle_event — keyboard input" do
@@ -216,8 +216,122 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "unrelated agent events don't modify the transcript" do
       s = %Interactive{transcript: [{:user, "x"}]}
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 0}})
       assert s.transcript == [{:user, "x"}]
+    end
+  end
+
+  describe "handle_event — loader lifecycle" do
+    test "AgentStart creates a loader" do
+      s = %Interactive{}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert %Loader{} = s.loader
+    end
+
+    test "AgentStart uses working_message when set" do
+      s = %Interactive{working_message: "Thinking hard..."}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert s.loader.message == "Thinking hard..."
+    end
+
+    test "AgentStart uses default message when working_message is nil" do
+      s = %Interactive{}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert s.loader.message =~ "Thinking"
+    end
+
+    test "AgentEnd clears the loader" do
+      loader = Loader.new(message: "Working...")
+      s = %Interactive{loader: loader}
+
+      s =
+        Interactive.handle_event(s, {
+          :octo_pi_agent_event,
+          %Event.AgentEnd{reason: :stop, messages: []}
+        })
+
+      assert s.loader == nil
+    end
+
+    test "AgentEnd resets working_message" do
+      loader = Loader.new()
+      s = %Interactive{loader: loader, working_message: "custom"}
+
+      s =
+        Interactive.handle_event(s, {
+          :octo_pi_agent_event,
+          %Event.AgentEnd{reason: :stop, messages: []}
+        })
+
+      assert s.working_message == nil
+    end
+
+    test "set_working_message updates loader message when loader is active" do
+      loader = Loader.new(message: "old")
+      s = %Interactive{loader: loader}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_working_message, "new message"})
+      assert s.working_message == "new message"
+      assert s.loader.message == "new message"
+    end
+
+    test "set_working_message with nil restores default when loader is active" do
+      loader = Loader.new(message: "custom")
+      s = %Interactive{loader: loader, working_message: "custom"}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_working_message, nil})
+      assert s.working_message == nil
+      assert s.loader.message =~ "Thinking"
+    end
+  end
+
+  describe "handle_event — loader tick" do
+    test "loader_tick advances the frame" do
+      loader = Loader.new(frames: ["a", "b", "c"])
+      s = %Interactive{loader: loader}
+      assert s.loader.frame == 0
+
+      s = Interactive.handle_event(s, :loader_tick)
+      assert s.loader.frame == 1
+
+      s = Interactive.handle_event(s, :loader_tick)
+      assert s.loader.frame == 2
+    end
+
+    test "loader_tick is a no-op when loader is nil" do
+      s = %Interactive{loader: nil}
+      s2 = Interactive.handle_event(s, :loader_tick)
+      assert s2 == s
+    end
+  end
+
+  describe "render — loader placement" do
+    test "active loader lines appear between transcript and input" do
+      loader = Loader.new(message: "Working...")
+
+      s = %Interactive{
+        transcript: [{:user, "hi"}],
+        loader: loader,
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 40
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      assert text =~ "Working..."
+    end
+
+    test "no loader lines when loader is nil" do
+      s = %Interactive{
+        transcript: [{:user, "hi"}],
+        loader: nil,
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 40
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      refute text =~ "Loading..."
     end
   end
 
