@@ -1935,6 +1935,76 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "build_autocomplete_provider/2 — extension commands (opi-8ee.5)" do
+    alias OctoPi.Coder.Extension.API
+    alias OctoPi.Coder.Extension.Loader, as: ExtLoader
+    alias OctoPi.TUI.Autocomplete
+
+    test "extension commands appear in autocomplete suggestions" do
+      {:ok, ext} =
+        ExtLoader.load_from_factory("myext", fn api ->
+          API.register_command(api, "deploy", %{description: "deploy the app", handler: fn _, _ -> nil end})
+        end)
+
+      provider = Interactive.build_autocomplete_provider(nil, [ext])
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/dep")
+      labels = Enum.map(items, & &1.value)
+      assert "/deploy" in labels
+    end
+
+    test "extension commands include their description" do
+      {:ok, ext} =
+        ExtLoader.load_from_factory("myext", fn api ->
+          API.register_command(api, "greet", %{description: "say hello", handler: fn _, _ -> nil end})
+        end)
+
+      provider = Interactive.build_autocomplete_provider(nil, [ext])
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/greet")
+      item = Enum.find(items, &(&1.value == "/greet"))
+      assert item
+      assert item.description =~ "say hello"
+    end
+
+    test "extension commands appear alongside builtin commands" do
+      {:ok, ext} =
+        ExtLoader.load_from_factory("myext", fn api ->
+          API.register_command(api, "mycommand", %{description: "custom", handler: fn _, _ -> nil end})
+        end)
+
+      provider = Interactive.build_autocomplete_provider(nil, [ext])
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/")
+      labels = Enum.map(items, & &1.value)
+      assert "/help" in labels
+      assert "/mycommand" in labels
+    end
+
+    test "duplicate extension command names get :1 :2 suffixes" do
+      {:ok, ext1} =
+        ExtLoader.load_from_factory("ext1", fn api ->
+          API.register_command(api, "run", %{description: "first", handler: fn _, _ -> nil end})
+        end)
+
+      {:ok, ext2} =
+        ExtLoader.load_from_factory("ext2", fn api ->
+          API.register_command(api, "run", %{description: "second", handler: fn _, _ -> nil end})
+        end)
+
+      provider = Interactive.build_autocomplete_provider(nil, [ext1, ext2])
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/run")
+      labels = Enum.map(items, & &1.value)
+      assert "/run:1" in labels
+      assert "/run:2" in labels
+    end
+
+    test "no extensions gives same result as build_autocomplete_provider/1" do
+      provider1 = Interactive.build_autocomplete_provider(nil)
+      provider2 = Interactive.build_autocomplete_provider(nil, [])
+      {:ok, items1} = Autocomplete.get_suggestions(provider1, "/")
+      {:ok, items2} = Autocomplete.get_suggestions(provider2, "/")
+      assert Enum.map(items1, & &1.value) == Enum.map(items2, & &1.value)
+    end
+  end
+
   describe "handle_ui_request — blocking dialogs" do
     test "select stores pending dialog" do
       options = [%{label: "A", value: :a}, %{label: "B", value: :b}]

@@ -462,7 +462,7 @@ defmodule OctoPi.TUI.Interactive do
         width: w,
         height: h,
         theme: theme,
-        autocomplete_provider: build_autocomplete_provider(loaded_resources)
+        autocomplete_provider: build_autocomplete_provider(loaded_resources, extensions)
       },
       width: w,
       height: h,
@@ -539,8 +539,8 @@ defmodule OctoPi.TUI.Interactive do
   defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
 
   @doc false
-  @spec build_autocomplete_provider(map() | nil) :: SlashCommandProvider.t()
-  def build_autocomplete_provider(loaded_resources) do
+  @spec build_autocomplete_provider(map() | nil, [Extension.t()]) :: SlashCommandProvider.t()
+  def build_autocomplete_provider(loaded_resources, extensions \\ []) do
     template_commands =
       case loaded_resources do
         %{prompt_templates: templates} ->
@@ -552,7 +552,15 @@ defmodule OctoPi.TUI.Interactive do
           []
       end
 
-    SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands)
+    extension_commands =
+      Enum.map(Dispatcher.get_registered_commands(extensions), fn entry ->
+        %Autocomplete.SlashCommand{
+          name: entry.invocation_name,
+          description: entry.cmd.description
+        }
+      end)
+
+    SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands ++ extension_commands)
   end
 
   defp build_loaded_resources(opts) do
