@@ -2,7 +2,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.ToolExecution
-  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.{Theme, WrapAnsi}
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
@@ -262,7 +262,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "BOXED-LINE"))
-      assert Enum.any?(stripped, &(&1 =~ "│"))
+      assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
   end
 
@@ -272,7 +272,49 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       lines = ToolExecution.render(te, 80)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "Read"))
-      assert Enum.any?(stripped, &(&1 =~ "│"))
+      assert Enum.any?(lines, &(&1 =~ "\e[48;"))
+    end
+  end
+
+  describe "borderless rendering (upstream parity)" do
+    test "tool box uses background color, not border characters" do
+      te = ToolExecution.new("Read", "call-1", %{}, @theme)
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      refute Enum.any?(stripped, &(&1 =~ "┌")),
+             "should not have top border"
+
+      refute Enum.any?(stripped, &(&1 =~ "└")),
+             "should not have bottom border"
+
+      refute Enum.any?(stripped, &(String.starts_with?(&1, "│") or String.ends_with?(&1, "│"))),
+             "should not have side borders"
+
+      assert Enum.any?(lines, &(&1 =~ "\e[48;")),
+             "should have background color"
+    end
+
+    test "header text is inside the box as content, not in a border title" do
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      header_line = Enum.find(stripped, &(&1 =~ "Bash"))
+      refute header_line =~ "┌", "header should not be in a border"
+      refute header_line =~ "─", "header should not be in a border"
+    end
+
+    test "box content is padded with spaces to full width" do
+      te = ToolExecution.new("Read", "call-1", %{}, @theme)
+      lines = ToolExecution.render(te, 40)
+
+      content_lines = Enum.filter(lines, &(&1 =~ "\e[48;"))
+
+      for line <- content_lines do
+        assert WrapAnsi.visible_width(strip_ansi(line)) >= 40,
+               "line should be padded to full width: #{inspect(strip_ansi(line))}"
+      end
     end
   end
 end

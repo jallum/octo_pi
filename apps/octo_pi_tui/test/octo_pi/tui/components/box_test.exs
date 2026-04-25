@@ -57,8 +57,8 @@ defmodule OctoPi.TUI.Components.BoxTest do
       lines = Box.render(box, 20)
       stripped = Enum.map(lines, &strip_ansi/1)
 
-      assert hd(stripped) == ""
-      assert List.last(stripped) == ""
+      assert String.trim(hd(stripped)) == ""
+      assert String.trim(List.last(stripped)) == ""
       content = Enum.find(stripped, &(&1 =~ "hi"))
       assert String.starts_with?(content, "  ")
     end
@@ -66,6 +66,28 @@ defmodule OctoPi.TUI.Components.BoxTest do
     test "empty children renders nothing" do
       box = Box.new()
       assert Box.render(box, 80) == []
+    end
+
+    test "content lines are right-padded to full width with bg_fn" do
+      bg_fn = fn text -> "\e[42m#{text}\e[49m" end
+      box = Box.new(padding_x: 1, padding_y: 0, bg_fn: bg_fn) |> Box.add_child(%Text{content: "hi"})
+      lines = Box.render(box, 20)
+
+      for line <- lines do
+        assert WrapAnsi.visible_width(strip_ansi(line)) == 20,
+               "borderless line should fill full width: #{inspect(strip_ansi(line))}"
+      end
+    end
+
+    test "padding_y lines are full-width" do
+      bg_fn = fn text -> "\e[42m#{text}\e[49m" end
+      box = Box.new(padding_x: 1, padding_y: 1, bg_fn: bg_fn) |> Box.add_child(%Text{content: "x"})
+      lines = Box.render(box, 30)
+
+      for line <- lines do
+        assert WrapAnsi.visible_width(strip_ansi(line)) == 30,
+               "padding line should fill full width: #{inspect(strip_ansi(line))}"
+      end
     end
   end
 

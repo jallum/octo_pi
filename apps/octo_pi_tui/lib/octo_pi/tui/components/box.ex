@@ -84,12 +84,15 @@ defmodule OctoPi.TUI.Components.Box do
 
       content =
         Enum.map(child_lines, fn line ->
-          apply_bg(pad <> line, box.bg_fn)
+          right_pad = max(0, content_width - WrapAnsi.visible_width(line))
+          inner = pad <> line <> String.duplicate(" ", right_pad) <> pad
+          apply_bg(inner, box.bg_fn)
         end)
 
       pad_lines =
         if box.padding_y > 0 do
-          List.duplicate(apply_bg("", box.bg_fn), box.padding_y)
+          full = String.duplicate(" ", width)
+          List.duplicate(apply_bg(full, box.bg_fn), box.padding_y)
         else
           []
         end

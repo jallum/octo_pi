@@ -105,23 +105,22 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp render_in_box(te, content, width) do
     bg_key = status_bg_key(te.status)
     bg_fn = fn text -> Theme.bg(te.theme, bg_key, text) end
-    border_color = status_border_color(te)
     header_text = format_header(te)
+    styled_header = Theme.fg(te.theme, :tool_title, Theme.bold(header_text))
 
     box =
       Box.new(
-        border: true,
-        title: header_text,
         padding_x: 1,
-        bg_fn: bg_fn,
-        border_color: border_color
+        padding_y: 1,
+        bg_fn: bg_fn
       )
 
     children =
-      Enum.map(content, fn
-        %Text{} = t -> t
-        line when is_binary(line) -> %Text{content: line}
-      end)
+      [%Text{content: styled_header}] ++
+        Enum.map(content, fn
+          %Text{} = t -> t
+          line when is_binary(line) -> %Text{content: line}
+        end)
 
     box = Enum.reduce(children, box, &Box.add_child(&2, &1))
     ["" | Box.render(box, width)]
@@ -213,11 +212,4 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp status_bg_key(:success), do: :tool_success_bg
   defp status_bg_key(:error), do: :tool_error_bg
 
-  defp status_border_color(%{status: :error, theme: theme}) do
-    fn text -> Theme.fg(theme, :error, text) end
-  end
-
-  defp status_border_color(%{theme: theme}) do
-    fn text -> Theme.fg(theme, :border, text) end
-  end
 end

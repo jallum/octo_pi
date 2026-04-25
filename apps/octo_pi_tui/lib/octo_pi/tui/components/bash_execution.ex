@@ -79,20 +79,20 @@ defmodule OctoPi.TUI.Components.BashExecution do
   @impl true
   def render(%__MODULE__{} = be, width) do
     color_key = if be.excluded, do: :dim, else: :bash_mode
-    border_color = fn text -> Theme.fg(be.theme, color_key, text) end
+    bg_key = status_bg_key(be.status)
+    bg_fn = if be.theme, do: fn text -> Theme.bg(be.theme, bg_key, text) end
 
-    header = Theme.fg(be.theme, color_key, Theme.bold("$ #{be.command}"))
+    header = %Text{content: Theme.fg(be.theme, color_key, Theme.bold("$ #{be.command}"))}
     content = build_content(be, color_key)
 
     box =
       Box.new(
-        border: true,
-        title: header,
         padding_x: 1,
-        border_color: border_color
+        padding_y: 1,
+        bg_fn: bg_fn
       )
 
-    box = Enum.reduce(content, box, &Box.add_child(&2, &1))
+    box = Enum.reduce([header | content], box, &Box.add_child(&2, &1))
     ["" | Box.render(box, width)]
   end
 
@@ -145,4 +145,9 @@ defmodule OctoPi.TUI.Components.BashExecution do
   end
 
   defp maybe_add_exit_status(parts, _), do: parts
+
+  defp status_bg_key(:running), do: :tool_pending_bg
+  defp status_bg_key(:complete), do: :tool_success_bg
+  defp status_bg_key(:cancelled), do: :tool_error_bg
+  defp status_bg_key(:error), do: :tool_error_bg
 end

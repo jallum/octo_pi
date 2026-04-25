@@ -197,6 +197,26 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
 
   # ── Output accessor ────────────────────────────────────────────
 
+  describe "borderless rendering (upstream parity)" do
+    test "bash box uses background color, not border characters" do
+      be = BashExecution.new("ls", @theme)
+      lines = BashExecution.render(be, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      refute Enum.any?(stripped, &(&1 =~ "┌")), "should not have top border"
+      refute Enum.any?(stripped, &(&1 =~ "└")), "should not have bottom border"
+    end
+
+    test "header is inside the box as content" do
+      be = BashExecution.new("echo hi", @theme)
+      lines = BashExecution.render(be, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      header_line = Enum.find(stripped, &(&1 =~ "$ echo hi"))
+      refute header_line =~ "─", "header should not be in a border"
+    end
+  end
+
   describe "get_output/1" do
     test "returns joined output" do
       be =
