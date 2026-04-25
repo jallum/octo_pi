@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:58Z",
+  "description": "Affected extension: status-line.ex\nUpstream: ctx.ui.setStatus(id, text) takes a named slot ID and text. Multiple extensions can each own a named slot; the footer renders all active slots. A single extension calling setStatus repeatedly updates only its own slot without clobbering others.\nCurrent workaround: UIContext.set_status is (String.t() -\u003e :ok) — single-arg, no slot ID. The status-line.ex example calls set_status.(\"Turn #{turn}...\") which works in isolation but would conflict with any other extension also calling set_status.\nWhat's needed: UIContext.set_status signature changed to (id :: String.t(), text :: String.t() -\u003e :ok). The footer render must maintain a map of id → text and render all active slots. Clearing a slot can use set_status(id, nil) or a dedicated clear_status(id) call. Existing callers must be updated to pass a slot id.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/status-line.ts (ctx.ui.setStatus('status-demo', ...))",
+  "id": "opi-rcg.11",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.ui.set_status named slot — set_status(id, text) vs single-string set_status(text)",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:58Z"
+}
