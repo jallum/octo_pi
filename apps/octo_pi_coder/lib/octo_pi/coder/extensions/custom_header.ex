@@ -3,8 +3,8 @@ defmodule OctoPi.Coder.Extensions.CustomHeader do
   Sets a custom header component on session start.
   Provides /builtin-header command to restore the built-in header.
 
-  Diverges from custom-header.ts: the pi mascot TUI widget is not ported;
-  the header component is a plain map descriptor.
+  Passes a render fn `(width :: integer -> [String.t()])` to `ctx.ui.set_header`.
+  The pi mascot TUI widget is not ported; the render fn returns a plain title line.
   Ported from examples/extensions/custom-header.ts.
   """
 
@@ -21,7 +21,7 @@ defmodule OctoPi.Coder.Extensions.CustomHeader do
   end
 
   defp on_session_start(%{has_ui?: true, ui: ui}) do
-    ui.set_header.(%{type: :custom_header, title: "octo_pi"})
+    ui.set_header.(fn width -> [String.slice("octo_pi", 0, width)] end)
   end
 
   defp on_session_start(_ctx), do: :ok

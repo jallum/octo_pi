@@ -2,9 +2,9 @@ defmodule OctoPi.Coder.Extensions.CustomFooter do
   @moduledoc """
   Toggles a custom footer component via /footer command.
 
-  ctx.get_branch is available for token stats, but computing them requires the
-  footer render factory (ctx.ui.set_footer with a render fn — see opi-rcg.8).
-  The footer component is a plain descriptor until the factory is implemented.
+  Passes a render fn `(width :: integer -> [String.t()])` to `ctx.ui.set_footer`.
+  ctx.get_branch is available; live token stats and branch data (footerData) are
+  deferred to opi-rcg.9.
   Ported from examples/extensions/custom-footer.ts.
   """
 
@@ -25,7 +25,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooter do
       ui.set_footer.(nil)
       ui.notify.("Default footer restored")
     else
-      ui.set_footer.(%{type: :custom_footer})
+      ui.set_footer.(fn _width -> ["custom footer"] end)
       ui.notify.("Custom footer enabled")
     end
   end

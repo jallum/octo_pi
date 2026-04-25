@@ -55,7 +55,7 @@ defmodule OctoPi.Coder.Extensions.CustomHeaderTest do
       assert length(Agent.get(header_calls, & &1)) == 1
     end
 
-    test "set_header receives a non-nil component" do
+    test "set_header receives a render fn" do
       {:ok, header_calls} = Agent.start_link(fn -> [] end)
       {:ok, notify_calls} = Agent.start_link(fn -> [] end)
       ctx = ui_ctx(header_calls, notify_calls)
@@ -63,7 +63,19 @@ defmodule OctoPi.Coder.Extensions.CustomHeaderTest do
       handler = hd(ext.handlers[:session_start])
       handler.(Event.new(:session_start, %{reason: :startup}), ctx)
       [component] = Agent.get(header_calls, & &1)
-      assert component
+      assert is_function(component, 1)
+    end
+
+    test "set_header render fn returns lines when called with a width" do
+      {:ok, header_calls} = Agent.start_link(fn -> [] end)
+      {:ok, notify_calls} = Agent.start_link(fn -> [] end)
+      ctx = ui_ctx(header_calls, notify_calls)
+      ext = load_ext()
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ctx)
+      [render_fn] = Agent.get(header_calls, & &1)
+      lines = render_fn.(80)
+      assert is_list(lines) and lines != []
     end
 
     test "does not call set_header when has_ui? is false" do

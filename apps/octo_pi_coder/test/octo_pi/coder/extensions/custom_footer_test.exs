@@ -44,7 +44,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
   end
 
   describe "/footer command toggle" do
-    test "first call enables footer by calling set_footer with non-nil component" do
+    test "first call enables footer by calling set_footer with a render fn" do
       {:ok, footer_calls} = Agent.start_link(fn -> [] end)
       {:ok, notify_calls} = Agent.start_link(fn -> [] end)
       ctx = ui_ctx(footer_calls, notify_calls)
@@ -53,7 +53,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
       ext.commands["footer"].handler.("", ctx)
 
       [component] = Agent.get(footer_calls, & &1)
-      assert component
+      assert is_function(component, 1)
     end
 
     test "second call disables footer by calling set_footer with nil" do
@@ -69,7 +69,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
       assert is_nil(last)
     end
 
-    test "third call re-enables footer" do
+    test "third call re-enables footer with a render fn" do
       {:ok, footer_calls} = Agent.start_link(fn -> [] end)
       {:ok, notify_calls} = Agent.start_link(fn -> [] end)
       ctx = ui_ctx(footer_calls, notify_calls)
@@ -80,7 +80,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
       ext.commands["footer"].handler.("", ctx)
 
       [last | _] = Agent.get(footer_calls, & &1)
-      assert last
+      assert is_function(last, 1)
     end
 
     test "notifies user on each toggle" do

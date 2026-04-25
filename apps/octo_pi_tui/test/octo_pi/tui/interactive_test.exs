@@ -1409,16 +1409,71 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.ui_overrides.widget == {:custom, "w"}
     end
 
-    test "set_header stores header override" do
+    test "set_header stores a render fn override" do
       s = %Interactive{}
-      {s, :ok} = Interactive.handle_ui_request(s, {:set_header, "custom header"})
-      assert s.ui_overrides.header == "custom header"
+      render_fn = fn _width -> ["custom header"] end
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_header, render_fn})
+      assert is_function(s.ui_overrides.header, 1)
     end
 
-    test "set_footer stores footer override" do
+    test "set_header render fn is called during render" do
+      test_pid = self()
+
+      render_fn = fn width ->
+        send(test_pid, {:rendered, width})
+        ["header line"]
+      end
+
+      s = %Interactive{
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        banner: nil,
+        width: 80,
+        height: 24,
+        ui_overrides: %{header: render_fn}
+      }
+
+      Interactive.render(s)
+      assert_receive {:rendered, 80}
+    end
+
+    test "set_header nil restores default (banner) rendering" do
       s = %Interactive{}
-      {s, :ok} = Interactive.handle_ui_request(s, {:set_footer, "custom footer"})
-      assert s.ui_overrides.footer == "custom footer"
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_header, nil})
+      assert is_nil(s.ui_overrides.header)
+    end
+
+    test "set_footer stores a render fn override" do
+      s = %Interactive{}
+      render_fn = fn _width -> ["custom footer"] end
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_footer, render_fn})
+      assert is_function(s.ui_overrides.footer, 1)
+    end
+
+    test "set_footer render fn is called during render" do
+      test_pid = self()
+
+      render_fn = fn width ->
+        send(test_pid, {:rendered, width})
+        ["footer line"]
+      end
+
+      s = %Interactive{
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 24,
+        ui_overrides: %{footer: render_fn}
+      }
+
+      Interactive.render(s)
+      assert_receive {:rendered, 80}
+    end
+
+    test "set_footer nil restores default footer rendering" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_footer, nil})
+      assert is_nil(s.ui_overrides.footer)
     end
 
     test "set_hidden_thinking_label stores label" do

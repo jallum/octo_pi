@@ -725,9 +725,13 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp cursor_position(%__MODULE__{input: input, width: width, height: height, footer: footer}, input_lines, lines) do
+  defp cursor_position(
+         %__MODULE__{input: input, width: width, height: height, footer: footer, ui_overrides: ui_overrides},
+         input_lines,
+         lines
+       ) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    footer_height = length(Footer.render(footer, width))
+    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, width))
     input_end = length(lines) - footer_height
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
@@ -1254,12 +1258,12 @@ defmodule OctoPi.TUI.Interactive do
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width, height: height} = state,
         input_lines
       ) do
-    banner_lines = render_banner(banner, width)
+    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
     notification_lines = render_notification(state.notification, width)
-    footer_lines = Footer.render(footer, width)
+    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, width)
 
     all =
       banner_lines ++
@@ -1338,6 +1342,12 @@ defmodule OctoPi.TUI.Interactive do
       lines -> lines ++ [""]
     end
   end
+
+  defp header_lines(render_fn, _banner, width) when is_function(render_fn, 1), do: render_fn.(width)
+  defp header_lines(nil, banner, width), do: render_banner(banner, width)
+
+  defp footer_lines(render_fn, _footer, width) when is_function(render_fn, 1), do: render_fn.(width)
+  defp footer_lines(nil, footer, width), do: Footer.render(footer, width)
 
   defp render_resource_sections(nil, _theme, _expanded), do: []
 
