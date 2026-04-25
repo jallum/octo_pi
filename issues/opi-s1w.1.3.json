@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:16:21Z",
+  "description": "Viewport scrolling model width enforcement clear strategy",
+  "id": "opi-s1w.1.3",
+  "labels": [],
+  "parent": "opi-s1w.1",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI Renderer Correctness",
+  "type": "task",
+  "updated_at": "2026-04-25T05:16:21Z"
+}
