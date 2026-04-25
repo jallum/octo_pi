@@ -265,6 +265,100 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "drain input on exit (opi-0g4.3)" do
+    test "terminate waits at least drain_idle_ms when no pending chunks" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10,
+          drain_idle_ms: 50
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      assert_receive {:tty, "\e[>4;2m"}, 500
+
+      t0 = System.monotonic_time(:millisecond)
+      GenServer.stop(pid, :normal)
+      elapsed = System.monotonic_time(:millisecond) - t0
+
+      assert elapsed >= 40
+      assert elapsed < 400
+    end
+
+    test "drain_timeout_ms caps total drain when drain_idle_ms is large" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10,
+          drain_idle_ms: 5000,
+          drain_timeout_ms: 60
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      assert_receive {:tty, "\e[>4;2m"}, 500
+
+      t0 = System.monotonic_time(:millisecond)
+      GenServer.stop(pid, :normal)
+      elapsed = System.monotonic_time(:millisecond) - t0
+
+      assert elapsed >= 40
+      assert elapsed < 500
+    end
+
+    test "skip_raw_mode skips drain entirely" do
+      tty_fn = fn _ -> :ok end
+      pid = start_terminal(name: nil, tty_fn: tty_fn, drain_idle_ms: 5000)
+
+      t0 = System.monotonic_time(:millisecond)
+      GenServer.stop(pid, :normal)
+      elapsed = System.monotonic_time(:millisecond) - t0
+
+      assert elapsed < 200
+    end
+
+    test "drain discards stdin chunks injected into mailbox during terminate" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10,
+          drain_idle_ms: 200
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      assert_receive {:tty, "\e[>4;2m"}, 500
+
+      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+
+      stop_task = Task.async(fn -> GenServer.stop(pid, :normal) end)
+
+      # Wait until disable_keyboard_protocol fires — drain starts immediately after
+      assert_receive {:tty, "\e[>4m"}, 500
+      send(pid, {:stdin_chunk, "key_release"})
+
+      Task.await(stop_task, 2000)
+
+      refute_receive {:stdin_chunk, "key_release"}, 100
+    end
+  end
+
   describe "reader exit diagnostics" do
     @describetag capture_log: true
 

@@ -92,6 +92,8 @@ defmodule OctoPi.TUI.Terminal do
     auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
     probe_timeout_ms = Keyword.get(opts, :probe_timeout_ms, 150)
+    drain_idle_ms = Keyword.get(opts, :drain_idle_ms, 50)
+    drain_timeout_ms = Keyword.get(opts, :drain_timeout_ms, 1000)
 
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
     tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
@@ -114,6 +116,8 @@ defmodule OctoPi.TUI.Terminal do
       write_fn: write_fn,
       scope: self(),
       probe_timeout_ms: probe_timeout_ms,
+      drain_idle_ms: drain_idle_ms,
+      drain_timeout_ms: drain_timeout_ms,
       keyboard_mode: :none,
       probe_start: nil
     }
@@ -189,6 +193,8 @@ defmodule OctoPi.TUI.Terminal do
 
     if not state.skip_raw_mode do
       disable_keyboard_protocol(state)
+      deadline = System.monotonic_time(:millisecond) + state.drain_timeout_ms
+      drain_input(deadline, state.drain_idle_ms)
       state.tty_fn.("\e[?2004l")
       state.raw_mode_fn.(:exit)
     end
@@ -197,6 +203,20 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   # --- helpers ---
+
+  defp drain_input(deadline_ms, idle_ms) do
+    remaining = deadline_ms - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      :ok
+    else
+      receive do
+        {:stdin_chunk, _} -> drain_input(deadline_ms, idle_ms)
+      after
+        min(remaining, idle_ms) -> :ok
+      end
+    end
+  end
 
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
