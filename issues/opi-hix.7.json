@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Example extensions wave 1: basic API surface (hello, commands, event-bus, session-name)",
   "type": "task",
-  "updated_at": "2026-04-25T16:33:23.655782Z"
+  "updated_at": "2026-04-25T16:48:54.566438Z"
 }
