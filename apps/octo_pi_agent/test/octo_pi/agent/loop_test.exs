@@ -425,9 +425,8 @@ defmodule OctoPi.Agent.LoopTest do
       session = start_session()
       OctoPi.Agent.subscribe(session, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "hi")
-      # Queue follow-up before the first turn reaches terminal.
       :ok = OctoPi.Agent.follow_up(session, "and then?")
+      :ok = OctoPi.Agent.prompt(session, "hi")
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
