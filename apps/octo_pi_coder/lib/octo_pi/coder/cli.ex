@@ -45,21 +45,25 @@ defmodule OctoPi.Coder.CLI do
     {switches, positional, _invalid} =
       OptionParser.parse(argv, switches: @switches, aliases: @aliases)
 
-    cond do
-      switches[:help] ->
-        {:help, usage_text()}
+    if Keyword.get(switches, :help, false) do
+      {:help, usage_text()}
+    else
+      {:ok, build_opts(switches, positional)}
+    end
+  end
 
+  defp build_opts(switches, positional) do
+    base = base_opts(switches)
+
+    cond do
       switches[:mode] == "rpc" ->
-        {:ok, switches |> base_opts() |> Map.put(:mode, :rpc) |> Map.put(:prompt, nil)}
+        Map.merge(base, %{mode: :rpc, prompt: nil})
 
       positional == [] and switches[:print] != true ->
-        # No prompt + no --print = interactive mode (the default
-        # when a user runs `mix pi` with nothing).
-        {:ok, switches |> base_opts() |> Map.put(:mode, :interactive) |> Map.put(:prompt, nil)}
+        Map.merge(base, %{mode: :interactive, prompt: nil})
 
       true ->
-        prompt = Enum.join(positional, " ")
-        {:ok, switches |> base_opts() |> Map.put(:mode, :print) |> Map.put(:prompt, prompt)}
+        Map.merge(base, %{mode: :print, prompt: Enum.join(positional, " ")})
     end
   end
 
@@ -75,6 +79,15 @@ defmodule OctoPi.Coder.CLI do
   Parse argv and dispatch to the selected mode. Returns an integer
   exit code suitable for `System.halt/1`.
   """
+  # Dialyzer can't infer through OptionParser.parse that parse_args
+  # returns both {:ok, _} and {:help, _} — it concludes only the
+  # {:help, _} branch is reachable, cascading into false "unused"
+  # and "pattern can never match" warnings for every mode clause.
+  @dialyzer [
+    {:no_match, run: 1},
+    {:no_unused, [run_interactive: 1, run_rpc: 1, rpc_loop: 1]}
+  ]
+
   @spec run([String.t()]) :: integer()
   def run(argv) do
     case parse_args(argv) do

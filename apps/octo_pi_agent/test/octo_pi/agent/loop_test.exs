@@ -494,9 +494,9 @@ defmodule OctoPi.Agent.LoopTest do
       :ok = OctoPi.Agent.set_queue_mode(session, :follow_up, :all)
       OctoPi.Agent.subscribe(session, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "hi")
       :ok = OctoPi.Agent.follow_up(session, "a")
       :ok = OctoPi.Agent.follow_up(session, "b")
+      :ok = OctoPi.Agent.prompt(session, "hi")
 
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 

@@ -17,6 +17,8 @@ defmodule Mix.Tasks.Pi do
 
   alias OctoPi.Coder.CLI
 
+  @dialyzer {:no_match, run: 1}
+
   @impl Mix.Task
   def run(argv) do
     Mix.Task.run("app.config")
