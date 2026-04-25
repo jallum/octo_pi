@@ -576,4 +576,71 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       assert List.last(lines) == ""
     end
   end
+
+  # ── Tables ─────────────────────────────────────────────────────
+
+  describe "tables" do
+    test "renders a basic table with borders" do
+      md = """
+      | Name | Age |
+      |------|-----|
+      | Bob  | 42  |
+      | Sue  | 31  |
+      """
+
+      lines = render(md)
+      stripped = Enum.map(lines, &strip_ansi/1)
+
+      assert Enum.any?(stripped, &(&1 =~ "┌")), "should have top border"
+      assert Enum.any?(stripped, &(&1 =~ "└")), "should have bottom border"
+      assert Enum.any?(stripped, &(&1 =~ "│")), "should have cell separators"
+      assert Enum.any?(stripped, &(&1 =~ "Bob"))
+      assert Enum.any?(stripped, &(&1 =~ "Sue"))
+    end
+
+    test "header row is bold" do
+      md = """
+      | Col1 | Col2 |
+      |------|------|
+      | a    | b    |
+      """
+
+      lines = render(md)
+      header_line = Enum.find(lines, &(strip_ansi(&1) =~ "Col1"))
+      assert header_line =~ "\e[1m", "header should be bold"
+    end
+
+    test "header separator uses ├┼┤" do
+      md = """
+      | A | B |
+      |---|---|
+      | 1 | 2 |
+      """
+
+      lines = render(md)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "├")), "should have separator left"
+      assert Enum.any?(stripped, &(&1 =~ "┤")), "should have separator right"
+    end
+
+    test "empty table renders nothing" do
+      md = "just text"
+      lines = render(md)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      refute Enum.any?(stripped, &(&1 =~ "┌"))
+    end
+
+    test "columns size to content width" do
+      md = """
+      | Short | A much longer column header |
+      |-------|----------------------------|
+      | x     | y                          |
+      """
+
+      lines = render(md, 60)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      top_border = Enum.find(stripped, &(&1 =~ "┌"))
+      assert top_border =~ "┬", "multi-column border should have ┬"
+    end
+  end
 end

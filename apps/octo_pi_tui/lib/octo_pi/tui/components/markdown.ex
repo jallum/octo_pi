@@ -135,16 +135,11 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space([line], next)
   end
 
-  # Tables: EarmarkParser emits `{"table", _, [thead, tbody], _}`.
-  # Upstream renders a bordered grid with alignment, per-cell
-  # wrapping, and column-width clamping. We deliberately fall
-  # through to the generic no-op renderer for now — markdown tables
-  # have not surfaced in coding-agent output frequently enough to
-  # justify the implementation cost. When a real use case appears,
-  # port tmp/pi-mono/packages/tui/src/components/markdown.ts table
-  # rendering and the 13 upstream markdown.test.ts "Tables" tests
-  # (tracked under opi-q5k.42.1).
-  defp render_node({"table", _, _, _}, _width, _theme, _next), do: []
+  defp render_node({"table", _, children, _}, width, theme, next) do
+    {headers, rows} = extract_table_data(children, theme)
+    lines = render_table(headers, rows, width, theme)
+    maybe_space(lines, next)
+  end
 
   defp render_node(_node, _width, _theme, _next), do: []
 
@@ -289,5 +284,126 @@ defmodule OctoPi.TUI.Components.Markdown do
   defp apply_padding_y(lines, py) do
     empty = List.duplicate("", py)
     empty ++ lines ++ empty
+  end
+
+  # ── Table rendering ────────────────────────────────────────────
+
+  defp extract_table_data(children, theme) do
+    thead = Enum.find(children, &match?({"thead", _, _, _}, &1))
+    tbody = Enum.find(children, &match?({"tbody", _, _, _}, &1))
+
+    headers =
+      case thead do
+        {"thead", _, rows, _} ->
+          rows
+          |> Enum.flat_map(fn {"tr", _, cells, _} -> cells end)
+          |> Enum.map(fn {"th", _, content, _} -> render_inline(content, theme) end)
+
+        _ ->
+          []
+      end
+
+    rows =
+      case tbody do
+        {"tbody", _, trs, _} ->
+          Enum.map(trs, fn {"tr", _, cells, _} ->
+            Enum.map(cells, fn {"td", _, content, _} -> render_inline(content, theme) end)
+          end)
+
+        _ ->
+          []
+      end
+
+    {headers, rows}
+  end
+
+  defp render_table([], _rows, _width, _theme), do: []
+
+  defp render_table(headers, rows, width, theme) do
+    num_cols = length(headers)
+    border_overhead = 3 * num_cols + 1
+
+    available = width - border_overhead
+
+    if available < num_cols do
+      []
+    else
+      natural = column_natural_widths(headers, rows)
+      col_widths = fit_columns(natural, available, num_cols)
+
+      top = "┌─" <> Enum.map_join(col_widths, "─┬─", &String.duplicate("─", &1)) <> "─┐"
+      sep = "├─" <> Enum.map_join(col_widths, "─┼─", &String.duplicate("─", &1)) <> "─┤"
+      bottom = "└─" <> Enum.map_join(col_widths, "─┴─", &String.duplicate("─", &1)) <> "─┘"
+
+      header_line = render_table_row(headers, col_widths, theme, true)
+      row_lines = Enum.map(rows, &render_table_row(&1, col_widths, theme, false))
+
+      body = row_lines |> Enum.intersperse([sep]) |> List.flatten()
+      [top] ++ header_line ++ [sep] ++ body ++ [bottom]
+    end
+  end
+
+  defp render_table_row(cells, col_widths, _theme, bold?) do
+    wrapped =
+      Enum.zip(cells, col_widths)
+      |> Enum.map(fn {text, w} -> WrapAnsi.wrap(text, max(w, 1)) end)
+
+    max_lines = wrapped |> Enum.map(&length/1) |> Enum.max(fn -> 1 end)
+
+    Enum.map(0..(max_lines - 1), fn line_idx ->
+      parts =
+        Enum.zip(wrapped, col_widths)
+        |> Enum.map(fn {cell_lines, w} ->
+          text = Enum.at(cell_lines, line_idx, "")
+          vis_w = WrapAnsi.visible_width(text)
+          padded = text <> String.duplicate(" ", max(0, w - vis_w))
+          if bold?, do: Theme.bold(padded), else: padded
+        end)
+
+      "│ " <> Enum.join(parts, " │ ") <> " │"
+    end)
+  end
+
+  defp column_natural_widths(headers, rows) do
+    num_cols = length(headers)
+
+    Enum.map(0..(num_cols - 1), fn i ->
+      header_w = WrapAnsi.visible_width(Enum.at(headers, i, ""))
+
+      row_max =
+        rows
+        |> Enum.map(fn row -> WrapAnsi.visible_width(Enum.at(row, i, "")) end)
+        |> Enum.max(fn -> 0 end)
+
+      max(header_w, row_max)
+    end)
+  end
+
+  defp fit_columns(natural, available, num_cols) do
+    total = Enum.sum(natural)
+
+    if total <= available do
+      natural
+    else
+      min_total = num_cols
+      extra = max(0, available - min_total)
+      total_weight = max(1, Enum.sum(natural))
+
+      widths =
+        Enum.map(natural, fn n ->
+          1 + trunc(n / total_weight * extra)
+        end)
+
+      allocated = Enum.sum(widths)
+      leftover = available - allocated
+
+      if leftover > 0 do
+        widths
+        |> Enum.with_index()
+        |> Enum.map(fn {w, i} -> if i < leftover, do: w + 1, else: w end)
+      else
+        widths
+      end
+    end
   end
 end
