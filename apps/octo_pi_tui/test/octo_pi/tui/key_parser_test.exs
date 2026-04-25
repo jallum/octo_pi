@@ -575,6 +575,104 @@ defmodule OctoPi.TUI.KeyParserTest do
     end
   end
 
+  describe "xterm modified CSI — arrows (opi-0g4.5)" do
+    test "shift+up (\\e[1;2A)" do
+      assert {:key, %Key{key: :up, modifiers: [:shift]}} = KeyParser.parse("\e[1;2A")
+    end
+
+    test "ctrl+up (\\e[1;5A)" do
+      assert {:key, %Key{key: :up, modifiers: [:ctrl]}} = KeyParser.parse("\e[1;5A")
+    end
+
+    test "alt+up (\\e[1;3A)" do
+      assert {:key, %Key{key: :up, modifiers: [:alt]}} = KeyParser.parse("\e[1;3A")
+    end
+
+    test "shift+down (\\e[1;2B)" do
+      assert {:key, %Key{key: :down, modifiers: [:shift]}} = KeyParser.parse("\e[1;2B")
+    end
+
+    test "shift+right (\\e[1;2C)" do
+      assert {:key, %Key{key: :right, modifiers: [:shift]}} = KeyParser.parse("\e[1;2C")
+    end
+
+    test "shift+left (\\e[1;2D)" do
+      assert {:key, %Key{key: :left, modifiers: [:shift]}} = KeyParser.parse("\e[1;2D")
+    end
+
+    test "ctrl+shift+up (\\e[1;6A)" do
+      result = KeyParser.parse("\e[1;6A")
+      assert {:key, %Key{key: :up}} = result
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+    end
+  end
+
+  describe "xterm modified CSI — home/end (opi-0g4.5)" do
+    test "shift+home (\\e[1;2H)" do
+      assert {:key, %Key{key: :home, modifiers: [:shift]}} = KeyParser.parse("\e[1;2H")
+    end
+
+    test "ctrl+home (\\e[1;5H)" do
+      assert {:key, %Key{key: :home, modifiers: [:ctrl]}} = KeyParser.parse("\e[1;5H")
+    end
+
+    test "shift+end (\\e[1;2F)" do
+      assert {:key, %Key{key: :end, modifiers: [:shift]}} = KeyParser.parse("\e[1;2F")
+    end
+
+    test "ctrl+end (\\e[1;5F)" do
+      assert {:key, %Key{key: :end, modifiers: [:ctrl]}} = KeyParser.parse("\e[1;5F")
+    end
+  end
+
+  describe "xterm modified CSI — F1-F4 via 1;<mod> (opi-0g4.5)" do
+    test "shift+F1 (\\e[1;2P)" do
+      assert {:key, %Key{key: :f1, modifiers: [:shift]}} = KeyParser.parse("\e[1;2P")
+    end
+
+    test "ctrl+F2 (\\e[1;5Q)" do
+      assert {:key, %Key{key: :f2, modifiers: [:ctrl]}} = KeyParser.parse("\e[1;5Q")
+    end
+
+    test "alt+F3 (\\e[1;3R)" do
+      assert {:key, %Key{key: :f3, modifiers: [:alt]}} = KeyParser.parse("\e[1;3R")
+    end
+
+    test "shift+F4 (\\e[1;2S)" do
+      assert {:key, %Key{key: :f4, modifiers: [:shift]}} = KeyParser.parse("\e[1;2S")
+    end
+  end
+
+  describe "xterm modified CSI — nav/F-keys via <n>;<mod>~ (opi-0g4.5)" do
+    test "shift+insert (\\e[2;2~)" do
+      assert {:key, %Key{key: :insert, modifiers: [:shift]}} = KeyParser.parse("\e[2;2~")
+    end
+
+    test "ctrl+delete (\\e[3;5~)" do
+      assert {:key, %Key{key: :delete, modifiers: [:ctrl]}} = KeyParser.parse("\e[3;5~")
+    end
+
+    test "ctrl+page_up (\\e[5;5~)" do
+      assert {:key, %Key{key: :page_up, modifiers: [:ctrl]}} = KeyParser.parse("\e[5;5~")
+    end
+
+    test "shift+page_down (\\e[6;2~)" do
+      assert {:key, %Key{key: :page_down, modifiers: [:shift]}} = KeyParser.parse("\e[6;2~")
+    end
+
+    test "shift+F1 via tilde (\\e[11;2~)" do
+      assert {:key, %Key{key: :f1, modifiers: [:shift]}} = KeyParser.parse("\e[11;2~")
+    end
+
+    test "ctrl+F5 (\\e[15;5~)" do
+      assert {:key, %Key{key: :f5, modifiers: [:ctrl]}} = KeyParser.parse("\e[15;5~")
+    end
+
+    test "alt+F12 (\\e[24;3~)" do
+      assert {:key, %Key{key: :f12, modifiers: [:alt]}} = KeyParser.parse("\e[24;3~")
+    end
+  end
+
   describe "bracketed paste markers" do
     test "paste start", do: assert(:paste_start = KeyParser.parse("\e[200~"))
     test "paste end", do: assert(:paste_end = KeyParser.parse("\e[201~"))

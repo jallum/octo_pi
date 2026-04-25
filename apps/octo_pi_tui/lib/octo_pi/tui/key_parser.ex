@@ -161,7 +161,11 @@ defmodule OctoPi.TUI.KeyParser do
   # xterm modifyOtherKeys: "27;<mod>;<cp>~"
   defp legacy_csi(<<"27;", rest::binary>>), do: parse_modify_other_keys(rest)
 
-  defp legacy_csi(_), do: :unknown
+  # xterm modified arrows/home/end/F1-F4: "1;<mod><final>"
+  defp legacy_csi(<<"1;", rest::binary>>), do: xterm_csi_1_param(rest)
+
+  # xterm modified nav/F-keys: "<n>;<mod>~"
+  defp legacy_csi(body), do: maybe_xterm_tilde(body)
 
   # --- SS3 (application keypad): "\eO<char>" ---
 
@@ -220,6 +224,82 @@ defmodule OctoPi.TUI.KeyParser do
   end
 
   defp alt_prefix(_), do: :unknown
+
+  # --- xterm modified CSI helpers ---
+
+  # "1;<mod><final>" — arrows, Home, End, F1-F4.
+  defp xterm_csi_1_param(rest) do
+    sz = byte_size(rest)
+
+    if sz >= 2 do
+      final = :binary.last(rest)
+      mod_str = binary_part(rest, 0, sz - 1)
+      key = xterm_1_final_key(final)
+
+      with {:ok, mod} <- parse_int(mod_str), true <- key != :unknown do
+        {:key, %Key{key: key, modifiers: bits_to_modifiers(max(mod - 1, 0))}}
+      else
+        _ -> :unknown
+      end
+    else
+      :unknown
+    end
+  end
+
+  defp xterm_1_final_key(?A), do: :up
+  defp xterm_1_final_key(?B), do: :down
+  defp xterm_1_final_key(?C), do: :right
+  defp xterm_1_final_key(?D), do: :left
+  defp xterm_1_final_key(?H), do: :home
+  defp xterm_1_final_key(?F), do: :end
+  defp xterm_1_final_key(?P), do: :f1
+  defp xterm_1_final_key(?Q), do: :f2
+  defp xterm_1_final_key(?R), do: :f3
+  defp xterm_1_final_key(?S), do: :f4
+  defp xterm_1_final_key(_), do: :unknown
+
+  # "<n>;<mod>~" — nav keys and F5-F12 with modifier.
+  defp maybe_xterm_tilde(body) do
+    sz = byte_size(body)
+    if sz >= 4 and :binary.last(body) == ?~, do: xterm_tilde_split(body, sz), else: :unknown
+  end
+
+  defp xterm_tilde_split(body, sz) do
+    inner = binary_part(body, 0, sz - 1)
+
+    case String.split(inner, ";", parts: 2) do
+      [n_str, mod_str] -> xterm_tilde_parse(n_str, mod_str)
+      _ -> :unknown
+    end
+  end
+
+  defp xterm_tilde_parse(n_str, mod_str) do
+    with {:ok, n} <- parse_int(n_str),
+         {:ok, mod} <- parse_int(mod_str),
+         key when key != :unknown <- xterm_tilde_key(n) do
+      {:key, %Key{key: key, modifiers: bits_to_modifiers(max(mod - 1, 0))}}
+    else
+      _ -> :unknown
+    end
+  end
+
+  defp xterm_tilde_key(2), do: :insert
+  defp xterm_tilde_key(3), do: :delete
+  defp xterm_tilde_key(5), do: :page_up
+  defp xterm_tilde_key(6), do: :page_down
+  defp xterm_tilde_key(11), do: :f1
+  defp xterm_tilde_key(12), do: :f2
+  defp xterm_tilde_key(13), do: :f3
+  defp xterm_tilde_key(14), do: :f4
+  defp xterm_tilde_key(15), do: :f5
+  defp xterm_tilde_key(17), do: :f6
+  defp xterm_tilde_key(18), do: :f7
+  defp xterm_tilde_key(19), do: :f8
+  defp xterm_tilde_key(20), do: :f9
+  defp xterm_tilde_key(21), do: :f10
+  defp xterm_tilde_key(23), do: :f11
+  defp xterm_tilde_key(24), do: :f12
+  defp xterm_tilde_key(_), do: :unknown
 
   # --- xterm modifyOtherKeys: "27;<mod>;<cp>~" ---
   # `rest` is "<mod>;<cp>~" (the part after "27;").
