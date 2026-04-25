@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Hint bar ghost text: compact hints line wraps causing leftover text from prior frame",
   "type": "bug",
-  "updated_at": "2026-04-25T17:17:17.224331Z"
+  "updated_at": "2026-04-25T17:18:54.271544Z"
 }
