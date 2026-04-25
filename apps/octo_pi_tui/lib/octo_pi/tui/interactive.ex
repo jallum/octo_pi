@@ -583,6 +583,20 @@ defmodule OctoPi.TUI.Interactive do
     Dispatcher.emit(extensions, ExtEvent.new(:session_start, %{reason: :startup}), ctx)
   end
 
+  defp fire_extension_event([], _event_type, _state), do: :ok
+
+  defp fire_extension_event(extensions, event_type, state) do
+    interactive_pid = self()
+    cwd = state.footer.cwd
+
+    Task.start(fn ->
+      ctx = Context.new(%{cwd: cwd, has_ui?: true, ui: build_ui_context(interactive_pid)})
+      Dispatcher.emit(extensions, ExtEvent.new(event_type), ctx)
+    end)
+
+    :ok
+  end
+
   defp start_terminal(opts, write_fn) do
     terminal_opts =
       opts
@@ -927,11 +941,14 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{input: input} = state, {:char, c}), do: %{state | input: Components.Input.insert(input, c)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
+    fire_extension_event(state.extensions, :agent_start, state)
     message = state.working_message || default_working_message()
     %{state | loader: Components.Loader.new(message: message)}
   end
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentEnd{} = event}) do
+    fire_extension_event(state.extensions, :agent_end, state)
+
     %{
       state
       | loader: nil,

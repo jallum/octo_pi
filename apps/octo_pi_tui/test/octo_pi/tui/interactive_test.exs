@@ -710,6 +710,68 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — extension lifecycle events (opi-8ee.3)" do
+    alias OctoPi.Coder.Extension.API
+    alias OctoPi.Coder.Extension.Loader, as: ExtLoader
+
+    test "AgentStart fires :agent_start to extensions" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("lifecycle", fn api ->
+          API.on(api, :agent_start, fn _event, _ctx ->
+            send(test_pid, :agent_start_fired)
+          end)
+        end)
+
+      s = %Interactive{extensions: [ext]}
+      Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert_receive :agent_start_fired, 1_000
+    end
+
+    test "AgentEnd fires :agent_end to extensions" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("lifecycle", fn api ->
+          API.on(api, :agent_end, fn _event, _ctx ->
+            send(test_pid, :agent_end_fired)
+          end)
+        end)
+
+      s = %Interactive{extensions: [ext]}
+      Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: []}})
+      assert_receive :agent_end_fired, 1_000
+    end
+
+    test "extension lifecycle context has has_ui?: true" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("lifecycle", fn api ->
+          API.on(api, :agent_start, fn _event, ctx ->
+            send(test_pid, {:has_ui, ctx.has_ui?})
+          end)
+        end)
+
+      s = %Interactive{extensions: [ext]}
+      Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert_receive {:has_ui, true}, 1_000
+    end
+
+    test "no extensions — AgentStart still creates loader" do
+      s = %Interactive{extensions: []}
+      new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
+      assert %OctoPi.TUI.Components.Loader{} = new_s.loader
+    end
+
+    test "no extensions — AgentEnd still clears loader" do
+      s = %Interactive{loader: OctoPi.TUI.Components.Loader.new(), extensions: []}
+      new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: []}})
+      assert new_s.loader == nil
+    end
+  end
+
   describe "handle_event — loader lifecycle" do
     test "AgentStart creates a loader" do
       s = %Interactive{}
