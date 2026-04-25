@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-fin.2.2"
+    "opi-fin.2.2",
+    "opi-fin.2.3"
   ],
   "blocks": [],
   "created": "2026-04-25T21:12:38Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "Migrate GitCheckpoint to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:12Z"
+  "updated_at": "2026-04-25T21:14:13Z"
 }
