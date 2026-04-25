@@ -136,6 +136,8 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     ["", Theme.fg(msg.theme, :error, text)]
   end
 
+  defp render_status(_msg, _has_visible), do: []
+
   defp has_visible_content_after(content, idx) do
     content
     |> Enum.drop(idx + 1)

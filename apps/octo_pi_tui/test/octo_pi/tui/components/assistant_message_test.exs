@@ -140,6 +140,29 @@ defmodule OctoPi.TUI.Components.AssistantMessageTest do
       assert Enum.any?(stripped, &(&1 =~ "Unknown error"))
     end
 
+    test "normal completion (:stop) renders without status line" do
+      msg =
+        AssistantMessage.new(@theme,
+          stop_reason: :stop,
+          content: [text: "done"]
+        )
+
+      lines = AssistantMessage.render(msg, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      refute Enum.any?(stripped, &(&1 =~ "error" or &1 =~ "abort"))
+    end
+
+    test "max_tokens (:length) renders without crash" do
+      msg =
+        AssistantMessage.new(@theme,
+          stop_reason: :length,
+          content: [text: "partial output"]
+        )
+
+      lines = AssistantMessage.render(msg, 80)
+      assert is_list(lines)
+    end
+
     test "suppresses error display when has_tool_calls" do
       msg =
         AssistantMessage.new(@theme,
