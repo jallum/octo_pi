@@ -240,8 +240,8 @@ defmodule OctoPi.Coder.CLI do
           name: id,
           api: :openai_completions,
           provider: :ollama,
-          base_url: "http://localhost:11434/v1",
-          context_window: 32_768,
+          base_url: "http://localhost:1234/v1",
+          context_window: 262_144,
           max_tokens: 4_096
         }
 

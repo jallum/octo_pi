@@ -113,7 +113,6 @@ defmodule OctoPi.TUI.Terminal do
     end
 
     reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
-    reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
 
     base_state = %{
       width: w,
@@ -122,7 +121,7 @@ defmodule OctoPi.TUI.Terminal do
       skip_raw_mode: skip_raw_mode,
       skip_sigwinch: skip_sigwinch,
       tty_fn: tty_fn,
-      reader_pid: reader_pid,
+      reader_pid: nil,
       write_fn: write_fn,
       scope: self(),
       probe_timeout_ms: probe_timeout_ms,
@@ -135,13 +134,18 @@ defmodule OctoPi.TUI.Terminal do
     }
 
     if skip_raw_mode do
-      {:ok, base_state}
+      reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
+      {:ok, %{base_state | reader_pid: reader_pid}}
     else
       raw_mode_fn.(:enter)
+      # Spawn the reader after entering raw mode so it inherits the
+      # updated group leader and `:io.get_chars/2` reads from the
+      # live TTY rather than the noshell null device.
+      reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
       tty_fn.("\e[?2004h")
       tty_fn.("\e[?u")
       probe_start = System.monotonic_time(:millisecond)
-      state = %{base_state | keyboard_mode: :probing, probe_start: probe_start}
+      state = %{base_state | reader_pid: reader_pid, keyboard_mode: :probing, probe_start: probe_start}
       {:ok, state, probe_timeout_ms}
     end
   end
