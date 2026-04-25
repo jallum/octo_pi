@@ -430,8 +430,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       # Input owns its borders
       border = String.duplicate("─", 80)
       assert border in lines
-      # Input content between borders
-      assert "next" in lines
+      # Input content between borders (may contain cursor ANSI codes)
+      assert Enum.any?(lines, &String.starts_with?(&1, "next"))
     end
 
     test "includes footer lines at the bottom" do

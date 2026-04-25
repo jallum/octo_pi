@@ -225,6 +225,21 @@ defmodule OctoPi.TUI.RendererTest do
     end
   end
 
+  describe "erase below after render" do
+    test "full redraw ends with erase-below to clear stale content" do
+      pid = new()
+      {:ok, bytes} = Renderer.render(pid, ["line1", "line2", "line3"])
+      assert bytes =~ "\e[J"
+    end
+
+    test "diff render ends with erase-below to clear stale content" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "X", "c"])
+      assert bytes =~ "\e[J"
+    end
+  end
+
   describe "find_diff_range/2" do
     test "no changes → {first > last}" do
       {first, last} = Renderer.find_diff_range(["a", "b", "c"], ["a", "b", "c"])

@@ -21,6 +21,7 @@ defmodule OctoPi.TUI.Renderer do
 
   @clear_screen "\e[2J"
   @cursor_home "\e[H"
+  @erase_below "\e[J"
   @sgr_reset_and_clear "\e[m\e[K"
   @sync_on "\e[?2026h"
   @sync_off "\e[?2026l"
@@ -115,7 +116,7 @@ defmodule OctoPi.TUI.Renderer do
   # --- full redraw ---
 
   defp full_redraw(lines, cursor_seq, state) do
-    body = [@clear_screen, @cursor_home, render_lines(lines, 0), cursor_seq]
+    body = [@clear_screen, @cursor_home, render_lines(lines, 0), @erase_below, cursor_seq]
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
     {bytes, %{state | previous: lines, full_redraws: state.full_redraws + 1}}
   end
@@ -136,6 +137,7 @@ defmodule OctoPi.TUI.Renderer do
         body = [
           move_to_row(first),
           render_lines(Enum.slice(lines, first..last), first),
+          @erase_below,
           cursor_seq
         ]
 
