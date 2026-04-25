@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.2.2"
+  ],
   "created": "2026-04-25T21:11:40Z",
   "description": "NEW FILE: apps/octo_pi_coder/lib/octo_pi/coder/extension/behaviour.ex\n\nDefine the OctoPi.Coder.Extension.Behaviour module with:\n\n1. @optional_callback mount() :: {:ok, term()} -- if exported, signals stateful extension; called once during init/1 to get initial state.\n\n2. For EACH event type returned by Event.event_types/0, define TWO optional callbacks:\n   - 2-arity (stateless): handle_\u003cevent_type\u003e(event :: Event.t(), ctx :: Context.t()) :: term()\n   - 3-arity (stateful):  handle_\u003cevent_type\u003e(event :: Event.t(), ctx :: Context.t(), state :: term()) :: {term(), term()}\n   Use @optional_callbacks for all of them.\n\n3. The naming convention: event type atom :turn_start -\u003e handle_turn_start, :before_tool_call -\u003e handle_before_tool_call, etc.\n\nNO existing files change. This is a new module only.\n\nTEST: New test file behaviour_test.exs. Verify that a module using @behaviour OctoPi.Coder.Extension.Behaviour compiles without warnings when implementing only a subset of callbacks. Verify that a module implementing handle_turn_start/2 and handle_turn_start/3 both compile (the two-arity convention must allow both).",
   "id": "opi-fin.2.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Define Extension.Behaviour",
   "type": "task",
-  "updated_at": "2026-04-25T21:11:40Z"
+  "updated_at": "2026-04-25T21:14:12Z"
 }
