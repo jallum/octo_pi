@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-uvo.1"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-uvo",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Replace fit_to_height with viewport scrolling model",
   "type": "task",
-  "updated_at": "2026-04-25T03:02:15Z"
+  "updated_at": "2026-04-25T03:09:59Z"
 }
