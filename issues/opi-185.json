@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T12:13:04.939023Z",
+  "description": "During the first streaming frame after a prompt is submitted, the second line of the welcome banner hints (` ctrl+o more`) gets corrupted to contain tail content from the first hint line: ` ctrl+o morerrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash ·`\n\nThe fragment `rrupt · ctrl+c...` is the suffix of `interrupt` from the line above — the `inte` prefix has been consumed by the beginning of the second line's content.\n\n**Likely cause**: When streaming begins the transcript section grows (new user message + loader appear), shifting the frame's line buffer downward. The diff renderer's cursor positioning logic gets the target row wrong for at least one changed line, causing the new content to be written at the wrong screen position — overwriting adjacent line content rather than replacing it cleanly.\n\n**Observed**: After submitting any prompt, before the first streaming token arrives, the banner row 2 always displays the corruption.\n\n**Repro**:\n1. `mix pi`\n2. Type any prompt, press Enter\n3. Before streaming completes, observe banner line 2\n\n**Expected**: ` ctrl+o more` remains unchanged; or banner disappears cleanly as content scrolls past it.",
+  "id": "opi-185",
+  "labels": [],
+  "parent": "",
+  "priority": 1,
+  "status": "open",
+  "title": "Render: banner hint line corrupted during streaming",
+  "type": "bug",
+  "updated_at": "2026-04-25T12:13:04.939023Z"
+}
