@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "WelcomeBanner compact hint says 'ctrl+o more' but actual key is '?'",
   "type": "bug",
-  "updated_at": "2026-04-25T17:31:55.188875Z"
+  "updated_at": "2026-04-25T17:33:25.841797Z"
 }
