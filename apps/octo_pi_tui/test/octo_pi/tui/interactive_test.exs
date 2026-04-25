@@ -1455,6 +1455,77 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  # ── keybindings loading / user overrides (opi-0g4.8) ───────────
+
+  describe "load_keybindings/1 (opi-0g4.8)" do
+    alias OctoPi.TUI.Keybindings
+
+    test "returns default Keybindings when file does not exist" do
+      kb = Interactive.load_keybindings(keybindings_path: "/tmp/nonexistent_#{System.unique_integer()}.json")
+      assert %Keybindings{} = kb
+      assert Keybindings.matches?(kb, %Key{key: ?d, modifiers: [:ctrl]}, "app.exit")
+    end
+
+    test "returns default Keybindings when path is nil" do
+      kb = Interactive.load_keybindings(keybindings_path: nil)
+      assert %Keybindings{} = kb
+    end
+
+    test "applies JSON overrides from file" do
+      path = Path.join(System.tmp_dir!(), "keybindings_#{System.unique_integer()}.json")
+      File.write!(path, Jason.encode!(%{"app.exit" => "ctrl+q"}))
+      on_exit(fn -> File.rm(path) end)
+
+      kb = Interactive.load_keybindings(keybindings_path: path)
+      assert Keybindings.matches?(kb, %Key{key: ?q, modifiers: [:ctrl]}, "app.exit")
+      refute Keybindings.matches?(kb, %Key{key: ?d, modifiers: [:ctrl]}, "app.exit")
+    end
+
+    test "falls back to defaults when JSON is invalid" do
+      path = Path.join(System.tmp_dir!(), "keybindings_#{System.unique_integer()}.json")
+      File.write!(path, "not json at all")
+      on_exit(fn -> File.rm(path) end)
+
+      kb = Interactive.load_keybindings(keybindings_path: path)
+      assert %Keybindings{} = kb
+      assert Keybindings.matches?(kb, %Key{key: ?d, modifiers: [:ctrl]}, "app.exit")
+    end
+  end
+
+  describe "handle_event — custom keybindings dispatch (opi-0g4.8)" do
+    alias OctoPi.TUI.Keybindings
+
+    defp state_with_keybindings(overrides) do
+      %Interactive{keybindings: Keybindings.new(overrides)}
+    end
+
+    test "remapped app.exit key exits on empty editor" do
+      s = state_with_keybindings(%{"app.exit" => "ctrl+q"})
+      s = %{s | input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?q, modifiers: [:ctrl]}})
+      assert s2.exit
+    end
+
+    test "old key no longer exits when app.exit is remapped" do
+      s = state_with_keybindings(%{"app.exit" => "ctrl+q"})
+      s = %{s | input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      refute s2.exit
+    end
+
+    test "remapped app.suspend suspends on new key" do
+      s = state_with_keybindings(%{"app.suspend" => "ctrl+b"})
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?b, modifiers: [:ctrl]}})
+      assert s2.suspend_pending
+    end
+
+    test "default keybindings (nil) still dispatch correctly" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      assert s2.exit
+    end
+  end
+
   # ── loaded_resources rendering ─────────────────────────────────
 
   defp fake_resources(overrides \\ %{}) do

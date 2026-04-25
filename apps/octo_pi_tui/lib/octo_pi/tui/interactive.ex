@@ -30,6 +30,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Events
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.KeyParser
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.RawMode
@@ -48,6 +49,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @type t :: %__MODULE__{
           session: pid() | nil,
+          keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
           transcript: [struct()],
           footer: Footer.t(),
@@ -79,6 +81,7 @@ defmodule OctoPi.TUI.Interactive do
         }
 
   defstruct session: nil,
+            keybindings: nil,
             input: %Components.Input{},
             transcript: [],
             footer: %Footer{},
@@ -311,6 +314,38 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @doc """
+  Load user keybindings from `~/.octo_pi/keybindings.json`, falling
+  back to defaults when the file is absent or unparseable.
+
+  Accepts `:keybindings_path` in opts to override the default path
+  (useful in tests).
+  """
+  @spec load_keybindings(keyword()) :: Keybindings.t()
+  def load_keybindings(opts \\ []) do
+    path = Keyword.get(opts, :keybindings_path, default_keybindings_path())
+    load_keybindings_from_path(path)
+  end
+
+  defp default_keybindings_path do
+    Path.join([System.user_home!(), ".octo_pi", "keybindings.json"])
+  end
+
+  defp load_keybindings_from_path(nil), do: Keybindings.new()
+
+  defp load_keybindings_from_path(path) do
+    case File.read(path) do
+      {:error, _} ->
+        Keybindings.new()
+
+      {:ok, json} ->
+        case Jason.decode(json) do
+          {:ok, overrides} when is_map(overrides) -> Keybindings.new(overrides)
+          _ -> Keybindings.new()
+        end
+    end
+  end
+
+  @doc """
   Entry point for the CLI. Wires up the full pipeline — Session,
   Terminal, StdinFSM, Renderer — subscribes to the events each
   produces, and runs the receive loop until `state.exit` flips.
@@ -386,8 +421,11 @@ defmodule OctoPi.TUI.Interactive do
 
     loaded_resources = build_loaded_resources(opts)
 
+    keybindings = load_keybindings(Keyword.take(opts, [:keybindings_path]))
+
     state = %__MODULE__{
       session: session,
+      keybindings: keybindings,
       input: %Components.Input{width: w, height: h, theme: theme},
       width: w,
       height: h,
@@ -672,6 +710,31 @@ defmodule OctoPi.TUI.Interactive do
     end)
   end
 
+  # --- keybindings dispatch helpers ---
+
+  @app_action_priority ~w(
+    app.clear
+    app.exit
+    app.suspend
+    app.thinking.toggle
+    app.thinking.cycle
+    app.tools.expand
+    app.editor.external
+    app.message.dequeue
+    app.message.followUp
+    app.model.cycleForward
+    app.model.cycleBackward
+    app.model.select
+    app.clipboard.pasteImage
+  )
+
+  defp get_keybindings(%{keybindings: nil}), do: Keybindings.new()
+  defp get_keybindings(%{keybindings: kb}), do: kb
+
+  defp find_app_action(kb, key) do
+    Enum.find(@app_action_priority, fn action -> Keybindings.matches?(kb, key, action) end)
+  end
+
   # --- pure state-machine ---
 
   @doc """
@@ -709,123 +772,14 @@ defmodule OctoPi.TUI.Interactive do
     handle_dequeue_key(state, ov, key)
   end
 
-  # Ctrl+C: clear non-empty editor; abort running agent; no-op when idle+empty.
-  def handle_event(%{input: %{value: v}} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) when v != "" do
-    %{state | input: %{state.input | value: "", cursor: 0}}
-  end
+  def handle_event(state, {:key, %Key{} = key}) do
+    kb = get_keybindings(state)
 
-  def handle_event(%{loader: %Components.Loader{}, session: session} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) do
-    if session, do: OctoPi.Agent.abort(session)
-    state
-  end
-
-  def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: state
-
-  # Ctrl+D: exit when editor is empty; otherwise fall through to Input delete-forward.
-  def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: ?d, modifiers: [:ctrl]}}) do
-    %{state | exit: true}
-  end
-
-  def handle_event(state, {:key, %Key{key: ?z, modifiers: [:ctrl]}}), do: %{state | suspend_pending: true}
-
-  def handle_event(state, {:key, %Key{key: ?t, modifiers: [:ctrl]}}),
-    do: %{state | thinking_visible: !state.thinking_visible}
-
-  def handle_event(%{session: session} = state, {:key, %Key{key: :tab, modifiers: [:shift]}}) do
-    new_level = next_thinking_level(state.thinking_level)
-    if session, do: OctoPi.Agent.set_thinking_level(session, new_level)
-    label = thinking_level_label(new_level)
-
-    %{
-      state
-      | thinking_level: new_level,
-        footer: %{state.footer | thinking_level: label},
-        notification: "Thinking: #{new_level}"
-    }
-  end
-
-  def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
-    expanded = !state.tools_expanded
-
-    banner =
-      case state.banner do
-        %Components.WelcomeBanner{} = b -> %{b | expanded: expanded}
-        other -> other
-      end
-
-    %{state | tools_expanded: expanded, banner: banner}
-  end
-
-  def handle_event(state, {:key, %Key{key: ?g, modifiers: [:ctrl]}}), do: %{state | editor_pending: true}
-
-  def handle_event(%{session: nil} = state, {:key, %Key{key: :up, modifiers: [:alt]}}), do: state
-
-  def handle_event(state, {:key, %Key{key: :up, modifiers: [:alt]}}) do
-    steering = OctoPi.Agent.drain_steering(state.session)
-    follow_up = OctoPi.Agent.drain_follow_up(state.session)
-    items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
-
-    if items == [] do
-      %{state | notification: "No queued messages"}
-    else
-      %{state | dequeue_overlay: %{items: items, selected: 0}}
+    case find_app_action(kb, key) do
+      nil -> handle_event_after_app(state, key)
+      action -> dispatch_app_action(action, state, key)
     end
   end
-
-  def handle_event(%{loader: %Components.Loader{}} = state, {:key, %Key{key: :enter, modifiers: [:alt]}}) do
-    text = state.input.value
-
-    if text == "" do
-      state
-    else
-      if state.session, do: OctoPi.Agent.follow_up(state.session, text)
-      input = %{state.input | value: "", cursor: 0}
-      %{state | input: input, notification: "Follow-up queued"}
-    end
-  end
-
-  def handle_event(state, {:key, %Key{key: :enter, modifiers: [:alt]}}) do
-    handle_event_key(state, %Key{key: :enter})
-  end
-
-  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl]}}) do
-    new_model = cycle_model(state.models, state.model, :next)
-    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
-
-    %{
-      state
-      | model: new_model,
-        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
-        notification: "Model: #{new_model.id}"
-    }
-  end
-
-  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}}) do
-    new_model = cycle_model(state.models, state.model, :prev)
-    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
-
-    %{
-      state
-      | model: new_model,
-        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
-        notification: "Model: #{new_model.id}"
-    }
-  end
-
-  def handle_event(%{models: [_ | _]} = state, {:key, %Key{key: ?l, modifiers: [:ctrl]}}) do
-    current_id = state.model && state.model.id
-    ms = ModelSelector.new(state.models, state.theme, current: current_id)
-    %{state | model_selector: ms}
-  end
-
-  def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key}) when shortcuts != [] do
-    case try_extension_shortcut(shortcuts, key, state) do
-      {:consumed, new_state} -> new_state
-      :pass -> handle_event_key(state, key)
-    end
-  end
-
-  def handle_event(state, {:key, %Key{} = key}), do: handle_event_key(state, key)
 
   def handle_event(state, :paste_start), do: %{state | paste_buffer: ""}
 
@@ -871,6 +825,123 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | loader: Components.Loader.advance_frame(loader)}
 
   def handle_event(state, _), do: state
+
+  defp handle_event_after_app(%{extension_shortcuts: [_ | _] = shortcuts} = state, key) do
+    case try_extension_shortcut(shortcuts, key, state) do
+      {:consumed, new_state} -> new_state
+      :pass -> handle_event_key(state, key)
+    end
+  end
+
+  defp handle_event_after_app(state, key), do: handle_event_key(state, key)
+
+  defp dispatch_app_action("app.clear", %{input: %{value: v}} = state, _key) when v != "",
+    do: %{state | input: %{state.input | value: "", cursor: 0}}
+
+  defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
+    if state.session, do: OctoPi.Agent.abort(state.session)
+    state
+  end
+
+  defp dispatch_app_action("app.clear", state, _key), do: state
+
+  defp dispatch_app_action("app.exit", %{input: %{value: ""}} = state, _key), do: %{state | exit: true}
+  defp dispatch_app_action("app.exit", state, key), do: handle_event_key(state, key)
+
+  defp dispatch_app_action("app.suspend", state, _key), do: %{state | suspend_pending: true}
+
+  defp dispatch_app_action("app.thinking.toggle", state, _key), do: %{state | thinking_visible: !state.thinking_visible}
+
+  defp dispatch_app_action("app.thinking.cycle", state, _key) do
+    new_level = next_thinking_level(state.thinking_level)
+    if state.session, do: OctoPi.Agent.set_thinking_level(state.session, new_level)
+    label = thinking_level_label(new_level)
+
+    %{
+      state
+      | thinking_level: new_level,
+        footer: %{state.footer | thinking_level: label},
+        notification: "Thinking: #{new_level}"
+    }
+  end
+
+  defp dispatch_app_action("app.tools.expand", state, _key) do
+    expanded = !state.tools_expanded
+
+    banner =
+      case state.banner do
+        %Components.WelcomeBanner{} = b -> %{b | expanded: expanded}
+        other -> other
+      end
+
+    %{state | tools_expanded: expanded, banner: banner}
+  end
+
+  defp dispatch_app_action("app.editor.external", state, _key), do: %{state | editor_pending: true}
+
+  defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
+
+  defp dispatch_app_action("app.message.dequeue", state, _key) do
+    steering = OctoPi.Agent.drain_steering(state.session)
+    follow_up = OctoPi.Agent.drain_follow_up(state.session)
+    items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
+
+    if items == [],
+      do: %{state | notification: "No queued messages"},
+      else: %{state | dequeue_overlay: %{items: items, selected: 0}}
+  end
+
+  defp dispatch_app_action("app.message.followUp", %{loader: %Components.Loader{}} = state, _key) do
+    text = state.input.value
+
+    if text == "" do
+      state
+    else
+      if state.session, do: OctoPi.Agent.follow_up(state.session, text)
+      input = %{state.input | value: "", cursor: 0}
+      %{state | input: input, notification: "Follow-up queued"}
+    end
+  end
+
+  defp dispatch_app_action("app.message.followUp", state, _key), do: handle_event_key(state, %Key{key: :enter})
+
+  defp dispatch_app_action("app.model.cycleForward", %{models: []} = state, _key), do: state
+
+  defp dispatch_app_action("app.model.cycleForward", state, _key) do
+    new_model = cycle_model(state.models, state.model, :next)
+    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+
+    %{
+      state
+      | model: new_model,
+        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
+        notification: "Model: #{new_model.id}"
+    }
+  end
+
+  defp dispatch_app_action("app.model.cycleBackward", %{models: []} = state, _key), do: state
+
+  defp dispatch_app_action("app.model.cycleBackward", state, _key) do
+    new_model = cycle_model(state.models, state.model, :prev)
+    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+
+    %{
+      state
+      | model: new_model,
+        footer: %{state.footer | model_id: new_model.id, provider: new_model.provider},
+        notification: "Model: #{new_model.id}"
+    }
+  end
+
+  defp dispatch_app_action("app.model.select", %{models: []} = state, _key), do: state
+
+  defp dispatch_app_action("app.model.select", state, _key) do
+    current_id = state.model && state.model.id
+    ms = ModelSelector.new(state.models, state.theme, current: current_id)
+    %{state | model_selector: ms}
+  end
+
+  defp dispatch_app_action(_action, state, _key), do: state
 
   defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}), do: %{state | exit: true}
 
