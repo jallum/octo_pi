@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Example extensions wave 3: lifecycle & compaction (trigger-compact, custom-compaction, auto-commit-on-exit, git-checkpoint)",
   "type": "task",
-  "updated_at": "2026-04-25T17:03:21.368168Z"
+  "updated_at": "2026-04-25T17:11:01.141607Z"
 }
