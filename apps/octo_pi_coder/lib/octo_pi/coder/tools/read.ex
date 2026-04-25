@@ -10,12 +10,11 @@ defmodule OctoPi.Coder.Tools.Read do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools.PathGuard
 
   @max_lines 10_000
   @max_bytes 512 * 1024
 
-  @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
+  @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against the session cwd."
   @spec tool(String.t()) :: Tool.t()
   def tool(cwd) when is_binary(cwd) do
     %Tool{
@@ -46,14 +45,14 @@ defmodule OctoPi.Coder.Tools.Read do
     offset = Map.get(args, "offset")
     limit = Map.get(args, "limit")
 
-    with {:ok, path} <- PathGuard.resolve_or_error(path, cwd),
-         :ok <- ensure_regular_file(path),
-         {:ok, body} <- File.read(path) do
+    resolved = Path.expand(path, Path.expand(cwd))
+
+    with :ok <- ensure_regular_file(resolved),
+         {:ok, body} <- File.read(resolved) do
       {body, details} = slice_and_truncate(body, offset, limit)
       {:ok, %Result{content: [%Content.Text{text: body}], details: details}}
     else
-      {:error, %Result{} = guard_result} -> {:ok, guard_result}
-      {:error, reason} -> {:ok, error_result(reason, path)}
+      {:error, reason} -> {:ok, error_result(reason, resolved)}
     end
   end
 

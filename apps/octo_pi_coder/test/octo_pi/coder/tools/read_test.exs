@@ -73,13 +73,6 @@ defmodule OctoPi.Coder.Tools.ReadTest do
     assert msg =~ "directory"
   end
 
-  test "rejects paths that escape session cwd", %{tmp: tmp, ref: ref} do
-    assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-             exec(%{"path" => "/etc/passwd"}, ref, tmp)
-
-    assert msg =~ "escapes session cwd"
-  end
-
   describe "line counting" do
     test "file ending with a newline: total_lines matches actual line count",
          %{tmp: tmp, ref: ref} do
