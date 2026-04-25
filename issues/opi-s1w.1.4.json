@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:16:27Z",
+  "description": "OpenAI completions additional providers (OpenAI Google Bedrock)",
+  "id": "opi-s1w.1.4",
+  "labels": [],
+  "parent": "opi-s1w.1",
+  "priority": 2,
+  "status": "open",
+  "title": "Provider Extensions",
+  "type": "task",
+  "updated_at": "2026-04-25T05:16:27Z"
+}
