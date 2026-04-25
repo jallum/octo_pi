@@ -137,7 +137,6 @@ defmodule OctoPi.TUI.Renderer do
         body = [
           move_to_row(first),
           render_lines(Enum.slice(lines, first..last), first),
-          @erase_below,
           cursor_seq
         ]
 

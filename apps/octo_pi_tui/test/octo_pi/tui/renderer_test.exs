@@ -232,11 +232,11 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes =~ "\e[J"
     end
 
-    test "diff render ends with erase-below to clear stale content" do
+    test "diff render does NOT erase below (would wipe unchanged rows)" do
       pid = new()
       {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
       {:ok, bytes} = Renderer.render(pid, ["a", "X", "c"])
-      assert bytes =~ "\e[J"
+      refute bytes =~ "\e[J"
     end
   end
 
