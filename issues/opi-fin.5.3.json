@@ -8,14 +8,15 @@
     "opi-fin.6.4",
     "opi-fin.7.2"
   ],
+  "closed_at": "2026-04-25T23:58:59Z",
   "created": "2026-04-25T21:12:38Z",
   "description": "FILES: extensions/git_checkpoint.ex, test/octo_pi/coder/extensions/git_checkpoint_test.exs\n\nREQUIRES: opi-fin.2.2, opi-fin.2.3\n\nGitCheckpoint is stateful with a checkpoints map (%{entry_id =\u003e stash_ref}). It also uses API.bind_core for the exec fn-field (shell execution).\n\nMIGRATION:\n1. Add 'use OctoPi.Coder.Extension'.\n2. Remove def init(api, checkpoints). Macro generates init/1.\n3. Add def mount, do: {:ok, %{}} (empty checkpoints map).\n4. Convert turn_start, session_before_fork, agent_end handlers to 3-arity callbacks with checkpoints map as state.\n5. Handlers return {result, updated_checkpoints}.\n\nIMPORTANT: DO NOT remove API.bind_core usage for exec fn-field. The exec action fn-field migration is Phase 6. The factory in tests still needs to call API.bind_core(api, %{exec: exec_fn}) BEFORE calling GitCheckpoint.init(api). The macro-generated init/1 must be called AFTER bind_core has set exec. Verify this works: factory = fn api -\u003e api = API.bind_core(api, %{exec: exec_fn}); GitCheckpoint.init(api) end.\n\nTEST: git_checkpoint_test.exs -- remove outer Agent.start_link for checkpoints. Keep the exec_fn injection via bind_core. Update factory to the pattern above.",
   "id": "opi-fin.5.3",
   "labels": [],
   "parent": "opi-fin.5",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Migrate GitCheckpoint to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T23:43:17Z"
+  "updated_at": "2026-04-25T23:58:59Z"
 }
