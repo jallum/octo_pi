@@ -138,10 +138,10 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
       assert lines != []
     end
 
-    test "highlights selected item" do
+    test "highlights selected item with arrow prefix" do
       input = type(%Input{autocomplete_provider: test_provider()}, "/")
       lines = Input.render_dropdown(input, 40)
-      assert Enum.any?(lines, &(&1 =~ "\e[7m"))
+      assert Enum.any?(lines, &String.starts_with?(&1, "→ "))
     end
   end
 end

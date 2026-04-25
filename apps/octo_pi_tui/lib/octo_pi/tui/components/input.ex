@@ -17,6 +17,12 @@ defmodule OctoPi.TUI.Components.Input do
 
   @max_history 1000
 
+  @dropdown_max_visible 5
+  @primary_column_gap 2
+  @min_description_width 10
+  @min_primary_col_width 12
+  @max_primary_col_width 32
+
   @type t :: %__MODULE__{
           value: String.t(),
           cursor: non_neg_integer(),
@@ -706,23 +712,92 @@ defmodule OctoPi.TUI.Components.Input do
   @spec render_dropdown(t(), pos_integer()) :: [String.t()]
   def render_dropdown(%__MODULE__{autocomplete_active: false}, _width), do: []
 
-  def render_dropdown(%__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel}, width) do
-    suggestions
-    |> Enum.with_index()
-    |> Enum.map(fn {%Suggestion{label: label, description: desc}, idx} ->
-      text = format_suggestion(label, desc, width)
-      if idx == sel, do: "\e[7m#{text}\e[27m", else: "  #{text}"
-    end)
+  def render_dropdown(
+        %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel, theme: theme},
+        width
+      ) do
+    total = length(suggestions)
+    start_index = max(0, min(sel - div(@dropdown_max_visible, 2), total - @dropdown_max_visible))
+    end_index = min(start_index + @dropdown_max_visible, total)
+    primary_col_w = dropdown_primary_col_width(suggestions)
+
+    lines =
+      suggestions
+      |> Enum.slice(start_index, end_index - start_index)
+      |> Enum.with_index(start_index)
+      |> Enum.map(fn {suggestion, idx} ->
+        render_dropdown_item(suggestion, idx == sel, width, primary_col_w, theme)
+      end)
+
+    if start_index > 0 or end_index < total do
+      scroll_text = "  (#{sel + 1}/#{total})"
+      truncated = WrapAnsi.truncate_to_width(scroll_text, width - 2, "")
+      scroll_line = if theme, do: Theme.fg(theme, :muted, truncated), else: truncated
+      lines ++ [scroll_line]
+    else
+      lines
+    end
   end
 
-  defp format_suggestion(label, nil, _max_width), do: label
+  defp dropdown_primary_col_width(suggestions) do
+    widest =
+      Enum.reduce(suggestions, 0, fn %Suggestion{label: label}, acc ->
+        max(acc, WrapAnsi.visible_width(label) + @primary_column_gap)
+      end)
 
-  defp format_suggestion(label, desc, max_width) do
-    combined = "#{label}  #{desc}"
+    widest |> max(@min_primary_col_width) |> min(@max_primary_col_width)
+  end
 
-    if String.length(combined) > max_width,
-      do: String.slice(combined, 0, max_width),
-      else: combined
+  defp render_dropdown_item(%Suggestion{label: label, description: desc}, is_selected, width, primary_col_w, theme) do
+    prefix = if is_selected, do: "→ ", else: "  "
+    prefix_w = 2
+    normalized_desc = if desc, do: desc |> String.replace(~r/[\r\n]+/, " ") |> String.trim()
+
+    if normalized_desc && width > 40 do
+      render_dropdown_two_col(label, normalized_desc, is_selected, width, prefix, prefix_w, primary_col_w, theme)
+    else
+      render_dropdown_label_only(label, is_selected, width, prefix, prefix_w, theme)
+    end
+  end
+
+  defp render_dropdown_two_col(label, desc, is_selected, width, prefix, prefix_w, primary_col_w, theme) do
+    effective_col_w = max(1, min(primary_col_w, width - prefix_w - 4))
+    max_primary_w = max(1, effective_col_w - @primary_column_gap)
+    truncated_label = WrapAnsi.truncate_to_width(label, max_primary_w, "")
+    truncated_label_w = WrapAnsi.visible_width(truncated_label)
+    spacing = String.duplicate(" ", max(1, effective_col_w - truncated_label_w))
+    desc_start = prefix_w + truncated_label_w + String.length(spacing)
+    remaining_w = width - desc_start - 2
+
+    if remaining_w > @min_description_width do
+      render_dropdown_with_desc(truncated_label, desc, spacing, remaining_w, is_selected, prefix, theme)
+    else
+      render_dropdown_label_only(label, is_selected, width, prefix, prefix_w, theme)
+    end
+  end
+
+  defp render_dropdown_with_desc(truncated_label, desc, spacing, remaining_w, is_selected, prefix, theme) do
+    truncated_desc = WrapAnsi.truncate_to_width(desc, remaining_w, "")
+
+    if is_selected do
+      full_line = prefix <> truncated_label <> spacing <> truncated_desc
+      if theme, do: Theme.fg(theme, :accent, full_line), else: full_line
+    else
+      desc_styled = if theme, do: Theme.fg(theme, :muted, spacing <> truncated_desc), else: spacing <> truncated_desc
+      prefix <> truncated_label <> desc_styled
+    end
+  end
+
+  defp render_dropdown_label_only(label, is_selected, width, prefix, prefix_w, theme) do
+    max_w = max(1, width - prefix_w - 2)
+    truncated = WrapAnsi.truncate_to_width(label, max_w, "")
+
+    if is_selected do
+      full_line = prefix <> truncated
+      if theme, do: Theme.fg(theme, :accent, full_line), else: full_line
+    else
+      prefix <> truncated
+    end
   end
 
   defp refresh_autocomplete(%__MODULE__{autocomplete_provider: nil} = s), do: s

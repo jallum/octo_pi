@@ -1385,4 +1385,91 @@ defmodule OctoPi.TUI.Components.InputTest do
       refute s2.autocomplete_active
     end
   end
+
+  describe "render_dropdown/2 — SelectList layout" do
+    alias OctoPi.TUI.Autocomplete.Suggestion
+
+    defp make_suggestion(label, desc \\ nil), do: %Suggestion{label: label, value: "/" <> label, description: desc}
+
+    defp active_input(suggestions, selected \\ 0) do
+      %Input{
+        autocomplete_active: true,
+        autocomplete_suggestions: suggestions,
+        autocomplete_selected: selected
+      }
+    end
+
+    test "selected item has → prefix, unselected items have   prefix" do
+      suggestions = [make_suggestion("help"), make_suggestion("clear"), make_suggestion("cost")]
+      lines = Input.render_dropdown(active_input(suggestions, 1), 80)
+      assert length(lines) == 3
+
+      [line0, line1, line2] = Enum.map(lines, &strip_ansi/1)
+      assert String.starts_with?(line0, "  ")
+      assert String.starts_with?(line1, "→ ")
+      assert String.starts_with?(line2, "  ")
+    end
+
+    test "no scroll indicator when suggestions fit in max visible" do
+      suggestions = Enum.map(1..5, &make_suggestion("cmd#{&1}"))
+      lines = Input.render_dropdown(active_input(suggestions, 2), 80)
+      assert length(lines) == 5
+      refute Enum.any?(lines, &String.contains?(strip_ansi(&1), "("))
+    end
+
+    test "scroll indicator appears when more than max visible items are present" do
+      suggestions = Enum.map(1..8, &make_suggestion("cmd#{&1}"))
+      lines = Input.render_dropdown(active_input(suggestions, 7), 80)
+      last = strip_ansi(List.last(lines))
+      assert String.contains?(last, "(8/8)")
+    end
+
+    test "viewport is centered on selected item" do
+      # 8 suggestions, selection at index 6
+      # start_index = max(0, min(6 - 2, 8 - 5)) = max(0, min(4, 3)) = 3
+      # visible: indices 3..7
+      suggestions = Enum.map(0..7, &make_suggestion("cmd#{&1}"))
+      lines = Input.render_dropdown(active_input(suggestions, 6), 80)
+      # Strip scroll indicator (last line)
+      item_lines = lines |> Enum.drop(-1) |> Enum.map(&strip_ansi/1)
+      assert length(item_lines) == 5
+      # selected (index 6) is inside the 5 visible lines
+      assert Enum.any?(item_lines, &String.starts_with?(&1, "→ "))
+      # The selected item text is cmd6
+      selected_line = Enum.find(item_lines, &String.starts_with?(&1, "→ "))
+      assert String.contains?(selected_line, "cmd6")
+    end
+
+    test "description rendered in two-column layout when width permits" do
+      suggestions = [make_suggestion("help", "Show available commands")]
+      lines = Input.render_dropdown(active_input(suggestions), 80)
+      assert length(lines) == 1
+      plain = strip_ansi(hd(lines))
+      assert String.contains?(plain, "help")
+      assert String.contains?(plain, "Show available commands")
+    end
+
+    test "nil theme does not crash" do
+      suggestions = [make_suggestion("help", "description"), make_suggestion("clear")]
+      assert is_list(Input.render_dropdown(active_input(suggestions), 80))
+    end
+
+    test "selected item with description wraps entire line (no separate muted desc)" do
+      # When selected, the full line (prefix + label + spacing + desc) is styled
+      # together. Without a theme, it's a plain string with both parts.
+      suggestions = [make_suggestion("help", "Show help")]
+      [line] = Input.render_dropdown(active_input(suggestions), 80)
+      plain = strip_ansi(line)
+      assert String.starts_with?(plain, "→ ")
+      assert String.contains?(plain, "Show help")
+    end
+
+    test "label truncated to fit width when very narrow" do
+      suggestions = [make_suggestion("averylonglabelname")]
+      [line] = Input.render_dropdown(active_input(suggestions), 12)
+      plain = strip_ansi(line)
+      # Must not exceed width
+      assert String.length(plain) <= 12
+    end
+  end
 end

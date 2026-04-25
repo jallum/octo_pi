@@ -121,7 +121,9 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
 
   # --- Caching ---
 
-  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"], do: r
+  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
+    do: r
+
   defp resolve_cache_retention(_opts), do: "short"
 
   defp apply_cache_control(body, _model, "none"), do: body
@@ -129,8 +131,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   defp apply_cache_control(body, model, cache_retention) do
     ttl =
       if cache_retention == "long" and String.contains?(model.base_url, "api.anthropic.com"),
-        do: "1h",
-        else: nil
+        do: "1h"
 
     cc = if ttl, do: %{"type" => "ephemeral", "ttl" => ttl}, else: %{"type" => "ephemeral"}
 
