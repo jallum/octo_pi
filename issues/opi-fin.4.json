@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:57Z",
+  "description": "Replace the custom event_bus.ex GenServer with Elixir's built-in Registry (keys: :duplicate). Narrow scope: only event_bus_demo.ex uses api.events. That extension and its test update; no other extensions are affected.",
+  "id": "opi-fin.4",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 4: Replace EventBus GenServer with Registry",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:57Z"
+}
