@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-uvo.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-uvo",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Markdown post-render width clamp",
   "type": "task",
-  "updated_at": "2026-04-25T03:02:15Z"
+  "updated_at": "2026-04-25T03:04:30Z"
 }
