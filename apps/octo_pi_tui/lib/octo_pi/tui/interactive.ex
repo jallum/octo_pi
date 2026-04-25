@@ -785,7 +785,8 @@ defmodule OctoPi.TUI.Interactive do
       fd -> log_overwide(fd, lines, state.width)
     end
 
-    cursor_seq = cursor_position(state, input_lines, lines)
+    post_input_h = post_input_height(state)
+    cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
     {:ok, bytes} = Renderer.render(renderer, lines, cursor_seq)
 
     if bytes != "", do: Terminal.write(terminal, bytes)
@@ -838,7 +839,13 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines) when not is_nil(cw), do: "\e[?25l"
+  defp post_input_height(%__MODULE__{input: input, width: width, notification: notification}) do
+    length(Components.Input.render_dropdown(input, width)) +
+      length(render_notification(notification, width))
+  end
+
+  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _post_input_h) when not is_nil(cw),
+    do: "\e[?25l"
 
   defp cursor_position(
          %__MODULE__{
@@ -850,11 +857,12 @@ defmodule OctoPi.TUI.Interactive do
            footer_data: footer_data_pid
          },
          input_lines,
-         lines
+         lines,
+         post_input_h
        ) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
     footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, footer_data_pid, width))
-    input_end = length(lines) - footer_height
+    input_end = length(lines) - footer_height - post_input_h
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
     screen_row = input_start + crow - viewport_top + 1
