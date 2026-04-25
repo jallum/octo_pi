@@ -41,6 +41,7 @@ defmodule OctoPi.TUI.Components.Markdown do
     {_status, ast, _} = EarmarkParser.as_ast(normalized)
 
     lines = render_nodes(ast, content_width, theme)
+    lines = clamp_width(lines, content_width)
 
     lines = apply_padding_x(lines, px)
     lines = apply_padding_y(lines, py)
@@ -276,6 +277,10 @@ defmodule OctoPi.TUI.Components.Markdown do
   defp drop_trailing_empty([]), do: []
   defp drop_trailing_empty(["" | rest]), do: drop_trailing_empty(rest)
   defp drop_trailing_empty(lines), do: lines
+
+  defp clamp_width(lines, width) do
+    Enum.flat_map(lines, fn line -> WrapAnsi.wrap(line, width) end)
+  end
 
   defp apply_padding_x(lines, 0), do: lines
 
