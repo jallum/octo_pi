@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:47:10Z",
+  "description": "Port upstream skills.ts loadSkills() to Elixir.\n\nUpstream behavior:\n- Scan ~/.pi/skills/ and {cwd}/.pi/skills/ recursively\n- Each skill is a directory containing SKILL.md\n- Parse SKILL.md frontmatter: name (must match parent directory name), description, disable-model-invocation\n- Validate: name length ≤ 64, description length ≤ 1024, name matches parent dir\n- Respect .gitignore / .ignore / .fdignore (using ignore lib patterns)\n- Global skills have scope: \"user\", project skills have scope: \"project\"\n- Returns list of Skill structs: %{name, description, file_path, base_dir, disable_model_invocation}\n\nImplementation:\n- New module: OctoPi.Coder.ResourceLoader.Skills\n- scan_dir/2 — recursive scan respecting ignore files\n- parse_skill/1 — parse SKILL.md frontmatter via simple \"---\\n...\\n---\\n\" extraction\n- validate_skill/1 — name/description length, name matches dir\n- load_all/1 — combine ~/.pi/skills/ + {cwd}/.pi/skills/ + explicit paths\n\nFrontmatter format (YAML-like, parse manually or with yamerl):\n  ---\n  name: my-skill\n  description: Does X when Y\n  disable-model-invocation: false\n  ---\n\nTests:\n- Directory with valid SKILL.md → loaded correctly\n- name mismatch → diagnostic/skipped (not fatal)\n- disable-model-invocation: true → skill loaded but excluded from prompt\n- .gitignore skips subdirectory\n- Empty skills dir → empty list\n- Global + project skills both loaded\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/skills.ts loadSkills()",
+  "id": "opi-u6a.3",
+  "labels": [],
+  "parent": "opi-u6a",
+  "priority": 1,
+  "status": "open",
+  "title": "Skills loading: discover and parse SKILL.md files",
+  "type": "task",
+  "updated_at": "2026-04-25T05:47:10Z"
+}
