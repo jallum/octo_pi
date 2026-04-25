@@ -10,6 +10,7 @@ defmodule OctoPi.Coder.CLI do
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
+  alias OctoPi.Coder.ResourceLoader
 
   # Matches upstream pi-mono's per-provider default for Anthropic
   # (see `tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`
@@ -120,7 +121,10 @@ defmodule OctoPi.Coder.CLI do
         # etc.) is up before Interactive.run/1 tries to register
         # subscribers against it.
         {:ok, _} = Application.ensure_all_started(:octo_pi_tui)
-        mod.run(Map.to_list(opts))
+        tools = OctoPi.Coder.default_tools(opts.cwd)
+        loader = ResourceLoader.load(opts.cwd, nil)
+        system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
+        mod.run(Map.to_list(Map.merge(opts, %{system_prompt: system_prompt, tools: tools})))
         0
 
       {:error, _} ->
@@ -130,10 +134,15 @@ defmodule OctoPi.Coder.CLI do
   end
 
   defp run_rpc(opts) do
+    tools = OctoPi.Coder.default_tools(opts.cwd)
+    loader = ResourceLoader.load(opts.cwd, nil)
+    system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
+
     {:ok, session} =
       OctoPi.Agent.start_session(
         model: opts.model,
-        tools: OctoPi.Coder.default_tools(opts.cwd)
+        tools: tools,
+        system_prompt: system_prompt
       )
 
     # Spawn a dedicated forwarder process and subscribe *it* — not
