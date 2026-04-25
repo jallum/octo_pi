@@ -2,9 +2,9 @@ defmodule OctoPi.Coder.Extensions.CustomFooter do
   @moduledoc """
   Toggles a custom footer component via /footer command.
 
-  Diverges from custom-footer.ts: ctx.sessionManager.getBranch() and footerData
-  (git branch, onBranchChange) are not ported. The footer component is a plain
-  descriptor; token stats and git info are omitted.
+  ctx.get_branch is available for token stats, but computing them requires the
+  footer render factory (ctx.ui.set_footer with a render fn — see opi-rcg.8).
+  The footer component is a plain descriptor until the factory is implemented.
   Ported from examples/extensions/custom-footer.ts.
   """
 

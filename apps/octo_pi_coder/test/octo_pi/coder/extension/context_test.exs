@@ -34,6 +34,17 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.get_leaf_entry_id.() == "entry-abc"
     end
 
+    test "get_branch defaults to a function returning an empty list" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.get_branch.() == []
+    end
+
+    test "accepts a custom get_branch function" do
+      entries = [:msg1, :msg2]
+      ctx = Context.new(%{cwd: "/tmp", get_branch: fn -> entries end})
+      assert ctx.get_branch.() == entries
+    end
+
     test "accepts all fields" do
       ctx =
         Context.new(%{

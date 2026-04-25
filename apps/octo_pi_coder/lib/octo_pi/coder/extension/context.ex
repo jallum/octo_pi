@@ -12,6 +12,7 @@ defmodule OctoPi.Coder.Extension.Context do
           has_ui?: boolean(),
           ui: OctoPi.Coder.Extension.UIContext.t() | nil,
           get_entries: (-> [Message.t()]),
+          get_branch: (-> [Message.t()]),
           get_leaf_entry_id: (-> String.t() | nil)
         }
 
@@ -23,6 +24,7 @@ defmodule OctoPi.Coder.Extension.Context do
             has_ui?: false,
             ui: nil,
             get_entries: &__MODULE__.empty_entries/0,
+            get_branch: &__MODULE__.empty_entries/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0
 
   @doc false

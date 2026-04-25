@@ -1,6 +1,7 @@
 defmodule OctoPi.Coder.Extensions.ToolsTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Event
@@ -39,7 +40,9 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
     {ext, state, applied}
   end
 
-  defp ctx, do: Context.new(%{cwd: "/tmp"})
+  defp ctx(branch \\ []), do: Context.new(%{cwd: "/tmp", get_branch: fn -> branch end})
+
+  defp tools_config_entry(names), do: %Custom{kind: :tools_config, payload: %{enabled_tools: names}, timestamp: 0}
 
   describe "init/2" do
     test "registers a 'tools' command" do
@@ -71,7 +74,7 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
   end
 
   describe "session_start handler" do
-    test "loads active tool names into state" do
+    test "loads active tool names into state when no branch config" do
       {ext, state, _} = ext_with_state(["bash"])
 
       handler = hd(ext.handlers[:session_start])
@@ -82,7 +85,7 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
       assert MapSet.member?(enabled, "bash")
     end
 
-    test "removes previously enabled tools not in active set" do
+    test "removes previously enabled tools not in active set when no branch config" do
       {ext, state, _} = ext_with_state(["bash"])
 
       Agent.update(state, fn s -> %{s | enabled_tools: MapSet.new(["bash", "write", "read"])} end)
@@ -93,6 +96,51 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
       enabled = Agent.get(state, & &1.enabled_tools)
       refute MapSet.member?(enabled, "write")
       refute MapSet.member?(enabled, "read")
+    end
+
+    test "restores enabled tools from branch tools-config entry" do
+      {ext, state, _} = ext_with_state(["bash", "write"])
+
+      branch = [tools_config_entry(["read"])]
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ctx(branch))
+
+      enabled = Agent.get(state, & &1.enabled_tools)
+      assert MapSet.equal?(enabled, MapSet.new(["read"]))
+    end
+
+    test "uses the last tools-config entry when branch has multiple" do
+      {ext, state, _} = ext_with_state(["bash"])
+
+      branch = [tools_config_entry(["bash"]), tools_config_entry(["read", "write"])]
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ctx(branch))
+
+      enabled = Agent.get(state, & &1.enabled_tools)
+      assert MapSet.equal?(enabled, MapSet.new(["read", "write"]))
+    end
+
+    test "filters out tool names not in get_all_tools when restoring from branch" do
+      {ext, state, _} = ext_with_state(["bash"])
+
+      branch = [tools_config_entry(["read", "nonexistent_tool"])]
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ctx(branch))
+
+      enabled = Agent.get(state, & &1.enabled_tools)
+      assert MapSet.equal?(enabled, MapSet.new(["read"]))
+      refute MapSet.member?(enabled, "nonexistent_tool")
+    end
+
+    test "calls set_active_tools with restored tool names" do
+      {ext, _, applied} = ext_with_state(["bash"])
+
+      branch = [tools_config_entry(["read"])]
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ctx(branch))
+
+      applied_names = Agent.get(applied, & &1)
+      assert applied_names == ["read"]
     end
   end
 
