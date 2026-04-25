@@ -851,7 +851,7 @@ defmodule OctoPi.TUI.Interactive do
         input_lines
       ) do
     banner_lines = render_banner(banner, width)
-    transcript_lines = Enum.flat_map(transcript, &render_entry(&1, width))
+    transcript_lines = render_transcript(transcript, width)
     loader_lines = render_loader(loader, width, state.theme)
     footer_lines = Footer.render(footer, width)
 
@@ -866,7 +866,21 @@ defmodule OctoPi.TUI.Interactive do
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_banner(nil, _width), do: []
-  defp render_banner(banner, width), do: Components.WelcomeBanner.render(banner, width)
+  defp render_banner(banner, width) do
+    case Components.WelcomeBanner.render(banner, width) do
+      [] -> []
+      lines -> lines ++ [""]
+    end
+  end
+
+  defp render_transcript(transcript, width) do
+    transcript
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {entry, idx} ->
+      spacer = if idx > 0 and match?(%Components.UserMessage{}, entry), do: [""], else: []
+      spacer ++ render_entry(entry, width)
+    end)
+  end
 
   defp render_entry(%mod{} = component, width), do: mod.render(component, width)
 

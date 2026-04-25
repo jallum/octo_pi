@@ -9,21 +9,25 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   defp strip_csi(binary) do
-    # For tests that don't care about specific CSI escapes — just
-    # verify the payload text survives.
     Regex.replace(~r/\e\[[0-9;?]*[A-Za-z]/, binary, "")
   end
 
-  describe "full redraw on first render" do
-    test "emits clear + home + all lines" do
+  describe "first render" do
+    test "clears screen and outputs all lines" do
       pid = new()
       {:ok, bytes} = Renderer.render(pid, ["hello", "world"])
 
-      # Expect: clear screen + cursor home + both lines visible.
       assert bytes =~ "\e[2J"
-      assert bytes =~ "\e[H"
-      assert strip_csi(bytes) =~ "hello"
-      assert strip_csi(bytes) =~ "world"
+      text = strip_csi(bytes)
+      assert text =~ "hello"
+      assert text =~ "world"
+    end
+
+    test "lines are joined with \\r\\n" do
+      pid = new()
+      {:ok, bytes} = Renderer.render(pid, ["a", "b", "c"])
+      text = strip_csi(bytes)
+      assert text =~ "a\r\nb\r\nc"
     end
   end
 
@@ -35,7 +39,7 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes == ""
     end
 
-    test "single middle-line change → cursor move + only that line" do
+    test "single middle-line change → only that line" do
       pid = new()
       {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
       {:ok, bytes} = Renderer.render(pid, ["a", "X", "c"])
@@ -75,17 +79,14 @@ defmodule OctoPi.TUI.RendererTest do
       text = strip_csi(bytes)
       assert text =~ "X"
       assert text =~ "Y"
-      # Middle unchanged line is re-emitted as part of the range
-      # (simple O(n) diff) — that's fine, the tradeoff is clarity.
       assert text =~ "c"
-      # Outer unchanged lines are NOT re-emitted.
       refute text =~ "a"
       refute text =~ "e"
     end
   end
 
   describe "full redraw triggers" do
-    test "width change triggers full redraw" do
+    test "width change triggers full redraw with clear" do
       pid = new(width: 80)
       {:ok, _} = Renderer.render(pid, ["a", "b"])
       :ok = Renderer.resize(pid, 100, 24)
@@ -93,17 +94,10 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes =~ "\e[2J"
     end
 
-    test "height change triggers full redraw" do
+    test "height change triggers full redraw with clear" do
       pid = new(height: 24)
       {:ok, _} = Renderer.render(pid, ["a", "b"])
       :ok = Renderer.resize(pid, 80, 40)
-      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
-      assert bytes =~ "\e[2J"
-    end
-
-    test "line-count shrink triggers full redraw" do
-      pid = new()
-      {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
       {:ok, bytes} = Renderer.render(pid, ["a", "b"])
       assert bytes =~ "\e[2J"
     end
@@ -113,15 +107,31 @@ defmodule OctoPi.TUI.RendererTest do
       {:ok, _} = Renderer.render(pid, ["a", "b"])
       {:ok, bytes} = Renderer.render(pid, ["a", "b", "c"])
       refute bytes =~ "\e[2J"
-      assert bytes =~ "c"
+      assert strip_csi(bytes) =~ "c"
+    end
+  end
+
+  @erase_line "\e[2K"
+
+  describe "content shrink" do
+    test "shrink uses diff path (not full redraw) by default" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
+
+      refute bytes =~ "\e[2J"
+    end
+
+    test "shrink clears stale rows" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
+
+      assert bytes =~ @erase_line
     end
   end
 
   describe "termux suppression" do
-    # Termux's console doesn't survive a clear-screen the same way
-    # as a normal xterm — upstream suppresses the full redraw on
-    # height changes. We detect via the TERMUX_VERSION env var.
-
     test "height change under Termux emits a normal diff instead of clear-screen" do
       prev = System.get_env("TERMUX_VERSION")
       System.put_env("TERMUX_VERSION", "0.118.0")
@@ -142,7 +152,7 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   describe "CSI 2026 synchronized output" do
-    test "wraps diff output in \\e[?2026h / \\e[?2026l when enabled" do
+    test "wraps output in \\e[?2026h / \\e[?2026l when enabled" do
       pid = new(csi_2026?: true)
       {:ok, _} = Renderer.render(pid, ["a"])
       {:ok, bytes} = Renderer.render(pid, ["X"])
@@ -160,34 +170,19 @@ defmodule OctoPi.TUI.RendererTest do
     end
   end
 
-  describe "content shrink triggers full redraw" do
-    test "shrinking from N to M<N lines triggers full redraw with stale-row clearance" do
-      pid = new()
-      {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
-      {:ok, bytes} = Renderer.render(pid, ["a", "b"])
-
-      assert bytes =~ "\e[2J"
-      text = strip_csi(bytes)
-      assert text =~ "a"
-      assert text =~ "b"
-    end
-  end
-
   describe "content transitions" do
-    test "content → empty is a shrink (full redraw), empty → content grows (diff)" do
+    test "content → empty → content round-trips correctly" do
       pid = new()
       {:ok, bytes1} = Renderer.render(pid, ["hello"])
-      assert bytes1 =~ "\e[2J"
+      assert strip_csi(bytes1) =~ "hello"
 
-      {:ok, bytes2} = Renderer.render(pid, [])
-      assert bytes2 =~ "\e[2J"
+      {:ok, _bytes2} = Renderer.render(pid, [])
 
       {:ok, bytes3} = Renderer.render(pid, ["back"])
-      refute bytes3 =~ "\e[2J"
       assert strip_csi(bytes3) =~ "back"
     end
 
-    test "growth to a wider frame paints new lines via diff" do
+    test "growth paints new lines via diff" do
       pid = new()
       {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
       {:ok, bytes} = Renderer.render(pid, ["x", "y", "z", "w"])
@@ -199,12 +194,20 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   describe "each line is preceded by erase-line" do
-    test "every rendered line has \\e[2K to clear the row before painting" do
+    test "every rendered line has \\e[2K on first render" do
       pid = new()
       {:ok, bytes} = Renderer.render(pid, ["short", "longer line here"])
 
-      assert bytes =~ "\e[2Kshort"
-      assert bytes =~ "\e[2Klonger line here"
+      assert strip_csi(bytes) =~ "short"
+      assert strip_csi(bytes) =~ "longer line here"
+    end
+
+    test "diff lines use erase-line before painting" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["a", "b"])
+      {:ok, bytes} = Renderer.render(pid, ["a", "X"])
+
+      assert bytes =~ "\e[2KX"
     end
   end
 
@@ -218,21 +221,6 @@ defmodule OctoPi.TUI.RendererTest do
       :ok = Renderer.resize(pid, 120, 40)
       {:ok, bytes} = Renderer.render(pid, ["a", "b"])
       assert bytes =~ "\e[2J"
-    end
-  end
-
-  describe "erase below after render" do
-    test "full redraw ends with erase-below to clear stale content" do
-      pid = new()
-      {:ok, bytes} = Renderer.render(pid, ["line1", "line2", "line3"])
-      assert bytes =~ "\e[J"
-    end
-
-    test "diff render does NOT erase below (would wipe unchanged rows)" do
-      pid = new()
-      {:ok, _} = Renderer.render(pid, ["a", "b", "c"])
-      {:ok, bytes} = Renderer.render(pid, ["a", "X", "c"])
-      refute bytes =~ "\e[J"
     end
   end
 

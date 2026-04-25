@@ -429,7 +429,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
   # --- redraw counter + Termux + SGR reset (upstream tui-render.test.ts L66-290) ---
 
   describe "redraw counter" do
-    test "full_redraws increments on first render and on shrink, stays flat on growth" do
+    test "full_redraws increments on first render, stays flat on shrink and growth" do
       {r, _vt} = setup_render(height: 10)
       assert Renderer.full_redraws(r) == 0
 
@@ -437,10 +437,10 @@ defmodule OctoPi.TUI.TuiRenderTest do
       assert Renderer.full_redraws(r) == 1
 
       {:ok, _} = Renderer.render(r, ["a", "b"])
-      assert Renderer.full_redraws(r) == 2, "shrink must trigger a full redraw"
+      assert Renderer.full_redraws(r) == 1, "shrink uses diff path, not full redraw"
 
       {:ok, _} = Renderer.render(r, ["a", "b", "c"])
-      assert Renderer.full_redraws(r) == 2, "growth must stay on the diff path"
+      assert Renderer.full_redraws(r) == 1, "growth must stay on the diff path"
     end
   end
 
@@ -490,18 +490,16 @@ defmodule OctoPi.TUI.TuiRenderTest do
   end
 
   describe "strict shrink/append counter invariants" do
-    test "deleting lines that move the viewport upward triggers a single full redraw" do
+    test "deleting lines clears stale rows and preserves remaining content" do
       {r, vt} = setup_render(width: 20, height: 12)
       twelve = Enum.map(0..11, &"Line #{&1}")
       {:ok, bytes0} = Renderer.render(r, twelve)
       vt = VT.write(vt, bytes0)
-      initial = Renderer.full_redraws(r)
 
       seven = Enum.map(0..6, &"Line #{&1}")
       {:ok, bytes1} = Renderer.render(r, seven)
       vt = VT.write(vt, bytes1)
 
-      assert Renderer.full_redraws(r) == initial + 1, "shrink should full-redraw"
       rows = visible(vt)
       for i <- 0..6, do: assert(Enum.at(rows, i) == "Line #{i}")
     end

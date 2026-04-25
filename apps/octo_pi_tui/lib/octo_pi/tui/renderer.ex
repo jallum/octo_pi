@@ -1,20 +1,27 @@
 defmodule OctoPi.TUI.Renderer do
   @moduledoc """
-  Differential screen renderer with viewport scrolling.
+  Scroll-based differential screen renderer.
 
-  Receives the full line buffer from the caller (no cropping).
-  Internally computes `viewport_top = max(0, len - height)` so the
-  viewport is always anchored to the bottom. Diffs at buffer-absolute
-  indices for stability, but only paints lines within the visible
-  viewport.
+  Writes **all** lines to the terminal and lets it scroll naturally,
+  keeping content in the scrollback buffer. Uses relative cursor
+  movement (`\\e[nA` / `\\e[nB`) for diff updates — never absolute
+  row positioning — so the terminal's own viewport tracking stays
+  consistent.
 
-  Full-redraw triggers: first render, dimension change, content
-  shrink, or a change above the viewport (in scrollback). Under
-  Termux (detected via `TERMUX_VERSION`), height-only changes
-  suppress the clear-screen.
+  Rendering modes, matching upstream pi-mono:
 
-  Each changed line is cleared with `\\e[2K` (erase entire line)
-  before painting, matching upstream pi-mono.
+    1. **First render** — output all lines, no clear.
+    2. **Width change** — clear screen + scrollback, re-render everything.
+    3. **Height change** — same (except Termux, where height-only changes
+       are suppressed to avoid keyboard-toggle flicker).
+    4. **Content shrink** — clear + re-render when `clear_on_shrink` is
+       set and no overlays are active.
+    5. **Normal diff** — find first/last changed line, move cursor there
+       via relative movement, re-render the changed range.
+
+  If the first changed line is above the visible viewport (user
+  scrolled up), a full clear + re-render is required because the
+  terminal won't let us write into the scrollback buffer.
 
   CSI 2026 (synchronized output) wrapping is opt-in via
   `:csi_2026?` at start_link time.
@@ -22,9 +29,7 @@ defmodule OctoPi.TUI.Renderer do
 
   use GenServer
 
-  @clear_screen "\e[2J\e[3J"
-  @cursor_home "\e[H"
-  @erase_below "\e[J"
+  @clear_screen "\e[2J\e[H\e[3J"
   @erase_line "\e[2K"
   @sync_on "\e[?2026h"
   @sync_off "\e[?2026l"
@@ -37,10 +42,9 @@ defmodule OctoPi.TUI.Renderer do
   @doc """
   Render a list of lines. Returns the bytes to write.
 
-  Lines may exceed the terminal height — the renderer computes the
-  viewport internally. An optional `cursor_seq` (e.g. `"\\e[5;3H"`)
-  is appended inside the sync block so the cursor move is atomic
-  with the frame update.
+  Lines may exceed the terminal height — the renderer writes them
+  all to the terminal. An optional `cursor_seq` positions the
+  hardware cursor (for IME) after the frame update.
   """
   @spec render(GenServer.server(), [binary()], binary()) :: {:ok, binary()}
   def render(pid, lines, cursor_seq \\ "")
@@ -57,21 +61,19 @@ defmodule OctoPi.TUI.Renderer do
   def full_redraws(pid), do: GenServer.call(pid, :full_redraws)
 
   @doc """
-  Pure function used by the diff path and exposed for unit tests.
-  Returns `{first_changed_index, last_changed_index}`. When nothing
-  changed, returns `{-1, -1}`. Compares index-by-index using
-  `max(length(new), length(old))`, treating out-of-bounds as `""`.
+  Pure diff helper exposed for unit tests.
+  Returns `{first_changed, last_changed}` or `{-1, -1}` when identical.
   """
   @spec find_diff_range([binary()], [binary()]) :: {integer(), integer()}
   def find_diff_range(new_lines, old_lines) do
     max_len = max(length(new_lines), length(old_lines))
-    find_diff_range(new_lines, old_lines, 0, max_len, -1, -1)
+    do_find_diff(new_lines, old_lines, 0, max_len, -1, -1)
   end
 
-  defp find_diff_range(_new, _old, i, max_len, first, last) when i >= max_len,
+  defp do_find_diff(_new, _old, i, max_len, first, last) when i >= max_len,
     do: {first, last}
 
-  defp find_diff_range(new, old, i, max_len, first, last) do
+  defp do_find_diff(new, old, i, max_len, first, last) do
     new_line = Enum.at(new, i, "")
     old_line = Enum.at(old, i, "")
 
@@ -82,7 +84,7 @@ defmodule OctoPi.TUI.Renderer do
         {first, last}
       end
 
-    find_diff_range(new, old, i + 1, max_len, first, last)
+    do_find_diff(new, old, i + 1, max_len, first, last)
   end
 
   # --- GenServer callbacks ---
@@ -93,10 +95,14 @@ defmodule OctoPi.TUI.Renderer do
       previous: nil,
       width: Keyword.get(opts, :width, 80),
       height: Keyword.get(opts, :height, 24),
-      viewport_top: 0,
+      hardware_cursor_row: 0,
+      max_lines_rendered: 0,
+      previous_viewport_top: 0,
+      needs_clear: true,
       csi_2026?: Keyword.get(opts, :csi_2026?, false),
       termux?: termux?(),
-      full_redraws: 0
+      full_redraws: 0,
+      clear_on_shrink: System.get_env("PI_CLEAR_ON_SHRINK") == "1"
     }
 
     {:ok, state}
@@ -109,9 +115,18 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   def handle_call({:resize, w, h}, _from, state) do
-    suppress? = state.termux? and w == state.width
-    new_prev = if suppress?, do: state.previous, else: nil
-    {:reply, :ok, %{state | width: w, height: h, previous: new_prev}}
+    width_changed = w != state.width
+    height_changed = h != state.height
+    suppress? = state.termux? and not width_changed and height_changed
+
+    new_state =
+      if suppress? do
+        %{state | width: w, height: h}
+      else
+        %{state | width: w, height: h, previous: nil, needs_clear: true}
+      end
+
+    {:reply, :ok, new_state}
   end
 
   def handle_call(:full_redraws, _from, state),
@@ -119,118 +134,275 @@ defmodule OctoPi.TUI.Renderer do
 
   # --- compute dispatch ---
 
-  defp compute(lines, cursor_seq, %{previous: nil} = state),
-    do: full_redraw(lines, cursor_seq, state)
+  defp compute(lines, cursor_seq, %{previous: nil, needs_clear: clear} = state) do
+    full_render(lines, cursor_seq, %{state | needs_clear: false}, clear)
+  end
 
-  defp compute(lines, cursor_seq, %{previous: prev} = state)
-       when length(lines) < length(prev),
-       do: full_redraw(lines, cursor_seq, state)
+  defp compute(lines, cursor_seq, state) do
+    if state.clear_on_shrink and length(lines) < state.max_lines_rendered do
+      full_render(lines, cursor_seq, state, true)
+    else
+      diff_render(lines, cursor_seq, state)
+    end
+  end
 
-  defp compute(lines, cursor_seq, state), do: diff(lines, cursor_seq, state)
+  # --- full render ---
 
-  # --- full redraw ---
+  defp full_render(lines, cursor_seq, state, clear) do
+    body =
+      if clear do
+        [@clear_screen | render_all_lines(lines)]
+      else
+        render_all_lines(lines)
+      end
 
-  defp full_redraw(lines, cursor_seq, state) do
-    vp_top = viewport_top(lines, state.height)
-    visible = viewport_slice(lines, vp_top, state.height)
-
-    body = [
-      @clear_screen,
-      @cursor_home,
-      render_visible(visible),
-      @erase_below,
-      cursor_seq
-    ]
-
+    content_end_row = max(0, length(lines) - 1)
+    {cursor_iodata, hw_row} = position_cursor(cursor_seq, content_end_row, lines, state.height)
+    body = body ++ [cursor_iodata]
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
+
+    max_lines =
+      if clear, do: length(lines), else: max(state.max_lines_rendered, length(lines))
+
+    buffer_length = max(state.height, length(lines))
 
     new_state = %{
       state
       | previous: lines,
-        viewport_top: vp_top,
+        hardware_cursor_row: hw_row,
+        max_lines_rendered: max_lines,
+        previous_viewport_top: max(0, buffer_length - state.height),
         full_redraws: state.full_redraws + 1
     }
 
     {bytes, new_state}
   end
 
-  # --- diff ---
+  defp render_all_lines([]), do: []
+  defp render_all_lines([line]), do: [line]
+  defp render_all_lines([line | rest]), do: [line, "\r\n" | render_all_lines(rest)]
 
-  defp diff(lines, cursor_seq, %{viewport_top: old_vp_top} = state) do
-    new_vp_top = viewport_top(lines, state.height)
+  # --- differential render ---
 
-    if new_vp_top != old_vp_top do
-      repaint_viewport(lines, cursor_seq, new_vp_top, state)
-    else
-      diff_within_viewport(lines, cursor_seq, new_vp_top, state)
+  defp diff_render(lines, cursor_seq, state) do
+    height = state.height
+    prev = state.previous
+    prev_len = length(prev)
+    new_len = length(lines)
+
+    {first_changed, last_changed} = find_diff_range(lines, prev)
+
+    appended = new_len > prev_len
+
+    {first_changed, last_changed} =
+      if appended do
+        fc = if first_changed == -1, do: prev_len, else: first_changed
+        {fc, new_len - 1}
+      else
+        {first_changed, last_changed}
+      end
+
+    prev_vp_top = state.previous_viewport_top
+    hw_cursor = state.hardware_cursor_row
+
+    cond do
+      first_changed == -1 ->
+        {cursor_iodata, hw_row} = position_cursor(cursor_seq, hw_cursor, lines, height)
+        body = [cursor_iodata]
+        bytes = IO.iodata_to_binary(wrap_sync(body, state))
+        {bytes, %{state | previous: lines, previous_viewport_top: prev_vp_top, hardware_cursor_row: hw_row}}
+
+      first_changed >= new_len and prev_len > new_len ->
+        handle_deleted_lines(lines, cursor_seq, state, first_changed, prev_vp_top, hw_cursor)
+
+      first_changed < prev_vp_top ->
+        full_render(lines, cursor_seq, state, true)
+
+      true ->
+        handle_changed_lines(
+          lines, cursor_seq, state,
+          first_changed, last_changed,
+          appended, prev_vp_top, hw_cursor
+        )
     end
   end
 
-  defp repaint_viewport(lines, cursor_seq, new_vp_top, state) do
-    vp_bottom = new_vp_top + state.height - 1
-    paint_last = min(vp_bottom, length(lines) - 1)
+  defp handle_deleted_lines(lines, cursor_seq, state, _first, prev_vp_top, hw_cursor) do
+    new_len = length(lines)
+    prev_len = length(state.previous)
+    target_row = max(0, new_len - 1)
 
-    body = paint_range(lines, new_vp_top, paint_last, new_vp_top) ++ [@erase_below, cursor_seq]
-    bytes = IO.iodata_to_binary(wrap_sync(body, state))
-    {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
-  end
+    if target_row < prev_vp_top do
+      full_render(lines, cursor_seq, state, true)
+    else
+      lines_to_clear = prev_len - max(new_len, 1)
 
-  defp diff_within_viewport(lines, cursor_seq, new_vp_top, state) do
-    case find_diff_range(lines, state.previous) do
-      {-1, -1} ->
-        if cursor_seq == "" do
-          {"", %{state | previous: lines, viewport_top: new_vp_top}}
-        else
-          bytes = IO.iodata_to_binary(wrap_sync([cursor_seq], state))
-          {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
-        end
+      if lines_to_clear > state.height do
+        full_render(lines, cursor_seq, state, true)
+      else
+        current_screen_row = hw_cursor - prev_vp_top
+        target_screen_row = target_row - prev_vp_top
+        move = target_screen_row - current_screen_row
 
-      {first, _last} when first < new_vp_top ->
-        full_redraw(lines, cursor_seq, state)
-
-      {first, last} ->
-        vp_bottom = new_vp_top + state.height - 1
-        paint_first = max(first, new_vp_top)
-        paint_last = min(last, vp_bottom)
+        {cursor_iodata, hw_row} =
+          if new_len == 0 do
+            position_cursor(cursor_seq, 0, lines, state.height)
+          else
+            position_cursor(cursor_seq, target_row, lines, state.height)
+          end
 
         body =
-          if paint_first > paint_last do
-            [cursor_seq]
+          if new_len == 0 do
+            [
+              move_cursor_v(move),
+              "\r",
+              clear_n_lines(prev_len),
+              if(prev_len > 1, do: "\e[#{prev_len - 1}A", else: ""),
+              cursor_iodata
+            ]
           else
-            paint_range(lines, paint_first, paint_last, new_vp_top) ++ [cursor_seq]
+            [
+              move_cursor_v(move),
+              if(lines_to_clear > 0, do: "\e[1B", else: ""),
+              clear_n_lines(lines_to_clear),
+              if(lines_to_clear > 0, do: "\e[#{lines_to_clear}A", else: ""),
+              cursor_iodata
+            ]
           end
 
         bytes = IO.iodata_to_binary(wrap_sync(body, state))
-        {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
+
+        new_state = %{
+          state
+          | previous: lines,
+            hardware_cursor_row: hw_row,
+            previous_viewport_top: prev_vp_top
+        }
+
+        {bytes, new_state}
+      end
     end
   end
 
-  # --- viewport helpers ---
+  defp handle_changed_lines(
+         lines, cursor_seq, state,
+         first_changed, last_changed,
+         appended, prev_vp_top, hw_cursor
+       ) do
+    height = state.height
+    append_start = appended and first_changed == length(state.previous) and first_changed > 0
+    prev_vp_bottom = prev_vp_top + height - 1
+    move_target = if append_start, do: first_changed - 1, else: first_changed
 
-  defp viewport_top(lines, height), do: max(0, length(lines) - height)
+    {body_prefix, prev_vp_top, viewport_top, hw_cursor} =
+      if move_target > prev_vp_bottom do
+        current_screen_row = max(0, min(height - 1, hw_cursor - prev_vp_top))
+        move_to_bottom = height - 1 - current_screen_row
+        scroll = move_target - prev_vp_bottom
 
-  defp viewport_slice(lines, vp_top, height) do
-    Enum.slice(lines, vp_top, height)
+        prefix = [
+          move_cursor_v(move_to_bottom),
+          String.duplicate("\r\n", scroll)
+        ]
+
+        {prefix, prev_vp_top + scroll, prev_vp_top + scroll, move_target}
+      else
+        {[], prev_vp_top, prev_vp_top, hw_cursor}
+      end
+
+    current_screen_row = hw_cursor - prev_vp_top
+    target_screen_row = move_target - viewport_top
+    line_diff = target_screen_row - current_screen_row
+
+    sep = if append_start, do: "\r\n", else: "\r"
+
+    render_end = min(last_changed, length(lines) - 1)
+
+    changed_body =
+      first_changed..render_end
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {i, idx} ->
+        line = Enum.at(lines, i, "")
+        prefix = if idx > 0, do: "\r\n", else: ""
+        [prefix, @erase_line, line]
+      end)
+
+    final_cursor_row = render_end
+
+    cleanup =
+      if length(state.previous) > length(lines) do
+        extra = length(state.previous) - length(lines)
+        remaining = length(lines) - 1 - render_end
+
+        move_down =
+          if remaining > 0, do: ["\e[#{remaining}B"], else: []
+
+        clear =
+          for _ <- 1..extra, do: "\r\n#{@erase_line}"
+
+        move_back = ["\e[#{extra}A"]
+        move_down ++ clear ++ move_back
+      else
+        []
+      end
+
+    {cursor_iodata, hw_row} = position_cursor(cursor_seq, final_cursor_row, lines, height)
+
+    body =
+      body_prefix ++
+        [move_cursor_v(line_diff), sep] ++
+        changed_body ++
+        cleanup ++
+        [cursor_iodata]
+
+    bytes = IO.iodata_to_binary(wrap_sync(body, state))
+
+    new_vp_top = max(prev_vp_top, final_cursor_row - height + 1)
+
+    new_state = %{
+      state
+      | previous: lines,
+        hardware_cursor_row: hw_row,
+        max_lines_rendered: max(state.max_lines_rendered, length(lines)),
+        previous_viewport_top: new_vp_top
+    }
+
+    {bytes, new_state}
   end
 
-  # --- output helpers ---
+  # --- cursor positioning ---
 
-  defp render_visible([]), do: []
+  defp position_cursor("", hw_row, _lines, _height), do: {"", hw_row}
 
-  defp render_visible([line]), do: [@erase_line, line]
+  defp position_cursor(cursor_seq, hw_row, lines, height) do
+    case Regex.run(~r/\e\[(\d+);(\d+)H/, cursor_seq) do
+      [_, row_s, col_s] ->
+        screen_row = String.to_integer(row_s) - 1
+        viewport_top = max(0, length(lines) - height)
+        buffer_row = viewport_top + screen_row
+        col = String.to_integer(col_s)
+        row_delta = buffer_row - hw_row
+        {[move_cursor_v(row_delta), "\e[#{col}G"], buffer_row}
 
-  defp render_visible([line | rest]),
-    do: [@erase_line, line, "\r\n" | render_visible(rest)]
+      _ ->
+        {cursor_seq, hw_row}
+    end
+  end
 
-  defp paint_range(lines, first, last, vp_top) do
-    Enum.flat_map(first..last, fn i ->
-      screen_row = i - vp_top + 1
-      line = Enum.at(lines, i, "")
-      [move_to(screen_row, 1), @erase_line, line]
+  # --- helpers ---
+
+  defp move_cursor_v(0), do: ""
+  defp move_cursor_v(n) when n > 0, do: "\e[#{n}B"
+  defp move_cursor_v(n) when n < 0, do: "\e[#{-n}A"
+
+  defp clear_n_lines(0), do: ""
+
+  defp clear_n_lines(n) do
+    Enum.map_join(1..n, fn i ->
+      suffix = if i < n, do: "\e[1B", else: ""
+      "\r#{@erase_line}#{suffix}"
     end)
   end
-
-  defp move_to(row, col), do: "\e[#{row};#{col}H"
 
   defp wrap_sync(body, %{csi_2026?: true}), do: [@sync_on, body, @sync_off]
   defp wrap_sync(body, %{csi_2026?: false}), do: body
