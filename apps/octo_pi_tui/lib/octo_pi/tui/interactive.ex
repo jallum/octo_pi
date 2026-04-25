@@ -345,19 +345,10 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp detect_dimensions do
-    w =
-      case :io.columns() do
-        {:ok, n} -> n
-        _ -> 80
-      end
-
-    h =
-      case :io.rows() do
-        {:ok, n} -> n
-        _ -> 24
-      end
-
-    {w, h}
+    case OctoPi.TUI.TTY.window_size() do
+      {:ok, {w, h}} -> {w, h}
+      _ -> {80, 24}
+    end
   end
 
   defp default_raw_mode(:enter), do: RawMode.enter()

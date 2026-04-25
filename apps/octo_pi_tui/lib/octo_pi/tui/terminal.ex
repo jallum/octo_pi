@@ -3,9 +3,9 @@ defmodule OctoPi.TUI.Terminal do
   GenServer that owns the TTY surface. Responsibilities:
 
     * Enter OTP 28's noshell raw mode on start; restore on terminate.
-    * Register as the SIGWINCH handler; broadcast `{:resize, w, h}`
-      events through `OctoPi.TUI.Events` whenever the window size
-      changes.
+    * Listen for SIGWINCH via a gen_event handler on
+      `erl_signal_server`; query actual dimensions via TIOCGWINSZ
+      NIF and broadcast `{:resize, w, h}` through `OctoPi.TUI.Events`.
     * Spawn a linked reader that calls `:io.get_chars("", N)` in a
       loop and forwards each chunk back as a `{:stdin_chunk, bin}`
       message, which Terminal rebroadcasts via `Events`.
@@ -16,7 +16,8 @@ defmodule OctoPi.TUI.Terminal do
     * `:raw_mode_fn` — 1-arg fn `(:enter | :exit) -> :ok` that
       replaces the default `RawMode` calls. Useful when tests want
       to assert enter/exit were called.
-    * `:skip_sigwinch` — don't register `:os.set_signal/2`.
+    * `:skip_sigwinch` — don't register the SIGWINCH gen_event
+      handler.
     * `:auto_start_reader` (default `true`) — when `false`, skips
       the stdin reader spawn. Tests feed chunks with
       `feed_chunk/2` instead.
@@ -33,8 +34,7 @@ defmodule OctoPi.TUI.Terminal do
 
   use GenServer
 
-  alias OctoPi.TUI.Events
-  alias OctoPi.TUI.RawMode
+  alias OctoPi.TUI.{Events, RawMode, SigwinchHandler, TTY}
 
   # --- public API ---
 
@@ -77,10 +77,12 @@ defmodule OctoPi.TUI.Terminal do
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
 
     if not skip_raw_mode, do: raw_mode_fn.(:enter)
-    if not skip_sigwinch, do: :os.set_signal(:sigwinch, :handle)
+
+    if not skip_sigwinch do
+      :gen_event.add_handler(:erl_signal_server, SigwinchHandler, self())
+    end
 
     reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
-
     reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
 
     state = %{
@@ -88,6 +90,7 @@ defmodule OctoPi.TUI.Terminal do
       height: h,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
+      skip_sigwinch: skip_sigwinch,
       reader_pid: reader_pid,
       write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
       scope: self()
@@ -121,19 +124,25 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_info({:signal, :sigwinch}, state) do
-    w = term_cols(state.width)
-    h = term_rows(state.height)
-    broadcast(state, :resize, {:resize, w, h})
-    {:noreply, %{state | width: w, height: h}}
+    case TTY.window_size() do
+      {:ok, {w, h}} when w != state.width or h != state.height ->
+        broadcast(state, :resize, {:resize, w, h})
+        {:noreply, %{state | width: w, height: h}}
+
+      _ ->
+        {:noreply, state}
+    end
   end
 
   def handle_info(_, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{skip_raw_mode: true}), do: :ok
+  def terminate(_reason, state) do
+    if not state.skip_sigwinch do
+      :gen_event.delete_handler(:erl_signal_server, SigwinchHandler, [])
+    end
 
-  def terminate(_reason, %{raw_mode_fn: fun}) do
-    fun.(:exit)
+    if not state.skip_raw_mode, do: state.raw_mode_fn.(:exit)
     :ok
   end
 
@@ -180,17 +189,4 @@ defmodule OctoPi.TUI.Terminal do
     )
   end
 
-  defp term_cols(fallback) do
-    case :io.columns() do
-      {:ok, n} -> n
-      _ -> fallback
-    end
-  end
-
-  defp term_rows(fallback) do
-    case :io.rows() do
-      {:ok, n} -> n
-      _ -> fallback
-    end
-  end
 end
