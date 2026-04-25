@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.ui.custom() — full-screen interactive custom widget slot",
   "type": "task",
-  "updated_at": "2026-04-25T18:45:45.601037Z"
+  "updated_at": "2026-04-25T19:01:58.723561Z"
 }
