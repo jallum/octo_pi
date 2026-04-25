@@ -66,6 +66,9 @@ defmodule OctoPi.Agent.Session do
   end
 
   @doc false
+  def set_thinking_level(pid, level), do: GenServer.call(pid, {:set_thinking_level, level})
+
+  @doc false
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
   @doc false
@@ -146,6 +149,10 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call({:set_queue_mode, :follow_up, mode}, _from, store) do
     {:reply, :ok, put_in(store.session.follow_up_queue.mode, mode)}
+  end
+
+  def handle_call({:set_thinking_level, level}, _from, store) do
+    {:reply, :ok, put_in(store.session.thinking_level, level)}
   end
 
   def handle_call(:drain_steering, _from, store) do

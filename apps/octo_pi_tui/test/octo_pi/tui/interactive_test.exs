@@ -8,6 +8,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Components.ToolExecution
@@ -97,6 +98,39 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = Interactive.handle_event(s, :paste_end)
       assert s.input.value == "helloboo world"
       assert s.paste_buffer == nil
+    end
+  end
+
+  describe "handle_event — Shift+Tab thinking cycle (opi-0g4.11)" do
+    test "cycles off → low → medium → high → off" do
+      s = %Interactive{thinking_level: :off}
+      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s.thinking_level == :low
+      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s.thinking_level == :medium
+      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s.thinking_level == :high
+      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s.thinking_level == :off
+    end
+
+    test "updates footer thinking_level to string label" do
+      s = %Interactive{thinking_level: :off, footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s2.footer.thinking_level == "low"
+    end
+
+    test "footer thinking_level is nil when off" do
+      s = %Interactive{thinking_level: :high, footer: %Footer{}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s2.footer.thinking_level == nil
+    end
+
+    test "sets notification with new level" do
+      s = %Interactive{thinking_level: :off}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      assert s2.notification
+      assert s2.notification =~ "low"
     end
   end
 
@@ -738,8 +772,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "includes footer lines at the bottom" do
-      alias OctoPi.TUI.Components.Footer
-
       footer = %Footer{
         cwd: "/tmp/test",
         model_id: "claude-opus-4-6",
@@ -804,8 +836,6 @@ defmodule OctoPi.TUI.InteractiveTest do
 
   describe "footer updates from agent events" do
     test "MessageEnd accumulates usage into footer" do
-      alias OctoPi.TUI.Components.Footer
-
       footer = %Footer{
         cwd: "/tmp",
         model_id: "test-model",

@@ -1110,6 +1110,13 @@ defmodule OctoPi.Agent.LoopTest do
   end
 
   describe "error stop_reason exits the loop" do
+    test "set_thinking_level/2 changes session thinking_level (opi-0g4.11)" do
+      session = start_session()
+      assert OctoPi.Agent.state(session).thinking_level == :off
+      :ok = OctoPi.Agent.set_thinking_level(session, :medium)
+      assert OctoPi.Agent.state(session).thinking_level == :medium
+    end
+
     test "assistant with :error stops, AgentEnd carries :error" do
       errored = assistant([], :error)
 

@@ -54,6 +54,7 @@ defmodule OctoPi.TUI.Interactive do
           height: pos_integer(),
           exit: boolean(),
           suspend_pending: boolean(),
+          thinking_level: atom(),
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -82,6 +83,7 @@ defmodule OctoPi.TUI.Interactive do
             height: 24,
             exit: false,
             suspend_pending: false,
+            thinking_level: :off,
             paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -503,6 +505,7 @@ defmodule OctoPi.TUI.Interactive do
     :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
 
     state
+    |> Map.put(:notification, nil)
     |> handle_event(parsed)
     |> advance(fsm, renderer, terminal)
   end
@@ -638,6 +641,19 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{key: ?t, modifiers: [:ctrl]}}),
     do: %{state | thinking_visible: !state.thinking_visible}
+
+  def handle_event(%{session: session} = state, {:key, %Key{key: :tab, modifiers: [:shift]}}) do
+    new_level = next_thinking_level(state.thinking_level)
+    if session, do: OctoPi.Agent.set_thinking_level(session, new_level)
+    label = thinking_level_label(new_level)
+
+    %{
+      state
+      | thinking_level: new_level,
+        footer: %{state.footer | thinking_level: label},
+        notification: "Thinking: #{new_level}"
+    }
+  end
 
   def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
     expanded = !state.tools_expanded
@@ -922,9 +938,13 @@ defmodule OctoPi.TUI.Interactive do
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
+    notification_lines = render_notification(state.notification, width)
     footer_lines = Footer.render(footer, width)
 
-    all = banner_lines ++ resource_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ footer_lines
+    all =
+      banner_lines ++
+        resource_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ notification_lines ++ footer_lines
+
     len = length(all)
     if len < height, do: List.duplicate("", height - len) ++ all, else: all
   end
@@ -934,6 +954,18 @@ defmodule OctoPi.TUI.Interactive do
   defp render_loader(nil, _width, _theme), do: []
 
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
+
+  defp render_notification(nil, _width), do: []
+  defp render_notification(text, _width), do: [dim(text)]
+
+  defp next_thinking_level(:off), do: :low
+  defp next_thinking_level(:low), do: :medium
+  defp next_thinking_level(:medium), do: :high
+  defp next_thinking_level(:high), do: :off
+  defp next_thinking_level(_), do: :low
+
+  defp thinking_level_label(:off), do: nil
+  defp thinking_level_label(level), do: to_string(level)
 
   defp render_banner(nil, _width), do: []
 
