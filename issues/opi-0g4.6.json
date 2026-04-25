@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "KeyParser: key release and repeat event filtering",
   "type": "task",
-  "updated_at": "2026-04-25T13:21:32.177297Z"
+  "updated_at": "2026-04-25T13:23:12.465789Z"
 }
