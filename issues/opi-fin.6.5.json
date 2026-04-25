@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.6.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:13:26Z",
   "description": "REQUIRES: opi-fin.6.2, opi-fin.6.3, opi-fin.5.4 (Tools stateful migration) merged.\n\nFILES:\n- extensions/tools.ex + test (already stateful-migrated in opi-fin.5.4)\n- test/support/harness.ex + harness_test.exs\n\nTOOLS EXTENSION:\nReplace get_all_tools, get_active_tools, set_active_tools, append_entry fn-field calls with Host client calls. These are called inside handlers where ctx is available. Remove remaining bind_core usage from tools.ex and tools_test.exs.\n\nHARNESS:\nharness.ex currently builds before_tool_call and after_tool_call closures that call Dispatcher functions directly, and wires action mocks via bind_core. Update Harness.create/1 to:\n1. Start a Host.Stub GenServer with the test session's tool/command config.\n2. Pass host: host_pid when creating Context for dispatch.\n3. Remove bind_core-based action mocking.\nExpose the Host.Stub pid from Harness.create/1 so integration tests can assert on Host.Stub.calls/1.\n\nTEST: Update harness_test.exs. All existing behavioral assertions must pass. Add an assertion that verifies actions dispatched during a session are recorded on Host.Stub.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "6b: Migrate tools extension and update Harness",
   "type": "task",
-  "updated_at": "2026-04-25T21:13:26Z"
+  "updated_at": "2026-04-25T21:14:24Z"
 }
