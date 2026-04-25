@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T22:38:00Z",
+  "description": "## Context\n\nThe `read` tool already removed its PathGuard integration (commit 90f8356) to match upstream pi-mono behavior. The upstream `read.ts` resolves paths relative to cwd but does not check for escape — it trusts the model.\n\n## Scope\n\nPathGuard (`OctoPi.Coder.Tools.PathGuard`) is currently used by 6 tool modules. Each one calls `PathGuard.resolve_or_error/2` to canonicalize paths and reject escapes outside the session cwd. This ticket removes that machinery entirely.\n\n### Files to modify\n\n**Tool modules** — replace `PathGuard.resolve_or_error(requested, cwd)` with `Path.expand(requested, cwd)` in:\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/bash.ex` (lines 23, 72)\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/edit.ex` (lines 18, 69)\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/grep.ex` (lines 14, 89)\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/ls.ex` (lines 13, 48)\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/write.ex` (lines 14, 42)\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/find.ex` (lines 14, 65)\n\n**Docs** — update:\n- `apps/octo_pi_coder/lib/octo_pi/coder.ex` line 17: remove \"PathGuard contract\" reference from docstring\n\n**Delete** — remove entirely:\n- `apps/octo_pi_coder/lib/octo_pi/coder/tools/path_guard.ex`\n- `apps/octo_pi_coder/test/octo_pi/coder/tools/path_guard_test.exs`\n\n### Pattern\n\nThe read tool removed PathGuard by:\n1. Dropping the `alias OctoPi.Coder.Tools.PathGuard`\n2. Replacing `PathGuard.resolve_or_error(requested, session_cwd)` with `Path.expand(requested, session_cwd)`\n3. Removing the `{:ok, path}` / `{:error, _}` pattern match and using the expanded path directly\n4. Removing the \"rejects paths that escape session cwd\" test\n\nApply the same pattern to all 6 remaining tools.\n\n### Notes\n\n- The `ensure_regular_file` check (rejecting directories and non-regular files) in the read tool is unrelated to PathGuard and was kept.\n- Tests that verify PathGuard-specific escape-rejection behavior in the tool modules should also be removed.",
+  "id": "opi-ozb",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Remove PathGuard from all tools",
+  "type": "task",
+  "updated_at": "2026-04-25T22:38:00Z"
+}
