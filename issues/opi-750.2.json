@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-750",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Auth.OAuth.login/1 — PKCE authorization code flow + callback server + tests",
   "type": "task",
-  "updated_at": "2026-04-25T15:11:18.407468Z"
+  "updated_at": "2026-04-25T15:12:35.453668Z"
 }
