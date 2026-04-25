@@ -124,7 +124,7 @@ defmodule OctoPi.Coder.CLI do
         tools = OctoPi.Coder.default_tools(opts.cwd)
         loader = ResourceLoader.load(opts.cwd, nil)
         system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
-        mod.run(Map.to_list(Map.merge(opts, %{system_prompt: system_prompt, tools: tools})))
+        mod.run(Map.to_list(Map.merge(opts, %{system_prompt: system_prompt, tools: tools, resource_loader: loader})))
         0
 
       {:error, _} ->

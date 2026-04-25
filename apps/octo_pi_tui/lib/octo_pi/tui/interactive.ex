@@ -36,6 +36,12 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.WrapAnsi
 
+  @type resource_data :: %{
+          context_files: [%{path: String.t()}],
+          skills: [%{name: String.t()}],
+          prompt_templates: [%{name: String.t()}]
+        }
+
   @type t :: %__MODULE__{
           session: pid() | nil,
           input: Components.Input.t(),
@@ -52,6 +58,7 @@ defmodule OctoPi.TUI.Interactive do
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
+          loaded_resources: resource_data() | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
@@ -65,6 +72,7 @@ defmodule OctoPi.TUI.Interactive do
             footer_data: nil,
             theme: nil,
             banner: nil,
+            loaded_resources: nil,
             width: 80,
             height: 24,
             exit: false,
@@ -348,6 +356,8 @@ defmodule OctoPi.TUI.Interactive do
       git_branch: FooterData.get_git_branch(footer_data)
     }
 
+    loaded_resources = build_loaded_resources(opts)
+
     state = %__MODULE__{
       session: session,
       input: %Components.Input{width: w, height: h, theme: theme},
@@ -357,6 +367,7 @@ defmodule OctoPi.TUI.Interactive do
       banner: Components.WelcomeBanner.new(theme, model: model.id),
       footer: footer,
       footer_data: footer_data,
+      loaded_resources: loaded_resources,
       debug_render_log: debug_render_log
     }
 
@@ -412,6 +423,20 @@ defmodule OctoPi.TUI.Interactive do
 
   defp put_if_present(kw, _k, nil), do: kw
   defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
+
+  defp build_loaded_resources(opts) do
+    case Keyword.get(opts, :resource_loader) do
+      nil ->
+        nil
+
+      loader ->
+        %{
+          context_files: Enum.map(loader.context_files, &%{path: &1.path}),
+          skills: Enum.map(loader.skills, &%{name: &1.name}),
+          prompt_templates: Enum.map(loader.prompt_templates, &%{name: &1.name})
+        }
+    end
+  end
 
   defp start_terminal(opts, write_fn) do
     terminal_opts =
@@ -564,6 +589,9 @@ defmodule OctoPi.TUI.Interactive do
   @spec handle_event(t(), term()) :: t()
 
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: %{state | exit: true}
+
+  def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}),
+    do: %{state | tools_expanded: !state.tools_expanded}
 
   def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key}) when shortcuts != [] do
     case try_extension_shortcut(shortcuts, key, state) do
@@ -832,11 +860,12 @@ defmodule OctoPi.TUI.Interactive do
         input_lines
       ) do
     banner_lines = render_banner(banner, width)
+    resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width)
     loader_lines = render_loader(loader, width, state.theme)
     footer_lines = Footer.render(footer, width)
 
-    all = banner_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ footer_lines
+    all = banner_lines ++ resource_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ footer_lines
     len = length(all)
     if len < height, do: List.duplicate("", height - len) ++ all, else: all
   end
@@ -855,6 +884,71 @@ defmodule OctoPi.TUI.Interactive do
       lines -> lines ++ [""]
     end
   end
+
+  defp render_resource_sections(nil, _theme, _expanded), do: []
+
+  defp render_resource_sections(resources, theme, expanded) do
+    [
+      render_context_section(resources.context_files, theme, expanded),
+      render_skills_section(resources.skills, theme, expanded),
+      render_prompts_section(resources.prompt_templates, theme, expanded)
+    ]
+    |> Enum.reject(&(&1 == []))
+    |> Enum.flat_map(&(&1 ++ [""]))
+  end
+
+  defp render_context_section([], _theme, _expanded), do: []
+
+  defp render_context_section(files, theme, expanded) do
+    header = section_header(theme, "Context")
+
+    body =
+      if expanded do
+        Enum.map_join(files, "\n", &("  " <> dim(&1.path)))
+      else
+        names = Enum.map_join(files, ", ", &Path.basename(&1.path))
+        dim("  #{names}")
+      end
+
+    [header, body]
+  end
+
+  defp render_skills_section([], _theme, _expanded), do: []
+
+  defp render_skills_section(skills, theme, expanded) do
+    header = section_header(theme, "Skills")
+
+    body =
+      if expanded do
+        Enum.map_join(skills, "\n", &("  " <> dim(&1.name)))
+      else
+        names = Enum.map_join(skills, ", ", & &1.name)
+        dim("  #{names}")
+      end
+
+    [header, body]
+  end
+
+  defp render_prompts_section([], _theme, _expanded), do: []
+
+  defp render_prompts_section(templates, theme, expanded) do
+    header = section_header(theme, "Prompts")
+
+    body =
+      if expanded do
+        Enum.map_join(templates, "\n", &("  " <> dim("/#{&1.name}")))
+      else
+        names = Enum.map_join(templates, ", ", &"/#{&1.name}")
+        dim("  #{names}")
+      end
+
+    [header, body]
+  end
+
+  defp section_header(nil, name), do: "[#{name}]"
+  defp section_header(theme, name), do: Theme.fg(theme, :md_heading, "[#{name}]")
+
+  defp dim(text), do: "\e[2m#{text}\e[22m"
 
   defp render_transcript(transcript, width) do
     transcript

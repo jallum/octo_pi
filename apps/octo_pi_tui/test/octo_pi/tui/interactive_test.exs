@@ -952,4 +952,158 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.input.cursor == 1
     end
   end
+
+  # ── ctrl+o — startup expansion toggle ─────────────────────────
+
+  describe "handle_event — ctrl+o" do
+    test "ctrl+o toggles tools_expanded from false to true" do
+      s = %Interactive{tools_expanded: false}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.tools_expanded == true
+    end
+
+    test "ctrl+o toggles tools_expanded from true to false" do
+      s = %Interactive{tools_expanded: true}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.tools_expanded == false
+    end
+  end
+
+  # ── loaded_resources rendering ─────────────────────────────────
+
+  defp fake_resources(overrides \\ %{}) do
+    Map.merge(
+      %{context_files: [], skills: [], prompt_templates: []},
+      overrides
+    )
+  end
+
+  defp joined_render(state) do
+    state
+    |> Interactive.render()
+    |> Enum.join("\n")
+  end
+
+  defp strip_ansi(text), do: String.replace(text, ~r/\e\[[0-9;]*m/, "")
+
+  describe "render/1 — loaded resources sections" do
+    test "no resource sections when loaded_resources is nil" do
+      s = %Interactive{width: 80, height: 40, loaded_resources: nil}
+      output = joined_render(s)
+      refute strip_ansi(output) =~ "[Context]"
+      refute strip_ansi(output) =~ "[Skills]"
+      refute strip_ansi(output) =~ "[Prompts]"
+    end
+
+    test "no resource sections when all lists are empty" do
+      s = %Interactive{width: 80, height: 40, loaded_resources: fake_resources()}
+      output = joined_render(s)
+      refute strip_ansi(output) =~ "[Context]"
+      refute strip_ansi(output) =~ "[Skills]"
+      refute strip_ansi(output) =~ "[Prompts]"
+    end
+
+    test "context section appears when context_files is non-empty" do
+      resources = fake_resources(%{context_files: [%{path: "/project/CLAUDE.md"}]})
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources}
+      assert strip_ansi(joined_render(s)) =~ "[Context]"
+    end
+
+    test "context compact shows basename" do
+      resources = fake_resources(%{context_files: [%{path: "/project/CLAUDE.md"}]})
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: false}
+      assert strip_ansi(joined_render(s)) =~ "CLAUDE.md"
+    end
+
+    test "context compact shows multiple basenames comma-separated" do
+      resources =
+        fake_resources(%{
+          context_files: [%{path: "/a/CLAUDE.md"}, %{path: "/b/AGENTS.md"}]
+        })
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: false}
+      output = strip_ansi(joined_render(s))
+      assert output =~ "CLAUDE.md"
+      assert output =~ "AGENTS.md"
+    end
+
+    test "context expanded shows full paths" do
+      resources =
+        fake_resources(%{
+          context_files: [%{path: "/project/CLAUDE.md"}]
+        })
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: true}
+      assert strip_ansi(joined_render(s)) =~ "/project/CLAUDE.md"
+    end
+
+    test "skills section appears when skills is non-empty" do
+      resources = fake_resources(%{skills: [%{name: "my-skill", file_path: "/skills/SKILL.md"}]})
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources}
+      assert strip_ansi(joined_render(s)) =~ "[Skills]"
+    end
+
+    test "skills compact shows skill names" do
+      resources =
+        fake_resources(%{
+          skills: [
+            %{name: "code-review", file_path: "/s/code-review/SKILL.md"},
+            %{name: "debug", file_path: "/s/debug/SKILL.md"}
+          ]
+        })
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: false}
+      output = strip_ansi(joined_render(s))
+      assert output =~ "code-review"
+      assert output =~ "debug"
+    end
+
+    test "prompts section appears when prompt_templates is non-empty" do
+      resources = fake_resources(%{prompt_templates: [%{name: "greet"}]})
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources}
+      assert strip_ansi(joined_render(s)) =~ "[Prompts]"
+    end
+
+    test "prompts compact shows /name format" do
+      resources =
+        fake_resources(%{
+          prompt_templates: [%{name: "greet"}, %{name: "review"}]
+        })
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: false}
+      output = strip_ansi(joined_render(s))
+      assert output =~ "/greet"
+      assert output =~ "/review"
+    end
+
+    test "resources sections appear before transcript" do
+      resources = fake_resources(%{context_files: [%{path: "/p/CLAUDE.md"}]})
+
+      s = %Interactive{
+        width: 80,
+        height: 40,
+        loaded_resources: resources,
+        transcript: [%AssistantMessage{content: [{:text, "hello"}], theme: Theme.load_builtin(:dark, :truecolor)}]
+      }
+
+      output = strip_ansi(joined_render(s))
+      context_pos = output |> :binary.match("[Context]") |> elem(0)
+      hello_pos = output |> :binary.match("hello") |> elem(0)
+      assert context_pos < hello_pos
+    end
+
+    test "all three sections visible together" do
+      resources = %{
+        context_files: [%{path: "/p/CLAUDE.md"}],
+        skills: [%{name: "my-skill", file_path: "/s/SKILL.md"}],
+        prompt_templates: [%{name: "cmd"}]
+      }
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources}
+      output = strip_ansi(joined_render(s))
+      assert output =~ "[Context]"
+      assert output =~ "[Skills]"
+      assert output =~ "[Prompts]"
+    end
+  end
 end
