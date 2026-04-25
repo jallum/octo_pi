@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:46:36Z",
+  "description": "Port the upstream pi-mono prompt composition machinery to octo_pi. The upstream assembles a system prompt from:\n1. Context files (CLAUDE.md/AGENTS.md, discovered by walking upward from cwd)\n2. File-based system prompt override (.pi/SYSTEM.md or ~/.pi/SYSTEM.md)\n3. Append system prompt (.pi/APPEND_SYSTEM.md / ~/.pi/APPEND_SYSTEM.md — both loaded, project appended after global)\n4. Skills (SKILL.md files discovered recursively in .pi/skills/ and ~/.pi/skills/, formatted as XML in system prompt)\n5. Prompt templates (.md files in .pi/prompts/ and ~/.pi/prompts/, with frontmatter + bash-style arg substitution)\n\nOur SystemPrompt.render/1 already accepts context_files, append, custom_prompt — but nothing populates them. This epic fills that gap.\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/system-prompt.ts, resource-loader.ts, skills.ts, prompt-templates.ts, agent-session.ts\n\nDependency graph:\n- context-file-discovery (1) → resource-loader-wiring (6)\n- system-append-prompt-files (2) → resource-loader-wiring (6)\n- skills-loading (3) → skills-xml (4) → resource-loader-wiring (6)\n- prompt-templates (5) → resource-loader-wiring (6)",
+  "id": "opi-u6a",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Prompt composition parity: resource loader, skills, context files, templates",
+  "type": "epic",
+  "updated_at": "2026-04-25T05:46:36Z"
+}
