@@ -9,6 +9,7 @@ defmodule OctoPi.TUI.Components.Input do
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.Suggestion
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.WrapAnsi
 
@@ -198,35 +199,94 @@ defmodule OctoPi.TUI.Components.Input do
     }
   end
 
-  # --- handle_key: multi-head dispatch ---
+  # --- handle_key: keybindings-based dispatch ---
+
+  @editor_action_priority ~w(
+    tui.editor.undo
+    tui.input.newLine
+    tui.input.submit
+    tui.editor.deleteCharBackward
+    tui.editor.deleteCharForward
+    tui.editor.deleteWordBackward
+    tui.editor.deleteWordForward
+    tui.editor.deleteToLineStart
+    tui.editor.deleteToLineEnd
+    tui.editor.yank
+    tui.editor.yankPop
+    tui.editor.cursorWordLeft
+    tui.editor.cursorWordRight
+    tui.editor.cursorLineStart
+    tui.editor.cursorLineEnd
+    tui.editor.cursorLeft
+    tui.editor.cursorRight
+    tui.editor.cursorUp
+    tui.editor.cursorDown
+    tui.editor.pageUp
+    tui.editor.pageDown
+    tui.select.cancel
+    tui.input.tab
+  )
+
+  @autocomplete_action_priority ~w(
+    tui.select.up
+    tui.select.down
+    tui.select.confirm
+    tui.input.tab
+    tui.select.cancel
+  )
+
+  defp resolve_kb(nil), do: Keybindings.new()
+  defp resolve_kb(kb), do: kb
+
+  defp find_editor_action(kb, key) do
+    Enum.find(@editor_action_priority, fn action -> Keybindings.matches?(kb, key, action) end)
+  end
+
+  defp find_autocomplete_action(kb, key) do
+    Enum.find(@autocomplete_action_priority, fn action -> Keybindings.matches?(kb, key, action) end)
+  end
 
   @impl true
-  def handle_key(%__MODULE__{} = s, %Key{key: ?-, modifiers: [:ctrl]}), do: undo(s)
+  def handle_key(%__MODULE__{} = s, %Key{} = key), do: handle_key(s, key, nil)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :up}), do: autocomplete_navigate(s, -1)
+  @doc "Handle a key event, dispatching via `keybindings` (or defaults when nil)."
+  @spec handle_key(t(), Key.t(), Keybindings.t() | nil) :: t() | {t(), [term()]}
+  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{} = key, kb) do
+    kb = resolve_kb(kb)
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :down}), do: autocomplete_navigate(s, 1)
+    case find_autocomplete_action(kb, key) do
+      "tui.select.up" -> autocomplete_navigate(s, -1)
+      "tui.select.down" -> autocomplete_navigate(s, 1)
+      "tui.select.confirm" -> autocomplete_accept(s)
+      "tui.input.tab" -> autocomplete_accept(s)
+      "tui.select.cancel" -> dismiss_autocomplete(s)
+      nil -> dispatch_editor_action(find_editor_action(kb, key), s)
+    end
+  end
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :tab}), do: autocomplete_accept(s)
+  def handle_key(%__MODULE__{} = s, %Key{} = key, kb) do
+    kb = resolve_kb(kb)
+    dispatch_editor_action(find_editor_action(kb, key), s)
+  end
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :enter}), do: autocomplete_accept(s)
+  defp dispatch_editor_action(nil, s), do: s
 
-  def handle_key(%__MODULE__{autocomplete_active: true} = s, %Key{key: :escape}), do: dismiss_autocomplete(s)
+  defp dispatch_editor_action("tui.editor.undo", s), do: undo(s)
 
-  def handle_key(%__MODULE__{} = s, %Key{key: :enter, modifiers: [:shift]}), do: insert(s, "\n")
+  defp dispatch_editor_action("tui.input.newLine", s), do: insert(s, "\n")
 
-  def handle_key(%__MODULE__{} = s, %Key{key: :enter}), do: {s, [{:submit, s.value}]}
+  defp dispatch_editor_action("tui.input.submit", s), do: {s, [{:submit, s.value}]}
 
-  def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: :backspace}), do: s
+  defp dispatch_editor_action("tui.editor.deleteCharBackward", %{cursor: 0} = s), do: s
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :backspace}) do
+  defp dispatch_editor_action("tui.editor.deleteCharBackward", %{value: v, cursor: c} = s) do
     s = %{push_undo(s) | last_action: nil}
     {before, after_cursor} = split_at_grapheme(v, c)
     trimmed = before |> String.graphemes() |> Enum.drop(-1) |> Enum.join()
     %{s | value: trimmed <> after_cursor, cursor: c - 1}
   end
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :delete}) do
+  defp dispatch_editor_action("tui.editor.deleteCharForward", %{value: v, cursor: c} = s) do
     if c >= String.length(v) do
       s
     else
@@ -237,54 +297,47 @@ defmodule OctoPi.TUI.Components.Input do
     end
   end
 
-  def handle_key(%__MODULE__{cursor: 0} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: s
+  defp dispatch_editor_action("tui.editor.deleteWordBackward", %{cursor: 0} = s), do: s
+  defp dispatch_editor_action("tui.editor.deleteWordBackward", s), do: delete_word_backward(s)
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?w, modifiers: [:ctrl]}), do: delete_word_backward(s)
+  defp dispatch_editor_action("tui.editor.deleteWordForward", s), do: delete_word_forward(s)
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?u, modifiers: [:ctrl]}) do
+  defp dispatch_editor_action("tui.editor.deleteToLineStart", s) do
     line_start = logical_line_start(s.value, s.cursor)
     if s.cursor == line_start, do: s, else: delete_to_line_start(s)
   end
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?k, modifiers: [:ctrl]}), do: delete_to_line_end(s)
+  defp dispatch_editor_action("tui.editor.deleteToLineEnd", s), do: delete_to_line_end(s)
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?d, modifiers: [:alt]}), do: delete_word_forward(s)
+  defp dispatch_editor_action("tui.editor.yank", s), do: yank(s)
+  defp dispatch_editor_action("tui.editor.yankPop", s), do: yank_pop(s)
 
-  def handle_key(%__MODULE__{} = s, %Key{key: ?y, modifiers: [:ctrl]}), do: yank(s)
-  def handle_key(%__MODULE__{} = s, %Key{key: ?y, modifiers: [:alt]}), do: yank_pop(s)
-
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?b, modifiers: [:alt]}),
+  defp dispatch_editor_action("tui.editor.cursorWordLeft", %{value: v, cursor: c} = s),
     do: %{s | cursor: word_boundary_backward(v, c), last_action: nil}
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?f, modifiers: [:alt]}),
+  defp dispatch_editor_action("tui.editor.cursorWordRight", %{value: v, cursor: c} = s),
     do: %{s | cursor: word_boundary_forward(v, c), last_action: nil}
 
-  def handle_key(%__MODULE__{cursor: c} = s, %Key{key: :left}),
+  defp dispatch_editor_action("tui.editor.cursorLineStart", %{value: v, cursor: c} = s),
+    do: %{s | cursor: logical_line_start(v, c), last_action: nil, preferred_col: nil}
+
+  defp dispatch_editor_action("tui.editor.cursorLineEnd", %{value: v, cursor: c} = s),
+    do: %{s | cursor: logical_line_end(v, c), last_action: nil, preferred_col: nil}
+
+  defp dispatch_editor_action("tui.editor.cursorLeft", %{cursor: c} = s),
     do: %{s | cursor: max(c - 1, 0), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :right}),
+  defp dispatch_editor_action("tui.editor.cursorRight", %{value: v, cursor: c} = s),
     do: %{s | cursor: min(c + 1, String.length(v)), last_action: nil, preferred_col: nil}
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :home}),
-    do: %{s | cursor: logical_line_start(v, c), last_action: nil, preferred_col: nil}
+  defp dispatch_editor_action("tui.editor.cursorUp", s), do: move_vertical(s, -1)
+  defp dispatch_editor_action("tui.editor.cursorDown", s), do: move_vertical(s, 1)
+  defp dispatch_editor_action("tui.editor.pageUp", s), do: move_vertical(s, -@page_size)
+  defp dispatch_editor_action("tui.editor.pageDown", s), do: move_vertical(s, @page_size)
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?a, modifiers: [:ctrl]}),
-    do: %{s | cursor: logical_line_start(v, c), last_action: nil, preferred_col: nil}
+  defp dispatch_editor_action("tui.select.cancel", s), do: {s, [:cancel]}
 
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: :end}),
-    do: %{s | cursor: logical_line_end(v, c), last_action: nil, preferred_col: nil}
-
-  def handle_key(%__MODULE__{value: v, cursor: c} = s, %Key{key: ?e, modifiers: [:ctrl]}),
-    do: %{s | cursor: logical_line_end(v, c), last_action: nil, preferred_col: nil}
-
-  def handle_key(%__MODULE__{} = s, %Key{key: :up}), do: move_vertical(s, -1)
-  def handle_key(%__MODULE__{} = s, %Key{key: :down}), do: move_vertical(s, 1)
-  def handle_key(%__MODULE__{} = s, %Key{key: :page_up}), do: move_vertical(s, -@page_size)
-  def handle_key(%__MODULE__{} = s, %Key{key: :page_down}), do: move_vertical(s, @page_size)
-
-  def handle_key(%__MODULE__{} = s, %Key{key: :escape}), do: {s, [:cancel]}
-
-  def handle_key(%__MODULE__{} = s, %Key{}), do: s
+  defp dispatch_editor_action(_action, s), do: s
 
   # --- kill ring operations ---
 

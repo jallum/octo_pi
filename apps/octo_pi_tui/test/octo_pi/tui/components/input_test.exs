@@ -1232,4 +1232,78 @@ defmodule OctoPi.TUI.Components.InputTest do
       end
     end
   end
+
+  # ── handle_key/3 — keybindings dispatch (opi-0g4.17) ──────────
+
+  describe "handle_key/3 — keybindings-based dispatch" do
+    alias OctoPi.TUI.Keybindings
+
+    defp press3(input, key_spec, kb) do
+      case Input.handle_key(input, key_spec, kb) do
+        {new_input, _events} -> new_input
+        new_input -> new_input
+      end
+    end
+
+    test "handle_key/2 compatibility shim still works (default keybindings)" do
+      input = type(%Input{}, "hello")
+      result = press(input, key(:left))
+      assert result.cursor == 4
+    end
+
+    test "handle_key/3 with nil keybindings uses defaults" do
+      input = type(%Input{}, "hello")
+      result = press3(input, key(:left), nil)
+      assert result.cursor == 4
+    end
+
+    test "custom binding for tui.input.submit submits on remapped key" do
+      kb = Keybindings.new(%{"tui.input.submit" => "ctrl+m"})
+      input = type(%Input{}, "hello")
+      result = Input.handle_key(input, ctrl(?m), kb)
+      assert {_, [{:submit, "hello"}]} = result
+    end
+
+    test "default submit key (enter) no longer works when tui.input.submit is remapped" do
+      kb = Keybindings.new(%{"tui.input.submit" => "ctrl+m"})
+      input = type(%Input{}, "hello")
+      result = Input.handle_key(input, key(:enter), kb)
+      refute match?({_, [{:submit, _}]}, result)
+    end
+
+    test "custom binding for tui.editor.cursorLeft moves cursor on remapped key" do
+      kb = Keybindings.new(%{"tui.editor.cursorLeft" => "ctrl+j"})
+      input = type(%Input{}, "hello")
+      result = press3(input, %Key{key: ?j, modifiers: [:ctrl]}, kb)
+      assert result.cursor == 4
+    end
+
+    test "default cursor left (left arrow) no longer works when remapped" do
+      kb = Keybindings.new(%{"tui.editor.cursorLeft" => "ctrl+j"})
+      input = type(%Input{}, "hello")
+      result = press3(input, key(:left), kb)
+      assert result.cursor == 5
+    end
+
+    test "alt+left triggers cursorWordLeft with default keybindings" do
+      kb = Keybindings.new()
+      input = type(%Input{}, "hello world")
+      result = press3(input, %Key{key: :left, modifiers: [:alt]}, kb)
+      assert result.cursor == 6
+    end
+
+    test "alt+backspace triggers deleteWordBackward with default keybindings" do
+      kb = Keybindings.new()
+      input = type(%Input{}, "hello world")
+      result = press3(input, %Key{key: :backspace, modifiers: [:alt]}, kb)
+      assert result.value == "hello "
+    end
+
+    test "tui.editor.undo action triggered via keybindings" do
+      kb = Keybindings.new(%{"tui.editor.undo" => "ctrl+z"})
+      input = type(%Input{}, "hello")
+      result = press3(input, ctrl(?z), kb)
+      assert result.value == ""
+    end
+  end
 end

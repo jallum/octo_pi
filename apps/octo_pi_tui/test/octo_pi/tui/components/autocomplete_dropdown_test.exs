@@ -116,10 +116,11 @@ defmodule OctoPi.TUI.Components.AutocompleteDropdownTest do
       refute input.autocomplete_active
     end
 
-    test "Ctrl+C does not interact with autocomplete" do
+    test "Ctrl+C dismisses autocomplete (tui.select.cancel default binding)" do
       input = type(%Input{autocomplete_provider: test_provider()}, "/")
+      assert input.autocomplete_active
       result = Input.handle_key(input, ctrl(?c))
-      assert result == input or match?({_, _}, result)
+      refute result.autocomplete_active
     end
   end
 

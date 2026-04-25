@@ -31,8 +31,8 @@ defmodule OctoPi.TUI.Keybindings do
       description: "Move to line start"
     },
     "tui.editor.cursorLineEnd" => %{keys: ["end", "ctrl+e"], description: "Move to line end"},
-    "tui.editor.pageUp" => %{keys: ["pageUp"], description: "Page up"},
-    "tui.editor.pageDown" => %{keys: ["pageDown"], description: "Page down"},
+    "tui.editor.pageUp" => %{keys: ["page_up"], description: "Page up"},
+    "tui.editor.pageDown" => %{keys: ["page_down"], description: "Page down"},
     "tui.editor.deleteCharBackward" => %{
       keys: ["backspace"],
       description: "Delete character backward"
@@ -60,8 +60,8 @@ defmodule OctoPi.TUI.Keybindings do
     "tui.input.copy" => %{keys: ["ctrl+c"], description: "Copy selection"},
     "tui.select.up" => %{keys: ["up"], description: "Move selection up"},
     "tui.select.down" => %{keys: ["down"], description: "Move selection down"},
-    "tui.select.pageUp" => %{keys: ["pageUp"], description: "Selection page up"},
-    "tui.select.pageDown" => %{keys: ["pageDown"], description: "Selection page down"},
+    "tui.select.pageUp" => %{keys: ["page_up"], description: "Selection page up"},
+    "tui.select.pageDown" => %{keys: ["page_down"], description: "Selection page down"},
     "tui.select.confirm" => %{keys: ["enter"], description: "Confirm selection"},
     "tui.select.cancel" => %{keys: ["escape", "ctrl+c"], description: "Cancel selection"},
     "app.interrupt" => %{keys: ["escape"], description: "Cancel/abort"},
@@ -127,9 +127,13 @@ defmodule OctoPi.TUI.Keybindings do
 
   @named_keys ~w(
     enter escape tab backspace delete space up down left right
-    home end pageUp pageDown insert
+    home end page_up page_down pageUp pageDown insert
     f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
   )
+
+  defp normalize_named_key("pageUp"), do: "page_up"
+  defp normalize_named_key("pageDown"), do: "page_down"
+  defp normalize_named_key(k), do: k
 
   defp normalize_key_id(id) do
     parts = String.split(id, "+")
@@ -137,7 +141,7 @@ defmodule OctoPi.TUI.Keybindings do
 
     normalized_key =
       if key_part in @named_keys do
-        key_part
+        normalize_named_key(key_part)
       else
         case String.to_charlist(key_part) do
           [cp] -> Integer.to_string(cp)
