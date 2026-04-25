@@ -139,7 +139,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
   describe "system prompt" do
     test "is shaped as a list of text blocks" do
       r = Request.build(model(), user_context(system_prompt: "be terse"), %StreamOptions{})
-      assert r.body["system"] == [%{"type" => "text", "text" => "be terse"}]
+      assert [%{"type" => "text", "text" => "be terse"}] = r.body["system"]
     end
 
     test "empty string is treated as no system prompt" do
@@ -152,9 +152,8 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
     test "string content becomes a single text block" do
       r = Request.build(model(), user_context(), %StreamOptions{})
 
-      assert r.body["messages"] == [
-               %{"role" => "user", "content" => [%{"type" => "text", "text" => "hello"}]}
-             ]
+      assert [%{"role" => "user", "content" => [%{"type" => "text", "text" => "hello"}]}] =
+               r.body["messages"]
     end
 
     test "list content with text + image is preserved as blocks" do
@@ -174,7 +173,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       [msg] = r.body["messages"]
       assert msg["role"] == "user"
 
-      assert msg["content"] == [
+      assert [
                %{"type" => "text", "text" => "what is this?"},
                %{
                  "type" => "image",
@@ -184,7 +183,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
                    "data" => "base64=="
                  }
                }
-             ]
+             ] = msg["content"]
     end
   end
 
@@ -208,7 +207,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       assert [msg] = r.body["messages"]
       assert msg["role"] == "assistant"
 
-      assert msg["content"] == [
+      assert [
                %{"type" => "text", "text" => "Let me think."},
                %{"type" => "thinking", "thinking" => "inner", "signature" => "sig"},
                %{
@@ -217,7 +216,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
                  "name" => "edit",
                  "input" => %{"path" => "x"}
                }
-             ]
+             ] = msg["content"]
     end
 
     test "redacted thinking serializes as redacted_thinking with data" do
@@ -482,7 +481,158 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       refute Enum.any?(r.headers, fn {k, _} -> k == "authorization" end)
       refute Enum.any?(r.headers, fn {k, _} -> k == "user-agent" end)
       refute Enum.any?(r.headers, fn {k, _} -> k == "x-app" end)
-      assert r.body["system"] == [%{"type" => "text", "text" => "hi"}]
+      assert [%{"type" => "text", "text" => "hi"}] = r.body["system"]
+    end
+  end
+
+  describe "cache control" do
+    test "adds cache_control: ephemeral to system, last tool, and last message by default" do
+      tool = %Tool{name: "edit", description: "", parameters: %{}}
+
+      ctx = %Context{
+        system_prompt: "be terse",
+        messages: [%Message.User{content: "hello", timestamp: 0}],
+        tools: [tool]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      cc = %{"type" => "ephemeral"}
+      assert [%{"cache_control" => ^cc}] = r.body["system"]
+      assert [%{"cache_control" => ^cc}] = r.body["tools"]
+
+      [msg] = r.body["messages"]
+      assert [%{"cache_control" => ^cc}] = msg["content"]
+    end
+
+    test "adds ttl: 1h when cache_retention is long and base_url is api.anthropic.com" do
+      ctx = %Context{
+        system_prompt: "be terse",
+        messages: [%Message.User{content: "hello", timestamp: 0}],
+        tools: []
+      }
+
+      opts = %StreamOptions{metadata: %{"cache_retention" => "long"}}
+      r = Request.build(model(), ctx, opts)
+
+      cc = %{"type" => "ephemeral", "ttl" => "1h"}
+      assert [%{"cache_control" => ^cc}] = r.body["system"]
+    end
+
+    test "omits ttl when cache_retention is long but base_url is a proxy" do
+      ctx = %Context{
+        system_prompt: "be terse",
+        messages: [%Message.User{content: "hello", timestamp: 0}],
+        tools: []
+      }
+
+      opts = %StreamOptions{metadata: %{"cache_retention" => "long"}}
+      r = Request.build(model(base_url: "https://my-proxy.example.com/v1"), ctx, opts)
+
+      cc = %{"type" => "ephemeral"}
+      assert [%{"cache_control" => ^cc}] = r.body["system"]
+    end
+
+    test "omits cache_control entirely when cache_retention is none" do
+      ctx = %Context{
+        system_prompt: "be terse",
+        messages: [%Message.User{content: "hello", timestamp: 0}],
+        tools: []
+      }
+
+      opts = %StreamOptions{metadata: %{"cache_retention" => "none"}}
+      r = Request.build(model(), ctx, opts)
+
+      assert [%{"type" => "text", "text" => "be terse"}] = r.body["system"]
+      refute Map.has_key?(hd(r.body["system"]), "cache_control")
+    end
+
+    test "skips system cache_control when there is no system prompt" do
+      r = Request.build(model(), user_context(), %StreamOptions{})
+      refute Map.has_key?(r.body, "system")
+    end
+
+    test "skips tool cache_control when there are no tools" do
+      r = Request.build(model(), user_context(system_prompt: "hi"), %StreamOptions{})
+      refute Map.has_key?(r.body, "tools")
+    end
+
+    test "applies cache_control to last tool only when multiple tools are present" do
+      tools = [
+        %Tool{name: "read", description: "", parameters: %{}},
+        %Tool{name: "edit", description: "", parameters: %{}}
+      ]
+
+      ctx = %Context{messages: [%Message.User{content: "hi", timestamp: 0}], tools: tools}
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      cc = %{"type" => "ephemeral"}
+      [first, last] = r.body["tools"]
+      refute Map.has_key?(first, "cache_control")
+      assert last["cache_control"] == cc
+    end
+
+    test "applies cache_control to last text block in multi-block user message" do
+      ctx = %Context{
+        messages: [
+          %Message.User{
+            content: [
+              %Content.Text{text: "what is this?"},
+              %Content.Image{data: "base64==", mime_type: "image/png"}
+            ],
+            timestamp: 0
+          }
+        ]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [msg] = r.body["messages"]
+      [text_block, image_block] = msg["content"]
+
+      assert text_block["cache_control"] == %{"type" => "ephemeral"}
+      refute Map.has_key?(image_block, "cache_control")
+    end
+
+    test "cache_control on last message targets last user/assistant, not tool_result bundles" do
+      ctx = %Context{
+        messages: [
+          %Message.User{content: "do x", timestamp: 0},
+          %Message.ToolResult{
+            tool_call_id: "toolu_1",
+            tool_name: "edit",
+            content: [%Content.Text{text: "done"}],
+            is_error?: false,
+            timestamp: 0
+          }
+        ]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+
+      # tool_result bundles into a user message — that is the last user message
+      [_first, bundled] = r.body["messages"]
+      assert bundled["role"] == "user"
+      # tool_result blocks have no text type — no cache_control added
+      [tr_block] = bundled["content"]
+      assert tr_block["type"] == "tool_result"
+      refute Map.has_key?(tr_block, "cache_control")
+    end
+
+    test "OAuth: cache_control goes on the last of the two system blocks" do
+      @oauth_token = "sk-ant-oat01-foobar"
+
+      ctx = %Context{
+        system_prompt: "be terse",
+        messages: [%Message.User{content: "hello", timestamp: 0}],
+        tools: []
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{api_key: @oauth_token})
+
+      cc = %{"type" => "ephemeral"}
+      [identity, user_sys] = r.body["system"]
+      refute Map.has_key?(identity, "cache_control")
+      assert user_sys["cache_control"] == cc
     end
   end
 end

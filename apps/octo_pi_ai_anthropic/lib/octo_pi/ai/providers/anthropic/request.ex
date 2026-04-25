@@ -13,9 +13,8 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
     tool names rewritten to Claude Code canonical casing via
     `ToolNames.to_claude_code/1`.
 
-  Deferred: prompt caching, adaptive / budget thinking shapes, the
-  interactive OAuth login-then-refresh flow (env / keychain OAuth
-  tokens are supported already).
+  Deferred: adaptive / budget thinking shapes, the interactive OAuth
+  login-then-refresh flow (env / keychain OAuth tokens are supported already).
 
   See `docs/port-map/anthropic.md` §1.
   """
@@ -101,6 +100,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   defp body(model, context, opts, auth) do
     max_tokens = opts.max_tokens || div(model.max_tokens, 3)
     oauth? = auth.type == :oauth
+    cache_retention = resolve_cache_retention(opts)
 
     %{
       "model" => model.id,
@@ -112,11 +112,77 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
     |> maybe_put("tools", convert_tools(context.tools, oauth?))
     |> maybe_put("temperature", opts.temperature)
     |> maybe_put("metadata", opts.metadata)
+    |> apply_cache_control(model, cache_retention)
   end
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, _key, []), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  # --- Caching ---
+
+  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"], do: r
+  defp resolve_cache_retention(_opts), do: "short"
+
+  defp apply_cache_control(body, _model, "none"), do: body
+
+  defp apply_cache_control(body, model, cache_retention) do
+    ttl =
+      if cache_retention == "long" and String.contains?(model.base_url, "api.anthropic.com"),
+        do: "1h",
+        else: nil
+
+    cc = if ttl, do: %{"type" => "ephemeral", "ttl" => ttl}, else: %{"type" => "ephemeral"}
+
+    body
+    |> add_cache_control_to_system(cc)
+    |> add_cache_control_to_last_tool(cc)
+    |> add_cache_control_to_last_conversation_msg(cc)
+  end
+
+  defp add_cache_control_to_system(%{"system" => [_ | _] = system} = body, cc) do
+    Map.put(body, "system", List.update_at(system, -1, &Map.put(&1, "cache_control", cc)))
+  end
+
+  defp add_cache_control_to_system(body, _cc), do: body
+
+  defp add_cache_control_to_last_tool(%{"tools" => [_ | _] = tools} = body, cc) do
+    Map.put(body, "tools", List.update_at(tools, -1, &Map.put(&1, "cache_control", cc)))
+  end
+
+  defp add_cache_control_to_last_tool(body, _cc), do: body
+
+  defp add_cache_control_to_last_conversation_msg(%{"messages" => messages} = body, cc) do
+    idx =
+      messages
+      |> Enum.with_index()
+      |> Enum.reverse()
+      |> Enum.find_value(fn {msg, i} ->
+        if msg["role"] in ["user", "assistant"], do: i
+      end)
+
+    case idx do
+      nil -> body
+      i -> Map.put(body, "messages", List.update_at(messages, i, &add_cache_control_to_last_text_block(&1, cc)))
+    end
+  end
+
+  defp add_cache_control_to_last_text_block(%{"content" => content} = msg, cc) when is_list(content) do
+    idx =
+      content
+      |> Enum.with_index()
+      |> Enum.reverse()
+      |> Enum.find_value(fn {block, i} ->
+        if block["type"] == "text", do: i
+      end)
+
+    case idx do
+      nil -> msg
+      i -> Map.put(msg, "content", List.update_at(content, i, &Map.put(&1, "cache_control", cc)))
+    end
+  end
+
+  defp add_cache_control_to_last_text_block(msg, _cc), do: msg
 
   # --- System prompt ---
 
