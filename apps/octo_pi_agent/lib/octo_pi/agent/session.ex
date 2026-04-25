@@ -72,6 +72,9 @@ defmodule OctoPi.Agent.Session do
   def set_model(pid, model), do: GenServer.call(pid, {:set_model, model})
 
   @doc false
+  def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
+
+  @doc false
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
   @doc false
@@ -160,6 +163,12 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call({:set_model, model}, _from, store) do
     {:reply, :ok, put_in(store.session.model, model)}
+  end
+
+  def handle_call({:add_tool, tool}, _from, store) do
+    tools = store.session.tools
+    new_tools = if Enum.any?(tools, &(&1.name == tool.name)), do: tools, else: tools ++ [tool]
+    {:reply, :ok, put_in(store.session.tools, new_tools)}
   end
 
   def handle_call(:drain_steering, _from, store) do

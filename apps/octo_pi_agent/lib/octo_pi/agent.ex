@@ -72,6 +72,10 @@ defmodule OctoPi.Agent do
   @spec set_model(session(), OctoPi.AI.Model.t()) :: :ok
   def set_model(pid, model), do: Session.set_model(pid, model)
 
+  @doc "Add a tool to the session's active tool list. No-op if a tool with the same name already exists."
+  @spec add_tool(session(), map()) :: :ok
+  def add_tool(pid, tool), do: Session.add_tool(pid, tool)
+
   @doc "Drain all messages from the steering queue and return them."
   @spec drain_steering(session()) :: [Message.t()]
   def drain_steering(pid), do: Session.drain_steering(pid)

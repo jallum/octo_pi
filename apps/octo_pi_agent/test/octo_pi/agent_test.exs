@@ -225,6 +225,23 @@ defmodule OctoPi.AgentTest do
     test "wait_for_idle/2 returns :ok immediately when session is idle", %{session: session} do
       assert :ok = OctoPi.Agent.wait_for_idle(session, 100)
     end
+
+    test "add_tool/2 appends a tool to the session's tool list", %{session: session} do
+      tool = %{name: "search", description: "search tool", input_schema: %{}}
+      :ok = OctoPi.Agent.add_tool(session, tool)
+      state = OctoPi.Agent.state(session)
+      assert Enum.any?(state.tools, &(&1.name == "search"))
+    end
+
+    test "add_tool/2 is a no-op if a tool with the same name already exists", %{session: session} do
+      tool = %{name: "search", description: "first", input_schema: %{}}
+      :ok = OctoPi.Agent.add_tool(session, tool)
+      :ok = OctoPi.Agent.add_tool(session, %{name: "search", description: "second", input_schema: %{}})
+      state = OctoPi.Agent.state(session)
+      tools = Enum.filter(state.tools, &(&1.name == "search"))
+      assert length(tools) == 1
+      assert hd(tools).description == "first"
+    end
   end
 
   defp fake_model do

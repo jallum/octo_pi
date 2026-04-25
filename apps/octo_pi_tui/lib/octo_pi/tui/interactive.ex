@@ -333,6 +333,11 @@ defmodule OctoPi.TUI.Interactive do
     {%{state | dialog: {:editor, ref, content, opts}}, :pending}
   end
 
+  def handle_ui_request(state, {:register_extension_tool, spec}) do
+    if state.session, do: OctoPi.Agent.add_tool(state.session, spec)
+    {state, :ok}
+  end
+
   def handle_ui_request(state, {:custom, _ref, _factory, _opts}) do
     {state, :pending}
   end
@@ -472,6 +477,7 @@ defmodule OctoPi.TUI.Interactive do
       extensions: extensions
     }
 
+    register_extension_tools(extensions, session)
     fire_session_start(extensions, cwd, self())
 
     state = render_frame(state, renderer, terminal)
@@ -574,6 +580,14 @@ defmodule OctoPi.TUI.Interactive do
       exts when is_list(exts) ->
         exts
     end
+  end
+
+  defp register_extension_tools(extensions, session) do
+    for ext <- extensions, tool <- Map.values(ext.tools) do
+      OctoPi.Agent.add_tool(session, tool)
+    end
+
+    :ok
   end
 
   defp fire_session_start([], _cwd, _interactive_pid), do: :ok
@@ -1122,6 +1136,14 @@ defmodule OctoPi.TUI.Interactive do
     dispatch_slash(cmd, state, new_input, value)
   end
 
+  defp handle_submit(state, new_input, "!" <> rest) do
+    command = String.trim_leading(rest, " ")
+    be = run_bash_command(command, state.theme)
+    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
+  end
+
+  defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
+
   defp dispatch_slash(cmd, state, new_input, _value) when cmd in ~w(help clear compact cost model theme config) do
     dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
   end
@@ -1159,14 +1181,6 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp notify_extension_result(_pid, _), do: :ok
-
-  defp handle_submit(state, new_input, "!" <> rest) do
-    command = String.trim_leading(rest, " ")
-    be = run_bash_command(command, state.theme)
-    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
-  end
-
-  defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
 
   defp do_handle_submit(state, new_input, value) do
     prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value

@@ -762,11 +762,11 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "no extensions — AgentStart still creates loader" do
       s = %Interactive{extensions: []}
       new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentStart{}})
-      assert %OctoPi.TUI.Components.Loader{} = new_s.loader
+      assert %Loader{} = new_s.loader
     end
 
     test "no extensions — AgentEnd still clears loader" do
-      s = %Interactive{loader: OctoPi.TUI.Components.Loader.new(), extensions: []}
+      s = %Interactive{loader: Loader.new(), extensions: []}
       new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: []}})
       assert new_s.loader == nil
     end
@@ -1103,6 +1103,87 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
       assert new_state.notification =~ "Commands:"
+    end
+  end
+
+  describe "run/1 — extension tool registration (opi-8ee.4)" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Model
+    alias OctoPi.Coder.Extension.API
+    alias OctoPi.Coder.Extension.Loader, as: ExtLoader
+    alias Terminal, as: TUITerminal
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    defp tool_reg_model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    test "extension tools are registered with the agent session on startup" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("tool_ext", fn api ->
+          API.register_tool(api, %{
+            name: "my_ext_tool",
+            description: "a tool",
+            input_schema: %{type: "object", properties: %{}}
+          })
+
+          API.on(api, :session_start, fn _event, _ctx ->
+            send(test_pid, :session_started)
+          end)
+        end)
+
+      terminal_name = :"tool_reg_terminal_#{System.unique_integer([:positive])}"
+
+      runner =
+        Task.async(fn ->
+          Interactive.run(
+            model: tool_reg_model(),
+            transport: FakeTransport,
+            tools: [],
+            extensions: [ext],
+            write_fn: fn _ -> :ok end,
+            skip_raw_mode: true,
+            skip_sigwinch: true,
+            auto_start_reader: false,
+            dimensions: {80, 24},
+            terminal_name: terminal_name
+          )
+        end)
+
+      assert_receive :session_started, 2_000
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      Task.await(runner, 2_000)
+    end
+
+    test "add_tool via handle_ui_request registers the tool when a session is active" do
+      {:ok, session} = OctoPi.Agent.start_session(model: tool_reg_model(), transport: FakeTransport)
+      tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
+
+      state = %Interactive{session: session}
+      {_new_state, :ok} = Interactive.handle_ui_request(state, {:register_extension_tool, tool})
+
+      session_state = OctoPi.Agent.state(session)
+      assert Enum.any?(session_state.tools, &(&1.name == "runtime_tool"))
+    end
+
+    test "add_tool via handle_ui_request is a no-op when session is nil" do
+      tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
+      state = %Interactive{session: nil}
+      {_new_state, :ok} = Interactive.handle_ui_request(state, {:register_extension_tool, tool})
     end
   end
 
