@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-uvo",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Clear-before-paint: use \\e[2K instead of \\e[K",
   "type": "task",
-  "updated_at": "2026-04-25T03:02:15Z"
+  "updated_at": "2026-04-25T12:00:34.251912Z"
 }
