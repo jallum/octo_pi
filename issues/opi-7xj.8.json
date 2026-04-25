@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Built-in slash commands not handled — /help /clear /model etc. sent to AI",
   "type": "bug",
-  "updated_at": "2026-04-25T16:15:35.895466Z"
+  "updated_at": "2026-04-25T17:40:15.332786Z"
 }
