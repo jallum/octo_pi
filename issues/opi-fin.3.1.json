@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.3.2"
+  ],
   "created": "2026-04-25T21:11:58Z",
   "description": "FILES: dispatcher.ex, wherever load_all/1 is called in the session runner.\n\nReplace the per-dispatch scan of Extension.t() handler maps with a :bag ETS table lookup.\n\nTABLE SPEC:\n- Type: :bag (multiple rows per key)\n- Row format: {event_type :: atom(), ext_id :: String.t(), handler_fn :: function()}\n- Options: {:read_concurrency, true}, :protected\n- Name: session-scoped (NOT a named global table -- multiple sessions must coexist)\n\nPOPULATION: After all extensions are loaded (post load_all/1 or equivalent), iterate extensions and insert one row per handler. Table is populated once and read many times.\n\nOWNERSHIP: The ETS table must be owned by a long-lived process that outlives individual dispatch calls. Options: (a) the session supervisor process owns it, (b) a dedicated TableOwner GenServer under the session supervisor. Do NOT create it in a process that may exit before the session ends. Document which approach is chosen.\n\nDISPATCHER CHANGE: Dispatcher.all_handlers/2 currently takes [Extension.t()] and scans. Change signature to accept either the ETS table reference or a context that carries it. The table reference must reach the Dispatcher on every emit call. Evaluate whether to thread it through Context.t() (add a handlers_table field) or pass as explicit argument to emit/3.\n\nExtension.t() structs are still built identically -- ETS is populated FROM them, not instead of them. Introspection functions (get_all_tools, get_all_commands, etc.) continue to work off the in-memory Extension.t() list.\n\nTEST: Update dispatcher_test.exs and extensions_runner_test.exs. Tests that currently pass [Extension.t()] to Dispatcher.emit must be updated to populate and pass a table reference instead.",
   "id": "opi-fin.3.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "ETS handler dispatch table",
   "type": "task",
-  "updated_at": "2026-04-25T21:11:58Z"
+  "updated_at": "2026-04-25T21:14:12Z"
 }
