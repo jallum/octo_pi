@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:14:07Z",
+  "description": "REQUIRES: opi-fin.6.5, opi-fin.7.3, opi-fin.8 all merged.\n\nThis ticket is a checklist. Complete all items, run full test suite, close.\n\nREMOVALS:\n1. API.bind_core/2 in api.ex -- remove the function. Grep for all callers first: grep -r 'bind_core' apps/. Should be zero after Phases 6 and 5 migrations.\n2. All action fn-fields from API.t() struct: send_message, send_user_message, append_entry, get_model, set_model, get_thinking_level, set_thinking_level, abort, compact, get_system_prompt, get_active_tools, get_all_tools, set_active_tools, get_session_name, set_session_name, set_label, register_tool, exec, get_commands, get_context_usage. Remove from defstruct, @type, and the stub-generation lists.\n3. API.new/1 stub generation: remove @one_arity_actions, @zero_arity_actions, @two_arity_actions lists and the Enum.reduce that builds stubs.\n4. The stub/2 and events_stub/0 private functions in api.ex.\n5. Remove the state_agent field from API.t() if Phase 2 macro puts it there -- move any remaining reference to Extension.t().\n6. Grep for the stub error string 'not bound — call bind_core first' -- should find zero occurrences.\n7. Grep for 'UIContext' -- should find zero occurrences (Phase 7 deleted the module).\n8. Remove any dead test helper functions (ext_with_state patterns, bind_core test setups) from test files.\n\nAFTER REMOVALS: Run mix test. All tests must pass. Run mix dialyzer if configured.",
+  "id": "opi-fin.9.1",
+  "labels": [],
+  "parent": "opi-fin.9",
+  "priority": 3,
+  "status": "open",
+  "title": "Remove legacy API (final cleanup)",
+  "type": "task",
+  "updated_at": "2026-04-25T21:14:07Z"
+}
