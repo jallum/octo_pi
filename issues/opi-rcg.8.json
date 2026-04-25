@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.ui.set_header/set_footer render factory — accept (tui, theme) => component instead of plain map",
   "type": "task",
-  "updated_at": "2026-04-25T18:27:10.156043Z"
+  "updated_at": "2026-04-25T18:34:42.640793Z"
 }
