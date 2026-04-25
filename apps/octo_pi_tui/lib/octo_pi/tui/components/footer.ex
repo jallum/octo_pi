@@ -20,6 +20,7 @@ defmodule OctoPi.TUI.Components.Footer do
           context_percent: float() | nil,
           context_window: non_neg_integer(),
           model_id: String.t(),
+          provider: atom() | nil,
           thinking_level: String.t() | nil,
           extension_statuses: %{String.t() => String.t()}
         }
@@ -35,6 +36,7 @@ defmodule OctoPi.TUI.Components.Footer do
             context_percent: nil,
             context_window: 0,
             model_id: "no-model",
+            provider: nil,
             thinking_level: nil,
             extension_statuses: %{}
 
@@ -42,8 +44,7 @@ defmodule OctoPi.TUI.Components.Footer do
   def render(%__MODULE__{} = f, width) do
     pwd_line = build_pwd_line(f, width)
     stats_line = build_stats_line(f, width)
-    hints_line = build_hints_line(width)
-    lines = [pwd_line, stats_line, hints_line]
+    lines = [pwd_line, stats_line]
 
     case build_extension_line(f, width) do
       nil -> lines
@@ -99,11 +100,6 @@ defmodule OctoPi.TUI.Components.Footer do
     truncate_dim(line, width)
   end
 
-  defp build_hints_line(width) do
-    hints = "Esc interrupt · Ctrl+C exit · /help commands · ? toggle tips"
-    truncate_dim(hints, width)
-  end
-
   # --- token formatting ---
 
   defp token_parts(f) do
@@ -149,9 +145,15 @@ defmodule OctoPi.TUI.Components.Footer do
   end
 
   defp model_part(f) do
-    case f.thinking_level do
-      nil -> f.model_id
-      level -> "#{f.model_id} · #{level}"
+    base =
+      case f.thinking_level do
+        nil -> f.model_id
+        level -> "#{f.model_id} · #{level}"
+      end
+
+    case f.provider do
+      nil -> base
+      provider -> "(#{provider}) #{base}"
     end
   end
 

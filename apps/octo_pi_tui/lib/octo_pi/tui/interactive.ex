@@ -320,6 +320,7 @@ defmodule OctoPi.TUI.Interactive do
     footer = %Footer{
       cwd: cwd,
       model_id: model.id,
+      provider: model.provider,
       context_window: model.context_window,
       git_branch: FooterData.get_git_branch(footer_data)
     }

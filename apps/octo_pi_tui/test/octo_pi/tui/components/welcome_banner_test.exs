@@ -22,10 +22,12 @@ defmodule OctoPi.TUI.Components.WelcomeBannerTest do
       assert text =~ "claude-opus-4-6"
     end
 
-    test "renders a single line" do
+    test "shows inline keybinding hints" do
       banner = WelcomeBanner.new(@theme, model: "claude-opus-4-6")
       lines = WelcomeBanner.render(banner, 80)
-      assert length(lines) == 1
+      text = Enum.join(lines, "\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
+      assert text =~ "escape interrupt"
+      assert text =~ "/ commands"
     end
   end
 

@@ -29,7 +29,12 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
 
   def render(%__MODULE__{expanded: false, model: model, theme: theme}, _width) do
     title = Theme.fg(theme, :accent, "Claude Code")
-    [" #{title}  #{dim(model)}"]
+    hints = dim(" escape interrupt · ctrl+c exit · / commands · ? tips")
+
+    [
+      " #{title}  #{dim(model)}",
+      hints
+    ]
   end
 
   def render(%__MODULE__{expanded: true, model: model, theme: theme}, _width) do
