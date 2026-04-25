@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "footerData — git branch accessor and onBranchChange subscription for footer components",
   "type": "task",
-  "updated_at": "2026-04-25T18:39:39.026452Z"
+  "updated_at": "2026-04-25T18:45:36.246095Z"
 }
