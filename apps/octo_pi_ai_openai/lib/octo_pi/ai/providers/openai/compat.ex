@@ -59,57 +59,71 @@ defmodule OctoPi.AI.Providers.OpenAI.Compat do
   """
   @spec detect(Model.t()) :: t()
   def detect(%Model{} = model) do
-    provider = model.provider
-    base_url = model.base_url
-
-    is_zai = provider == :zai or String.contains?(base_url, "api.z.ai")
-
-    is_non_standard =
-      provider == :cerebras or String.contains?(base_url, "cerebras.ai") or
-        provider == :xai or String.contains?(base_url, "api.x.ai") or
-        String.contains?(base_url, "chutes.ai") or
-        String.contains?(base_url, "deepseek.com") or
-        is_zai or
-        provider == :opencode or String.contains?(base_url, "opencode.ai")
-
-    is_grok = provider == :xai or String.contains?(base_url, "api.x.ai")
-    is_groq = provider == :groq or String.contains?(base_url, "groq.com")
-
-    cache_control_format =
-      if provider == :openrouter and String.starts_with?(model.id, "anthropic/"),
-        do: :anthropic,
-        else: nil
-
-    reasoning_effort_map =
-      if is_groq and model.id == "qwen/qwen3-32b",
-        do: %{minimal: "default", low: "default", medium: "default", high: "default", xhigh: "default"},
-        else: %{}
-
-    thinking_format =
-      cond do
-        is_zai -> :zai
-        provider == :openrouter or String.contains?(base_url, "openrouter.ai") -> :openrouter
-        true -> :openai
-      end
+    flags = classify(model)
 
     %__MODULE__{
-      supports_store: not is_non_standard,
-      supports_developer_role: not is_non_standard,
-      supports_reasoning_effort: not is_grok and not is_zai,
-      reasoning_effort_map: reasoning_effort_map,
+      supports_store: not flags.non_standard,
+      supports_developer_role: not flags.non_standard,
+      supports_reasoning_effort: not flags.grok and not flags.zai,
+      reasoning_effort_map: reasoning_effort_map(flags, model),
       supports_usage_in_streaming: true,
-      max_tokens_field: if(String.contains?(base_url, "chutes.ai"), do: :max_tokens, else: :max_completion_tokens),
+      max_tokens_field: max_tokens_field(model.base_url),
       requires_tool_result_name: false,
       requires_assistant_after_tool_result: false,
       requires_thinking_as_text: false,
-      thinking_format: thinking_format,
+      thinking_format: thinking_format(flags, model),
       supports_strict_mode: true,
-      cache_control_format: cache_control_format,
+      cache_control_format: cache_control_format(model),
       send_session_affinity_headers: false,
       zai_tool_stream: false,
       open_router_routing: %{},
       vercel_gateway_routing: %{}
     }
+  end
+
+  defp classify(%Model{provider: provider, base_url: base_url}) do
+    zai = provider == :zai or String.contains?(base_url, "api.z.ai")
+    grok = provider == :xai or String.contains?(base_url, "api.x.ai")
+    groq = provider == :groq or String.contains?(base_url, "groq.com")
+
+    %{
+      zai: zai,
+      grok: grok,
+      groq: groq,
+      non_standard: non_standard?(provider, base_url, zai, grok)
+    }
+  end
+
+  defp non_standard?(provider, base_url, zai, grok) do
+    grok or zai or
+      provider == :cerebras or String.contains?(base_url, "cerebras.ai") or
+      String.contains?(base_url, "chutes.ai") or
+      String.contains?(base_url, "deepseek.com") or
+      provider == :opencode or String.contains?(base_url, "opencode.ai")
+  end
+
+  defp cache_control_format(%Model{provider: :openrouter, id: id}) do
+    if String.starts_with?(id, "anthropic/"), do: :anthropic, else: nil
+  end
+
+  defp cache_control_format(_model), do: nil
+
+  defp reasoning_effort_map(%{groq: true}, %Model{id: "qwen/qwen3-32b"}) do
+    %{minimal: "default", low: "default", medium: "default", high: "default", xhigh: "default"}
+  end
+
+  defp reasoning_effort_map(_flags, _model), do: %{}
+
+  defp thinking_format(%{zai: true}, _model), do: :zai
+
+  defp thinking_format(_flags, %Model{provider: :openrouter}), do: :openrouter
+
+  defp thinking_format(_flags, %Model{base_url: base_url}) do
+    if String.contains?(base_url, "openrouter.ai"), do: :openrouter, else: :openai
+  end
+
+  defp max_tokens_field(base_url) do
+    if String.contains?(base_url, "chutes.ai"), do: :max_tokens, else: :max_completion_tokens
   end
 
   @doc """

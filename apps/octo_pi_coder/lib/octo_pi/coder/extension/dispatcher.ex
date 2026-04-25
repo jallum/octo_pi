@@ -47,27 +47,14 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   @spec cancel_on_result([Extension.t()], Event.t(), Context.t()) :: :ok | {:cancel, term()}
   def cancel_on_result(extensions, event, ctx) do
     Enum.reduce_while(all_handlers(extensions, event.type), :ok, fn {handler, ext}, :ok ->
-      case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-        {:cancel, reason} ->
-          emit_cancel_telemetry(ext, event.type, reason)
-          {:halt, {:cancel, reason}}
-
-        _ ->
-          {:cont, :ok}
-      end
+      try_cancel(ext, event, ctx, handler)
     end)
   end
 
   @spec reduce_chain([Extension.t()], Event.event_type(), term(), Context.t()) :: term()
   def reduce_chain(extensions, event_type, acc, ctx) do
     Enum.reduce(all_handlers(extensions, event_type), acc, fn {handler, ext}, acc ->
-      event = %{type: event_type, messages: acc}
-
-      case safe_call(ext, event_type, fn -> handler.(event, ctx) end) do
-        %{messages: new_msgs} -> new_msgs
-        nil -> acc
-        _ -> acc
-      end
+      reduce_chain_step(ext, event_type, acc, ctx, handler)
     end)
   end
 
@@ -75,17 +62,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
           {:ok, Event.t()} | {:block, term()}
   def mutate_in_place(extensions, event, ctx) do
     Enum.reduce_while(all_handlers(extensions, event.type), {:ok, event}, fn {handler, ext}, {:ok, event} ->
-      case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-        {:block, reason} ->
-          emit_cancel_telemetry(ext, event.type, reason)
-          {:halt, {:block, reason}}
-
-        %{input: _} = updated ->
-          {:cont, {:ok, updated}}
-
-        _ ->
-          {:cont, {:ok, event}}
-      end
+      try_mutate(ext, event, ctx, handler)
     end)
   end
 
@@ -94,10 +71,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   def patch_merge(extensions, event, ctx) do
     patches =
       Enum.reduce(all_handlers(extensions, event.type), %{}, fn {handler, ext}, merged ->
-        case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-          %{} = patch when map_size(patch) > 0 -> Map.merge(merged, patch)
-          _ -> merged
-        end
+        merge_patch(ext, event, ctx, handler, merged)
       end)
 
     if map_size(patches) == 0, do: :unchanged, else: {:ok, patches}
@@ -106,10 +80,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   @spec first_result([Extension.t()], Event.t(), Context.t()) :: term() | nil
   def first_result(extensions, event, ctx) do
     Enum.reduce_while(all_handlers(extensions, event.type), nil, fn {handler, ext}, nil ->
-      case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-        nil -> {:cont, nil}
-        result -> {:halt, result}
-      end
+      try_first(ext, event, ctx, handler)
     end)
   end
 
@@ -118,10 +89,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     extensions
     |> all_handlers(event.type)
     |> Enum.reduce([], fn {handler, ext}, acc ->
-      case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
-        nil -> acc
-        result -> [result | acc]
-      end
+      collect_step(ext, event, ctx, handler, acc)
     end)
     |> Enum.reverse()
   end
@@ -148,11 +116,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     {cmds, _} =
       Enum.reduce(extensions, {[], MapSet.new()}, fn ext, {acc, seen} ->
         Enum.reduce(ext.commands, {acc, seen}, fn {name, cmd}, {acc, seen} ->
-          if MapSet.member?(seen, name) do
-            {acc, seen}
-          else
-            {[{name, cmd, ext.id} | acc], MapSet.put(seen, name)}
-          end
+          dedup_command(name, cmd, ext.id, acc, seen)
         end)
       end)
 
@@ -188,6 +152,71 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Enum.filter(fn {_name, ext_ids} -> length(ext_ids) > 1 end)
     |> Enum.map(fn {name, ext_ids} -> %{name: name, extensions: ext_ids} end)
+  end
+
+  # --- dispatch step helpers ---
+
+  defp try_cancel(ext, event, ctx, handler) do
+    case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
+      {:cancel, reason} ->
+        emit_cancel_telemetry(ext, event.type, reason)
+        {:halt, {:cancel, reason}}
+
+      _ ->
+        {:cont, :ok}
+    end
+  end
+
+  defp reduce_chain_step(ext, event_type, acc, ctx, handler) do
+    event = %{type: event_type, messages: acc}
+
+    case safe_call(ext, event_type, fn -> handler.(event, ctx) end) do
+      %{messages: new_msgs} -> new_msgs
+      _ -> acc
+    end
+  end
+
+  defp try_mutate(ext, event, ctx, handler) do
+    case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
+      {:block, reason} ->
+        emit_cancel_telemetry(ext, event.type, reason)
+        {:halt, {:block, reason}}
+
+      %{input: _} = updated ->
+        {:cont, {:ok, updated}}
+
+      _ ->
+        {:cont, {:ok, event}}
+    end
+  end
+
+  defp merge_patch(ext, event, ctx, handler, merged) do
+    case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
+      %{} = patch when map_size(patch) > 0 -> Map.merge(merged, patch)
+      _ -> merged
+    end
+  end
+
+  defp try_first(ext, event, ctx, handler) do
+    case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
+      nil -> {:cont, nil}
+      result -> {:halt, result}
+    end
+  end
+
+  defp collect_step(ext, event, ctx, handler, acc) do
+    case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
+      nil -> acc
+      result -> [result | acc]
+    end
+  end
+
+  defp dedup_command(name, cmd, ext_id, acc, seen) do
+    if MapSet.member?(seen, name) do
+      {acc, seen}
+    else
+      {[{name, cmd, ext_id} | acc], MapSet.put(seen, name)}
+    end
   end
 
   # --- internal ---

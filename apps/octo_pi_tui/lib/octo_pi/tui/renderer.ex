@@ -240,87 +240,70 @@ defmodule OctoPi.TUI.Renderer do
     new_len = length(lines)
     prev_len = length(state.previous)
     target_row = max(0, new_len - 1)
+    lines_to_clear = prev_len - max(new_len, 1)
 
-    if target_row < prev_vp_top do
-      full_render(lines, cursor_seq, state, true)
-    else
-      lines_to_clear = prev_len - max(new_len, 1)
-
-      if lines_to_clear > state.height do
+    cond do
+      target_row < prev_vp_top ->
         full_render(lines, cursor_seq, state, true)
-      else
-        current_screen_row = hw_cursor - prev_vp_top
-        target_screen_row = target_row - prev_vp_top
-        move = target_screen_row - current_screen_row
 
-        {cursor_iodata, hw_row} =
-          if new_len == 0 do
-            position_cursor(cursor_seq, 0, lines, state.height)
-          else
-            position_cursor(cursor_seq, target_row, lines, state.height)
-          end
+      lines_to_clear > state.height ->
+        full_render(lines, cursor_seq, state, true)
 
-        body =
-          if new_len == 0 do
-            [
-              move_cursor_v(move),
-              "\r",
-              clear_n_lines(prev_len),
-              if(prev_len > 1, do: "\e[#{prev_len - 1}A", else: ""),
-              cursor_iodata
-            ]
-          else
-            [
-              move_cursor_v(move),
-              if(lines_to_clear > 0, do: "\e[1B", else: ""),
-              clear_n_lines(lines_to_clear),
-              if(lines_to_clear > 0, do: "\e[#{lines_to_clear}A", else: ""),
-              cursor_iodata
-            ]
-          end
-
-        bytes = IO.iodata_to_binary(wrap_sync(body, state))
-
-        new_state = %{
-          state
-          | previous: lines,
-            hardware_cursor_row: hw_row,
-            previous_viewport_top: prev_vp_top
-        }
-
-        {bytes, new_state}
-      end
+      true ->
+        emit_deleted_lines(lines, cursor_seq, state, target_row, lines_to_clear, prev_vp_top, hw_cursor)
     end
+  end
+
+  defp emit_deleted_lines(lines, cursor_seq, state, target_row, lines_to_clear, prev_vp_top, hw_cursor) do
+    new_len = length(lines)
+    prev_len = length(state.previous)
+    move = target_row - prev_vp_top - (hw_cursor - prev_vp_top)
+    cursor_target = if new_len == 0, do: 0, else: target_row
+    {cursor_iodata, hw_row} = position_cursor(cursor_seq, cursor_target, lines, state.height)
+
+    body = deleted_lines_body(new_len, move, prev_len, lines_to_clear, cursor_iodata)
+    bytes = IO.iodata_to_binary(wrap_sync(body, state))
+
+    new_state = %{
+      state
+      | previous: lines,
+        hardware_cursor_row: hw_row,
+        previous_viewport_top: prev_vp_top
+    }
+
+    {bytes, new_state}
+  end
+
+  defp deleted_lines_body(0, move, prev_len, _lines_to_clear, cursor_iodata) do
+    [
+      move_cursor_v(move),
+      "\r",
+      clear_n_lines(prev_len),
+      if(prev_len > 1, do: "\e[#{prev_len - 1}A", else: ""),
+      cursor_iodata
+    ]
+  end
+
+  defp deleted_lines_body(_new_len, move, _prev_len, lines_to_clear, cursor_iodata) do
+    [
+      move_cursor_v(move),
+      if(lines_to_clear > 0, do: "\e[1B", else: ""),
+      clear_n_lines(lines_to_clear),
+      if(lines_to_clear > 0, do: "\e[#{lines_to_clear}A", else: ""),
+      cursor_iodata
+    ]
   end
 
   defp handle_changed_lines(lines, cursor_seq, state, first_changed, last_changed, appended, prev_vp_top, hw_cursor) do
     height = state.height
     append_start = appended and first_changed == length(state.previous) and first_changed > 0
-    prev_vp_bottom = prev_vp_top + height - 1
     move_target = if append_start, do: first_changed - 1, else: first_changed
 
     {body_prefix, prev_vp_top, viewport_top, hw_cursor} =
-      if move_target > prev_vp_bottom do
-        current_screen_row = max(0, min(height - 1, hw_cursor - prev_vp_top))
-        move_to_bottom = height - 1 - current_screen_row
-        scroll = move_target - prev_vp_bottom
+      maybe_scroll_viewport(move_target, prev_vp_top, height, hw_cursor)
 
-        prefix = [
-          move_cursor_v(move_to_bottom),
-          String.duplicate("\r\n", scroll)
-        ]
-
-        {prefix, prev_vp_top + scroll, prev_vp_top + scroll, move_target}
-      else
-        {[], prev_vp_top, prev_vp_top, hw_cursor}
-      end
-
-    current_screen_row = hw_cursor - prev_vp_top
-    target_screen_row = move_target - viewport_top
-    line_diff = target_screen_row - current_screen_row
-
+    line_diff = move_target - viewport_top - (hw_cursor - prev_vp_top)
     sep = if append_start, do: "\r\n", else: "\r"
-
     render_end = min(last_changed, length(lines) - 1)
 
     changed_body =
@@ -332,26 +315,8 @@ defmodule OctoPi.TUI.Renderer do
         [prefix, @erase_line, line]
       end)
 
-    final_cursor_row = render_end
-
-    cleanup =
-      if length(state.previous) > length(lines) do
-        extra = length(state.previous) - length(lines)
-        remaining = length(lines) - 1 - render_end
-
-        move_down =
-          if remaining > 0, do: ["\e[#{remaining}B"], else: []
-
-        clear =
-          for _ <- 1..extra, do: "\r\n#{@erase_line}"
-
-        move_back = ["\e[#{extra}A"]
-        move_down ++ clear ++ move_back
-      else
-        []
-      end
-
-    {cursor_iodata, hw_row} = position_cursor(cursor_seq, final_cursor_row, lines, height)
+    cleanup = build_cleanup(state.previous, lines, render_end)
+    {cursor_iodata, hw_row} = position_cursor(cursor_seq, render_end, lines, height)
 
     body =
       body_prefix ++
@@ -361,8 +326,7 @@ defmodule OctoPi.TUI.Renderer do
         [cursor_iodata]
 
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
-
-    new_vp_top = max(prev_vp_top, final_cursor_row - height + 1)
+    new_vp_top = max(prev_vp_top, render_end - height + 1)
 
     new_state = %{
       state
@@ -374,6 +338,41 @@ defmodule OctoPi.TUI.Renderer do
 
     {bytes, new_state}
   end
+
+  defp maybe_scroll_viewport(move_target, prev_vp_top, height, hw_cursor) do
+    prev_vp_bottom = prev_vp_top + height - 1
+
+    if move_target > prev_vp_bottom do
+      current_screen_row = max(0, min(height - 1, hw_cursor - prev_vp_top))
+      move_to_bottom = height - 1 - current_screen_row
+      scroll = move_target - prev_vp_bottom
+
+      prefix = [
+        move_cursor_v(move_to_bottom),
+        String.duplicate("\r\n", scroll)
+      ]
+
+      {prefix, prev_vp_top + scroll, prev_vp_top + scroll, move_target}
+    else
+      {[], prev_vp_top, prev_vp_top, hw_cursor}
+    end
+  end
+
+  defp build_cleanup(previous, lines, render_end) when length(previous) > length(lines) do
+    extra = length(previous) - length(lines)
+    remaining = length(lines) - 1 - render_end
+
+    move_down =
+      if remaining > 0, do: ["\e[#{remaining}B"], else: []
+
+    clear =
+      for _ <- 1..extra, do: "\r\n#{@erase_line}"
+
+    move_back = ["\e[#{extra}A"]
+    move_down ++ clear ++ move_back
+  end
+
+  defp build_cleanup(_previous, _lines, _render_end), do: []
 
   # --- cursor positioning ---
 

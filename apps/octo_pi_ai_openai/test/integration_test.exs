@@ -118,7 +118,7 @@ defmodule OctoPi.AI.Providers.OpenAI.IntegrationTest do
       assert reason == :tool_use
 
       tool_calls = Enum.filter(msg.content, &match?(%ToolCall{}, &1))
-      assert length(tool_calls) >= 1
+      assert tool_calls != []
 
       [tc | _] = tool_calls
       assert tc.name == "get_weather"

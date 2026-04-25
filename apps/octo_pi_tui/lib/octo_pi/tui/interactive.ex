@@ -452,44 +452,48 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp handle_loop_msg(state, msg, fsm, renderer, terminal) do
-    case msg do
-      {:stdin_chunk, bin} ->
-        :ok = StdinFSM.process(fsm, bin)
-        loop(state, fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:stdin_chunk, bin}, fsm, renderer, terminal) do
+    :ok = StdinFSM.process(fsm, bin)
+    loop(state, fsm, renderer, terminal)
+  end
 
-      {:stdin_event, seq} ->
-        state
-        |> handle_event(KeyParser.parse(seq))
-        |> advance(fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:stdin_event, seq}, fsm, renderer, terminal) do
+    state
+    |> handle_event(KeyParser.parse(seq))
+    |> advance(fsm, renderer, terminal)
+  end
 
-      {:resize, w, h} = resize_msg ->
-        Renderer.resize(renderer, w, h)
+  defp handle_loop_msg(state, {:resize, w, h} = resize_msg, fsm, renderer, terminal) do
+    Renderer.resize(renderer, w, h)
 
-        state
-        |> handle_event(resize_msg)
-        |> advance(fsm, renderer, terminal)
+    state
+    |> handle_event(resize_msg)
+    |> advance(fsm, renderer, terminal)
+  end
 
-      {:octo_pi_agent_event, _} = agent_msg ->
-        state
-        |> handle_event(agent_msg)
-        |> advance(fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:octo_pi_agent_event, _} = agent_msg, fsm, renderer, terminal) do
+    state
+    |> handle_event(agent_msg)
+    |> advance(fsm, renderer, terminal)
+  end
 
-      {:ui_request, from, ref, ui_msg} ->
-        {new_state, reply} = handle_ui_request(state, ui_msg)
-        if reply != :pending, do: send(from, {:ui_reply, ref, reply})
-        advance(new_state, fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:ui_request, from, ref, ui_msg}, fsm, renderer, terminal) do
+    {new_state, reply} = handle_ui_request(state, ui_msg)
+    if reply != :pending, do: send(from, {:ui_reply, ref, reply})
+    advance(new_state, fsm, renderer, terminal)
+  end
 
-      {:ui_fire, ui_msg} ->
-        {new_state, _reply} = handle_ui_request(state, ui_msg)
-        advance(new_state, fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:ui_fire, ui_msg}, fsm, renderer, terminal) do
+    {new_state, _reply} = handle_ui_request(state, ui_msg)
+    advance(new_state, fsm, renderer, terminal)
+  end
 
-      {:EXIT, _pid, _reason} ->
-        loop(%{state | exit: true}, fsm, renderer, terminal)
+  defp handle_loop_msg(state, {:EXIT, _pid, _reason}, fsm, renderer, terminal) do
+    loop(%{state | exit: true}, fsm, renderer, terminal)
+  end
 
-      _ ->
-        loop(state, fsm, renderer, terminal)
-    end
+  defp handle_loop_msg(state, _msg, fsm, renderer, terminal) do
+    loop(state, fsm, renderer, terminal)
   end
 
   defp advance(new_state, fsm, renderer, terminal) do

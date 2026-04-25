@@ -227,8 +227,15 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
             {[], state}
           end
 
-        state = update_head(state, fn %Content.Thinking{thinking: t} = b -> %{b | thinking: t <> value} end)
-        delta_ev = %Event.ThinkingDelta{content_index: state.content_count - 1, delta: value, partial: present(state.message)}
+        state =
+          update_head(state, fn %Content.Thinking{thinking: t} = b ->
+            %{b | thinking: t <> value}
+          end)
+        delta_ev = %Event.ThinkingDelta{
+          content_index: state.content_count - 1,
+          delta: value,
+          partial: present(state.message)
+        }
 
         {events ++ finish_events ++ [delta_ev], state}
 
@@ -259,34 +266,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
   defp handle_tool_calls({events, state}, _delta), do: {events, state}
 
   defp handle_one_tool_call(events, state, tc_delta) do
-    stream_index = tc_delta["index"]
-
-    same_tool? =
-      case state.current_block do
-        {:tool_call, idx} ->
-          (stream_index != nil and idx == stream_index) or
-            (stream_index == nil and tc_delta["id"] != nil and match_current_id(state, tc_delta["id"]))
-
-        _ ->
-          false
-      end
-
-    {finish_events, state} =
-      if same_tool? do
-        {[], state}
-      else
-        {fe, st} = finish_current_block(state)
-
-        tc = %ToolCall{
-          id: tc_delta["id"] || "",
-          name: get_in(tc_delta, ["function", "name"]) || "",
-          arguments: %{}
-        }
-
-        st = open_block(st, tc, {:tool_call, stream_index})
-        start_ev = %Event.ToolCallStart{content_index: st.content_count - 1, partial: present(st.message)}
-        {fe ++ [start_ev], st}
-      end
+    {finish_events, state} = maybe_open_tool_block(state, tc_delta)
 
     position = state.content_count - 1
 
@@ -302,12 +282,37 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
     {events ++ finish_events ++ [delta_ev], state}
   end
 
-  defp match_current_id(state, id) do
-    case state.message.content do
-      [%ToolCall{id: ^id} | _] -> true
-      _ -> false
+  defp maybe_open_tool_block(state, tc_delta) do
+    if same_tool?(state, tc_delta) do
+      {[], state}
+    else
+      {fe, st} = finish_current_block(state)
+
+      tc = %ToolCall{
+        id: tc_delta["id"] || "",
+        name: get_in(tc_delta, ["function", "name"]) || "",
+        arguments: %{}
+      }
+
+      st = open_block(st, tc, {:tool_call, tc_delta["index"]})
+      start_ev = %Event.ToolCallStart{content_index: st.content_count - 1, partial: present(st.message)}
+      {fe ++ [start_ev], st}
     end
   end
+
+  defp same_tool?(%State{current_block: {:tool_call, idx}}, %{"index" => stream_index})
+       when stream_index != nil do
+    idx == stream_index
+  end
+
+  defp same_tool?(%State{current_block: {:tool_call, _}, message: %{content: [%ToolCall{id: id} | _]}}, %{
+         "id" => delta_id
+       })
+       when is_binary(delta_id) and delta_id != "" do
+    id == delta_id
+  end
+
+  defp same_tool?(_state, _tc_delta), do: false
 
   defp maybe_update_tc_id(state, %{"id" => id}) when is_binary(id) and id != "" do
     update_head(state, fn

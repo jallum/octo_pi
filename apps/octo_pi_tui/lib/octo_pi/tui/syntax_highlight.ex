@@ -68,14 +68,15 @@ defmodule OctoPi.TUI.SyntaxHighlight do
 
   defp apply_one_pattern(text, regex, color_key, theme) do
     segments = Regex.split(@ansi_sequence, text, include_captures: true)
+    Enum.map_join(segments, "", &colorize_segment(&1, regex, color_key, theme))
+  end
 
-    Enum.map_join(segments, "", fn segment ->
-      if Regex.match?(@ansi_sequence, segment) do
-        segment
-      else
-        Regex.replace(regex, segment, fn match -> Theme.fg(theme, color_key, match) end)
-      end
-    end)
+  defp colorize_segment(segment, regex, color_key, theme) do
+    if Regex.match?(@ansi_sequence, segment) do
+      segment
+    else
+      Regex.replace(regex, segment, fn match -> Theme.fg(theme, color_key, match) end)
+    end
   end
 
   defp patterns_for("elixir") do

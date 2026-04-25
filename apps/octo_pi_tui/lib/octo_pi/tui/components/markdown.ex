@@ -312,15 +312,17 @@ defmodule OctoPi.TUI.Components.Markdown do
     rows =
       case tbody do
         {"tbody", _, trs, _} ->
-          Enum.map(trs, fn {"tr", _, cells, _} ->
-            Enum.map(cells, fn {"td", _, content, _} -> render_inline(content, theme) end)
-          end)
+          Enum.map(trs, &extract_row_cells(&1, theme))
 
         _ ->
           []
       end
 
     {headers, rows}
+  end
+
+  defp extract_row_cells({"tr", _, cells, _}, theme) do
+    Enum.map(cells, fn {"td", _, content, _} -> render_inline(content, theme) end)
   end
 
   defp render_table([], _rows, _width, _theme), do: []
@@ -361,15 +363,17 @@ defmodule OctoPi.TUI.Components.Markdown do
       parts =
         wrapped
         |> Enum.zip(col_widths)
-        |> Enum.map(fn {cell_lines, w} ->
-          text = Enum.at(cell_lines, line_idx, "")
-          vis_w = WrapAnsi.visible_width(text)
-          padded = text <> String.duplicate(" ", max(0, w - vis_w))
-          if bold?, do: Theme.bold(padded), else: padded
-        end)
+        |> Enum.map(&format_table_cell(&1, line_idx, bold?))
 
       "│ " <> Enum.join(parts, " │ ") <> " │"
     end)
+  end
+
+  defp format_table_cell({cell_lines, w}, line_idx, bold?) do
+    text = Enum.at(cell_lines, line_idx, "")
+    vis_w = WrapAnsi.visible_width(text)
+    padded = text <> String.duplicate(" ", max(0, w - vis_w))
+    if bold?, do: Theme.bold(padded), else: padded
   end
 
   defp column_natural_widths(headers, rows) do
@@ -393,25 +397,30 @@ defmodule OctoPi.TUI.Components.Markdown do
     if total <= available do
       natural
     else
-      min_total = num_cols
-      extra = max(0, available - min_total)
-      total_weight = max(1, Enum.sum(natural))
-
-      widths =
-        Enum.map(natural, fn n ->
-          1 + trunc(n / total_weight * extra)
-        end)
-
-      allocated = Enum.sum(widths)
-      leftover = available - allocated
-
-      if leftover > 0 do
-        widths
-        |> Enum.with_index()
-        |> Enum.map(fn {w, i} -> if i < leftover, do: w + 1, else: w end)
-      else
-        widths
-      end
+      shrink_columns(natural, available, num_cols)
     end
   end
+
+  defp shrink_columns(natural, available, num_cols) do
+    min_total = num_cols
+    extra = max(0, available - min_total)
+    total_weight = max(1, Enum.sum(natural))
+
+    widths =
+      Enum.map(natural, fn n ->
+        1 + trunc(n / total_weight * extra)
+      end)
+
+    allocated = Enum.sum(widths)
+    leftover = available - allocated
+    distribute_leftover(widths, leftover)
+  end
+
+  defp distribute_leftover(widths, leftover) when leftover > 0 do
+    widths
+    |> Enum.with_index()
+    |> Enum.map(fn {w, i} -> if i < leftover, do: w + 1, else: w end)
+  end
+
+  defp distribute_leftover(widths, _leftover), do: widths
 end

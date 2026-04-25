@@ -167,26 +167,28 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   @preview_lines 5
 
-  defp build_content(te) do
-    cond do
-      te.status == :error and te.result ->
-        [%Text{content: Theme.fg(te.theme, :error, te.result)}]
+  defp build_content(%{status: :error, result: result, theme: theme}) when result != nil do
+    [%Text{content: Theme.fg(theme, :error, result)}]
+  end
 
-      te.expanded and te.result ->
-        [%Text{content: Theme.fg(te.theme, :tool_output, te.result)}]
+  defp build_content(%{expanded: true, result: result, theme: theme}) when result != nil do
+    [%Text{content: Theme.fg(theme, :tool_output, result)}]
+  end
 
-      te.expanded and te.partial ->
-        [%Text{content: Theme.fg(te.theme, :tool_output, te.partial)}]
+  defp build_content(%{expanded: true, partial: partial, theme: theme}) when partial != nil do
+    [%Text{content: Theme.fg(theme, :tool_output, partial)}]
+  end
 
-      te.result ->
-        preview_collapsed(te.result, te.theme)
+  defp build_content(%{result: result, theme: theme}) when result != nil do
+    preview_collapsed(result, theme)
+  end
 
-      te.partial ->
-        [%Text{content: Theme.fg(te.theme, :tool_output, String.slice(te.partial, -1, 1))}]
+  defp build_content(%{partial: partial, theme: theme}) when partial != nil do
+    [%Text{content: Theme.fg(theme, :tool_output, String.slice(partial, -1, 1))}]
+  end
 
-      true ->
-        [%Text{content: ""}]
-    end
+  defp build_content(_te) do
+    [%Text{content: ""}]
   end
 
   defp preview_collapsed(result, theme) do

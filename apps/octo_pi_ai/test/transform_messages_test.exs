@@ -84,7 +84,7 @@ defmodule OctoPi.AI.TransformMessagesTest do
       text_blocks = Enum.filter(assistant.content, &match?(%Content.Text{}, &1))
       thinking_blocks = Enum.filter(assistant.content, &match?(%Content.Thinking{}, &1))
 
-      assert length(thinking_blocks) == 0
+      assert thinking_blocks == []
       assert length(text_blocks) >= 2
     end
   end

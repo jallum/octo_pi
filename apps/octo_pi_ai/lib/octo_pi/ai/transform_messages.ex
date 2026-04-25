@@ -80,14 +80,7 @@ defmodule OctoPi.AI.TransformMessages do
             {[msg | acc], map}
 
           %Message.ToolResult{} = tr ->
-            normalized_id = Map.get(map, tr.tool_call_id, tr.tool_call_id)
-
-            updated =
-              if normalized_id == tr.tool_call_id,
-                do: tr,
-                else: %{tr | tool_call_id: normalized_id}
-
-            {[updated | acc], map}
+            {[normalize_tool_result_id(tr, map) | acc], map}
 
           %Message.Assistant{} = asst ->
             transform_assistant(asst, model, normalize_fn, acc, map)
@@ -95,6 +88,14 @@ defmodule OctoPi.AI.TransformMessages do
       end)
 
     Enum.reverse(transformed)
+  end
+
+  defp normalize_tool_result_id(%Message.ToolResult{tool_call_id: id} = tr, map) do
+    case Map.get(map, id) do
+      nil -> tr
+      ^id -> tr
+      normalized_id -> %{tr | tool_call_id: normalized_id}
+    end
   end
 
   defp transform_assistant(%Message.Assistant{stop_reason: reason}, _model, _norm_fn, acc, map)
@@ -174,14 +175,7 @@ defmodule OctoPi.AI.TransformMessages do
       Enum.reduce(messages, {[], [], MapSet.new()}, fn msg, {acc, pending, existing} ->
         case msg do
           %Message.Assistant{} = asst ->
-            acc = flush_pending(acc, pending, existing)
-            tool_calls = Enum.filter(asst.content, &match?(%ToolCall{}, &1))
-
-            if tool_calls == [] do
-              {[asst | acc], [], MapSet.new()}
-            else
-              {[asst | acc], tool_calls, MapSet.new()}
-            end
+            collect_assistant_tool_calls(asst, flush_pending(acc, pending, existing))
 
           %Message.ToolResult{} = tr ->
             {[tr | acc], pending, MapSet.put(existing, tr.tool_call_id)}
@@ -195,6 +189,11 @@ defmodule OctoPi.AI.TransformMessages do
     result
     |> flush_pending(pending, existing_ids)
     |> Enum.reverse()
+  end
+
+  defp collect_assistant_tool_calls(%Message.Assistant{} = asst, acc) do
+    tool_calls = Enum.filter(asst.content, &match?(%ToolCall{}, &1))
+    {[asst | acc], tool_calls, MapSet.new()}
   end
 
   defp flush_pending(acc, [], _existing), do: acc

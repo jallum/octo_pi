@@ -152,27 +152,28 @@ defmodule OctoPi.TUI.Autocomplete.FilePathProvider do
       {:ok, entries} ->
         entries
         |> Enum.reject(&(&1 == ".git"))
-        |> Enum.flat_map(fn entry ->
-          full = Path.join(dir, entry)
-          rel = Path.relative_to(full, root)
-          stat = File.stat(full)
-
-          case stat do
-            {:ok, %File.Stat{type: :directory}} ->
-              [{rel <> "/", true} | walk(full, root, depth + 1)]
-
-            {:ok, %File.Stat{type: _}} ->
-              [{rel, false}]
-
-            _ ->
-              []
-          end
-        end)
+        |> Enum.flat_map(&walk_entry(&1, dir, root, depth))
 
       _ ->
         []
     end
   end
+
+  defp walk_entry(entry, dir, root, depth) do
+    full = Path.join(dir, entry)
+    rel = Path.relative_to(full, root)
+    classify_entry(File.stat(full), rel, full, root, depth)
+  end
+
+  defp classify_entry({:ok, %File.Stat{type: :directory}}, rel, full, root, depth) do
+    [{rel <> "/", true} | walk(full, root, depth + 1)]
+  end
+
+  defp classify_entry({:ok, %File.Stat{type: _}}, rel, _full, _root, _depth) do
+    [{rel, false}]
+  end
+
+  defp classify_entry(_, _rel, _full, _root, _depth), do: []
 
   defp file_rank(path) do
     case File.stat(path) do

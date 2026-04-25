@@ -216,20 +216,24 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
       session_id = get_in((opts.metadata || %{}), ["session_id"])
 
       body
-      |> then(fn b ->
-        if cache_retention != "none" and session_id,
-          do: Map.put(b, "prompt_cache_key", session_id),
-          else: b
-      end)
-      |> then(fn b ->
-        if cache_retention == "long",
-          do: Map.put(b, "prompt_cache_retention", "24h"),
-          else: b
-      end)
+      |> maybe_put_cache_key(session_id, cache_retention)
+      |> maybe_put_cache_retention(cache_retention)
     else
       body
     end
   end
+
+  defp maybe_put_cache_key(body, session_id, cache_retention)
+       when cache_retention != "none" and session_id != nil do
+    Map.put(body, "prompt_cache_key", session_id)
+  end
+
+  defp maybe_put_cache_key(body, _session_id, _cache_retention), do: body
+
+  defp maybe_put_cache_retention(body, "long"),
+    do: Map.put(body, "prompt_cache_retention", "24h")
+
+  defp maybe_put_cache_retention(body, _cache_retention), do: body
 
   defp apply_cache_control(body, _model, %Compat{cache_control_format: nil}, _retention), do: body
   defp apply_cache_control(body, _model, _compat, "none"), do: body
@@ -425,68 +429,65 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   defp convert_assistant(%Message.Assistant{content: content}, compat) do
     text_blocks =
-      content
-      |> Enum.filter(&match?(%Content.Text{}, &1))
-      |> Enum.filter(&(String.trim(&1.text) != ""))
+      Enum.filter(content, fn
+        %Content.Text{text: t} -> String.trim(t) != ""
+        _ -> false
+      end)
 
     thinking_blocks =
-      content
-      |> Enum.filter(&match?(%Content.Thinking{}, &1))
-      |> Enum.filter(&(&1.thinking != nil and String.trim(&1.thinking) != ""))
+      Enum.filter(content, fn
+        %Content.Thinking{thinking: t} when t != nil -> String.trim(t) != ""
+        _ -> false
+      end)
 
     tool_calls = Enum.filter(content, &match?(%ToolCall{}, &1))
-    text = text_blocks |> Enum.map(& &1.text) |> Enum.join("")
+    text = Enum.map_join(text_blocks, "", & &1.text)
 
     msg = %{"role" => "assistant"}
+    msg = put_assistant_content(msg, text_blocks, thinking_blocks, text, compat)
+    msg = put_assistant_tool_calls(msg, tool_calls)
 
-    msg =
-      cond do
-        thinking_blocks != [] and compat.requires_thinking_as_text ->
-          thinking_parts =
-            Enum.map(thinking_blocks, fn b -> %{"type" => "text", "text" => b.thinking} end)
-
-          text_parts =
-            Enum.map(text_blocks, fn b -> %{"type" => "text", "text" => b.text} end)
-
-          Map.put(msg, "content", thinking_parts ++ text_parts)
-
-        text != "" ->
-          Map.put(msg, "content", text)
-
-        true ->
-          Map.put(msg, "content", nil)
-      end
-
-    msg =
-      if tool_calls != [] do
-        wire_tcs =
-          Enum.map(tool_calls, fn tc ->
-            %{
-              "id" => tc.id,
-              "type" => "function",
-              "function" => %{
-                "name" => tc.name,
-                "arguments" => Jason.encode!(tc.arguments)
-              }
-            }
-          end)
-
-        Map.put(msg, "tool_calls", wire_tcs)
-      else
-        msg
-      end
-
-    has_content =
-      case msg["content"] do
-        nil -> false
-        "" -> false
-        s when is_binary(s) -> s != ""
-        l when is_list(l) -> l != []
-        _ -> false
-      end
-
-    if has_content or Map.has_key?(msg, "tool_calls"), do: msg, else: nil
+    if has_content?(msg) or Map.has_key?(msg, "tool_calls"), do: msg, else: nil
   end
+
+  defp put_assistant_content(msg, text_blocks, thinking_blocks, _text, %Compat{requires_thinking_as_text: true})
+       when thinking_blocks != [] do
+    thinking_parts = Enum.map(thinking_blocks, fn b -> %{"type" => "text", "text" => b.thinking} end)
+    text_parts = Enum.map(text_blocks, fn b -> %{"type" => "text", "text" => b.text} end)
+    Map.put(msg, "content", thinking_parts ++ text_parts)
+  end
+
+  defp put_assistant_content(msg, _text_blocks, _thinking_blocks, text, _compat) when text != "" do
+    Map.put(msg, "content", text)
+  end
+
+  defp put_assistant_content(msg, _text_blocks, _thinking_blocks, _text, _compat) do
+    Map.put(msg, "content", nil)
+  end
+
+  defp put_assistant_tool_calls(msg, []), do: msg
+
+  defp put_assistant_tool_calls(msg, tool_calls) do
+    wire_tcs =
+      Enum.map(tool_calls, fn tc ->
+        %{
+          "id" => tc.id,
+          "type" => "function",
+          "function" => %{
+            "name" => tc.name,
+            "arguments" => Jason.encode!(tc.arguments)
+          }
+        }
+      end)
+
+    Map.put(msg, "tool_calls", wire_tcs)
+  end
+
+  defp has_content?(%{"content" => nil}), do: false
+  defp has_content?(%{"content" => ""}), do: false
+  defp has_content?(%{"content" => s}) when is_binary(s), do: s != ""
+  defp has_content?(%{"content" => l}) when is_list(l), do: l != []
+  defp has_content?(_msg), do: false
 
   # --- Tool Result ---
 

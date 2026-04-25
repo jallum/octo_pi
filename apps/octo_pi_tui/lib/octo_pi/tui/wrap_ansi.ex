@@ -56,13 +56,17 @@ defmodule OctoPi.TUI.WrapAnsi do
         do: text <> String.duplicate(" ", max_width - text_width),
         else: text
     else
-      {clipped_text, clipped_width} = truncate_fragment(ellipsis, max_width)
+      clip_wide_ellipsis(max_width, ellipsis, pad)
+    end
+  end
 
-      if clipped_width == 0 do
-        if pad, do: String.duplicate(" ", max_width), else: ""
-      else
-        finalize_truncated("", 0, clipped_text, clipped_width, max_width, pad)
-      end
+  defp clip_wide_ellipsis(max_width, ellipsis, pad) do
+    {clipped_text, clipped_width} = truncate_fragment(ellipsis, max_width)
+
+    if clipped_width == 0 do
+      if pad, do: String.duplicate(" ", max_width), else: ""
+    else
+      finalize_truncated("", 0, clipped_text, clipped_width, max_width, pad)
     end
   end
 
@@ -428,65 +432,48 @@ defmodule OctoPi.TUI.WrapAnsi do
 
   def grapheme_width(_), do: 2
 
-  defp wide_codepoint?(cp) do
-    (cp >= 0x1100 and cp <= 0x115F) or
-      (cp >= 0x231A and cp <= 0x232A) or
-      (cp >= 0x23E9 and cp <= 0x23F3) or
-      (cp >= 0x23F8 and cp <= 0x23FA) or
-      (cp >= 0x25FD and cp <= 0x25FE) or
-      (cp >= 0x2614 and cp <= 0x2615) or
-      (cp >= 0x2648 and cp <= 0x2653) or
-      (cp >= 0x267F and cp <= 0x267F) or
-      (cp >= 0x2693 and cp <= 0x2693) or
-      (cp >= 0x26A1 and cp <= 0x26A1) or
-      (cp >= 0x26AA and cp <= 0x26AB) or
-      (cp >= 0x26BD and cp <= 0x26BE) or
-      (cp >= 0x26C4 and cp <= 0x26C5) or
-      (cp >= 0x26D4 and cp <= 0x26D4) or
-      (cp >= 0x26EA and cp <= 0x26EA) or
-      (cp >= 0x26F2 and cp <= 0x26F3) or
-      (cp >= 0x26F5 and cp <= 0x26F5) or
-      (cp >= 0x26FA and cp <= 0x26FA) or
-      (cp >= 0x26FD and cp <= 0x26FD) or
-      (cp >= 0x2702 and cp <= 0x2702) or
-      (cp >= 0x2705 and cp <= 0x2705) or
-      (cp >= 0x2708 and cp <= 0x270D) or
-      (cp >= 0x270F and cp <= 0x270F) or
-      (cp >= 0x2712 and cp <= 0x2712) or
-      (cp >= 0x2714 and cp <= 0x2714) or
-      (cp >= 0x2716 and cp <= 0x2716) or
-      (cp >= 0x271D and cp <= 0x271D) or
-      (cp >= 0x2721 and cp <= 0x2721) or
-      (cp >= 0x2728 and cp <= 0x2728) or
-      (cp >= 0x2733 and cp <= 0x2734) or
-      (cp >= 0x2744 and cp <= 0x2744) or
-      (cp >= 0x2747 and cp <= 0x2747) or
-      (cp >= 0x274C and cp <= 0x274C) or
-      (cp >= 0x274E and cp <= 0x274E) or
-      (cp >= 0x2753 and cp <= 0x2755) or
-      (cp >= 0x2757 and cp <= 0x2757) or
-      (cp >= 0x2763 and cp <= 0x2764) or
-      (cp >= 0x2795 and cp <= 0x2797) or
-      (cp >= 0x27A1 and cp <= 0x27A1) or
-      (cp >= 0x27B0 and cp <= 0x27B0) or
-      (cp >= 0x27BF and cp <= 0x27BF) or
-      (cp >= 0x2934 and cp <= 0x2935) or
-      (cp >= 0x2B05 and cp <= 0x2B07) or
-      (cp >= 0x2B1B and cp <= 0x2B1C) or
-      (cp >= 0x2B50 and cp <= 0x2B50) or
-      (cp >= 0x2B55 and cp <= 0x2B55) or
-      (cp >= 0x2E80 and cp <= 0x303E) or
-      (cp >= 0x3040 and cp <= 0x33FF) or
-      (cp >= 0x3400 and cp <= 0x4DBF) or
-      (cp >= 0x4E00 and cp <= 0xA4CF) or
-      (cp >= 0xAC00 and cp <= 0xD7AF) or
-      (cp >= 0xF900 and cp <= 0xFAFF) or
-      (cp >= 0xFE10 and cp <= 0xFE19) or
-      (cp >= 0xFE30 and cp <= 0xFE6F) or
-      (cp >= 0xFF01 and cp <= 0xFF60) or
-      (cp >= 0xFFE0 and cp <= 0xFFE6) or
-      (cp >= 0x1F000 and cp <= 0x1FAFF) or
-      (cp >= 0x1F1E6 and cp <= 0x1F1FF) or
-      (cp >= 0x20000 and cp <= 0x323AF)
-  end
+  # East Asian Wide / Emoji presentation codepoint ranges.
+  # Split across function heads to stay within Credo's cyclomatic-complexity limit.
+
+  defp wide_codepoint?(cp) when cp in 0x1100..0x115F, do: true
+  defp wide_codepoint?(cp) when cp in 0x231A..0x232A, do: true
+  defp wide_codepoint?(cp) when cp in 0x23E9..0x23F3, do: true
+  defp wide_codepoint?(cp) when cp in 0x23F8..0x23FA, do: true
+  defp wide_codepoint?(cp) when cp in 0x25FD..0x25FE, do: true
+  defp wide_codepoint?(cp) when cp in 0x2614..0x2615, do: true
+  defp wide_codepoint?(cp) when cp in 0x2648..0x2653, do: true
+  defp wide_codepoint?(cp) when cp in [0x267F, 0x2693, 0x26A1], do: true
+  defp wide_codepoint?(cp) when cp in 0x26AA..0x26AB, do: true
+  defp wide_codepoint?(cp) when cp in 0x26BD..0x26BE, do: true
+  defp wide_codepoint?(cp) when cp in 0x26C4..0x26C5, do: true
+  defp wide_codepoint?(cp) when cp in [0x26D4, 0x26EA], do: true
+  defp wide_codepoint?(cp) when cp in 0x26F2..0x26F3, do: true
+  defp wide_codepoint?(cp) when cp in [0x26F5, 0x26FA, 0x26FD], do: true
+  defp wide_codepoint?(cp) when cp in [0x2702, 0x2705], do: true
+  defp wide_codepoint?(cp) when cp in 0x2708..0x270D, do: true
+  defp wide_codepoint?(cp) when cp in [0x270F, 0x2712, 0x2714, 0x2716, 0x271D, 0x2721, 0x2728], do: true
+  defp wide_codepoint?(cp) when cp in 0x2733..0x2734, do: true
+  defp wide_codepoint?(cp) when cp in [0x2744, 0x2747, 0x274C, 0x274E], do: true
+  defp wide_codepoint?(cp) when cp in 0x2753..0x2755, do: true
+  defp wide_codepoint?(cp) when cp in [0x2757], do: true
+  defp wide_codepoint?(cp) when cp in 0x2763..0x2764, do: true
+  defp wide_codepoint?(cp) when cp in 0x2795..0x2797, do: true
+  defp wide_codepoint?(cp) when cp in [0x27A1, 0x27B0, 0x27BF], do: true
+  defp wide_codepoint?(cp) when cp in 0x2934..0x2935, do: true
+  defp wide_codepoint?(cp) when cp in 0x2B05..0x2B07, do: true
+  defp wide_codepoint?(cp) when cp in 0x2B1B..0x2B1C, do: true
+  defp wide_codepoint?(cp) when cp in [0x2B50, 0x2B55], do: true
+  defp wide_codepoint?(cp) when cp in 0x2E80..0x33FF, do: true
+  defp wide_codepoint?(cp) when cp in 0x3400..0x4DBF, do: true
+  defp wide_codepoint?(cp) when cp in 0x4E00..0xA4CF, do: true
+  defp wide_codepoint?(cp) when cp in 0xAC00..0xD7AF, do: true
+  defp wide_codepoint?(cp) when cp in 0xF900..0xFAFF, do: true
+  defp wide_codepoint?(cp) when cp in 0xFE10..0xFE19, do: true
+  defp wide_codepoint?(cp) when cp in 0xFE30..0xFE6F, do: true
+  defp wide_codepoint?(cp) when cp in 0xFF01..0xFF60, do: true
+  defp wide_codepoint?(cp) when cp in 0xFFE0..0xFFE6, do: true
+  defp wide_codepoint?(cp) when cp in 0x1F000..0x1FAFF, do: true
+  defp wide_codepoint?(cp) when cp in 0x1F1E6..0x1F1FF, do: true
+  defp wide_codepoint?(cp) when cp in 0x20000..0x323AF, do: true
+  defp wide_codepoint?(_cp), do: false
 end

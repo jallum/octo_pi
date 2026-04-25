@@ -272,27 +272,28 @@ defmodule OctoPi.TUI.Overlay do
         acc
 
       {g, rest} ->
-        w = WrapAnsi.grapheme_width(g)
-        end_col = start + len
-
-        cond do
-          col >= end_col ->
-            acc
-
-          col >= start ->
-            if col + w <= end_col do
-              do_slice(rest, start, len, col + w, acc <> g, true)
-            else
-              acc
-            end
-
-          col + w > start ->
-            do_slice(rest, start, len, col + w, acc, in_range)
-
-          true ->
-            do_slice(rest, start, len, col + w, acc, in_range)
-        end
+        advance_slice(rest, g, start, len, col, acc, in_range)
     end
+  end
+
+  defp advance_slice(_rest, _g, start, len, col, acc, _in_range) when col >= start + len do
+    acc
+  end
+
+  defp advance_slice(rest, g, start, len, col, acc, _in_range) when col >= start do
+    w = WrapAnsi.grapheme_width(g)
+    end_col = start + len
+
+    if col + w <= end_col do
+      do_slice(rest, start, len, col + w, acc <> g, true)
+    else
+      acc
+    end
+  end
+
+  defp advance_slice(rest, g, start, len, col, acc, in_range) do
+    w = WrapAnsi.grapheme_width(g)
+    do_slice(rest, start, len, col + w, acc, in_range)
   end
 
   defp extract_escape(<<"\e[", rest::binary>>) do

@@ -37,13 +37,7 @@ defmodule OctoPi.Coder.Extension.Loader do
     {paths, _seen} =
       Enum.reduce(dirs, {[], MapSet.new()}, fn dir, {acc, seen} ->
         Enum.reduce(discover(dir), {acc, seen}, fn path, {acc, seen} ->
-          basename = extension_id(path)
-
-          if MapSet.member?(seen, basename) do
-            {acc, seen}
-          else
-            {[path | acc], MapSet.put(seen, basename)}
-          end
+          dedup_path(path, acc, seen)
         end)
       end)
 
@@ -131,6 +125,16 @@ defmodule OctoPi.Coder.Extension.Loader do
       Path.join(cwd, ".octo_pi/extensions"),
       Path.expand("~/.octo_pi/extensions")
     ]
+  end
+
+  defp dedup_path(path, acc, seen) do
+    basename = extension_id(path)
+
+    if MapSet.member?(seen, basename) do
+      {acc, seen}
+    else
+      {[path | acc], MapSet.put(seen, basename)}
+    end
   end
 
   defp extension_id(path) do

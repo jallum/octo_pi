@@ -24,6 +24,7 @@ defmodule OctoPi.Coder.Modes.Print do
 
   alias OctoPi.Agent.Event
   alias OctoPi.AI.Content
+  alias OctoPi.Coder.SystemPrompt
 
   @spec run(map()) :: {:ok, atom()} | {:error, atom()}
   def run(%{prompt: prompt, model: model} = opts) do
@@ -33,7 +34,7 @@ defmodule OctoPi.Coder.Modes.Print do
 
     system_prompt =
       Map.get_lazy(opts, :system_prompt, fn ->
-        OctoPi.Coder.SystemPrompt.render(cwd: cwd, tools: tools)
+        SystemPrompt.render(cwd: cwd, tools: tools)
       end)
 
     session_opts = maybe_put([model: model, tools: tools, system_prompt: system_prompt], :transport, transport)

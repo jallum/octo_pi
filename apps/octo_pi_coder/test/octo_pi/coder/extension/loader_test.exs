@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
   # Tests that exercise bad-syntax/crashing-init paths log warnings
   # by design; capture them so test output stays clean.
+  alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Loader
 
   @moduletag capture_log: true
@@ -166,7 +167,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
   describe "load_from_factory/2" do
     test "loads extension from inline factory function" do
       factory = fn api ->
-        {:ok, api} = OctoPi.Coder.Extension.API.on(api, :session_start, fn _e, _c -> nil end)
+        {:ok, api} = API.on(api, :session_start, fn _e, _c -> nil end)
         {:ok, api}
       end
 
