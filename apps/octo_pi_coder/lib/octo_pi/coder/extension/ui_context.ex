@@ -3,6 +3,11 @@ defmodule OctoPi.Coder.Extension.UIContext do
 
   @type select_option :: %{label: String.t(), value: term()}
 
+  @type custom_tui :: %{request_render: (-> :ok)}
+  @type custom_theme :: %{fg: (atom(), String.t() -> String.t())}
+  @type custom_component :: %{render: (pos_integer() -> [String.t()]), handle_input: (term() -> :ok)}
+  @type custom_factory :: (custom_tui(), custom_theme(), (term() -> :ok) -> custom_component())
+
   @type t :: %__MODULE__{
           select: ([select_option()], keyword() -> {:ok, term()} | :cancelled | no_return()),
           confirm: (String.t(), keyword() -> boolean() | no_return()),
@@ -16,7 +21,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
           set_footer: (term() -> :ok | no_return()),
           set_header: (term() -> :ok | no_return()),
           set_title: (String.t() -> :ok | no_return()),
-          custom: (term(), keyword() -> term() | no_return()),
+          custom: (custom_factory(), keyword() -> term() | no_return()),
           paste_to_editor: (String.t() -> :ok | no_return()),
           set_editor_text: (String.t() -> :ok | no_return()),
           get_editor_text: (-> String.t() | no_return()),

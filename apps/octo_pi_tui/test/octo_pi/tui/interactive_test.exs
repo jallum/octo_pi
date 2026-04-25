@@ -1610,10 +1610,96 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.dialog == {:editor, ref, "initial", []}
     end
 
-    test "custom stores pending dialog" do
+    test "custom is handled at loop level — handle_ui_request returns pending with no state change" do
       ref = make_ref()
-      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:custom, ref, :my_ext, []})
-      assert s.dialog == {:custom, ref, :my_ext, []}
+      factory = fn _tui, _theme, _done -> %{render: fn _ -> [] end, handle_input: fn _ -> :ok end} end
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:custom, ref, factory, []})
+      assert s.custom_widget == nil
+      assert s.dialog == nil
+    end
+  end
+
+  # ── Custom widget ──────────────────────────────────────────────
+
+  describe "render/2 — custom widget" do
+    test "renders component output instead of normal UI when custom_widget is set" do
+      component = %{render: fn _w -> ["widget line 1", "widget line 2"] end, handle_input: fn _ -> :ok end}
+      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 80, height: 5}
+      lines = Interactive.render(state, ["input line"])
+      assert "widget line 1" in lines
+      assert "widget line 2" in lines
+      refute "input line" in lines
+    end
+
+    test "custom widget output is padded to height when shorter" do
+      component = %{render: fn _w -> ["only line"] end, handle_input: fn _ -> :ok end}
+      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 80, height: 5}
+      lines = Interactive.render(state, [])
+      assert length(lines) == 5
+      assert "only line" in lines
+    end
+
+    test "custom widget receives the state width" do
+      {:ok, widths} = Agent.start_link(fn -> [] end)
+
+      component = %{
+        render: fn w ->
+          Agent.update(widths, &[w | &1])
+          []
+        end,
+        handle_input: fn _ -> :ok end
+      }
+
+      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 120, height: 5}
+      Interactive.render(state, [])
+      assert [120] = Agent.get(widths, & &1)
+    end
+  end
+
+  describe "handle_event — custom widget key routing" do
+    test "key events are forwarded to handle_input when custom_widget is active" do
+      {:ok, received} = Agent.start_link(fn -> [] end)
+
+      component = %{
+        render: fn _ -> [] end,
+        handle_input: fn ev ->
+          Agent.update(received, &[ev | &1])
+          :ok
+        end
+      }
+
+      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert [{:key, %Key{key: :enter}}] = Agent.get(received, & &1)
+    end
+
+    test "char events are forwarded to handle_input when custom_widget is active" do
+      {:ok, received} = Agent.start_link(fn -> [] end)
+
+      component = %{
+        render: fn _ -> [] end,
+        handle_input: fn ev ->
+          Agent.update(received, &[ev | &1])
+          :ok
+        end
+      }
+
+      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      Interactive.handle_event(state, {:char, "x"})
+      assert [{:char, "x"}] = Agent.get(received, & &1)
+    end
+
+    test "state is unchanged after routing key to custom widget" do
+      component = %{render: fn _ -> [] end, handle_input: fn _ -> :ok end}
+      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert new_state == state
+    end
+
+    test "normal key handling resumes when custom_widget is nil" do
+      state = %Interactive{input: %Input{value: "", cursor: 0}}
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :escape}})
+      assert new_state.exit == true
     end
   end
 

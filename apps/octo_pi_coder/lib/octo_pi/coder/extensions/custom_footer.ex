@@ -24,6 +24,8 @@ defmodule OctoPi.Coder.Extensions.CustomFooter do
     do_toggle(enabled, ui)
   end
 
+  defp toggle_footer(_ctx, _state), do: :ok
+
   defp do_toggle(true, ui) do
     ui.set_footer.(nil)
     ui.notify.("Default footer restored")
@@ -44,6 +46,4 @@ defmodule OctoPi.Coder.Extensions.CustomFooter do
 
   defp status_string(statuses) when map_size(statuses) == 0, do: ""
   defp status_string(statuses), do: " · " <> Enum.map_join(statuses, ", ", fn {_, v} -> v end)
-
-  defp toggle_footer(_ctx, _state), do: :ok
 end

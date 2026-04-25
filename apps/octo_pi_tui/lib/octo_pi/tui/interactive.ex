@@ -57,7 +57,7 @@ defmodule OctoPi.TUI.Interactive do
           transcript: [struct()],
           footer: Footer.t(),
           footer_data: pid() | nil,
-          theme: Theme.t(),
+          theme: Theme.t() | nil,
           width: pos_integer(),
           height: pos_integer(),
           exit: boolean(),
@@ -79,6 +79,7 @@ defmodule OctoPi.TUI.Interactive do
           expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
+          custom_widget: {reference(), pid(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           debug_render_log: IO.device() | nil
         }
@@ -111,6 +112,7 @@ defmodule OctoPi.TUI.Interactive do
             notification: nil,
             ui_overrides: %{},
             dialog: nil,
+            custom_widget: nil,
             extension_shortcuts: [],
             debug_render_log: nil
 
@@ -326,8 +328,8 @@ defmodule OctoPi.TUI.Interactive do
     {%{state | dialog: {:editor, ref, content, opts}}, :pending}
   end
 
-  def handle_ui_request(state, {:custom, ref, term, opts}) do
-    {%{state | dialog: {:custom, ref, term, opts}}, :pending}
+  def handle_ui_request(state, {:custom, _ref, _factory, _opts}) do
+    {state, :pending}
   end
 
   @doc """
@@ -617,6 +619,30 @@ defmodule OctoPi.TUI.Interactive do
     |> advance(fsm, renderer, terminal)
   end
 
+  defp handle_loop_msg(state, {:ui_request, from, ref, {:custom, ref, factory, _opts}}, fsm, renderer, terminal) do
+    interactive_pid = self()
+    tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
+    theme = build_custom_theme(state)
+    done = fn result -> send(interactive_pid, {:custom_done, ref, from, result}) end
+    component = factory.(tui, theme, done)
+    advance(%{state | custom_widget: {ref, from, component}}, fsm, renderer, terminal)
+  end
+
+  defp handle_loop_msg(
+         %{custom_widget: {ref, from, _}} = state,
+         {:custom_done, ref, from, result},
+         fsm,
+         renderer,
+         terminal
+       ) do
+    send(from, {:ui_reply, ref, result})
+    advance(%{state | custom_widget: nil}, fsm, renderer, terminal)
+  end
+
+  defp handle_loop_msg(state, :force_render, fsm, renderer, terminal) do
+    advance(state, fsm, renderer, terminal)
+  end
+
   defp handle_loop_msg(state, {:ui_request, from, ref, ui_msg}, fsm, renderer, terminal) do
     {new_state, reply} = handle_ui_request(state, ui_msg)
     if reply != :pending, do: send(from, {:ui_reply, ref, reply})
@@ -731,6 +757,8 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines) when not is_nil(cw), do: "\e[?25l"
+
   defp cursor_position(
          %__MODULE__{
            input: input,
@@ -798,6 +826,16 @@ defmodule OctoPi.TUI.Interactive do
   @spec handle_event(t(), term()) :: t()
 
   def handle_event(state, {:key, %Key{event_type: :release}}), do: state
+
+  def handle_event(%{custom_widget: {_, _, component}} = state, {:key, _} = event) when not is_nil(component) do
+    component.handle_input.(event)
+    state
+  end
+
+  def handle_event(%{custom_widget: {_, _, component}} = state, {:char, _} = event) when not is_nil(component) do
+    component.handle_input.(event)
+    state
+  end
 
   def handle_event(%{model_selector: ms} = state, {:key, %Key{} = key}) when not is_nil(ms) do
     case ModelSelector.handle_key(ms, key) do
@@ -1267,6 +1305,12 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
+  def render(%{custom_widget: {_, _, component}, width: width, height: height}, _input_lines) do
+    lines = component.render.(width)
+    len = length(lines)
+    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+  end
+
   def render(
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width, height: height} = state,
         input_lines
@@ -1285,6 +1329,9 @@ defmodule OctoPi.TUI.Interactive do
     len = length(all)
     if len < height, do: List.duplicate("", height - len) ++ all, else: all
   end
+
+  defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}
+  defp build_custom_theme(%{theme: theme}), do: %{fg: fn color, text -> Theme.fg(theme, color, text) end}
 
   defp default_working_message, do: "Thinking…"
 

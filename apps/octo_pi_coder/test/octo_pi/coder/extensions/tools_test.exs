@@ -6,6 +6,7 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Extensions.Tools
 
   defp all_tools do
@@ -41,6 +42,27 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
   end
 
   defp ctx(branch \\ []), do: Context.new(%{cwd: "/tmp", get_branch: fn -> branch end})
+
+  defp ctx_with_ui(custom_calls, branch \\ []) do
+    ui = %UIContext{
+      custom: fn factory, _opts ->
+        Agent.update(custom_calls, fn acc -> [factory | acc] end)
+        nil
+      end
+    }
+
+    Context.new(%{cwd: "/tmp", has_ui?: true, ui: ui, get_branch: fn -> branch end})
+  end
+
+  defp call_factory(custom_calls) do
+    [factory] = Agent.get(custom_calls, & &1)
+    tui = %{request_render: fn -> :ok end}
+    theme = %{fg: fn _color, text -> text end}
+    {:ok, done_box} = Agent.start_link(fn -> nil end)
+    done = fn result -> Agent.update(done_box, fn _ -> result end) end
+    component = factory.(tui, theme, done)
+    {component, done_box}
+  end
 
   defp tools_config_entry(names), do: %Custom{kind: :tools_config, payload: %{enabled_tools: names}, timestamp: 0}
 
@@ -157,7 +179,83 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
     end
   end
 
-  describe "/tools command" do
+  describe "/tools command — interactive UI (has_ui?: true)" do
+    test "calls ctx.ui.custom with a 3-arity factory fn" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      ctx = ctx_with_ui(custom_calls)
+      {ext, _, _} = ext_with_state()
+      ext.commands["tools"].handler.("", ctx)
+      [factory] = Agent.get(custom_calls, & &1)
+      assert is_function(factory, 3)
+    end
+
+    test "factory returns a component with render and handle_input fns" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _, _} = ext_with_state()
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, _} = call_factory(custom_calls)
+      assert is_function(component.render, 1)
+      assert is_function(component.handle_input, 1)
+    end
+
+    test "render fn returns lines containing each tool name" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _, _} = ext_with_state(["bash"])
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, _} = call_factory(custom_calls)
+      lines = component.render.(80)
+      assert is_list(lines)
+      assert Enum.any?(lines, &String.contains?(&1, "bash"))
+      assert Enum.any?(lines, &String.contains?(&1, "write"))
+      assert Enum.any?(lines, &String.contains?(&1, "read"))
+    end
+
+    test "render fn reflects enabled status" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _, _} = ext_with_state(["bash"])
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, _} = call_factory(custom_calls)
+      lines = component.render.(80)
+      bash_line = Enum.find(lines, &String.contains?(&1, "bash"))
+      assert bash_line =~ "enabled"
+      read_line = Enum.find(lines, &String.contains?(&1, "read"))
+      assert read_line =~ "disabled"
+    end
+
+    test "escape key calls done with nil" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _, _} = ext_with_state()
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, done_box} = call_factory(custom_calls)
+      component.handle_input.({:key, %{key: :escape}})
+      assert Agent.get(done_box, & &1) == nil
+    end
+
+    test "enter toggles selected tool and calls set_active_tools" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _state, applied} = ext_with_state(["bash", "write"])
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, _} = call_factory(custom_calls)
+      # Default selection is 0 (bash). Enter disables it.
+      component.handle_input.({:key, %{key: :enter}})
+      applied_names = Agent.get(applied, & &1)
+      refute "bash" in applied_names
+    end
+
+    test "down key moves selection and enter toggles newly selected tool" do
+      {:ok, custom_calls} = Agent.start_link(fn -> [] end)
+      {ext, _state, applied} = ext_with_state(["bash"])
+      ext.commands["tools"].handler.("", ctx_with_ui(custom_calls))
+      {component, _} = call_factory(custom_calls)
+      # Move to "write" (index 1), then toggle
+      component.handle_input.({:key, %{key: :down}})
+      component.handle_input.({:key, %{key: :enter}})
+      applied_names = Agent.get(applied, & &1)
+      assert "write" in applied_names
+    end
+  end
+
+  describe "/tools command — no-UI fallback (has_ui?: false)" do
     test "returns a list of tool status maps" do
       {ext, _, _} = ext_with_state(["bash"])
 
