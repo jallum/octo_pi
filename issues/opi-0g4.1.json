@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Terminal: Kitty keyboard protocol negotiation + modifyOtherKeys fallback",
   "type": "task",
-  "updated_at": "2026-04-25T13:14:48.976497Z"
+  "updated_at": "2026-04-25T13:21:19.991677Z"
 }
