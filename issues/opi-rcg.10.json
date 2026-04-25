@@ -3,13 +3,13 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-25T17:32:52Z",
-  "description": "Affected extension: tools.ex\nUpstream: ctx.ui.custom((tui, theme, kb, done) =\u003e widget) opens a full-screen interactive UI panel. The factory receives the TUI rendering context, theme, keyboard input stream, and a done() callback to exit. Used by tools.ts to render an interactive SettingsList where the user can toggle tools on/off with arrow keys and Enter.\nCurrent workaround: the /tools command returns a plain list of tool status maps instead of an interactive TUI selector. Tool toggling requires a separate mechanism.\nWhat's needed: UIContext.custom must be implemented. It needs to: (1) pause the main Interactive render loop, (2) hand control to the custom widget factory, (3) pipe keyboard input to the widget's kb stream, (4) resume the main loop when done() is called. This is a significant TUI overlay/modal infrastructure piece.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/tools.ts (ctx.ui.custom)",
+  "description": "Affected extension: tools.ex\nUpstream: ctx.ui.custom((tui, theme, kb, done) => widget) opens a full-screen interactive UI panel. The factory receives the TUI rendering context, theme, keyboard input stream, and a done() callback to exit. Used by tools.ts to render an interactive SettingsList where the user can toggle tools on/off with arrow keys and Enter.\nCurrent workaround: the /tools command returns a plain list of tool status maps instead of an interactive TUI selector. Tool toggling requires a separate mechanism.\nWhat's needed: UIContext.custom must be implemented. It needs to: (1) pause the main Interactive render loop, (2) hand control to the custom widget factory, (3) pipe keyboard input to the widget's kb stream, (4) resume the main loop when done() is called. This is a significant TUI overlay/modal infrastructure piece.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/tools.ts (ctx.ui.custom)",
   "id": "opi-rcg.10",
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "ctx.ui.custom() — full-screen interactive custom widget slot",
   "type": "task",
-  "updated_at": "2026-04-25T17:32:52Z"
+  "updated_at": "2026-04-25T18:45:45.601037Z"
 }
