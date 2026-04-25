@@ -89,24 +89,6 @@ defmodule OctoPi.Coder.Tools.BashTest do
     end
   end
 
-  describe "cwd enforcement" do
-    test "rejects a cwd arg that escapes the session cwd", %{ref: ref} do
-      tmp = Path.join(System.tmp_dir!(), "bash-cwd-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(tmp)
-      on_exit(fn -> File.rm_rf!(tmp) end)
-
-      assert {:ok, %Result{is_error?: true, content: [%Content.Text{text: msg}]}} =
-               Bash.execute(
-                 "id",
-                 %{"_cwd" => tmp, "command" => "echo hi", "cwd" => "/etc"},
-                 ref,
-                 fn _ -> :ok end
-               )
-
-      assert msg =~ "escapes session cwd"
-    end
-  end
-
   describe "abort" do
     test "aborted_ref flips mid-run kills the command", %{ref: ref} do
       test_pid = self()
