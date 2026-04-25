@@ -4,14 +4,15 @@
   "blocks": [
     "opi-u6a.6"
   ],
+  "closed_at": "2026-04-25T06:06:24Z",
   "created": "2026-04-25T05:47:41Z",
   "description": "Port upstream prompt-templates.ts to Elixir.\n\nUpstream behavior:\n- Load .md files (non-recursive) from ~/.pi/prompts/ and {cwd}/.pi/prompts/\n- Parse frontmatter (--- delimited YAML): name (from filename without .md), description (frontmatter or first line ≤60 chars), argument-hint\n- Argument substitution in template content:\n  - $1, $2, ... → positional args (1-indexed)\n  - $@ / $ARGUMENTS → all args joined with space\n  - ${@:N} → args from Nth onwards (1-indexed, bash slice)\n  - ${@:N:L} → L args starting from N (1-indexed)\n  - Replacement is non-recursive (arg values not substituted again)\n- Shell-like arg parsing: respects single/double quotes (quoted strings are one arg)\n- Expansion: user input starting with \"/name args\" matches template named \"name\"\n\nImplementation:\n- New module: OctoPi.Coder.PromptTemplates\n- load_all/1 — scan global + project dirs for .md files\n- parse_template/1 — extract frontmatter, name, description, argument_hint\n- parse_args/1 — bash-style arg parsing respecting single/double quotes\n- substitute_args/2 — apply $1/$@/$ARGUMENTS/${@:N}/${@:N:L} substitutions\n- expand/2 — check if text starts with \"/name ...\" and expand if template found\n\nTests (TDD — port upstream tests from packages/coding-agent/test/prompt-templates.test.ts):\n- Load templates from directory\n- Frontmatter name override\n- Description from frontmatter vs first line truncation\n- $1 substitution\n- $@ and $ARGUMENTS substitution\n- ${@:2} slicing\n- ${@:2:3} slicing\n- Quoted args parsing (\"hello world\" → one arg)\n- /template-name expansion\n- No match → original text returned\n- Empty args for template with $1 → empty string\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/prompt-templates.ts\nReference: tmp/pi-mono/packages/coding-agent/test/ for tests to port",
   "id": "opi-u6a.5",
   "labels": [],
   "parent": "opi-u6a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Prompt templates: loading, frontmatter, argument substitution, expansion",
   "type": "task",
-  "updated_at": "2026-04-25T05:57:48Z"
+  "updated_at": "2026-04-25T06:06:24Z"
 }
