@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T22:19:29Z",
+  "description": "The read tool in ./tmp/pi-mono (upstream) has no directory gates or path restrictions — it resolves and reads any file the process has permission to access. Our project has accidentally added directory limitations on top of this. We should remove them to match upstream behavior.",
+  "id": "opi-u1t",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Remove directory gates from read tool",
+  "type": "task",
+  "updated_at": "2026-04-25T22:19:29Z"
+}
