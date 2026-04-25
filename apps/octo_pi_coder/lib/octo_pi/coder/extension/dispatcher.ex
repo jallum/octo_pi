@@ -154,6 +154,66 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     |> Enum.map(fn {name, ext_ids} -> %{name: name, extensions: ext_ids} end)
   end
 
+  @type command_entry :: %{
+          name: String.t(),
+          invocation_name: String.t(),
+          cmd: Extension.command_spec(),
+          ext_id: String.t()
+        }
+
+  @doc """
+  Returns all commands from all extensions with `invocation_name` set.
+  Unique commands get `invocation_name == name`. Duplicate names across
+  extensions get `:1`, `:2` suffixes in insertion order — matching
+  upstream pi-mono's runner `getRegisteredCommands()` semantics.
+  """
+  @spec get_registered_commands([Extension.t()]) :: [command_entry()]
+  def get_registered_commands(extensions) do
+    all =
+      Enum.flat_map(extensions, fn ext ->
+        Enum.map(ext.commands, fn {name, cmd} -> {name, cmd, ext.id} end)
+      end)
+
+    name_counts = Enum.frequencies_by(all, &elem(&1, 0))
+
+    {result, _} =
+      Enum.map_reduce(all, %{}, fn {name, cmd, ext_id}, counters ->
+        if Map.fetch!(name_counts, name) > 1 do
+          idx = Map.get(counters, name, 0) + 1
+          entry = %{name: name, invocation_name: "#{name}:#{idx}", cmd: cmd, ext_id: ext_id}
+          {entry, Map.put(counters, name, idx)}
+        else
+          {%{name: name, invocation_name: name, cmd: cmd, ext_id: ext_id}, counters}
+        end
+      end)
+
+    result
+  end
+
+  @doc "Look up a command by its `invocation_name`."
+  @spec get_command_by_invocation([Extension.t()], String.t()) ::
+          {Extension.command_spec(), String.t()} | nil
+  def get_command_by_invocation(extensions, invocation_name) do
+    case Enum.find(get_registered_commands(extensions), &(&1.invocation_name == invocation_name)) do
+      nil -> nil
+      entry -> {entry.cmd, entry.ext_id}
+    end
+  end
+
+  @doc "Collect all flags from all extensions (first-wins deduplication by name)."
+  @spec get_all_flags([Extension.t()]) :: [{String.t(), Extension.flag_spec()}]
+  def get_all_flags(extensions) do
+    extensions
+    |> Enum.flat_map(fn ext -> Enum.to_list(ext.flags) end)
+    |> Enum.uniq_by(&elem(&1, 0))
+  end
+
+  @doc "Collect all shortcuts from all extensions (insertion order, no conflict detection)."
+  @spec get_all_shortcuts([Extension.t()]) :: [{String.t(), Extension.shortcut_spec()}]
+  def get_all_shortcuts(extensions) do
+    Enum.flat_map(extensions, fn ext -> Enum.to_list(ext.shortcuts) end)
+  end
+
   # --- dispatch step helpers ---
 
   defp try_cancel(ext, event, ctx, handler) do
