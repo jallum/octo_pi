@@ -491,7 +491,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp cursor_position(
-         %__MODULE__{input: input, width: width, footer: footer},
+         %__MODULE__{input: input, width: width, height: height, footer: footer},
          input_lines,
          lines
        ) do
@@ -499,7 +499,9 @@ defmodule OctoPi.TUI.Interactive do
     footer_height = length(Footer.render(footer, width))
     input_end = length(lines) - footer_height
     input_start = input_end - length(input_lines)
-    "\e[#{input_start + crow + 1};#{ccol + 1}H"
+    viewport_top = max(0, length(lines) - height)
+    screen_row = input_start + crow - viewport_top + 1
+    "\e[#{screen_row};#{ccol + 1}H"
   end
 
   defp shutdown(terminal, fsm, renderer, footer_data) do
@@ -798,17 +800,8 @@ defmodule OctoPi.TUI.Interactive do
     footer_lines = Footer.render(footer, width)
 
     all = banner_lines ++ transcript_lines ++ input_lines ++ footer_lines
-    fit_to_height(all, height)
-  end
-
-  defp fit_to_height(lines, height) do
-    len = length(lines)
-
-    cond do
-      len == height -> lines
-      len > height -> Enum.take(lines, -height)
-      true -> List.duplicate("", height - len) ++ lines
-    end
+    len = length(all)
+    if len < height, do: List.duplicate("", height - len) ++ all, else: all
   end
 
   defp render_banner(nil, _width), do: []

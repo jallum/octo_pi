@@ -6,8 +6,10 @@ defmodule OctoPi.TUI.VirtualTerminal do
   sequences our Renderer emits, nothing more:
 
     - \\e[2J        clear screen
+    - \\e[J         erase below (cursor to end of screen)
     - \\e[H         cursor home (1,1)
     - \\e[row;colH  cursor absolute position
+    - \\e[2K        erase entire line
     - \\e[K         clear to end of line
     - \\e[?2026h/l  synchronized output (ignored)
     - \\r\\n         carriage return + line feed
@@ -163,6 +165,20 @@ defmodule OctoPi.TUI.VirtualTerminal do
     %{term | grid: blank_grid(term.rows), cell_attrs: %{}}
   end
 
+  # Erase below: CSI J (or CSI 0 J) — clear from cursor to end of screen
+  defp exec_csi(term, "J", params) when params in ["", "0"] do
+    row_str = Map.get(term.grid, term.cursor_row, "")
+    truncated = slice_to_col(row_str, term.cursor_col)
+    grid = Map.put(term.grid, term.cursor_row, truncated)
+
+    grid =
+      Enum.reduce((term.cursor_row + 1)..(term.rows - 1)//1, grid, fn r, acc ->
+        Map.put(acc, r, "")
+      end)
+
+    %{term | grid: grid}
+  end
+
   # Cursor home: CSI H (no params)
   defp exec_csi(term, "H", "") do
     %{term | cursor_row: 0, cursor_col: 0}
@@ -183,6 +199,11 @@ defmodule OctoPi.TUI.VirtualTerminal do
       _ ->
         term
     end
+  end
+
+  # Erase entire line: CSI 2 K
+  defp exec_csi(term, "K", "2") do
+    %{term | grid: Map.put(term.grid, term.cursor_row, "")}
   end
 
   # Clear to end of line: CSI K (or CSI 0 K)
