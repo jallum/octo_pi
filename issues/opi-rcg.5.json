@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:16Z",
+  "description": "Affected extension: status-line.ex\nUpstream: ctx.ui.theme is a Theme object with fg(color, text) and bg(color, text) methods for applying named semantic colors (dim, accent, success, muted, etc.) to status strings.\nUsed by status-line.ts to produce colored status text: theme.fg('accent', '●') for the spinner, theme.fg('success', '✓') for complete, theme.fg('dim', ' Turn N...') for the label.\nCurrent workaround: plain strings without ANSI styling.\nWhat's needed: UIContext must expose a theme field (or get_theme fn returning a struct with color-application helpers). Integrates with the theme system (opi-m4h.1). The theme struct needs at least fg/2 and bg/2 that map semantic color names to ANSI escape sequences.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/status-line.ts (ctx.ui.theme.fg)",
+  "id": "opi-rcg.5",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.ui.theme — expose theme color palette to UIContext",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:16Z"
+}
