@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.sessionManager.getEntries() — expose full session transcript to Context",
   "type": "task",
-  "updated_at": "2026-04-25T17:50:42.459939Z"
+  "updated_at": "2026-04-25T18:02:48.835909Z"
 }
