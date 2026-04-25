@@ -1001,14 +1001,20 @@ defmodule OctoPi.TUI.Interactive do
   defp update_footer(footer, %{__struct__: MessageEnd, message: msg}) do
     usage = Map.get(msg, :usage, %{})
     cost_struct = Map.get(usage, :cost, %{})
+    new_input = footer.input_tokens + Map.get(usage, :input, 0)
+
+    context_percent =
+      if footer.context_window > 0,
+        do: new_input / footer.context_window * 100.0
 
     %{
       footer
-      | input_tokens: footer.input_tokens + Map.get(usage, :input, 0),
+      | input_tokens: new_input,
         output_tokens: footer.output_tokens + Map.get(usage, :output, 0),
         cache_read: footer.cache_read + Map.get(usage, :cache_read, 0),
         cache_write: footer.cache_write + Map.get(usage, :cache_write, 0),
-        cost: footer.cost + Map.get(cost_struct, :total, 0.0)
+        cost: footer.cost + Map.get(cost_struct, :total, 0.0),
+        context_percent: context_percent
     }
   end
 

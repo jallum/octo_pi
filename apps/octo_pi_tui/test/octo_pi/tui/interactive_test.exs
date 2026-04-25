@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Usage
+  alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.Footer
@@ -1030,7 +1031,7 @@ defmodule OctoPi.TUI.InteractiveTest do
           output: 100,
           cache_read: 50,
           cache_write: 25,
-          cost: %OctoPi.AI.Usage.Cost{total: 0.002}
+          cost: %Cost{total: 0.002}
         }
       }
 
@@ -1041,6 +1042,105 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.footer.cache_read == 50
       assert s.footer.cache_write == 25
       assert_in_delta s.footer.cost, 0.003, 0.0001
+    end
+
+    test "MessageEnd computes context_percent from input_tokens / context_window" do
+      footer = %Footer{
+        cwd: "/tmp",
+        model_id: "test-model",
+        context_window: 200_000,
+        input_tokens: 0,
+        output_tokens: 0,
+        cost: 0.0
+      }
+
+      s = %Interactive{footer: footer}
+
+      msg = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "test-model",
+        timestamp: 0,
+        content: [%Content.Text{text: "reply"}],
+        stop_reason: :stop,
+        usage: %Usage{
+          input: 20_000,
+          output: 500,
+          cache_read: 0,
+          cache_write: 0,
+          cost: %Cost{total: 0.001}
+        }
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+
+      assert_in_delta s.footer.context_percent, 10.0, 0.01
+    end
+
+    test "MessageEnd context_percent accumulates across turns" do
+      footer = %Footer{
+        cwd: "/tmp",
+        model_id: "test-model",
+        context_window: 100_000,
+        input_tokens: 10_000,
+        output_tokens: 0,
+        cost: 0.0
+      }
+
+      s = %Interactive{footer: footer}
+
+      msg = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "test-model",
+        timestamp: 0,
+        content: [%Content.Text{text: "reply"}],
+        stop_reason: :stop,
+        usage: %Usage{
+          input: 15_000,
+          output: 100,
+          cache_read: 0,
+          cache_write: 0,
+          cost: %Cost{total: 0.001}
+        }
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+
+      assert_in_delta s.footer.context_percent, 25.0, 0.01
+    end
+
+    test "MessageEnd context_percent is nil when context_window is 0" do
+      footer = %Footer{
+        cwd: "/tmp",
+        model_id: "test-model",
+        context_window: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cost: 0.0
+      }
+
+      s = %Interactive{footer: footer}
+
+      msg = %Assistant{
+        api: :fake,
+        provider: :fake,
+        model: "test-model",
+        timestamp: 0,
+        content: [%Content.Text{text: "reply"}],
+        stop_reason: :stop,
+        usage: %Usage{
+          input: 1_000,
+          output: 50,
+          cache_read: 0,
+          cache_write: 0,
+          cost: %Cost{total: 0.0}
+        }
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+
+      assert is_nil(s.footer.context_percent)
     end
   end
 
