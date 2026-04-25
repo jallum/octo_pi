@@ -52,6 +52,27 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.input.cursor == 0
     end
 
+    test "Enter calls expand_prompt_fn and shows original value in transcript" do
+      test_pid = self()
+
+      expand_fn = fn text ->
+        send(test_pid, {:expanded, text})
+        "expanded: #{text}"
+      end
+
+      s = %Interactive{input: %Input{value: "/greet world", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert_received {:expanded, "/greet world"}
+      assert s.transcript == [{:user, "/greet world"}]
+      assert s.input.value == ""
+    end
+
+    test "Enter without expand_prompt_fn works as before" do
+      s = %Interactive{input: %Input{value: "/foo", cursor: 4}, session: nil, expand_prompt_fn: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.transcript == [{:user, "/foo"}]
+    end
+
     test "Escape clears non-empty input" do
       s = %Interactive{input: %Input{value: "draft", cursor: 5}}
       s = Interactive.handle_event(s, {:key, %Key{key: :escape}})
@@ -518,6 +539,7 @@ defmodule OctoPi.TUI.InteractiveTest do
             tools: [],
             write_fn: write_fn,
             raw_mode_fn: raw_mode_fn,
+            tty_fn: fn _ -> :ok end,
             skip_sigwinch: true,
             auto_start_reader: false,
             dimensions: {80, 24},
@@ -552,6 +574,7 @@ defmodule OctoPi.TUI.InteractiveTest do
             tools: [],
             write_fn: write_fn,
             raw_mode_fn: raw_mode_fn,
+            tty_fn: fn _ -> :ok end,
             skip_sigwinch: true,
             auto_start_reader: false,
             dimensions: {80, 24},

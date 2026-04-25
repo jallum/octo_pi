@@ -60,6 +60,7 @@ defmodule OctoPi.TUI.Interactive do
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
           loaded_resources: resource_data() | nil,
+          expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
@@ -74,6 +75,7 @@ defmodule OctoPi.TUI.Interactive do
             theme: nil,
             banner: nil,
             loaded_resources: nil,
+            expand_prompt_fn: nil,
             width: 80,
             height: 24,
             exit: false,
@@ -375,6 +377,7 @@ defmodule OctoPi.TUI.Interactive do
       footer: footer,
       footer_data: footer_data,
       loaded_resources: loaded_resources,
+      expand_prompt_fn: Keyword.get(opts, :expand_prompt_fn),
       debug_render_log: debug_render_log
     }
 
@@ -454,7 +457,8 @@ defmodule OctoPi.TUI.Interactive do
         :skip_sigwinch,
         :auto_start_reader,
         :dimensions,
-        :raw_mode_fn
+        :raw_mode_fn,
+        :tty_fn
       ])
       |> Keyword.put(:name, Keyword.get(opts, :terminal_name, Terminal))
       |> Keyword.put(:write_fn, write_fn)
@@ -675,7 +679,8 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: input, session: session} = state, %Key{key: :enter}) do
     case Components.Input.handle_key(input, %Key{key: :enter}) do
       {new_input, [{:submit, value}]} when value != "" ->
-        if session, do: OctoPi.Agent.prompt(session, value)
+        prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
+        if session, do: OctoPi.Agent.prompt(session, prompt)
 
         user_msg =
           if state.theme do

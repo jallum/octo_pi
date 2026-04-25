@@ -81,7 +81,13 @@ defmodule OctoPi.TUI.Terminal do
     auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
 
-    if not skip_raw_mode, do: raw_mode_fn.(:enter)
+    write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
+    tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
+
+    if not skip_raw_mode do
+      raw_mode_fn.(:enter)
+      tty_fn.("\e[?2004h")
+    end
 
     if not skip_sigwinch do
       :gen_event.add_handler(:erl_signal_server, SigwinchHandler, self())
@@ -96,8 +102,9 @@ defmodule OctoPi.TUI.Terminal do
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
       skip_sigwinch: skip_sigwinch,
+      tty_fn: tty_fn,
       reader_pid: reader_pid,
-      write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
+      write_fn: write_fn,
       scope: self()
     }
 
@@ -148,7 +155,11 @@ defmodule OctoPi.TUI.Terminal do
       :gen_event.delete_handler(:erl_signal_server, SigwinchHandler, [])
     end
 
-    if not state.skip_raw_mode, do: state.raw_mode_fn.(:exit)
+    if not state.skip_raw_mode do
+      state.tty_fn.("\e[?2004l")
+      state.raw_mode_fn.(:exit)
+    end
+
     :ok
   end
 

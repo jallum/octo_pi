@@ -82,6 +82,24 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "bracketed paste mode (opi-0g4.2)" do
+    test "sends enable sequence on init" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
+      assert_receive {:tty, "\e[?2004h"}, 500
+    end
+
+    test "sends disable sequence on terminate" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+      pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
+      assert_receive {:tty, "\e[?2004h"}, 500
+      GenServer.stop(pid, :normal)
+      assert_receive {:tty, "\e[?2004l"}, 500
+    end
+  end
+
   describe "write/2" do
     test "routes bytes to the injected write_fn" do
       test_pid = self()
@@ -105,7 +123,8 @@ defmodule OctoPi.TUI.TerminalTest do
       pid =
         start_terminal(
           skip_raw_mode: false,
-          raw_mode_fn: raw_mode
+          raw_mode_fn: raw_mode,
+          tty_fn: fn _ -> :ok end
         )
 
       assert_receive {:raw_mode, :enter}, 500
@@ -126,7 +145,8 @@ defmodule OctoPi.TUI.TerminalTest do
         start_terminal(
           name: nil,
           skip_raw_mode: false,
-          raw_mode_fn: raw_mode
+          raw_mode_fn: raw_mode,
+          tty_fn: fn _ -> :ok end
         )
 
       assert_receive {:raw_mode, :enter}, 500

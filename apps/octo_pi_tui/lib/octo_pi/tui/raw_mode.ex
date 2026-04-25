@@ -23,6 +23,7 @@ defmodule OctoPi.TUI.RawMode do
 
   @doc "Flip the terminal into raw mode."
   @spec enter() :: :ok | {:error, term()}
+  @dialyzer {:no_match, enter: 0}
   def enter do
     result = :shell.start_interactive({:noshell, :raw})
 
@@ -36,6 +37,7 @@ defmodule OctoPi.TUI.RawMode do
 
   @doc "Restore the terminal to cooked mode."
   @spec exit() :: :ok | {:error, term()}
+  @dialyzer {:no_match, exit: 0}
   def exit do
     case TtyNif.restore_iexten() do
       {:error, msg} -> Logger.warning("RawMode: restore_iexten failed: #{msg}")
