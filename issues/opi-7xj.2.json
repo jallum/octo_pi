@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Footer shows ?% for context usage — context_percent never set",
   "type": "bug",
-  "updated_at": "2026-04-25T17:21:24.866708Z"
+  "updated_at": "2026-04-25T17:23:48.123177Z"
 }
