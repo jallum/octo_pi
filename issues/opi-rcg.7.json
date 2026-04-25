@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Dynamic tool registration after init — extensions immutable after build_extension/2",
   "type": "task",
-  "updated_at": "2026-04-25T18:23:40.438154Z"
+  "updated_at": "2026-04-25T18:26:52.927396Z"
 }
