@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.6.1"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:13:25Z",
   "description": "REQUIRES: opi-fin.6.1 (Host behaviour + Stub) merged first.\n\nFILES: Session supervisor/runner (find where OctoPi.Agent.start_session or equivalent is called), api.ex\n\nGOAL: The real Host GenServer is started per session under the session supervisor. bind_core is rewired to delegate to it so zero extension code changes.\n\nSTEP 1 -- Create the production Host GenServer:\n- New module implementing Host behaviour\n- Started as a child of the session supervisor at session startup\n- Holds references to: transport layer (for send_message), session state process (for get_active_tools etc.), agent task (for abort)\n- Its pid is held by the session runner\n\nSTEP 2 -- Wire bind_core to delegate:\nIn API.bind_core/2 (api.ex), add a new key :host_pid. When present, generate fn-field implementations that delegate to the Host GenServer via the client API functions defined in opi-fin.6.1. Example:\n  bind_core(api, %{host_pid: host_pid}) generates:\n    send_message: fn msg -\u003e Host.send_message(host_pid, msg) end\n    get_active_tools: fn -\u003e Host.get_active_tools(host_pid) end\n    ... for all action fields\n\nExisting call sites that pass individual fn values to bind_core continue to work -- the new host_pid key is additive.\n\nVALIDATION: Run full test suite. Zero extension tests should fail (no extension code changes in this ticket). Integration tests should pass with the new supervision structure.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "6a: Introduce Host GenServer into session supervision tree",
   "type": "task",
-  "updated_at": "2026-04-25T21:13:25Z"
+  "updated_at": "2026-04-25T21:14:23Z"
 }

@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.6.2"
+  ],
   "created": "2026-04-25T21:13:25Z",
   "description": "NEW FILES:\n- apps/octo_pi_coder/lib/octo_pi/coder/extension/host.ex\n- apps/octo_pi_coder/lib/octo_pi/coder/extension/host/stub.ex\n\nHOST BEHAVIOUR (host.ex):\nDefine OctoPi.Coder.Extension.Host with @callback for each action currently in API.t()'s action fn-fields. The full list from api.ex: send_message, send_user_message, append_entry, get_model, set_model, get_thinking_level, set_thinking_level, abort, compact, get_system_prompt, get_active_tools, get_all_tools, set_active_tools, get_session_name, set_session_name, set_label, register_tool, exec, get_commands, get_context_usage.\n\nAlso define client-side API functions in the same module (not the behaviour callbacks -- these are the functions extensions call):\n- Fire-and-forget actions (no return value needed): use GenServer.cast\n  send_message/2, send_user_message/2, append_entry/2, set_model/2, set_thinking_level/2, compact/2, set_active_tools/2, set_session_name/2, set_label/2\n- Query actions (return value needed): use GenServer.call\n  get_model/1, get_thinking_level/1, get_system_prompt/1, get_active_tools/1, get_all_tools/1, get_session_name/1, get_commands/1, get_context_usage/1\n- Special: abort/1 (cast), register_tool/2 (cast), exec/3 (call, returns result)\n\nHOST.STUB (host/stub.ex):\nGenServer that implements Host behaviour for tests. \n- start_link/1 takes initial config map: %{tools: [], commands: [], system_prompt: '', ...}\n- Records all calls in order as [{action, args}] list\n- Returns configurable responses for query actions (set via start_link config or update_config/2)\n- Expose: Stub.calls(pid) -\u003e [{action, args}], Stub.get(pid, key) -\u003e value\n\nNO existing files change in this ticket.\n\nTEST: New test file host_test.exs. Test Host.Stub records calls, returns configured values, handles all actions without crashing.",
   "id": "opi-fin.6.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "6a: Define Host behaviour and Host.Stub",
   "type": "task",
-  "updated_at": "2026-04-25T21:13:25Z"
+  "updated_at": "2026-04-25T21:14:23Z"
 }
