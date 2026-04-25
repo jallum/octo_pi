@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.2.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:12:38Z",
   "description": "FILES: extensions/status_line.ex, test/octo_pi/coder/extensions/status_line_test.exs\n\nREQUIRES: opi-fin.2.2 (macro) and opi-fin.2.3 (load_from_factory verification) merged first.\n\nCURRENT: def init(api, state) where state is an Agent pid provisioned by the caller. Closes over state in handlers via Agent.get_and_update.\n\nTARGET:\n1. Add 'use OctoPi.Coder.Extension' at top of module.\n2. Remove def init(api, state). The macro generates init/1.\n3. Add: def mount, do: {:ok, %{turn_count: 0}}\n4. Rename private on_session_start/1, on_turn_start/2, on_turn_end/2 to public handle_session_start/2, handle_turn_start/3, handle_turn_end/3 (3-arity for stateful ones, 2-arity for session_start which doesn't need state).\n5. Replace Agent.get/get_and_update/update calls with direct state parameter reads/updates.\n6. handle_turn_start and handle_turn_end return {result, new_state} tuple.\n7. DO NOT change ctx.ui.set_status.(...) calls -- UI fn-field migration is Phase 7.\n8. DO NOT change ctx.ui.apply_fg.(...) calls -- same.\n\nTEST CHANGES: status_line_test.exs\n- Remove outer Agent.start_link setup.\n- Change load_from_factory call from factory fn with state injection to: Loader.load_from_factory('status-line', \u0026StatusLine.init/1)\n- All behavioral assertions (status is set, turn count increments) must still pass.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Migrate StatusLine to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T21:12:38Z"
+  "updated_at": "2026-04-25T21:14:12Z"
 }
