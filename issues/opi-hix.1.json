@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Test harness: faux model + session factory for extension integration tests",
   "type": "task",
-  "updated_at": "2026-04-25T15:13:26.776624Z"
+  "updated_at": "2026-04-25T15:27:48.095170Z"
 }
