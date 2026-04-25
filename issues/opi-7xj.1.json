@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "The WelcomeBanner compact hints string is ~81 chars. At 68-col terminals it wraps to two visual lines, but the renderer counts it as one logical line. On the next render the second visual line (e.g. 'ctrl+o more') is not cleared, leaving ghost text. In subsequent frames the overwrite produces garbled output like 'ctrl+o morerrupt · ctrl+c/ctrl+d clear/exit · ...'.\n\nRoot cause: WelcomeBanner.render returns 2 logical lines, but line 2 wraps to 2 visual lines; the diff renderer doesn't account for terminal line-wrap.\n\nFix options:\n- Shorten the compact hints to fit within 70 chars\n- Split the hints string at a known width and return the correct number of logical lines",
+  "id": "opi-7xj.1",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Hint bar ghost text: compact hints line wraps causing leftover text from prior frame",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}

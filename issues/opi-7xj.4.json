@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "Upstream footer shows 'qwen3.5 • medium' or 'qwen3.5 • off' for the current thinking level. Our footer shows only the raw model ID like '(ollama) qwen3.5:latest'.\n\nFooter.thinking_level exists in the struct and model_part/1 handles it (renders '#{model_id} · #{level}' when non-nil), but interactive.ex never populates it — the footer is initialized once at startup and the thinking_level field is never set.\n\nNeeds: footer update on thinking_level changes (similar to how model_id is updated on model_select events).",
+  "id": "opi-7xj.4",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Footer missing thinking-level indicator (• medium / • off)",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}

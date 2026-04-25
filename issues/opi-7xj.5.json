@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "The compact banner hint reads 'ctrl+o more' (implying Ctrl+O expands the banner). The expanded banner confirms '? toggle this banner'. WelcomeBanner.handle_key only responds to Key{key: ??} — not Ctrl+O.\n\nSo the compact hint is wrong: it should say '? more' to match the actual handler. The expanded banner also lists 'Ctrl+O show full startup help' — but there is no handle_key clause for Ctrl+O, so that key does nothing.\n\nNeeds: either fix the compact hint to say '? more', or implement a Ctrl+O handler for 'show full startup help' and update hints accordingly.",
+  "id": "opi-7xj.5",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "WelcomeBanner compact hint says 'ctrl+o more' but actual key is '?'",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}

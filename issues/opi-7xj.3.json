@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "The compact hints show '! bash' implying that typing '! <cmd>' runs a shell command. The expanded banner confirms: '!  run bash command'.\n\nActually handle_submit/3 in interactive.ex sends all input directly to OctoPi.Agent.prompt/2 with no prefix handling. '! echo hello' is sent verbatim to the AI as a prompt.\n\nUpstream pi intercepts '!'-prefixed input, runs the command in a shell, and streams the output into the transcript as a bash execution block (using the existing BashExecution component).\n\nNeeds: prefix detection in handle_submit + shell execution + transcript entry.",
+  "id": "opi-7xj.3",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "! bash passthrough not implemented — shell commands sent to AI instead",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}

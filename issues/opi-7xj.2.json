@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "Footer shows '?%/33k' because Footer.context_percent is initialized to nil and never updated. The nil branch in context_part/1 renders '?'.\n\nThe token usage data arrives via MessageEnd events (interactive.ex:1002 already reads usage). context_percent should be computed as (input_tokens / context_window * 100) and stored back into footer.context_percent after each turn.\n\nUpstream shows e.g. '8.2%/262k'. Our footer has the field and color-coding logic — it just needs to be populated.",
+  "id": "opi-7xj.2",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Footer shows ?% for context usage — context_percent never set",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}

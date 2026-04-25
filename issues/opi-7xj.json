@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:10:40.938349Z",
+  "description": "Bugs and gaps discovered by running mix pi and comparing with upstream pi. Covers rendering glitches, missing features, and hint-bar inaccuracies.",
+  "id": "opi-7xj",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI rendering bugs found during tire-kick",
+  "type": "epic",
+  "updated_at": "2026-04-25T16:10:40.938349Z"
+}
