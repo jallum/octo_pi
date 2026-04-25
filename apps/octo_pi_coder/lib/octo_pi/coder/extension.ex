@@ -7,7 +7,7 @@ defmodule OctoPi.Coder.Extension do
 
   @type command_spec :: %{
           description: String.t(),
-          handler: (term() -> term())
+          handler: (term(), OctoPi.Coder.Extension.Context.t() -> term())
         }
 
   @type message_renderer :: (String.t(), term() -> String.t())

@@ -653,6 +653,10 @@ defmodule OctoPi.TUI.Interactive do
     |> advance(fsm, renderer, terminal)
   end
 
+  defp handle_loop_msg(state, {:extension_result, text}, fsm, renderer, terminal) do
+    advance(%{state | notification: text}, fsm, renderer, terminal)
+  end
+
   defp handle_loop_msg(state, {:ui_request, from, ref, {:custom, ref, factory, _opts}}, fsm, renderer, terminal) do
     interactive_pid = self()
     tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
@@ -1098,13 +1102,46 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_submit(state, new_input, "/" <> command = value) do
     cmd = String.downcase(String.trim(command))
-
-    if cmd in ~w(help clear compact cost model theme config) do
-      dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
-    else
-      do_handle_submit(state, new_input, value)
-    end
+    dispatch_slash(cmd, state, new_input, value)
   end
+
+  defp dispatch_slash(cmd, state, new_input, _value) when cmd in ~w(help clear compact cost model theme config) do
+    dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
+  end
+
+  defp dispatch_slash(cmd, state, new_input, value) do
+    dispatch_ext_or_ai(Dispatcher.get_command_by_invocation(state.extensions, cmd), state, new_input, value)
+  end
+
+  defp dispatch_ext_or_ai({cmd_spec, _ext_id}, state, new_input, _value) do
+    run_extension_command(cmd_spec, state, new_input)
+  end
+
+  defp dispatch_ext_or_ai(nil, state, new_input, value) do
+    do_handle_submit(state, new_input, value)
+  end
+
+  defp run_extension_command(cmd_spec, state, new_input) do
+    interactive_pid = self()
+    cwd = state.footer.cwd
+
+    Task.start(fn ->
+      ctx = Context.new(%{cwd: cwd, has_ui?: true, ui: build_ui_context(interactive_pid)})
+      result = cmd_spec.handler.("", ctx)
+      notify_extension_result(interactive_pid, result)
+    end)
+
+    %{state | input: %{new_input | value: "", cursor: 0}}
+  end
+
+  defp notify_extension_result(pid, text) when is_binary(text), do: send(pid, {:extension_result, text})
+
+  defp notify_extension_result(pid, list) when is_list(list) do
+    text = list |> Enum.filter(&is_binary/1) |> Enum.join("\n")
+    if text != "", do: send(pid, {:extension_result, text})
+  end
+
+  defp notify_extension_result(_pid, _), do: :ok
 
   defp handle_submit(state, new_input, "!" <> rest) do
     command = String.trim_leading(rest, " ")

@@ -954,6 +954,96 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_submit — extension slash commands (opi-8ee.2)" do
+    alias OctoPi.Coder.Extension.API
+    alias OctoPi.Coder.Extension.Loader
+
+    defp ext_with_command(name, handler) do
+      {:ok, ext} =
+        Loader.load_from_factory(name, fn api ->
+          API.register_command(api, name, %{description: "test", handler: handler})
+        end)
+
+      ext
+    end
+
+    test "extension command handler is called when slash command matches" do
+      test_pid = self()
+
+      ext =
+        ext_with_command("myext", fn _args, _ctx ->
+          send(test_pid, :called)
+          "result"
+        end)
+
+      state = %Interactive{input: %Input{value: "/myext", cursor: 6}, extensions: [ext], session: nil}
+      Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert_receive :called, 1_000
+    end
+
+    test "extension command clears input without sending to AI" do
+      ext = ext_with_command("myext", fn _args, _ctx -> "result" end)
+      state = %Interactive{input: %Input{value: "/myext", cursor: 6}, extensions: [ext], session: nil}
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert new_state.input.value == ""
+      assert new_state.input.cursor == 0
+      assert new_state.transcript == []
+    end
+
+    test "unknown slash command with no matching extension falls through to AI" do
+      state = %Interactive{input: %Input{value: "/unknown", cursor: 8}, extensions: [], session: nil}
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert new_state.transcript == [{:user, "/unknown"}]
+    end
+
+    test "extension command takes priority over AI dispatch" do
+      test_pid = self()
+
+      ext =
+        ext_with_command("custom", fn _args, _ctx ->
+          send(test_pid, :ext_called)
+          nil
+        end)
+
+      state = %Interactive{
+        input: %Input{value: "/custom", cursor: 7},
+        extensions: [ext],
+        session: nil
+      }
+
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert_receive :ext_called, 1_000
+      assert new_state.transcript == []
+    end
+
+    test "extension command handler receives a context with has_ui?: true" do
+      test_pid = self()
+
+      ext =
+        ext_with_command("uicheck", fn _args, ctx ->
+          send(test_pid, {:has_ui, ctx.has_ui?})
+          nil
+        end)
+
+      state = %Interactive{input: %Input{value: "/uicheck", cursor: 8}, extensions: [ext], session: nil}
+      Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert_receive {:has_ui, true}, 1_000
+    end
+
+    test "builtin commands still take priority over extensions" do
+      ext = ext_with_command("help", fn _args, _ctx -> "ext help" end)
+
+      state = %Interactive{
+        input: %Input{value: "/help", cursor: 5},
+        extensions: [ext],
+        session: nil
+      }
+
+      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      assert new_state.notification =~ "Commands:"
+    end
+  end
+
   describe "run/1 end-to-end" do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent
