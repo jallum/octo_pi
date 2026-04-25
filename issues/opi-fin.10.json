@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.3.1"
+  ],
   "created": "2026-04-25T21:53:02Z",
   "description": "GAP: OctoPi.Agent.Session is a GenServer (octo_pi_agent/lib/octo_pi/agent/session.ex:26) with start_link/1, but OctoPi.Agent.start_session/1 calls Session.start_link directly (agent.ex:36) without placing the process under a supervisor. Callers in cli.ex:157 and modes/print.ex:43 start sessions as unsupervised processes. In a multi-session world (forking, concurrent agents) this means crashed sessions leave no trace and cannot be enumerated or managed.\n\nWHAT THIS TICKET DOES:\n\nSTEP 1 -- Add DynamicSupervisor to OctoPi.Agent.Application:\nIn apps/octo_pi_agent/lib/octo_pi/agent/application.ex, add:\n  {DynamicSupervisor, name: OctoPi.Agent.SessionSupervisor, strategy: :one_for_one}\nto the children list alongside the existing LoopSupervisor, ToolSupervisor, and Subscribers.\n\nSTEP 2 -- Update OctoPi.Agent.start_session/1:\nChange from:\n  def start_session(opts), do: Session.start_link(opts)\nTo:\n  def start_session(opts) do\n    DynamicSupervisor.start_child(OctoPi.Agent.SessionSupervisor, {Session, opts})\n  end\nSession must implement a child_spec/1 (use GenServer provides this automatically if start_link/1 is defined with the right signature). Verify Session.start_link/1 signature is compatible with child_spec or add an explicit child_spec/1.\n\nSTEP 3 -- Verify callers are unaffected:\ncli.ex and modes/print.ex both pattern-match on {:ok, session}. DynamicSupervisor.start_child returns {:ok, pid} on success, so the call sites do not need to change.\n\nSTEP 4 -- Session restart strategy:\nUse restart: :temporary on the Session child spec (default for DynamicSupervisor children). Sessions should not be automatically restarted on crash -- a crashed session is a terminated conversation, not a transient fault.\n\nRELATIONSHIP TO EXTENSION.MANAGER (opi-fin.3.1):\nOnce sessions are supervised, each Session (coding agent process) starts Extension.Manager via start_link (linked) as described in opi-fin.3.1. If the Session dies, Extension.Manager and all extension Agents die with it. The SessionSupervisor sees the Session exit but does not restart it (restart: :temporary).\n\nTEST: Verify that two concurrent start_session calls produce two independent supervised children. Verify that a Session crash removes it from the supervisor without restarting. Verify {:ok, pid} return shape is preserved for existing callers.",
   "id": "opi-fin.10",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Supervise coding agent sessions under Agent.Supervisor",
   "type": "task",
-  "updated_at": "2026-04-25T21:53:02Z"
+  "updated_at": "2026-04-25T21:53:06Z"
 }

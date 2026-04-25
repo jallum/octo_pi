@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.10"
+  ],
   "blocks": [
     "opi-fin.3.2",
     "opi-fin.6.2"
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "ETS handler dispatch table",
   "type": "task",
-  "updated_at": "2026-04-25T21:48:07Z"
+  "updated_at": "2026-04-25T21:53:06Z"
 }
