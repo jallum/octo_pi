@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:14:19Z",
+  "description": "Consolidated review of deferred/skipped items",
+  "id": "opi-s1w.1",
+  "labels": [],
+  "parent": "opi-s1w",
+  "priority": 2,
+  "status": "open",
+  "title": "Deferred \u0026 Skipped Work Review",
+  "type": "epic",
+  "updated_at": "2026-04-25T05:14:19Z"
+}
