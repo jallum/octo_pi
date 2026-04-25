@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:11Z",
+  "description": "Affected extension: custom-compaction.ex\nUpstream: ctx.modelRegistry.find(provider, modelId) locates an alternative model (e.g. Gemini Flash for cheaper summarization). ctx.modelRegistry.getApiKeyAndHeaders(model) resolves auth. Used by custom-compaction.ts to run LLM summarization with a model different from the session model.\nCurrent workaround: summary is generated locally from preparation metadata (message count + previous_summary). No LLM call is made.\nWhat's needed: Context must expose a model registry accessor (or a complete fn field) so extensions can enumerate available models and obtain auth credentials. This probably needs ModelRegistry integration in AgentSession / Interactive and threaded through to Context.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/custom-compaction.ts (ctx.modelRegistry.find + getApiKeyAndHeaders)",
+  "id": "opi-rcg.4",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.modelRegistry — expose model registry for alternative-model selection",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:11Z"
+}
