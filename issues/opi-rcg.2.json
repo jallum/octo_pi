@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:00Z",
+  "description": "Affected extension: git-checkpoint.ex\nUpstream: ctx.sessionManager.getLeafEntry() returns the current leaf entry (the latest node in the session tree). Used by git-checkpoint.ts to key stash checkpoints by the stable entry ID rather than a monotonic counter, enabling correct restore on /fork which references entry IDs.\nCurrent workaround: checkpoints are keyed by a monotonic turn counter (map_size + 1). This breaks /fork restore because fork events carry an entry_id that can't be matched to the counter.\nWhat's needed: Context must expose the current leaf entry ID (or the leaf entry struct) when dispatching events like turn_start and session_before_fork.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/git-checkpoint.ts (ctx.sessionManager.getLeafEntry())",
+  "id": "opi-rcg.2",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.sessionManager.getLeafEntry() — expose current leaf entry ID to Context",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:00Z"
+}
