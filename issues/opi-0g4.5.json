@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-0g4.17"
+  ],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream handles xterm-style modified CSI sequences: `\\e[1;2A` (Shift+Up), `\\e[1;5A` (Ctrl+Up), `\\e[1;3A` (Alt+Up), and the same pattern for B/C/D (arrows), H/F (Home/End), P-S (F1-F4), and `\\e[N;modM~` for modified F5-F12/Insert/Delete/PageUp/PageDown.\n\nOur legacy_csi parser has no handling for the `;mod` parameter in CSI sequences. This means Shift+Up, Ctrl+Down, Alt+Right, etc. all return `:unknown` when the terminal uses xterm-style reporting (which is the default for most terminals when Kitty protocol is not active).\n\nThis is a critical gap — it breaks Ctrl+Left/Right word navigation and Shift+Enter newline insertion in terminals that report these as CSI sequences rather than legacy escape codes.\n\nImplement: in `legacy_csi/1`, detect the `<num>;<mod><final>` pattern and parse the modifier bits (same bitmask as Kitty: shift=2, alt=3, ctrl=5, etc., where the reported value is modifier+1).\n\nRef: `keys.ts` L609-624 (arrow match), L387-411 (general CSI modifier parsing).",
+  "id": "opi-0g4.5",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "KeyParser: xterm modified CSI sequences (\\e[1;modA for Shift/Ctrl/Alt+arrows and nav keys)",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

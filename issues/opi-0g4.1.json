@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-0g4.6"
+  ],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's ProcessTerminal probes for Kitty keyboard protocol support on start by sending `\\x1b[?u` and watching for a `\\x1b[?<flags>u` response within 150ms. If detected, it enables Kitty with push flags `\\x1b[>7u` (disambiguate + event types + alternate keys). If no response, it falls back to xterm modifyOtherKeys mode 2 (`\\x1b[>4;2m`).\n\nOur Terminal GenServer does neither — it enters raw mode via `:shell.start_interactive` but never negotiates an enhanced keyboard protocol. This means:\n- No key release/repeat events (Kitty flag 2)\n- No alternate-layout base keys (Kitty flag 4) for non-Latin keyboards\n- No modifyOtherKeys disambiguation for modified printable keys\n\nImplement:\n1. On Terminal init (after raw mode enter), send the Kitty query sequence.\n2. Watch for the Kitty response in the stdin stream (StdinFSM or Terminal itself). If received within ~150ms, enable Kitty push flags and set a `:kitty_active` flag.\n3. If no Kitty response, enable modifyOtherKeys mode 2 and set `:modify_other_keys_active`.\n4. On terminate, pop/disable whichever mode was enabled.\n5. Expose `kitty_protocol_active?/1` for downstream consumers that need to know.\n\nRef: `terminal.ts` L116-194, `enableKittyKeyboardProtocol()`, `watchForKittyProtocol()`.",
+  "id": "opi-0g4.1",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Terminal: Kitty keyboard protocol negotiation + modifyOtherKeys fallback",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

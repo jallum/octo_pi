@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's StdinBuffer recognizes DCS (`ESC P ... ESC \\`) and APC (`ESC _ ... ESC \\`) sequence types and buffers them until the ST terminator arrives. Our StdinFSM only handles CSI (`ESC [`), OSC (`ESC ]`), and SS3 (`ESC O`). DCS and APC sequences will be mis-parsed — the `ESC P` or `ESC _` prefix will be emitted as an alt-prefix event, and the body/terminator will be emitted as garbage.\n\nThis matters because Kitty graphics responses arrive as APC sequences, and XTVersion responses arrive as DCS.\n\nImplement `extract_dcs` and `extract_apc` in StdinFSM.extract/1, mirroring the existing extract_osc pattern (buffer until `ESC \\` ST terminator).\n\nRef: `stdin-buffer.ts` L55-60, L146-178.",
+  "id": "opi-0g4.4",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "StdinFSM: handle DCS and APC escape sequences",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

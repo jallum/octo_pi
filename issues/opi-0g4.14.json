@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `app.editor.external` (Ctrl+G) opens the user's $EDITOR (or $VISUAL) with the current input text in a temp file. When the editor exits, the content is loaded back into the input. Uses the terminal's alternate screen so the TUI is preserved.\n\nOur Interactive has no external editor support.\n\nImplement:\n1. On Ctrl+G, write current input to a temp file.\n2. Exit raw mode, spawn $EDITOR/$VISUAL with the temp file, wait for it to exit.\n3. Read the temp file back, set as input text.\n4. Re-enter raw mode, re-render.\n\nRef: `interactive-mode.ts` L3395-3430.",
+  "id": "opi-0g4.14",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: external editor support (Ctrl+G)",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

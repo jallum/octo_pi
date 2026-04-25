@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `app.suspend` (Ctrl+Z) suspends the process to the shell (like vim's Ctrl+Z). It restores the terminal to cooked mode, sends SIGTSTP, then re-enters raw mode on resume.\n\nOur Interactive doesn't handle Ctrl+Z at all — it falls through to the Input component which ignores it.\n\nImplement: on Ctrl+Z (non-Windows), exit raw mode, send SIGTSTP via `:os.cmd` or port, wait for SIGCONT, re-enter raw mode and re-render.\n\nRef: `interactive-mode.ts` L3192-3263, `handleCtrlZ()`.",
+  "id": "opi-0g4.10",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: Ctrl+Z process suspend (unix)",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

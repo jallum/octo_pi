@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `drainInput()` is called after disabling the keyboard protocol and before fully exiting. It reads and discards any remaining stdin bytes (especially Kitty key-release events) with a short timeout, preventing escape sequences from leaking to the parent shell — particularly important over slow SSH.\n\nOur Terminal.terminate/2 just restores cooked mode and returns. Any in-flight bytes (especially key releases from Kitty mode) can leak.\n\nImplement a drain phase in Terminal.terminate: after disabling keyboard protocol but before exiting raw mode, read and discard stdin for up to ~1s or until idle for ~50ms.\n\nRef: `terminal.ts` L228-260, `drainInput()`.",
+  "id": "opi-0g4.3",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Terminal: drainInput on exit to prevent key leakage",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

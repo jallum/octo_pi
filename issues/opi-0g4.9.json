@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-0g4.7"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream maps Ctrl+C to `app.clear` (clear the editor text). Exit is Ctrl+D (only when editor is empty). Our Interactive hardcodes Ctrl+C as immediate exit (`%{state | exit: true}`).\n\nThis is a significant UX divergence — users expect Ctrl+C to cancel the current input, not kill the entire session.\n\nChange:\n- Ctrl+C with non-empty editor: clear the editor text\n- Ctrl+C with empty editor while agent is running: abort the agent run\n- Ctrl+C with empty editor while idle: no-op (or show a hint about Ctrl+D to exit)\n- Ctrl+D with empty editor: exit\n- Escape with empty editor: exit (already implemented)\n\nRef: `interactive-mode.ts` L2178-2326.",
+  "id": "opi-0g4.9",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: Ctrl+C should clear editor, not exit",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `app.message.dequeue` (Alt+Up) opens an overlay showing all queued steering and follow-up messages, letting the user edit or remove them before they're delivered.\n\nOur Interactive has no dequeue UI. The Session supports `drain_steering/1` and `drain_follow_up/1` but there's no user-facing way to inspect or edit the queues.\n\nImplement: on Alt+Up, drain both queues, show them in an editable overlay (or at minimum a select list with delete), and re-enqueue any the user keeps.\n\nRef: `interactive-mode.ts` L2359, `handleDequeue()`.",
+  "id": "opi-0g4.16",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: message dequeue editing (Alt+Up)",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

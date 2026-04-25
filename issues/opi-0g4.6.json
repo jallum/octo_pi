@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-0g4.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream exposes `isKeyRelease(data)` and `isKeyRepeat(data)` functions, and the TUI filters out key release events by default (only forwarding them to components that set `wantsKeyRelease: true`). Our KeyParser correctly parses Kitty event types into `Key.event_type` (`:press`, `:repeat`, `:release`), but Interactive.handle_event never checks `event_type` — it processes releases and repeats identically to presses.\n\nOnce Kitty protocol is enabled (ticket 1), release events will fire for every keyup, causing double-handling of every keystroke.\n\nImplement: in Interactive.handle_event, filter out `:release` events (and optionally `:repeat` unless the component opts in). This should be a simple guard at the top of the key dispatch chain.\n\nRef: `tui.ts` L567-568.",
+  "id": "opi-0g4.6",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "KeyParser: key release and repeat event filtering",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-0g4.8",
+    "opi-0g4.9",
+    "opi-0g4.17"
+  ],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream defines ~50 app-level keybindings in `coding-agent/src/core/keybindings.ts` via declaration merging on the `Keybindings` interface. Our `Keybindings` module only defines ~30 TUI-level bindings (editor + select). The app-level bindings are entirely missing.\n\nAdd app-level binding definitions to Keybindings for:\n- `app.interrupt` (escape) — cancel/abort\n- `app.clear` (ctrl+c) — clear editor (currently hardcoded as exit)\n- `app.exit` (ctrl+d) — exit when editor is empty\n- `app.suspend` (ctrl+z) — suspend to shell (unix only)\n- `app.thinking.cycle` (shift+tab) — cycle thinking level\n- `app.model.cycleForward` (ctrl+p) — next model\n- `app.model.cycleBackward` (shift+ctrl+p) — previous model\n- `app.model.select` (ctrl+l) — open model selector overlay\n- `app.tools.expand` (ctrl+o) — toggle tool output expansion\n- `app.thinking.toggle` (ctrl+t) — toggle thinking block visibility\n- `app.editor.external` (ctrl+g) — open external editor\n- `app.message.followUp` (alt+enter) — queue follow-up message\n- `app.message.dequeue` (alt+up) — edit all queued messages\n- `app.clipboard.pasteImage` (ctrl+v) — paste image from clipboard\n\nRef: `coding-agent/src/core/keybindings.ts` L65-200.",
+  "id": "opi-0g4.7",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Keybindings: app-level action definitions",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

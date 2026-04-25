@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `app.message.followUp` (Alt+Enter) queues the current input as a follow-up message (delivered when the agent finishes its current run) instead of blocking until idle.\n\nOur Interactive doesn't handle Alt+Enter — it falls through to the Input component. The Session already supports `follow_up/2` but there's no UI path to it.\n\nImplement: on Alt+Enter while agent is running, call `Agent.follow_up(session, text)`, clear the input, show a brief 'follow-up queued' notification. When idle, Alt+Enter should behave like regular Enter (submit immediately).\n\nRef: `interactive-mode.ts` L3285-3310.",
+  "id": "opi-0g4.15",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: Alt+Enter follow-up message queuing",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

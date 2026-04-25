@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream enables bracketed paste mode (`\\x1b[?2004h`) on terminal start and disables it (`\\x1b[?2004l`) on exit. Our Terminal does not send these sequences — bracketed paste only works if the user's terminal happens to have it enabled already.\n\nImplement: send `\\x1b[?2004h` on init, `\\x1b[?2004l` on terminate.\n\nRef: `terminal.ts` L109-112.",
+  "id": "opi-0g4.2",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Terminal: bracketed paste mode enable/disable",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

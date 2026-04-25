@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream's `app.thinking.toggle` (Ctrl+T) toggles whether thinking blocks are shown or hidden in the transcript. Our Interactive has a `set_hidden_thinking_label` UI override but no keyboard shortcut to toggle it.\n\nImplement: Ctrl+T toggles a `thinking_visible` flag in state, which the AssistantMessage renderer checks to show/hide thinking content blocks.\n\nRef: `interactive-mode.ts` L2356.",
+  "id": "opi-0g4.13",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: toggle thinking block visibility (Ctrl+T)",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

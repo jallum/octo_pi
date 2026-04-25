@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-0g4.5",
+    "opi-0g4.7",
+    "opi-0g4.8"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "The Input component's `handle_key/2` dispatches via hardcoded `%Key{}` pattern matches. This means user keybinding overrides have no effect on editor behavior. Upstream's Editor component dispatches through the KeybindingsManager.\n\nRefactor Input.handle_key to accept a `Keybindings` struct (threaded through Interactive state) and use `Keybindings.matches?/3` for all editor actions instead of raw pattern matching. Keep the multi-head function style but match on action names rather than key structs.\n\nThis is a prerequisite for user keybinding customization (ticket 8) to actually work end-to-end.\n\nRef: `editor.ts` handleInput method.",
+  "id": "opi-0g4.17",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Input: use Keybindings instead of hardcoded Key patterns",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream provides three model-related shortcuts:\n- Ctrl+P: cycle to next model\n- Shift+Ctrl+P: cycle to previous model  \n- Ctrl+L: open a full model selector overlay (select list)\n\nOur Interactive has a ModelSelector component but no keyboard shortcut wires it in. The Ctrl+P/Shift+Ctrl+P cycling is also unimplemented.\n\nImplement:\n1. Ctrl+P / Shift+Ctrl+P: cycle through available models, update the session, show status notification.\n2. Ctrl+L: show the ModelSelector overlay, let user pick, update session on confirm.\n\nRef: `interactive-mode.ts` L2349-2354, L3329-3340, `cycleModel()`, `showModelSelector()`.",
+  "id": "opi-0g4.12",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Interactive: model cycling and model selector overlay",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

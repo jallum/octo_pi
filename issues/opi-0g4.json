@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "The TUI's keyboard input pipeline — Terminal → StdinFSM → KeyParser → Keybindings → Input/Interactive — is functional but has significant gaps compared to upstream pi-mono. This epic tracks the missing pieces across six layers: protocol negotiation, sequence buffering, key parsing, keybinding infrastructure, editor/input features, and app-level shortcuts.\n\nReference upstream files:\n- `packages/tui/src/terminal.ts` (ProcessTerminal)\n- `packages/tui/src/stdin-buffer.ts` (StdinBuffer)\n- `packages/tui/src/keys.ts` (matchesKey/parseKey)\n- `packages/tui/src/keybindings.ts` (KeybindingsManager)\n- `packages/tui/src/components/editor.ts` (Editor)\n- `packages/coding-agent/src/core/keybindings.ts` (AppKeybindings)\n- `packages/coding-agent/src/modes/interactive/interactive-mode.ts`",
+  "id": "opi-0g4",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI keyboard handling parity with upstream pi-mono",
+  "type": "epic",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}

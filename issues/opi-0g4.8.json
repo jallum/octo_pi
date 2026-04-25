@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-0g4.7"
+  ],
+  "blocks": [
+    "opi-0g4.17"
+  ],
+  "comments": [],
+  "created": "2026-04-25T11:17:48.453005Z",
+  "description": "Upstream loads user keybinding overrides from `~/.claude/keybindings.json`. Our Keybindings module accepts user overrides in `new/1` but nothing reads the config file or passes overrides in.\n\nImplement:\n1. On TUI startup (in Interactive.do_run), read `~/.octo_pi/keybindings.json` if it exists.\n2. Parse it and pass the overrides to `Keybindings.new/1`.\n3. Thread the resulting `Keybindings` struct through Interactive state so `handle_event` can use `Keybindings.matches?/3` instead of hardcoded key patterns.\n\nRef: `coding-agent/src/core/keybindings.ts` L204-320 (KeybindingsManager class, config loading, legacy migration).",
+  "id": "opi-0g4.8",
+  "labels": [],
+  "parent": "opi-0g4",
+  "priority": 2,
+  "status": "open",
+  "title": "Keybindings: user config loading from ~/.octo_pi/keybindings.json",
+  "type": "task",
+  "updated_at": "2026-04-25T11:17:48.453005Z"
+}
