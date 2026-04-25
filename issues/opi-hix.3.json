@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port extensions-input-event tests (transform, handled, chaining)",
   "type": "task",
-  "updated_at": "2026-04-25T15:35:30.702903Z"
+  "updated_at": "2026-04-25T15:42:26.931783Z"
 }
