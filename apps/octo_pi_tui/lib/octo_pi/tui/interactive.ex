@@ -1450,12 +1450,14 @@ defmodule OctoPi.TUI.Interactive do
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
+    dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
     footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
     all =
       banner_lines ++
-        resource_lines ++ transcript_lines ++ loader_lines ++ input_lines ++ notification_lines ++ footer_lines
+        resource_lines ++
+        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines
 
     len = length(all)
     if len < height, do: List.duplicate("", height - len) ++ all, else: all

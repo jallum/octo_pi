@@ -2017,6 +2017,55 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "slash-command autocomplete — popup and e2e submit" do
+    alias OctoPi.TUI.Autocomplete
+    alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+
+    defp state_with_autocomplete do
+      provider = SlashCommandProvider.new(Autocomplete.builtin_commands())
+      %Interactive{input: %Input{autocomplete_provider: provider}, session: nil}
+    end
+
+    test "typing / activates autocomplete in the input" do
+      s = Interactive.handle_event(state_with_autocomplete(), {:char, "/"})
+      assert s.input.autocomplete_active
+    end
+
+    test "typing / then h narrows autocomplete to /help" do
+      s =
+        state_with_autocomplete()
+        |> Interactive.handle_event({:char, "/"})
+        |> Interactive.handle_event({:char, "h"})
+
+      assert s.input.autocomplete_active
+      assert Enum.all?(s.input.autocomplete_suggestions, &String.starts_with?(&1.value, "/h"))
+    end
+
+    test "Enter with autocomplete active dispatches slash command and clears input" do
+      s =
+        state_with_autocomplete()
+        |> Interactive.handle_event({:char, "/"})
+        |> Interactive.handle_event({:char, "h"})
+        |> Interactive.handle_event({:key, %Key{key: :enter}})
+
+      refute s.input.autocomplete_active
+      assert s.input.value == ""
+      assert s.notification =~ "Commands:"
+    end
+
+    test "Tab with autocomplete active fills in suggestion without submitting" do
+      s =
+        state_with_autocomplete()
+        |> Interactive.handle_event({:char, "/"})
+        |> Interactive.handle_event({:char, "h"})
+        |> Interactive.handle_event({:key, %Key{key: :tab}})
+
+      refute s.input.autocomplete_active
+      assert String.starts_with?(s.input.value, "/h")
+      assert s.notification == nil
+    end
+  end
+
   describe "handle_ui_request — blocking dialogs" do
     test "select stores pending dialog" do
       options = [%{label: "A", value: :a}, %{label: "B", value: :b}]

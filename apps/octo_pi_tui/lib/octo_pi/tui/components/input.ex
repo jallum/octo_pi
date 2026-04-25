@@ -257,7 +257,7 @@ defmodule OctoPi.TUI.Components.Input do
     case find_autocomplete_action(kb, key) do
       "tui.select.up" -> autocomplete_navigate(s, -1)
       "tui.select.down" -> autocomplete_navigate(s, 1)
-      "tui.select.confirm" -> autocomplete_accept(s)
+      "tui.select.confirm" -> autocomplete_accept_and_submit(s)
       "tui.input.tab" -> autocomplete_accept(s)
       "tui.select.cancel" -> dismiss_autocomplete(s)
       nil -> dispatch_editor_action(find_editor_action(kb, key), s)
@@ -743,6 +743,19 @@ defmodule OctoPi.TUI.Components.Input do
 
       %Suggestion{value: value} ->
         dismiss_autocomplete(%{s | value: value, cursor: String.length(value)})
+    end
+  end
+
+  defp autocomplete_accept_and_submit(
+         %__MODULE__{autocomplete_suggestions: suggestions, autocomplete_selected: sel} = s
+       ) do
+    case Enum.at(suggestions, sel) do
+      nil ->
+        {s, [{:submit, s.value}]}
+
+      %Suggestion{value: value} ->
+        accepted = dismiss_autocomplete(%{s | value: value, cursor: String.length(value)})
+        {accepted, [{:submit, value}]}
     end
   end
 

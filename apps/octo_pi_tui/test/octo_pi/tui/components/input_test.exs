@@ -1306,4 +1306,64 @@ defmodule OctoPi.TUI.Components.InputTest do
       assert result.value == ""
     end
   end
+
+  describe "slash-command autocomplete — popup and submit" do
+    alias OctoPi.TUI.Autocomplete
+    alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+
+    defp with_slash_provider do
+      provider = SlashCommandProvider.new(Autocomplete.builtin_commands())
+      %Input{autocomplete_provider: provider}
+    end
+
+    test "typing / triggers autocomplete with all builtin commands" do
+      s = Input.insert(with_slash_provider(), "/")
+      assert s.autocomplete_active
+      assert length(s.autocomplete_suggestions) == length(Autocomplete.builtin_commands())
+    end
+
+    test "typing /h narrows suggestions to commands starting with h" do
+      s = with_slash_provider() |> Input.insert("/") |> Input.insert("h")
+      assert s.autocomplete_active
+      assert Enum.all?(s.autocomplete_suggestions, &String.starts_with?(&1.value, "/h"))
+    end
+
+    test "render_dropdown returns non-empty lines when autocomplete is active" do
+      s = Input.insert(with_slash_provider(), "/")
+      lines = Input.render_dropdown(s, 80)
+      assert lines != []
+    end
+
+    test "render_dropdown returns empty list when autocomplete is inactive" do
+      s = %Input{value: "hello", autocomplete_active: false}
+      assert Input.render_dropdown(s, 80) == []
+    end
+
+    test "Enter while autocomplete is active accepts suggestion AND emits submit" do
+      s = with_slash_provider() |> Input.insert("/") |> Input.insert("h")
+      assert s.autocomplete_active
+      assert {new_input, [{:submit, value}]} = Input.handle_key(s, key(:enter))
+      refute new_input.autocomplete_active
+      assert String.starts_with?(value, "/")
+    end
+
+    test "Tab while autocomplete is active accepts suggestion without submitting" do
+      s = with_slash_provider() |> Input.insert("/") |> Input.insert("h")
+      result = Input.handle_key(s, key(:tab))
+      refute match?({_, [{:submit, _}]}, result)
+
+      case result do
+        {new_input, _} -> refute new_input.autocomplete_active
+        new_input -> refute new_input.autocomplete_active
+      end
+    end
+
+    test "Up/Down navigate suggestions" do
+      s = Input.insert(with_slash_provider(), "/")
+      s_down = press(s, key(:down))
+      assert s_down.autocomplete_selected == 1
+      s_up = press(s_down, key(:up))
+      assert s_up.autocomplete_selected == 0
+    end
+  end
 end
