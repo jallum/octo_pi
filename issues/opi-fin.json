@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:36Z",
+  "description": "Full rework of apps/octo_pi_coder/lib/octo_pi/coder/extension/ from the fn-field/Agent pattern to a behaviour + macro + Host GenServer architecture.\n\nNine phases. Phases 1-4 are independent and touch no extension author code. Phase 5 requires Phase 2. Phases 6b, 7 require Phase 5. Phase 8 requires 6b. Phase 9 requires 6b+7+8.\n\nKEY DESIGN DECISIONS (must be preserved through all child work):\n\nSTATE THREADING (Phase 2/5): The 'use OctoPi.Coder.Extension' macro generates Agent-backed 2-arity closures from 3-arity handle_*/3 callbacks. Extension authors write mount/0 + handle_*(event, ctx, state) -\u003e {result, new_state}. The macro calls mount/0 during init/1, creates one Agent per stateful extension, and wraps each 3-arity callback in a 2-arity closure that does Agent.get/update. The Dispatcher and Context are NOT changed to thread state -- the Agent is an implementation detail of the macro. This is intentional: the author-facing API is stable, the Agent implementation swaps for a supervised GenServer in a later phase when the supervision tree exists.\n\nHOST GENSERVER (Phase 6): The session runtime implements a Host behaviour as a separate GenServer (NOT the session runner itself -- deadlock risk if runner dispatches events and is also the Host). Phase 6a introduces the Host GenServer and wires bind_core to delegate to it (zero extension code changes). Phase 6b adds host: pid() to Context.t() and migrates extension call sites from api.send_message.() to Host.send_message(ctx.host, msg). bind_core is removed in Phase 9.\n\nPROVIDER_PAYLOAD EXCEPTION: provider_payload.ex takes a log_fn callback, not an Agent state pid. It is NOT a stateful extension and must NOT be migrated in Phase 5.\n\nEVENT_BUS_DEMO NOTE: event_bus_demo.ex uses api.events.emit/on as a map -- it is a Phase 4 casualty (Registry migration), not a Phase 6 target.",
+  "id": "opi-fin",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Rework extension framework to idiomatic Elixir",
+  "type": "epic",
+  "updated_at": "2026-04-25T21:10:36Z"
+}
