@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:57Z",
+  "description": "Two-step. 6a: introduce Host GenServer and supervision structure, wire bind_core to delegate (zero extension changes). 6b: add host: pid() to Context.t(), migrate the 4 action-using extensions to Host client calls. bind_core is NOT removed until Phase 9.",
+  "id": "opi-fin.6",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 6: Host GenServer replaces API action fn-fields",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:57Z"
+}
