@@ -24,5 +24,15 @@ defmodule OctoPi.TUI.Components.TextTest do
       styled = "\e[31mred\e[0m"
       assert [^styled] = Text.render(%Text{content: styled}, 80)
     end
+
+    test "expands tabs to 3 spaces" do
+      assert ["      indented"] = Text.render(%Text{content: "\t\tindented"}, 80)
+    end
+
+    test "expands tabs in cat -n style output" do
+      [line] = Text.render(%Text{content: "  42\tif true do"}, 80)
+      refute line =~ "\t"
+      assert line == "  42   if true do"
+    end
   end
 end

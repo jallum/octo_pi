@@ -17,8 +17,12 @@ defmodule OctoPi.TUI.Components.Text do
   @type t :: %__MODULE__{content: String.t()}
 
   @impl true
-  def render(%__MODULE__{content: content}, width),
-    do: content |> String.split("\n") |> Enum.map(&truncate(&1, width))
+  def render(%__MODULE__{content: content}, width) do
+    content
+    |> String.replace("\t", "   ")
+    |> String.split("\n")
+    |> Enum.map(&truncate(&1, width))
+  end
 
   # Keep lines that already fit as-is (fast path).
   defp truncate(line, width) when byte_size(line) <= width, do: line
