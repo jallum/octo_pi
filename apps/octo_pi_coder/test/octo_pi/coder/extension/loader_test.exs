@@ -221,12 +221,276 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
     end
   end
 
+  describe "discover/1 - additional coverage" do
+    test "ignores subdirectory without index.ex", %{dir: dir} do
+      sub = Path.join(dir, "no-index")
+      File.mkdir_p!(sub)
+      File.write!(Path.join(sub, "helper.ex"), sample_extension("DiscovNoIndex"))
+
+      assert [] == Loader.discover(dir)
+    end
+
+    test "does not recurse beyond one level", %{dir: dir} do
+      container = Path.join(dir, "container")
+      nested = Path.join(container, "nested")
+      File.mkdir_p!(nested)
+      File.write!(Path.join(nested, "index.ex"), sample_extension("DiscovNested"))
+
+      assert [] == Loader.discover(dir)
+    end
+
+    test "handles mixed direct files and subdirectories", %{dir: dir} do
+      File.write!(Path.join(dir, "direct.ex"), sample_extension("DiscovMixedDirect"))
+      sub = Path.join(dir, "sub-mixed")
+      File.mkdir_p!(sub)
+      File.write!(Path.join(sub, "index.ex"), sample_extension("DiscovMixedSub"))
+
+      assert length(Loader.discover(dir)) == 2
+    end
+  end
+
+  describe "discover_and_load/2" do
+    test "discovers and loads from {cwd}/extensions/", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "auto.ex"), factory_ext(uid()))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      assert length(result.extensions) == 1
+    end
+
+    test "combines explicit paths with auto-discovered extensions", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "auto.ex"), factory_ext(uid()))
+      explicit = Path.join(dir, "explicit.ex")
+      File.write!(explicit, factory_ext(uid()))
+
+      result = Loader.discover_and_load([explicit], dir)
+      assert result.errors == []
+      assert length(result.extensions) == 2
+    end
+
+    test "collects errors without crashing other extensions", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "good.ex"), factory_ext(uid()))
+      bad_path = Path.join(ext_dir, "bad.ex")
+      File.write!(bad_path, factory_ext_raises(uid()))
+
+      result = Loader.discover_and_load([], dir)
+      assert length(result.errors) == 1
+      assert hd(result.errors).path == bad_path
+      assert hd(result.errors).error =~ "boom"
+      assert length(result.extensions) == 1
+    end
+
+    test "returns empty result when no extensions exist", %{dir: dir} do
+      result = Loader.discover_and_load([], dir)
+      assert result == %{extensions: [], errors: []}
+    end
+  end
+
+  describe "load_extensions/2" do
+    test "loads only explicit paths, skips discovery dir", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "discoverable.ex"), factory_ext(uid()))
+      explicit = Path.join(dir, "explicit.ex")
+      File.write!(explicit, factory_ext(uid()))
+
+      result = Loader.load_extensions([explicit], dir)
+      assert result.errors == []
+      assert length(result.extensions) == 1
+      assert hd(result.extensions).id == "explicit"
+    end
+
+    test "with no paths loads nothing regardless of discovery dir", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "discoverable.ex"), factory_ext(uid()))
+
+      result = Loader.load_extensions([], dir)
+      assert result == %{extensions: [], errors: []}
+    end
+  end
+
+  describe "registration from discovered extensions" do
+    test "registers commands", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "cmd-ext.ex"), factory_ext_with_command(uid(), "my-cmd"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.commands, "my-cmd")
+    end
+
+    test "registers tools", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "tool-ext.ex"), factory_ext_with_tool(uid(), "my-tool"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.tools, "my-tool")
+    end
+
+    test "registers event handlers", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "handler-ext.ex"), factory_ext_with_handler(uid(), :agent_start))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.handlers, :agent_start)
+    end
+
+    test "registers message renderers", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "renderer-ext.ex"), factory_ext_with_renderer(uid(), "my-type"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.message_renderers, "my-type")
+    end
+
+    test "registers shortcuts", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "shortcut-ext.ex"), factory_ext_with_shortcut(uid(), "ctrl+t"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.shortcuts, "ctrl+t")
+    end
+
+    test "registers flags", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "flag-ext.ex"), factory_ext_with_flag(uid(), "my-flag"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      [ext] = result.extensions
+      assert Map.has_key?(ext.flags, "my-flag")
+    end
+
+    test "multiple extensions register different tools", %{dir: dir} do
+      ext_dir = Path.join(dir, "extensions")
+      File.mkdir_p!(ext_dir)
+      File.write!(Path.join(ext_dir, "tool-a.ex"), factory_ext_with_tool(uid(), "tool-a"))
+      File.write!(Path.join(ext_dir, "tool-b.ex"), factory_ext_with_tool(uid(), "tool-b"))
+
+      result = Loader.discover_and_load([], dir)
+      assert result.errors == []
+      assert length(result.extensions) == 2
+      tool_names = Enum.flat_map(result.extensions, fn ext -> Map.keys(ext.tools) end)
+      assert "tool-a" in tool_names
+      assert "tool-b" in tool_names
+    end
+  end
+
   defp sample_extension(module_suffix) do
     """
     defmodule OctoPi.Extensions.#{module_suffix} do
       def init(api) do
         {:ok, api} = OctoPi.Coder.Extension.API.on(api, :session_start, fn _e, _c -> nil end)
         {:ok, api}
+      end
+    end
+    """
+  end
+
+  defp uid, do: :erlang.unique_integer([:positive])
+
+  defp factory_ext(id) do
+    """
+    defmodule OctoPiTestLoaderDyn#{id} do
+      def init(api), do: {:ok, api}
+    end
+    """
+  end
+
+  defp factory_ext_raises(id) do
+    """
+    defmodule OctoPiTestLoaderRaise#{id} do
+      def init(_api), do: raise "boom"
+    end
+    """
+  end
+
+  defp factory_ext_with_command(id, cmd_name) do
+    """
+    defmodule OctoPiTestLoaderCmd#{id} do
+      def init(api) do
+        cmd = %{description: "test", handler: fn _ctx -> :ok end}
+        {:ok, api2} = OctoPi.Coder.Extension.API.register_command(api, "#{cmd_name}", cmd)
+        {:ok, api2}
+      end
+    end
+    """
+  end
+
+  defp factory_ext_with_tool(id, tool_name) do
+    """
+    defmodule OctoPiTestLoaderTool#{id} do
+      def init(api) do
+        {:ok, api2} = OctoPi.Coder.Extension.API.register_tool(api, %{name: "#{tool_name}", description: "test"})
+        {:ok, api2}
+      end
+    end
+    """
+  end
+
+  defp factory_ext_with_handler(id, event_type) do
+    """
+    defmodule OctoPiTestLoaderHandler#{id} do
+      def init(api) do
+        OctoPi.Coder.Extension.API.on(api, :#{event_type}, fn _ev, _ctx -> nil end)
+      end
+    end
+    """
+  end
+
+  defp factory_ext_with_renderer(id, type_name) do
+    """
+    defmodule OctoPiTestLoaderRenderer#{id} do
+      def init(api) do
+        renderer = fn _msg, _opts -> "" end
+        {:ok, api2} = OctoPi.Coder.Extension.API.register_message_renderer(api, "#{type_name}", renderer)
+        {:ok, api2}
+      end
+    end
+    """
+  end
+
+  defp factory_ext_with_shortcut(id, key) do
+    """
+    defmodule OctoPiTestLoaderShortcut#{id} do
+      def init(api) do
+        spec = %{description: "test", handler: fn _ctx -> :ok end}
+        {:ok, api2} = OctoPi.Coder.Extension.API.register_shortcut(api, "#{key}", spec)
+        {:ok, api2}
+      end
+    end
+    """
+  end
+
+  defp factory_ext_with_flag(id, flag_name) do
+    """
+    defmodule OctoPiTestLoaderFlag#{id} do
+      def init(api) do
+        spec = %{description: "test", default: false}
+        {:ok, api2} = OctoPi.Coder.Extension.API.register_flag(api, "#{flag_name}", spec)
+        {:ok, api2}
       end
     end
     """

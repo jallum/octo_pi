@@ -127,6 +127,41 @@ defmodule OctoPi.Coder.Extension.Loader do
     ]
   end
 
+  @type load_result :: %{extensions: [Extension.t()], errors: [%{path: String.t(), error: String.t()}]}
+
+  @doc """
+  Discovers extensions from `{cwd}/extensions/` and loads them together
+  with any `explicit_paths`. Returns a result map with `:extensions` and
+  `:errors` keys so callers can surface load failures without crashing.
+  """
+  @spec discover_and_load([String.t()], String.t()) :: load_result()
+  def discover_and_load(explicit_paths, cwd) do
+    discovered = discover(Path.join(cwd, "extensions"))
+    all_paths = Enum.uniq(explicit_paths ++ discovered)
+    load_with_errors(all_paths)
+  end
+
+  @doc """
+  Loads only the given `explicit_paths` without any filesystem discovery.
+  Returns a result map with `:extensions` and `:errors` keys.
+  """
+  @spec load_extensions([String.t()], String.t()) :: load_result()
+  def load_extensions(explicit_paths, _cwd) do
+    load_with_errors(explicit_paths)
+  end
+
+  defp load_with_errors(paths) do
+    {exts, errs} =
+      Enum.reduce(paths, {[], []}, fn path, {exts, errs} ->
+        case load(path) do
+          {:ok, ext} -> {[ext | exts], errs}
+          {:error, reason} -> {exts, [%{path: path, error: reason} | errs]}
+        end
+      end)
+
+    %{extensions: Enum.reverse(exts), errors: Enum.reverse(errs)}
+  end
+
   defp dedup_path(path, acc, seen) do
     basename = extension_id(path)
 
