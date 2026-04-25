@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Terminal: bracketed paste mode enable/disable",
   "type": "task",
-  "updated_at": "2026-04-25T12:52:11.178935Z"
+  "updated_at": "2026-04-25T13:04:58.929571Z"
 }
