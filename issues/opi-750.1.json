@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-750.2"
+  ],
+  "comments": [],
+  "created": "2026-04-25T15:11:18.407468Z",
+  "description": "Port `refreshAnthropicToken()` from `tmp/pi-mono/packages/ai/src/utils/oauth/anthropic.ts`.\n\n## What to implement\n\nNew module `OctoPi.AI.Providers.Anthropic.Auth.OAuth` with:\n\n```elixir\n@spec refresh_token(String.t()) ::\n  {:ok, %{access: String.t(), refresh: String.t(), expires_in: pos_integer()}} |\n  {:error, term()}\ndef refresh_token(refresh_token)\n```\n\nPOST to `https://platform.claude.com/v1/oauth/token` with:\n```json\n{\n  \"grant_type\": \"refresh_token\",\n  \"client_id\": \"<decoded CLIENT_ID>\",\n  \"refresh_token\": \"<token>\"\n}\n```\nNo `scope` field on refresh (upstream: scope is omitted from refresh grants).\n\nReturns `{:ok, %{access: ..., refresh: ..., expires_in: ...}}` on 200, `{:error, reason}` otherwise.\n\n## Constants (from upstream anthropic.ts)\n- `CLIENT_ID` = `atob(\"OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl\")` = `\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\"`\n- `TOKEN_URL` = `\"https://platform.claude.com/v1/oauth/token\"`\n\n## Tests\n\nPort the `refreshAnthropicToken` test case from `tmp/pi-mono/packages/ai/test/anthropic-oauth.test.ts`:\n- POST hits the correct URL\n- body contains `grant_type: refresh_token`, `client_id`, `refresh_token` — but NOT `scope`\n- returns parsed credentials on 200\n- returns `{:error, _}` on non-200\n\nUse `Req.Test` / `Plug` adapter to mock HTTP — same pattern as the existing `ProducerTest`.\n\n## Reference\n- Upstream: `tmp/pi-mono/packages/ai/src/utils/oauth/anthropic.ts` lines ~350–380 (`refreshAnthropicToken`)\n- Test: `tmp/pi-mono/packages/ai/test/anthropic-oauth.test.ts` — \"omits scope from refresh token requests\"",
+  "id": "opi-750.1",
+  "labels": [],
+  "parent": "opi-750",
+  "priority": 2,
+  "status": "open",
+  "title": "Auth.OAuth.refresh_token/1 — HTTP token refresh + tests",
+  "type": "task",
+  "updated_at": "2026-04-25T15:11:18.407468Z"
+}

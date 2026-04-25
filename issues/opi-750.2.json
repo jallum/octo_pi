@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-750.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T15:11:18.407468Z",
+  "description": "Port `loginAnthropic()` from `tmp/pi-mono/packages/ai/src/utils/oauth/anthropic.ts`.\n\n## What to implement\n\nAdd to `OctoPi.AI.Providers.Anthropic.Auth.OAuth`:\n\n```elixir\n@type login_callbacks :: %{\n  on_auth: (auth_info :: map() -> :ok),\n  on_prompt: (prompt :: String.t() -> :ok),\n  on_manual_code_input: (() -> {:ok, String.t()} | {:error, :cancelled})\n}\n\n@spec login(login_callbacks()) ::\n  {:ok, %{access: String.t(), refresh: String.t(), expires_in: pos_integer()}} |\n  {:error, term()}\ndef login(callbacks)\n```\n\n### Flow\n1. Generate PKCE `{code_verifier, code_challenge}` (SHA256, base64url)\n2. Generate random `state` for CSRF protection\n3. Start an HTTP callback server on port 53692 (or `PI_OAUTH_CALLBACK_HOST`)\n4. Build authorization URL pointing to `https://claude.ai/oauth/authorize` with params: `client_id`, `response_type=code`, `redirect_uri`, `scope`, `state`, `code_challenge`, `code_challenge_method=S256`\n5. Call `callbacks.on_auth.(%{url: auth_url})` so caller can open browser / display link\n6. Wait for callback OR fall through to `callbacks.on_manual_code_input.()`\n7. Verify state matches\n8. POST code exchange to TOKEN_URL (same as refresh but with `grant_type: authorization_code`, `code`, `redirect_uri`, `code_verifier`)\n9. Return credentials\n\n### PKCE\nImplement in `Auth.OAuth.PKCE` (or inline):\n- `generate_verifier/0` — 32 random bytes, base64url encoded (no padding)\n- `generate_challenge/1` — SHA256 of verifier, base64url encoded (no padding)\n\n### Callback server\nA simple Plug/Cowboy HTTP server accepting one request on `/callback?code=...&state=...`, or implement via `:gen_tcp` if Cowboy isn't available as a dep.\n\n## Constants\n- `AUTHORIZE_URL` = `\"https://claude.ai/oauth/authorize\"`\n- `TOKEN_URL` = `\"https://platform.claude.com/v1/oauth/token\"`\n- `CALLBACK_PORT` = `53692`\n- `REDIRECT_URI` = `\"http://localhost:53692/callback\"`\n- `SCOPES` = `\"org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload\"`\n\n## Tests\n\nPort the `loginAnthropic` test case from `tmp/pi-mono/packages/ai/test/anthropic-oauth.test.ts`:\n- \"keeps the localhost redirect_uri for manual callback login\"\n- Verify: POST hits TOKEN_URL, body has `grant_type=authorization_code`, `code=manual-code`, correct `redirect_uri`\n- Returns correct credentials\n\n## Reference\n- Upstream: `tmp/pi-mono/packages/ai/src/utils/oauth/anthropic.ts` (403 lines)\n- Test: `tmp/pi-mono/packages/ai/test/anthropic-oauth.test.ts` — \"keeps the localhost redirect_uri\"",
+  "id": "opi-750.2",
+  "labels": [],
+  "parent": "opi-750",
+  "priority": 2,
+  "status": "open",
+  "title": "Auth.OAuth.login/1 — PKCE authorization code flow + callback server + tests",
+  "type": "task",
+  "updated_at": "2026-04-25T15:11:18.407468Z"
+}
