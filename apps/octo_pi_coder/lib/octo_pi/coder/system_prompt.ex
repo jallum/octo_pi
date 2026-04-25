@@ -26,8 +26,8 @@ defmodule OctoPi.Coder.SystemPrompt do
           cwd: String.t(),
           tools: [OctoPi.Agent.Tool.t()],
           guidelines: [String.t()],
-          custom_prompt: String.t() | nil,
-          append: String.t() | nil,
+          custom_prompt: String.t(),
+          append: String.t(),
           context_files: [%{path: String.t(), content: String.t()}],
           skills: [map()],
           date: Date.t()
