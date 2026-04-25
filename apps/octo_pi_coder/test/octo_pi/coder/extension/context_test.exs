@@ -24,6 +24,16 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.get_entries.() == entries
     end
 
+    test "get_leaf_entry_id defaults to a function returning nil" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.get_leaf_entry_id.() == nil
+    end
+
+    test "accepts a custom get_leaf_entry_id function" do
+      ctx = Context.new(%{cwd: "/tmp", get_leaf_entry_id: fn -> "entry-abc" end})
+      assert ctx.get_leaf_entry_id.() == "entry-abc"
+    end
+
     test "accepts all fields" do
       ctx =
         Context.new(%{

@@ -20,11 +20,21 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
     {ext, checkpoints}
   end
 
-  defp no_ui_ctx, do: Context.new(%{cwd: "/tmp"})
+  defp no_ui_ctx(entry_id \\ nil), do: Context.new(%{cwd: "/tmp", get_leaf_entry_id: fn -> entry_id end})
 
-  defp ui_ctx(choice) do
-    ui = %UIContext{select: fn _opts, _kw -> {:ok, choice} end, notify: fn _msg -> :ok end}
-    Context.new(%{cwd: "/tmp", has_ui?: true, ui: ui})
+  defp ui_ctx(choice, entry_id \\ nil) do
+    ui =
+      UIContext.bind(UIContext.new(), %{
+        select: fn _opts, _kw -> {:ok, choice} end,
+        notify: fn _msg -> :ok end
+      })
+
+    Context.new(%{
+      cwd: "/tmp",
+      has_ui?: true,
+      ui: ui,
+      get_leaf_entry_id: fn -> entry_id end
+    })
   end
 
   describe "init/2" do
@@ -61,22 +71,29 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
 
       {ext, _} = ext_with_exec(exec_fn)
       handler = hd(ext.handlers[:turn_start])
-      handler.(Event.new(:turn_start, %{}), no_ui_ctx())
+      handler.(Event.new(:turn_start, %{}), no_ui_ctx("entry-1"))
 
       assert_receive {:exec, "git", ["stash", "create"]}
     end
 
-    test "stores a non-empty stash ref in checkpoints" do
+    test "stores a non-empty stash ref keyed by the leaf entry ID" do
+      {ext, checkpoints} = ext_with_exec(fn _cmd, _args -> %{stdout: "abc123\n", code: 0} end)
+      handler = hd(ext.handlers[:turn_start])
+      handler.(Event.new(:turn_start, %{}), no_ui_ctx("entry-1"))
+      assert Agent.get(checkpoints, & &1) == %{"entry-1" => "abc123"}
+    end
+
+    test "does not store checkpoint when get_leaf_entry_id returns nil" do
       {ext, checkpoints} = ext_with_exec(fn _cmd, _args -> %{stdout: "abc123\n", code: 0} end)
       handler = hd(ext.handlers[:turn_start])
       handler.(Event.new(:turn_start, %{}), no_ui_ctx())
-      assert map_size(Agent.get(checkpoints, & &1)) == 1
+      assert map_size(Agent.get(checkpoints, & &1)) == 0
     end
 
     test "does not store empty stash ref (no changes to stash)" do
       {ext, checkpoints} = ext_with_exec(fn _cmd, _args -> %{stdout: "\n", code: 0} end)
       handler = hd(ext.handlers[:turn_start])
-      handler.(Event.new(:turn_start, %{}), no_ui_ctx())
+      handler.(Event.new(:turn_start, %{}), no_ui_ctx("entry-1"))
       assert map_size(Agent.get(checkpoints, & &1)) == 0
     end
   end
@@ -86,16 +103,16 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
       {ext, checkpoints} =
         ext_with_exec(fn _cmd, _args -> %{stdout: "abc123\n", code: 0} end)
 
-      Agent.update(checkpoints, &Map.put(&1, 1, "abc123"))
+      Agent.update(checkpoints, &Map.put(&1, "entry-1", "abc123"))
 
       handler = hd(ext.handlers[:session_before_fork])
-      result = handler.(Event.new(:session_before_fork, %{entry_id: "x"}), no_ui_ctx())
+      result = handler.(Event.new(:session_before_fork, %{entry_id: "entry-1"}), no_ui_ctx())
       assert is_nil(result)
     end
   end
 
   describe "session_before_fork handler — with UI" do
-    test "applies stash when user selects :yes" do
+    test "applies stash when user selects :yes and entry_id matches checkpoint" do
       test_pid = self()
 
       exec_fn = fn cmd, args ->
@@ -104,10 +121,10 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
       end
 
       {ext, checkpoints} = ext_with_exec(exec_fn)
-      Agent.update(checkpoints, &Map.put(&1, 1, "abc123"))
+      Agent.update(checkpoints, &Map.put(&1, "entry-1", "abc123"))
 
       handler = hd(ext.handlers[:session_before_fork])
-      handler.(Event.new(:session_before_fork, %{entry_id: "x"}), ui_ctx(:yes))
+      handler.(Event.new(:session_before_fork, %{entry_id: "entry-1"}), ui_ctx(:yes))
 
       assert_receive {:exec, "git", ["stash", "apply", "abc123"]}
     end
@@ -121,12 +138,29 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
       end
 
       {ext, checkpoints} = ext_with_exec(exec_fn)
-      Agent.update(checkpoints, &Map.put(&1, 1, "abc123"))
+      Agent.update(checkpoints, &Map.put(&1, "entry-1", "abc123"))
 
       handler = hd(ext.handlers[:session_before_fork])
-      handler.(Event.new(:session_before_fork, %{entry_id: "x"}), ui_ctx(:no))
+      handler.(Event.new(:session_before_fork, %{entry_id: "entry-1"}), ui_ctx(:no))
 
       refute_receive {:exec, "git", ["stash", "apply", _]}
+    end
+
+    test "does nothing when event entry_id has no matching checkpoint" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        send(test_pid, {:exec, cmd, args})
+        %{stdout: "", code: 0}
+      end
+
+      {ext, checkpoints} = ext_with_exec(exec_fn)
+      Agent.update(checkpoints, &Map.put(&1, "entry-1", "abc123"))
+
+      handler = hd(ext.handlers[:session_before_fork])
+      result = handler.(Event.new(:session_before_fork, %{entry_id: "entry-2"}), ui_ctx(:yes))
+      assert is_nil(result)
+      refute_receive {:exec, _, _}
     end
 
     test "does nothing when no checkpoints exist" do
@@ -139,7 +173,7 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
 
       {ext, _} = ext_with_exec(exec_fn)
       handler = hd(ext.handlers[:session_before_fork])
-      result = handler.(Event.new(:session_before_fork, %{entry_id: "x"}), ui_ctx(:yes))
+      result = handler.(Event.new(:session_before_fork, %{entry_id: "entry-1"}), ui_ctx(:yes))
       assert is_nil(result)
       refute_receive {:exec, _, _}
     end
@@ -148,8 +182,8 @@ defmodule OctoPi.Coder.Extensions.GitCheckpointTest do
   describe "agent_end handler" do
     test "clears all checkpoints" do
       {ext, checkpoints} = ext_with_exec(fn _cmd, _args -> %{stdout: "", code: 0} end)
-      Agent.update(checkpoints, &Map.put(&1, 1, "ref1"))
-      Agent.update(checkpoints, &Map.put(&1, 2, "ref2"))
+      Agent.update(checkpoints, &Map.put(&1, "entry-1", "ref1"))
+      Agent.update(checkpoints, &Map.put(&1, "entry-2", "ref2"))
 
       handler = hd(ext.handlers[:agent_end])
       handler.(Event.new(:agent_end, %{}), no_ui_ctx())
