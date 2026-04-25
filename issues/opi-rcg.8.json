@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:36Z",
+  "description": "Affected extensions: custom-header.ex, custom-footer.ex\nUpstream: ctx.ui.setHeader(factory) and ctx.ui.setFooter(factory) accept a factory function (tui, theme) =\u003e { render(width): string[], invalidate(): void, dispose?(): void }. This lets the component re-render on demand at any width and access the current theme.\nCurrent workaround: set_header/set_footer accept plain map descriptors (e.g. %{type: :custom_header, title: 'octo_pi'}). The pi mascot TUI widget (custom-header.ts) and the live-rendered token/branch footer (custom-footer.ts) are not ported.\nWhat's needed: UIContext.set_header and set_footer must accept either nil (restore default) or a render function (width :: integer -\u003e [String.t()]) bound at component-mount time. The TUI render loop must call this function at the right render phase instead of applying a static descriptor.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/custom-header.ts + custom-footer.ts",
+  "id": "opi-rcg.8",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.ui.set_header/set_footer render factory — accept (tui, theme) =\u003e component instead of plain map",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:36Z"
+}
