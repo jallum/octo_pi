@@ -590,8 +590,17 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: %{state | exit: true}
 
-  def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}),
-    do: %{state | tools_expanded: !state.tools_expanded}
+  def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
+    expanded = !state.tools_expanded
+
+    banner =
+      case state.banner do
+        %Components.WelcomeBanner{} = b -> %{b | expanded: expanded}
+        other -> other
+      end
+
+    %{state | tools_expanded: expanded, banner: banner}
+  end
 
   def handle_event(%{extension_shortcuts: shortcuts} = state, {:key, %Key{} = key}) when shortcuts != [] do
     case try_extension_shortcut(shortcuts, key, state) do

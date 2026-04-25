@@ -967,6 +967,32 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
       assert s.tools_expanded == false
     end
+
+    test "ctrl+o syncs banner expanded to match new tools_expanded" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = WelcomeBanner.new(theme)
+      s = %Interactive{tools_expanded: false, banner: banner}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.tools_expanded == true
+      assert s.banner.expanded == true
+    end
+
+    test "ctrl+o banner sync works when collapsing" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = WelcomeBanner.new(theme, [])
+      s = %Interactive{tools_expanded: false, banner: banner}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.banner.expanded == true
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.banner.expanded == false
+    end
+
+    test "ctrl+o is safe when banner is nil" do
+      s = %Interactive{tools_expanded: false, banner: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      assert s.tools_expanded == true
+      assert s.banner == nil
+    end
   end
 
   # ── loaded_resources rendering ─────────────────────────────────
