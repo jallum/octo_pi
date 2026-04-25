@@ -224,6 +224,68 @@ defmodule OctoPi.TUI.RendererTest do
     end
   end
 
+  describe "viewport tracking (opi-185)" do
+    # previous_viewport_top must be derived from hw_row (actual final cursor
+    # position) not render_end (last changed line index). When cursor_seq places
+    # the cursor above render_end the two diverge, causing the next diff render
+    # to incorrectly decide first_changed < prev_vp_top and trigger a full redraw.
+    test "cursor_seq above render_end does not cause spurious full redraw" do
+      pid = new(height: 10)
+      lines8 = Enum.map(1..8, &"line#{&1}")
+      {:ok, _} = Renderer.render(pid, lines8)
+
+      # Grow to 12 lines; cursor placed at screen row 0 (buffer row 2 for
+      # a 12-line frame in a 10-row terminal).  render_end will be 11 but
+      # hw_row will be 2.  Bug: prev_vp_top = max(0, 11-9) = 2.
+      # Fix: prev_vp_top = max(0, 2-9)  = 0.
+      lines12 = lines8 ++ Enum.map(9..12, &"line#{&1}")
+      {:ok, _} = Renderer.render(pid, lines12, "\e[1;1H")
+
+      # Change the first line.  With the bug, prev_vp_top=2 so
+      # first_changed(0) < 2 forces a full redraw.
+      changed = List.replace_at(lines12, 0, "CHANGED")
+      {:ok, _} = Renderer.render(pid, changed)
+
+      assert Renderer.full_redraws(pid) == 1
+    end
+  end
+
+  describe "max_lines_rendered resets on content change (opi-e72)" do
+    # max_lines_rendered must track the *current* line count, not a
+    # historical maximum.  When clear_on_shrink is active, a monotonically
+    # growing counter would trigger a full clear-redraw whenever content
+    # later renders at fewer lines than the all-time peak — even when those
+    # extra lines were already removed by a handled deletion.
+    test "shrink-then-grow does not trigger spurious clear-redraw" do
+      prev = System.get_env("PI_CLEAR_ON_SHRINK")
+      System.put_env("PI_CLEAR_ON_SHRINK", "1")
+
+      try do
+        pid = new()
+        # Render 5 lines — max_lines_rendered = 5
+        {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
+
+        # Render 3 lines with a content change at row 0 (goes through
+        # handle_changed_lines, not handle_deleted_lines).
+        # Bug:  max_lines_rendered stays 5.
+        # Fix:  max_lines_rendered reset to 3.
+        {:ok, _} = Renderer.render(pid, ["X", "b", "c"])
+
+        # Render the same 3 lines with a change.
+        # Bug:  3 < 5 → compute triggers full_render → full_redraws = 2.
+        # Fix:  3 < 3 is false → diff path → full_redraws = 1.
+        {:ok, _} = Renderer.render(pid, ["X", "b", "Y"])
+
+        assert Renderer.full_redraws(pid) == 1
+      after
+        case prev do
+          nil -> System.delete_env("PI_CLEAR_ON_SHRINK")
+          v -> System.put_env("PI_CLEAR_ON_SHRINK", v)
+        end
+      end
+    end
+  end
+
   describe "find_diff_range/2" do
     test "no changes → {-1, -1}" do
       assert {-1, -1} = Renderer.find_diff_range(["a", "b", "c"], ["a", "b", "c"])

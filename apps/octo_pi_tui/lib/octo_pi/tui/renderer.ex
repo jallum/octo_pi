@@ -326,7 +326,7 @@ defmodule OctoPi.TUI.Renderer do
         [cursor_iodata]
 
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
-    new_vp_top = max(prev_vp_top, render_end - height + 1)
+    new_vp_top = max(prev_vp_top, hw_row - height + 1)
 
     new_state = %{
       state
