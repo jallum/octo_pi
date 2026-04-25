@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:11:12Z",
+  "description": "FILE: apps/octo_pi_coder/lib/octo_pi/coder/extension/dispatcher.ex\n\nCURRENT BEHAVIOR: collect_all/3 for :before_agent_start gathers all handler return values into a flat list. Each handler sees the original event -- prior handlers' system prompt additions are not visible.\n\nREQUIRED BEHAVIOR (matching upstream pi-mono emitBeforeAgentStart): each handler should see the accumulated additions from prior handlers. Thread the growing list through handlers as a reduce, not a collect.\n\nCHANGE: Either (a) add a new reduce_collect dispatch pattern in Dispatcher that reduces into a list, or (b) special-case :before_agent_start in emit/3 with its own reduce path. Option (a) is preferred for generality. The accumulated list should be available in the event passed to each subsequent handler (e.g., event.data.prior_additions).\n\nVerify in event.ex that :before_agent_start uses :collect_all pattern. Update Event.pattern/1 if adding a new pattern name.\n\nTEST: Add a test in dispatcher_test.exs with two before_agent_start handlers where the second asserts it sees the first handler's addition in the event.",
+  "id": "opi-fin.1.2",
+  "labels": [],
+  "parent": "opi-fin.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Fix before_agent_start to thread additions through handlers",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:12Z"
+}
