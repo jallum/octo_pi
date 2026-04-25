@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T05:46:57Z",
+  "description": "Port upstream resource-loader.ts getSystemPrompt() and getAppendSystemPrompt() to Elixir.\n\nUpstream behavior:\n- getSystemPrompt(): reads {cwd}/.pi/SYSTEM.md if exists, else ~/.pi/SYSTEM.md if exists, else undefined\n  → feeds custom_prompt opt in SystemPrompt.render/1 (replaces default body entirely)\n- getAppendSystemPrompt(): reads both ~/.pi/APPEND_SYSTEM.md AND {cwd}/.pi/APPEND_SYSTEM.md\n  → both loaded; joined with \"\\n\\n\" → feeds append opt in SystemPrompt.render/1\n  → project append is applied after global append\n\nImplementation:\n- Add to OctoPi.Coder.ResourceLoader (or a new PromptFiles submodule)\n- load_system_prompt/1 — project-local first, then global fallback, returns string | nil\n- load_append_system_prompt/1 — load both global + project, join with \"\\n\\n\", return string | nil\n\nTests:\n- Project SYSTEM.md present → used as custom_prompt\n- Project absent, global present → global used\n- Neither present → nil (default body used)\n- Append: only global → global content\n- Append: only project → project content\n- Append: both → global + \"\\n\\n\" + project content\n- Empty files → treated as absent (nil)\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/resource-loader.ts getSystemPrompt(), getAppendSystemPrompt()",
+  "id": "opi-u6a.2",
+  "labels": [],
+  "parent": "opi-u6a",
+  "priority": 2,
+  "status": "open",
+  "title": "System prompt file and append system prompt file loading",
+  "type": "task",
+  "updated_at": "2026-04-25T05:46:57Z"
+}
