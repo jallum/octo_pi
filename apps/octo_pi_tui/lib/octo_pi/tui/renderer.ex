@@ -210,7 +210,14 @@ defmodule OctoPi.TUI.Renderer do
         {cursor_iodata, hw_row} = position_cursor(cursor_seq, hw_cursor, lines, height)
         body = [cursor_iodata]
         bytes = IO.iodata_to_binary(wrap_sync(body, state))
-        {bytes, %{state | previous: lines, previous_viewport_top: prev_vp_top, hardware_cursor_row: hw_row}}
+
+        {bytes,
+         %{
+           state
+           | previous: lines,
+             previous_viewport_top: prev_vp_top,
+             hardware_cursor_row: hw_row
+         }}
 
       first_changed >= new_len and prev_len > new_len ->
         handle_deleted_lines(lines, cursor_seq, state, first_changed, prev_vp_top, hw_cursor)
@@ -220,9 +227,14 @@ defmodule OctoPi.TUI.Renderer do
 
       true ->
         handle_changed_lines(
-          lines, cursor_seq, state,
-          first_changed, last_changed,
-          appended, prev_vp_top, hw_cursor
+          lines,
+          cursor_seq,
+          state,
+          first_changed,
+          last_changed,
+          appended,
+          prev_vp_top,
+          hw_cursor
         )
     end
   end
@@ -285,9 +297,14 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   defp handle_changed_lines(
-         lines, cursor_seq, state,
-         first_changed, last_changed,
-         appended, prev_vp_top, hw_cursor
+         lines,
+         cursor_seq,
+         state,
+         first_changed,
+         last_changed,
+         appended,
+         prev_vp_top,
+         hw_cursor
        ) do
     height = state.height
     append_start = appended and first_changed == length(state.previous) and first_changed > 0

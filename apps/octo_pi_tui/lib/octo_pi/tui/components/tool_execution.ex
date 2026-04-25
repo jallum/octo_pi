@@ -211,5 +211,4 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp status_bg_key(:pending), do: :tool_pending_bg
   defp status_bg_key(:success), do: :tool_success_bg
   defp status_bg_key(:error), do: :tool_error_bg
-
 end

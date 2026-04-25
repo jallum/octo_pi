@@ -46,6 +46,7 @@ defmodule OctoPi.TUI.Components.TextTest do
 
       stripped = strip_ansi(line)
       assert String.length(stripped) <= 15
+
       refute Regex.match?(~r/\d+;\d+;\d+m/, stripped),
              "raw ANSI code fragments should not appear as visible text: #{inspect(stripped)}"
     end
@@ -56,6 +57,7 @@ defmodule OctoPi.TUI.Components.TextTest do
 
       # Should contain "red" and not have broken escape sequences
       assert line =~ "red"
+
       refute Regex.match?(~r/(?<!\e)\[[\d;]*m/, line),
              "should not have orphaned ANSI fragments"
     end

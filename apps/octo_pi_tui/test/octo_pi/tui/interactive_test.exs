@@ -210,7 +210,11 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       # The continuation text must be a NEW entry BELOW the tool, not
       # merged into the first AssistantMessage above it.
-      assert [%AssistantMessage{content: [text: "let me check"]}, %ToolExecution{}, %AssistantMessage{content: [text: "here is the answer"]}] =
+      assert [
+               %AssistantMessage{content: [text: "let me check"]},
+               %ToolExecution{},
+               %AssistantMessage{content: [text: "here is the answer"]}
+             ] =
                s.transcript
     end
 

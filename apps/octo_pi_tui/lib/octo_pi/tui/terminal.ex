@@ -4,8 +4,9 @@ defmodule OctoPi.TUI.Terminal do
 
     * Enter OTP 28's noshell raw mode on start; restore on terminate.
     * Listen for SIGWINCH via a gen_event handler on
-      `erl_signal_server`; query actual dimensions via TIOCGWINSZ
-      NIF and broadcast `{:resize, w, h}` through `OctoPi.TUI.Events`.
+      `erl_signal_server`; query actual dimensions via
+      `:io.columns/0` / `:io.rows/0` and broadcast `{:resize, w, h}`
+      through `OctoPi.TUI.Events`.
     * Spawn a linked reader that calls `:io.get_chars("", N)` in a
       loop and forwards each chunk back as a `{:stdin_chunk, bin}`
       message, which Terminal rebroadcasts via `Events`.
@@ -23,6 +24,9 @@ defmodule OctoPi.TUI.Terminal do
       `feed_chunk/2` instead.
     * `:dimensions` — `{width, height}` override for tests.
 
+  Terminal dimensions are queried via `:io.columns/0` and
+  `:io.rows/0` — no NIF required.
+
   `Events` is a Registry keyed on `{topic, scope}` tuples.
   Subscribers register via
   `Registry.register(Events, {:stdin_chunk, terminal_pid}, nil)`;
@@ -34,7 +38,7 @@ defmodule OctoPi.TUI.Terminal do
 
   use GenServer
 
-  alias OctoPi.TUI.{Events, RawMode, SigwinchHandler, TTY}
+  alias OctoPi.TUI.{Events, RawMode, SigwinchHandler}
 
   # --- public API ---
 
@@ -124,7 +128,7 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_info({:signal, :sigwinch}, state) do
-    case TTY.window_size() do
+    case window_size() do
       {:ok, {w, h}} when w != state.width or h != state.height ->
         broadcast(state, :resize, {:resize, w, h})
         {:noreply, %{state | width: w, height: h}}
@@ -155,6 +159,12 @@ defmodule OctoPi.TUI.Terminal do
     Registry.dispatch(Events, {topic, state.scope}, fn subscribers ->
       for {pid, _} <- subscribers, do: send(pid, msg)
     end)
+  end
+
+  defp window_size do
+    with {:ok, cols} <- :io.columns(), {:ok, rows} <- :io.rows() do
+      {:ok, {cols, rows}}
+    end
   end
 
   defp default_reader, do: :io.get_chars("", 256)
@@ -188,5 +198,4 @@ defmodule OctoPi.TUI.Terminal do
       %{reason: reason, terminal: parent}
     )
   end
-
 end

@@ -61,6 +61,7 @@ defmodule OctoPi.TUI.SyntaxHighlightTest do
       code = "# comment"
       [line] = SyntaxHighlight.highlight(code, "bash", theme())
       stripped = String.replace(line, ~r/\e\[[0-9;]*m/, "")
+
       assert stripped == "# comment",
              "visible text should be unchanged but got: #{inspect(stripped)}"
 

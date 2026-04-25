@@ -371,8 +371,9 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp detect_dimensions do
-    case OctoPi.TUI.TTY.window_size() do
-      {:ok, {w, h}} -> {w, h}
+    with {:ok, cols} <- :io.columns(), {:ok, rows} <- :io.rows() do
+      {cols, rows}
+    else
       _ -> {80, 24}
     end
   end
@@ -863,9 +864,12 @@ defmodule OctoPi.TUI.Interactive do
   defp default_working_message, do: "Thinking…"
 
   defp render_loader(nil, _width, _theme), do: []
-  defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
+
+  defp render_loader(%Components.Loader{} = loader, width, theme),
+    do: Components.Loader.render(loader, width, theme)
 
   defp render_banner(nil, _width), do: []
+
   defp render_banner(banner, width) do
     case Components.WelcomeBanner.render(banner, width) do
       [] -> []

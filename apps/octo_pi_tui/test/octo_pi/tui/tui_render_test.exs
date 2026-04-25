@@ -561,5 +561,4 @@ defmodule OctoPi.TUI.TuiRenderTest do
       do: Enum.take(lines, -height),
       else: List.duplicate("", height - len) ++ lines
   end
-
 end

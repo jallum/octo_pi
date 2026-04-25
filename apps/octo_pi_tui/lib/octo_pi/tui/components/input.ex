@@ -82,7 +82,10 @@ defmodule OctoPi.TUI.Components.Input do
   # --- render ---
 
   @impl true
-  def render(%__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input, width) do
+  def render(
+        %__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input,
+        width
+      ) do
     {effective_px, content_w, lw} = layout_width(width, px)
     all_lines = layout_lines(value, lw)
 

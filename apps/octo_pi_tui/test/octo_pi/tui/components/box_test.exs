@@ -70,7 +70,10 @@ defmodule OctoPi.TUI.Components.BoxTest do
 
     test "content lines are right-padded to full width with bg_fn" do
       bg_fn = fn text -> "\e[42m#{text}\e[49m" end
-      box = Box.new(padding_x: 1, padding_y: 0, bg_fn: bg_fn) |> Box.add_child(%Text{content: "hi"})
+
+      box =
+        Box.new(padding_x: 1, padding_y: 0, bg_fn: bg_fn) |> Box.add_child(%Text{content: "hi"})
+
       lines = Box.render(box, 20)
 
       for line <- lines do
@@ -81,7 +84,10 @@ defmodule OctoPi.TUI.Components.BoxTest do
 
     test "padding_y lines are full-width" do
       bg_fn = fn text -> "\e[42m#{text}\e[49m" end
-      box = Box.new(padding_x: 1, padding_y: 1, bg_fn: bg_fn) |> Box.add_child(%Text{content: "x"})
+
+      box =
+        Box.new(padding_x: 1, padding_y: 1, bg_fn: bg_fn) |> Box.add_child(%Text{content: "x"})
+
       lines = Box.render(box, 30)
 
       for line <- lines do
