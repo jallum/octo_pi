@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:29Z",
+  "description": "Affected extension: dynamic-tools.ex\nUpstream: pi.registerTool() can be called at any time — including inside session_start or command handlers — and the new tool is immediately available for the session.\nCurrent workaround: echo_session is registered at init rather than in session_start (works only because the tool is always desired). The /add-echo-tool command tracks names in a registry Agent for dedup and state inspection but cannot actually add a new tool to the live session — the Extension struct is immutable after build_extension/2.\nWhat's needed: a post-init tool registration path. Options:\n  (a) Agent/GenServer-backed mutable extension: add_tool/2 mutates a live state process.\n  (b) A runtime registration callback (like append_entry) that routes the new tool spec to AgentSession/Interactive.\nThe callback approach (b) is lower overhead and consistent with other API fn fields.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/dynamic-tools.ts (pi.registerTool in session_start)",
+  "id": "opi-rcg.7",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "Dynamic tool registration after init — extensions immutable after build_extension/2",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:29Z"
+}
