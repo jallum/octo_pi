@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "KeyParser: xterm modified CSI sequences (\\e[1;modA for Shift/Ctrl/Alt+arrows and nav keys)",
   "type": "task",
-  "updated_at": "2026-04-25T13:07:56.401315Z"
+  "updated_at": "2026-04-25T13:14:32.770653Z"
 }
