@@ -3,12 +3,12 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T10:36:14Z",
-  "description": "Bring octo_pi_tui to rough feature parity with the upstream pi-mono interactive TUI.\n\nCurrent state: ~5k LOC, basic infrastructure (terminal, stdin_fsm, key_parser, renderer, overlay, input, select_list, footer, text). Interactive mode handles streaming text only — no tool display, no markdown, no dialogs, no themes, no autocomplete, no extension integration. Footer and overlay are built but not wired into the render pipeline.\n\nTarget: a TUI that looks and feels like pi-mono's interactive mode — markdown-rendered messages, tool execution display, model/session selectors, autocomplete, theme support, and extension hooks.\n\nUpstream reference: tmp/pi-mono/packages/tui/ + tmp/pi-mono/packages/coding-agent/src/modes/interactive/\n\nOrganized into tiers:\n- T1: Foundation (theme, container, footer wiring)\n- T2: Content rendering (markdown, message components, tool execution)\n- T3: Editor \u0026 autocomplete\n- T4: Dialogs \u0026 selectors\n- T5: Extension integration\n- T6: Terminal features \u0026 polish",
+  "description": "Bring octo_pi_tui to rough feature parity with the upstream pi-mono interactive TUI.\n\nCurrent state: ~5k LOC, basic infrastructure (terminal, stdin_fsm, key_parser, renderer, overlay, input, select_list, footer, text). Interactive mode handles streaming text only — no tool display, no markdown, no dialogs, no themes, no autocomplete, no extension integration. Footer and overlay are built but not wired into the render pipeline.\n\nTarget: a TUI that looks and feels like pi-mono's interactive mode — markdown-rendered messages, tool execution display, model/session selectors, autocomplete, theme support, and extension hooks.\n\nUpstream reference: tmp/pi-mono/packages/tui/ + tmp/pi-mono/packages/coding-agent/src/modes/interactive/\n\nOrganized into tiers:\n- T1: Foundation (theme, container, footer wiring)\n- T2: Content rendering (markdown, message components, tool execution)\n- T3: Editor & autocomplete\n- T4: Dialogs & selectors\n- T5: Extension integration\n- T6: Terminal features & polish",
   "id": "opi-m4h",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 4.1: TUI feature parity with pi-mono",
   "type": "epic",
-  "updated_at": "2026-04-24T10:36:14Z"
+  "updated_at": "2026-04-25T12:01:05.259330Z"
 }
