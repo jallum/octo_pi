@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.ui.set_status named slot — set_status(id, text) vs single-string set_status(text)",
   "type": "task",
-  "updated_at": "2026-04-25T18:34:57.703743Z"
+  "updated_at": "2026-04-25T18:37:56.089560Z"
 }
