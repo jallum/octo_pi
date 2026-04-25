@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:57Z",
+  "description": "Final cleanup once Phases 6b, 7, 8 are complete. Remove API.bind_core/2, fn-field stubs from API.new/1, all action fn-fields from API.t() struct, UIContext.t() (if Phase 7 done), dead test helpers. Grep for stub error message strings to confirm all throwing stubs are gone.",
+  "id": "opi-fin.9",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 3,
+  "status": "open",
+  "title": "Phase 9: Remove legacy API",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:57Z"
+}
