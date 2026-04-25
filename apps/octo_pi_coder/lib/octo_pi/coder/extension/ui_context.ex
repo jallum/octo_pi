@@ -8,7 +8,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
           confirm: (String.t(), keyword() -> boolean() | no_return()),
           input: (String.t(), keyword() -> {:ok, String.t()} | :cancelled | no_return()),
           notify: (String.t() -> :ok | no_return()),
-          set_status: (String.t() -> :ok | no_return()),
+          set_status: (String.t(), String.t() | nil -> :ok | no_return()),
           set_working_message: (String.t() | nil -> :ok | no_return()),
           set_working_indicator: (boolean() -> :ok | no_return()),
           set_hidden_thinking_label: (String.t() | nil -> :ok | no_return()),
@@ -34,7 +34,6 @@ defmodule OctoPi.Coder.Extension.UIContext do
 
   @one_arity_fields [
     :notify,
-    :set_status,
     :set_working_message,
     :set_working_indicator,
     :set_hidden_thinking_label,
@@ -57,7 +56,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
     :get_tools_expanded
   ]
 
-  @two_arity_fields [:custom, :editor, :confirm, :apply_fg, :apply_bg]
+  @two_arity_fields [:set_status, :custom, :editor, :confirm, :apply_fg, :apply_bg]
 
   @var_arity_fields [:select, :input]
 

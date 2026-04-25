@@ -18,7 +18,7 @@ defmodule OctoPi.Coder.Extensions.StatusLineTest do
   defp ui_ctx(status_calls) do
     ui =
       UIContext.bind(UIContext.new(), %{
-        set_status: fn text -> Agent.update(status_calls, fn acc -> [text | acc] end) end,
+        set_status: fn id, text -> Agent.update(status_calls, fn acc -> [{id, text} | acc] end) end,
         apply_fg: fn _color, text -> text end,
         apply_bg: fn _color, text -> text end
       })
@@ -62,12 +62,21 @@ defmodule OctoPi.Coder.Extensions.StatusLineTest do
       assert length(Agent.get(status_calls, & &1)) == 1
     end
 
+    test "set_status uses the 'status-line' slot id" do
+      {:ok, status_calls} = Agent.start_link(fn -> [] end)
+      {ext, _} = ext_with_state()
+      handler = hd(ext.handlers[:session_start])
+      handler.(Event.new(:session_start, %{reason: :startup}), ui_ctx(status_calls))
+      [{id, _text}] = Agent.get(status_calls, & &1)
+      assert id == "status-line"
+    end
+
     test "set_status text indicates ready state" do
       {:ok, status_calls} = Agent.start_link(fn -> [] end)
       {ext, _} = ext_with_state()
       handler = hd(ext.handlers[:session_start])
       handler.(Event.new(:session_start, %{reason: :startup}), ui_ctx(status_calls))
-      [text] = Agent.get(status_calls, & &1)
+      [{_id, text}] = Agent.get(status_calls, & &1)
       assert is_binary(text)
       assert String.length(text) > 0
     end
@@ -103,7 +112,7 @@ defmodule OctoPi.Coder.Extensions.StatusLineTest do
       {ext, _} = ext_with_state()
       handler = hd(ext.handlers[:turn_start])
       handler.(Event.new(:turn_start, %{}), ui_ctx(status_calls))
-      [text] = Agent.get(status_calls, & &1)
+      [{_id, text}] = Agent.get(status_calls, & &1)
       assert text =~ "1"
     end
   end
@@ -132,7 +141,7 @@ defmodule OctoPi.Coder.Extensions.StatusLineTest do
       hd(ext.handlers[:turn_start]).(Event.new(:turn_start, %{}), ctx)
       hd(ext.handlers[:turn_end]).(Event.new(:turn_end, %{}), ctx)
 
-      [end_text | _] = Agent.get(status_calls, & &1)
+      [{_id, end_text} | _] = Agent.get(status_calls, & &1)
       assert end_text =~ "1"
     end
   end

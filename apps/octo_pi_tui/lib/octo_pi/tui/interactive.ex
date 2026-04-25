@@ -150,7 +150,7 @@ defmodule OctoPi.TUI.Interactive do
       set_theme: fn name -> fire.({:set_theme, name}) end,
       set_tools_expanded: fn val -> fire.({:set_tools_expanded, val}) end,
       notify: fn text -> fire.({:notify, text}) end,
-      set_status: fn text -> fire.({:set_status, text}) end,
+      set_status: fn id, text -> fire.({:set_status, id, text}) end,
       set_working_message: fn msg -> fire.({:set_working_message, msg}) end,
       set_working_indicator: fn val -> fire.({:set_working_indicator, val}) end,
       set_hidden_thinking_label: fn label -> fire.({:set_hidden_thinking_label, label}) end,
@@ -262,8 +262,14 @@ defmodule OctoPi.TUI.Interactive do
     {state, :ok}
   end
 
-  def handle_ui_request(state, {:set_status, text}) do
-    {%{state | ui_overrides: Map.put(state.ui_overrides, :status, text)}, :ok}
+  def handle_ui_request(state, {:set_status, id, nil}) do
+    footer = %{state.footer | extension_statuses: Map.delete(state.footer.extension_statuses, id)}
+    {%{state | footer: footer}, :ok}
+  end
+
+  def handle_ui_request(state, {:set_status, id, text}) do
+    footer = %{state.footer | extension_statuses: Map.put(state.footer.extension_statuses, id, text)}
+    {%{state | footer: footer}, :ok}
   end
 
   def handle_ui_request(state, {:set_title, text}) do

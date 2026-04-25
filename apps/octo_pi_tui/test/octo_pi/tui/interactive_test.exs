@@ -1385,10 +1385,25 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.working_message == nil
     end
 
-    test "set_status stores status text" do
+    test "set_status updates footer extension_statuses for the given id" do
       s = %Interactive{}
-      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "indexing..."})
-      assert s.ui_overrides.status == "indexing..."
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "my-ext", "indexing..."})
+      assert s.footer.extension_statuses["my-ext"] == "indexing..."
+    end
+
+    test "set_status with nil clears the named slot" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "my-ext", "indexing..."})
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "my-ext", nil})
+      refute Map.has_key?(s.footer.extension_statuses, "my-ext")
+    end
+
+    test "set_status for different ids are independent" do
+      s = %Interactive{}
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "ext-a", "status a"})
+      {s, :ok} = Interactive.handle_ui_request(s, {:set_status, "ext-b", "status b"})
+      assert s.footer.extension_statuses["ext-a"] == "status a"
+      assert s.footer.extension_statuses["ext-b"] == "status b"
     end
 
     test "set_title stores title" do

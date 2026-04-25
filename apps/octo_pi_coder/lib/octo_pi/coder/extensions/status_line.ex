@@ -18,7 +18,7 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
   end
 
   defp on_session_start(%{has_ui?: true, ui: ui}) do
-    ui.set_status.(ui.apply_fg.(:success, "● ") <> "Ready")
+    ui.set_status.("status-line", ui.apply_fg.(:success, "● ") <> "Ready")
   end
 
   defp on_session_start(_ctx), do: :ok
@@ -30,7 +30,7 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
         {n, %{s | turn_count: n}}
       end)
 
-    ui.set_status.(ui.apply_fg.(:accent, "● ") <> ui.apply_fg.(:dim, "Turn #{turn}..."))
+    ui.set_status.("status-line", ui.apply_fg.(:accent, "● ") <> ui.apply_fg.(:dim, "Turn #{turn}..."))
   end
 
   defp on_turn_start(_ctx, state) do
@@ -40,7 +40,7 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
 
   defp on_turn_end(%{has_ui?: true, ui: ui}, state) do
     turn = Agent.get(state, & &1.turn_count)
-    ui.set_status.(ui.apply_fg.(:success, "✓ ") <> ui.apply_fg.(:dim, "Turn #{turn} complete"))
+    ui.set_status.("status-line", ui.apply_fg.(:success, "✓ ") <> ui.apply_fg.(:dim, "Turn #{turn} complete"))
   end
 
   defp on_turn_end(_ctx, _state), do: :ok
