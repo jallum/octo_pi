@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:13:26Z",
+  "description": "REQUIRES: opi-fin.6.1 merged.\n\nFILE: apps/octo_pi_coder/lib/octo_pi/coder/extension/context.ex\n\nAdd host: pid() | nil field to Context.t() struct, default nil.\nUpdate Context.new/1 to accept host: key from the attrs map.\nUpdate @type t() spec.\n\nThe session runner populates this when creating Context for dispatch: Context.new(%{..., host: host_pid}).\n\nIn tests that use Context.new directly (context_test.exs, extension tests), host: nil is fine as long as the extension under test does not call Host client functions. Tests that DO test Host interactions will use Host.Stub (opi-fin.6.4 and opi-fin.6.5).\n\nTEST: Update context_test.exs to cover the new field.",
+  "id": "opi-fin.6.3",
+  "labels": [],
+  "parent": "opi-fin.6",
+  "priority": 1,
+  "status": "open",
+  "title": "6b: Add host: pid() to Context.t()",
+  "type": "task",
+  "updated_at": "2026-04-25T21:13:26Z"
+}
