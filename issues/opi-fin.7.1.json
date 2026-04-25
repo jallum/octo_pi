@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:13:48Z",
+  "description": "NEW FILES:\n- apps/octo_pi_coder/lib/octo_pi/coder/extension/ui.ex\n- apps/octo_pi_coder/lib/octo_pi/coder/extension/ui/stub.ex\n\nUI BEHAVIOUR (ui.ex):\nRead ui_context.ex to get the full list of fn-fields. Define @callback for each:\nset_status/2 (pid, text), notify/2 (pid, msg), custom/3 (pid, factory, opts), get_theme/1, set_theme/2, get_all_themes/1, apply_fg/3, apply_bg/3, select/3, request_render/1.\n\nAlso define client-side API functions matching the behaviour -- extensions call UI.set_status(ctx.ui, text) rather than calling the GenServer directly.\n\nContext.t() type annotation: change ui: UIContext.t() | nil to ui: pid() | nil. The UIContext.t() struct is NOT deleted yet -- that is Phase 9. This ticket only adds the new type and behaviour; existing UIContext.new/bind usage in tests continues to work.\n\nUI.STUB (ui/stub.ex):\nGenServer implementing UI behaviour. No-ops all side-effecting calls (set_status, notify, etc.). Records calls as [{action, args}]. Returns sensible defaults for query calls (get_theme returns %{}, get_all_themes returns []). Expose: Stub.calls(pid) -\u003e list.\n\nNO existing files change except context.ex type annotation.\n\nTEST: New ui_test.exs. Test that Stub records calls, returns defaults, does not crash on any callback.",
+  "id": "opi-fin.7.1",
+  "labels": [],
+  "parent": "opi-fin.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Define UI behaviour and UI.Stub",
+  "type": "task",
+  "updated_at": "2026-04-25T21:13:48Z"
+}
