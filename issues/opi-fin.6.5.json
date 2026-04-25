@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-fin.5.4",
     "opi-fin.6.2",
     "opi-fin.6.3"
   ],
@@ -14,5 +15,5 @@
   "status": "open",
   "title": "6b: Migrate tools extension and update Harness",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:24Z"
+  "updated_at": "2026-04-25T21:14:25Z"
 }
