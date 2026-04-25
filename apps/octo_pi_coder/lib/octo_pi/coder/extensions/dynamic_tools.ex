@@ -2,35 +2,35 @@ defmodule OctoPi.Coder.Extensions.DynamicTools do
   @moduledoc """
   Demonstrates registering tools after session initialization.
 
-  Registers echo_session at init time and provides /add-echo-tool to track
-  additional echo tool names at runtime. Full dynamic addition to the extension
-  struct is not supported in the Elixir architecture (extensions are immutable
-  after build); the registry agent tracks names for dedup and state inspection.
+  Uses `api.register_tool` (bound via `bind_core`) to add tools to the live
+  session at runtime from command handlers, matching the upstream behaviour
+  where `pi.registerTool()` can be called at any time.
 
-  Diverges from dynamic-tools.ts: echo_session is registered at init rather than
-  in session_start; runtime tools are tracked via a registry agent rather than
-  mutating pi at runtime.
+  An internal registry tracks registered names for dedup. `echo_session` is
+  registered both statically at init (via `API.register_tool/2`) and into the
+  internal registry, so `/add-echo-tool echo_session` returns a duplicate warning.
   Ported from examples/extensions/dynamic-tools.ts.
   """
 
   alias OctoPi.Coder.Extension.API
 
-  @spec init(API.t(), pid()) :: {:ok, API.t()}
-  def init(api, registry) do
-    Agent.update(registry, &MapSet.put(&1, "echo_session"))
+  @spec init(API.t()) :: {:ok, API.t()}
+  def init(api) do
+    {:ok, registry} = Agent.start_link(fn -> MapSet.new(["echo_session"]) end)
 
-    {:ok, api} = register_echo_tool(api, "echo_session", "[session] ")
+    register_tool_fn = api.register_tool
 
+    {:ok, api} = API.register_tool(api, echo_spec("echo_session", "[session] "))
     {:ok, api} = API.on(api, :session_start, fn _event, ctx -> on_session_start(ctx) end)
 
     API.register_command(api, "add-echo-tool", %{
       description: "Register a new echo tool dynamically: /add-echo-tool <tool_name>",
-      handler: fn args, _ctx -> add_echo_tool(args, registry) end
+      handler: fn args, _ctx -> add_echo_tool(args, registry, register_tool_fn) end
     })
   end
 
-  defp register_echo_tool(api, name, prefix) do
-    API.register_tool(api, %{
+  defp echo_spec(name, prefix) do
+    %{
       name: name,
       label: "Echo #{String.capitalize(name)}",
       description: "Echo a message with prefix: #{prefix}",
@@ -47,7 +47,7 @@ defmodule OctoPi.Coder.Extensions.DynamicTools do
           details: %{tool: name, prefix: prefix}
         }
       end
-    })
+    }
   end
 
   defp on_session_start(%{has_ui?: true, ui: ui}) do
@@ -57,13 +57,13 @@ defmodule OctoPi.Coder.Extensions.DynamicTools do
 
   defp on_session_start(_ctx), do: :ok
 
-  defp add_echo_tool(args, registry) do
+  defp add_echo_tool(args, registry, register_tool_fn) do
     case normalize_name(args) do
       nil ->
         "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores only)"
 
       name ->
-        register_in_registry(name, registry)
+        register_dynamic_tool(name, registry, register_tool_fn)
     end
   end
 
@@ -74,11 +74,12 @@ defmodule OctoPi.Coder.Extensions.DynamicTools do
       do: trimmed
   end
 
-  defp register_in_registry(name, registry) do
+  defp register_dynamic_tool(name, registry, register_tool_fn) do
     if MapSet.member?(Agent.get(registry, & &1), name) do
       "Tool already registered: #{name}"
     else
       Agent.update(registry, &MapSet.put(&1, name))
+      register_tool_fn.(echo_spec(name, "[#{name}] "))
       "Registered dynamic tool: #{name}"
     end
   end

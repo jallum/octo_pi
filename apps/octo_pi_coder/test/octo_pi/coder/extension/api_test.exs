@@ -89,7 +89,8 @@ defmodule OctoPi.Coder.Extension.APITest do
             :compact,
             :set_active_tools,
             :set_session_name,
-            :set_label
+            :set_label,
+            :register_tool
           ] do
         assert_raise RuntimeError, ~r/not bound/, fn -> Map.get(api, field).(:arg) end
       end

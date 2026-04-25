@@ -32,6 +32,7 @@ defmodule OctoPi.Coder.Extension.API do
           get_session_name: (-> String.t() | nil),
           set_session_name: (String.t() -> :ok),
           set_label: (String.t() -> :ok),
+          register_tool: (map() -> :ok),
           exec: (String.t(), [String.t()] -> term()),
           get_commands: (-> [map()]),
           get_context_usage: (-> map() | nil)
@@ -46,7 +47,8 @@ defmodule OctoPi.Coder.Extension.API do
     :compact,
     :set_active_tools,
     :set_session_name,
-    :set_label
+    :set_label,
+    :register_tool
   ]
 
   @zero_arity_actions [
