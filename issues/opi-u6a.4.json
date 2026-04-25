@@ -6,14 +6,15 @@
   "blocks": [
     "opi-u6a.6"
   ],
+  "closed_at": "2026-04-25T05:56:11Z",
   "created": "2026-04-25T05:47:24Z",
   "description": "Port upstream formatSkillsForPrompt() to Elixir and wire into SystemPrompt.render/1.\n\nUpstream format (skills.ts:339):\n  \\n\\nThe following skills provide specialized instructions for specific tasks.\n  Use the read tool to load a skill's file when the task matches its description.\n  When a skill file references a relative path, resolve it against the skill directory...\n\n  \u003cavailable_skills\u003e\n    \u003cskill\u003e\n      \u003cname\u003emy-skill\u003c/name\u003e\n      \u003cdescription\u003eDoes X when Y\u003c/description\u003e\n      \u003clocation\u003e/abs/path/to/SKILL.md\u003c/location\u003e\n    \u003c/skill\u003e\n  \u003c/available_skills\u003e\n\nRules:\n- Skills with disable_model_invocation: true are excluded\n- Section is only appended when read tool is in active tool list (has_read guard)\n- XML entities escaped: \u0026 → \u0026amp; \u003c → \u0026lt; \u003e → \u0026gt; \" → \u0026quot; ' → \u0026apos;\n\nImplementation:\n- Add format_skills_section/2 to OctoPi.Coder.SystemPrompt (or inline in build_body)\n- Add :skills opt to SystemPrompt.render/1 (list of %{name, description, file_path, disable_model_invocation})\n- Appended after context_section, before date/cwd\n\nTests (TDD):\n- Empty skills → no section added\n- Single skill → correct XML format with all elements\n- Skill with disable_model_invocation: true → excluded\n- Multiple skills → all included in order\n- XML entity escaping: \u0026 \u003c \u003e \" ' in name/description/path\n- No read tool → section omitted\n- read tool present → section included\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/skills.ts formatSkillsForPrompt()\nReference: tmp/pi-mono/packages/coding-agent/src/core/system-prompt.ts (skills section placement)",
   "id": "opi-u6a.4",
   "labels": [],
   "parent": "opi-u6a",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Skills XML section in system prompt",
   "type": "task",
-  "updated_at": "2026-04-25T05:54:18Z"
+  "updated_at": "2026-04-25T05:56:11Z"
 }
