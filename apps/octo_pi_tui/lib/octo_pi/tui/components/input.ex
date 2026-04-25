@@ -255,12 +255,26 @@ defmodule OctoPi.TUI.Components.Input do
     kb = resolve_kb(kb)
 
     case find_autocomplete_action(kb, key) do
-      "tui.select.up" -> autocomplete_navigate(s, -1)
-      "tui.select.down" -> autocomplete_navigate(s, 1)
-      "tui.select.confirm" -> autocomplete_accept_and_submit(s)
-      "tui.input.tab" -> autocomplete_accept(s)
-      "tui.select.cancel" -> dismiss_autocomplete(s)
-      nil -> dispatch_editor_action(find_editor_action(kb, key), s)
+      "tui.select.up" ->
+        autocomplete_navigate(s, -1)
+
+      "tui.select.down" ->
+        autocomplete_navigate(s, 1)
+
+      "tui.select.confirm" ->
+        autocomplete_accept_and_submit(s)
+
+      "tui.input.tab" ->
+        autocomplete_accept(s)
+
+      "tui.select.cancel" ->
+        dismiss_autocomplete(s)
+
+      nil ->
+        case dispatch_editor_action(find_editor_action(kb, key), s) do
+          {new_s, events} -> {refresh_autocomplete(new_s), events}
+          new_s -> refresh_autocomplete(new_s)
+        end
     end
   end
 

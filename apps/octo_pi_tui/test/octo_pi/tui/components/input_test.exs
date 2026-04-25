@@ -1365,5 +1365,24 @@ defmodule OctoPi.TUI.Components.InputTest do
       s_up = press(s_down, key(:up))
       assert s_up.autocomplete_selected == 0
     end
+
+    test "backspace while active deletes char and re-queries suggestions" do
+      s = with_slash_provider() |> Input.insert("/") |> Input.insert("h")
+      assert Enum.all?(s.autocomplete_suggestions, &String.starts_with?(&1.value, "/h"))
+
+      s2 = press(s, key(:backspace))
+      assert s2.value == "/"
+      assert s2.autocomplete_active
+      assert length(s2.autocomplete_suggestions) == length(Autocomplete.builtin_commands())
+    end
+
+    test "backspace clears autocomplete when value no longer starts with /" do
+      s = Input.insert(with_slash_provider(), "/")
+      assert s.autocomplete_active
+
+      s2 = press(s, key(:backspace))
+      assert s2.value == ""
+      refute s2.autocomplete_active
+    end
   end
 end
