@@ -30,7 +30,7 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
 
   def render(%__MODULE__{expanded: false, theme: theme}, _width) do
     title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
-    hints = dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more")
+    hints = dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more")
 
     [
       " #{title}",

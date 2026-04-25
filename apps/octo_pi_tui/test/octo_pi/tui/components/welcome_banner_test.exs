@@ -29,6 +29,18 @@ defmodule OctoPi.TUI.Components.WelcomeBannerTest do
       assert text =~ "escape interrupt"
       assert text =~ "/ commands"
     end
+
+    test "compact hints line fits within 70 visible characters" do
+      banner = WelcomeBanner.new(@theme, model: "claude-opus-4-6")
+      [_title, hints | _] = WelcomeBanner.render(banner, 80)
+      visible = String.replace(hints, ~r/\e\[[0-9;]*m/, "")
+      assert String.length(visible) <= 70
+    end
+
+    test "compact render returns exactly 2 lines" do
+      banner = WelcomeBanner.new(@theme, model: "claude-opus-4-6")
+      assert length(WelcomeBanner.render(banner, 80)) == 2
+    end
   end
 
   describe "render/2 — expanded" do
