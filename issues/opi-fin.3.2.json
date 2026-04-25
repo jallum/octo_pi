@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:11:58Z",
+  "description": "FILES: dispatcher.ex, runtime_state.ex (if applicable).\n\nAdd two more ETS tables alongside the handler dispatch table (same ownership model as opi-fin.3.1):\n\nTOOLS TABLE:\n- Type: :set\n- Row format: {tool_name :: String.t(), tool_def :: map()}\n- Use: Dispatcher.get_tool_definition/2 reads from this table instead of scanning Extension.t() list\n- Population: after load_all/1, insert one row per tool across all extensions (first-wins for duplicates, matching current Dispatcher.get_tool_definition/2 semantics)\n\nFLAGS TABLE:\n- Type: :set\n- Row format: {flag_name :: String.t(), value :: term()}\n- Use: flag value reads go through this table\n- Population: initialized from Extension.t() flags at load time; updated when set_flag is called\n\nBoth tables follow the same ownership rules as the handler table (opi-fin.3.1). Implement this ticket after opi-fin.3.1 establishes the ownership pattern.\n\nRequires: opi-fin.3.1 merged first.",
+  "id": "opi-fin.3.2",
+  "labels": [],
+  "parent": "opi-fin.3",
+  "priority": 2,
+  "status": "open",
+  "title": "ETS active tools and flags tables",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:58Z"
+}
