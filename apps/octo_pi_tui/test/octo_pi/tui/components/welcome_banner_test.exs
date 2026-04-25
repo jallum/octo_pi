@@ -15,12 +15,11 @@ defmodule OctoPi.TUI.Components.WelcomeBannerTest do
   end
 
   describe "render/2 — compact" do
-    test "shows product name and model" do
+    test "shows product name and version" do
       banner = WelcomeBanner.new(@theme, model: "claude-opus-4-6")
       lines = WelcomeBanner.render(banner, 80)
       text = Enum.join(lines, "\n")
-      assert text =~ "Claude Code"
-      assert text =~ "claude-opus-4-6"
+      assert text =~ "octo_pi"
     end
 
     test "shows inline keybinding hints" do
@@ -38,7 +37,7 @@ defmodule OctoPi.TUI.Components.WelcomeBannerTest do
       lines = WelcomeBanner.render(banner, 80)
       text = Enum.join(lines, "\n")
       assert text =~ "Esc"
-      assert text =~ "/help"
+      assert text =~ "commands"
     end
 
     test "has more lines than compact" do

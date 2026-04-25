@@ -631,7 +631,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       lines = Interactive.render(s)
       text = Enum.join(lines, "\n")
-      assert text =~ "Claude Code"
+      assert text =~ "octo_pi"
     end
 
     test "? toggles banner when input is empty" do

@@ -28,25 +28,27 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
   @impl true
   def render(%__MODULE__{quiet: true}, _width), do: []
 
-  def render(%__MODULE__{expanded: false, model: model, theme: theme}, _width) do
-    title = Theme.fg(theme, :accent, "Claude Code")
-    hints = dim(" escape interrupt · ctrl+c exit · / commands · ? tips")
+  def render(%__MODULE__{expanded: false, theme: theme}, _width) do
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
+    hints = dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more")
 
     [
-      " #{title}  #{dim(model)}",
+      " #{title}",
       hints
     ]
   end
 
-  def render(%__MODULE__{expanded: true, model: model, theme: theme}, _width) do
-    title = Theme.fg(theme, :accent, "Claude Code")
+  def render(%__MODULE__{expanded: true, theme: theme}, _width) do
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
 
     [
-      " #{title}  #{dim(model)}",
+      " #{title}",
       "",
       dim("  Esc        interrupt generation"),
-      dim("  Shift+Tab  switch input modes"),
-      dim("  /help      show available commands"),
+      dim("  Ctrl+C     clear / Ctrl+D exit"),
+      dim("  /          commands"),
+      dim("  !          run bash command"),
+      dim("  Ctrl+O     show full startup help"),
       dim("  ?          toggle this banner")
     ]
   end
@@ -57,6 +59,13 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
   end
 
   def handle_key(%__MODULE__{} = banner, %Key{}), do: banner
+
+  defp version do
+    case :application.get_key(:octo_pi_tui, :vsn) do
+      {:ok, vsn} -> "v#{vsn}"
+      _ -> "dev"
+    end
+  end
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 end
