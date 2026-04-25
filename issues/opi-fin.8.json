@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:57Z",
+  "description": "CommandContext.t() has 6 session navigation fn-fields (new_session, fork, navigate_tree, switch_session, wait_for_idle, reload). Audit: no extensions in the current codebase actually use these -- they appear to be CLI-layer concerns. Task: verify no extensions use them, then either fold into Host behaviour or document as CLI-only and leave scoped.",
+  "id": "opi-fin.8",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 3,
+  "status": "open",
+  "title": "Phase 8: CommandContext cleanup",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:57Z"
+}
