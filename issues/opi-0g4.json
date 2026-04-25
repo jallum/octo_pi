@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "TUI keyboard handling parity with upstream pi-mono",
   "type": "epic",
-  "updated_at": "2026-04-25T12:51:52.839652Z"
+  "updated_at": "2026-04-25T14:51:32.767783Z"
 }
