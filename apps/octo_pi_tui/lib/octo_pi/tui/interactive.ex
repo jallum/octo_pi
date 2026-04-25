@@ -20,6 +20,8 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.AI.Model
   alias OctoPi.Coder
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.TUI.Autocomplete
+  alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
@@ -427,7 +429,12 @@ defmodule OctoPi.TUI.Interactive do
     state = %__MODULE__{
       session: session,
       keybindings: keybindings,
-      input: %Components.Input{width: w, height: h, theme: theme},
+      input: %Components.Input{
+        width: w,
+        height: h,
+        theme: theme,
+        autocomplete_provider: build_autocomplete_provider(loaded_resources)
+      },
       width: w,
       height: h,
       theme: theme,
@@ -494,6 +501,23 @@ defmodule OctoPi.TUI.Interactive do
 
   defp put_if_present(kw, _k, nil), do: kw
   defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
+
+  @doc false
+  @spec build_autocomplete_provider(map() | nil) :: SlashCommandProvider.t()
+  def build_autocomplete_provider(loaded_resources) do
+    template_commands =
+      case loaded_resources do
+        %{prompt_templates: templates} ->
+          Enum.map(templates, fn t ->
+            %Autocomplete.SlashCommand{name: t.name, description: "Prompt template"}
+          end)
+
+        _ ->
+          []
+      end
+
+    SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands)
+  end
 
   defp build_loaded_resources(opts) do
     case Keyword.get(opts, :resource_loader) do

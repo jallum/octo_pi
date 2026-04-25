@@ -1359,6 +1359,46 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "build_autocomplete_provider/1" do
+    alias OctoPi.TUI.Autocomplete
+    alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+
+    test "returns SlashCommandProvider with builtin commands" do
+      provider = Interactive.build_autocomplete_provider(nil)
+      assert %SlashCommandProvider{} = provider
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/")
+      labels = Enum.map(items, & &1.value)
+      assert "/help" in labels
+      assert "/clear" in labels
+      assert "/model" in labels
+    end
+
+    test "suggestions filtered by prefix" do
+      provider = Interactive.build_autocomplete_provider(nil)
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/mo")
+      assert Enum.all?(items, &String.starts_with?(&1.value, "/mo"))
+    end
+
+    test "no suggestions for non-slash input" do
+      provider = Interactive.build_autocomplete_provider(nil)
+      {:ok, items} = Autocomplete.get_suggestions(provider, "hello")
+      assert items == []
+    end
+
+    test "includes prompt templates from loaded_resources" do
+      resources = %{
+        context_files: [],
+        skills: [],
+        prompt_templates: [%{name: "my-template"}, %{name: "other"}]
+      }
+
+      provider = Interactive.build_autocomplete_provider(resources)
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/my")
+      labels = Enum.map(items, & &1.value)
+      assert "/my-template" in labels
+    end
+  end
+
   describe "handle_ui_request — blocking dialogs" do
     test "select stores pending dialog" do
       options = [%{label: "A", value: :a}, %{label: "B", value: :b}]
