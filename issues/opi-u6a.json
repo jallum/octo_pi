@@ -7,8 +7,8 @@
   "id": "opi-u6a",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Prompt composition parity: resource loader, skills, context files, templates",
   "type": "epic",
-  "updated_at": "2026-04-25T05:46:36Z"
+  "updated_at": "2026-04-25T12:05:54.875711Z"
 }
