@@ -7,14 +7,15 @@
   "blocks": [
     "opi-fin.6.5"
   ],
+  "closed_at": "2026-04-25T23:59:00Z",
   "created": "2026-04-25T21:12:38Z",
   "description": "FILES: extensions/tools.ex, test/octo_pi/coder/extensions/tools_test.exs\n\nREQUIRES: opi-fin.2.2, opi-fin.2.3\n\nTools is stateful with enabled_tools MapSet. It also uses API.bind_core for get_all_tools, get_active_tools, set_active_tools, append_entry.\n\nMIGRATION:\n1. Add 'use OctoPi.Coder.Extension'.\n2. Remove def init(api, state). Macro generates init/1.\n3. Add def mount, do: {:ok, %{enabled_tools: MapSet.new()}} -- initial state. The actual enabled tools are loaded in handle_session_start.\n4. Convert session_start, session_tree handlers to 3-arity callbacks. The enabled_tools MapSet becomes part of state, not a closed-over Agent.\n5. The /tools command handler also needs access to state -- if it reads enabled_tools, it must receive state too. If commands are registered differently from event handlers, evaluate how command handlers receive state. Commands currently receive (args, ctx) -- may need to close over state_agent if the macro doesn't handle command state threading. Document whatever approach is taken.\n\nIMPORTANT: DO NOT remove API.bind_core usage for get_all_tools, get_active_tools, set_active_tools, append_entry. That is Phase 6.\n\nTEST: tools_test.exs -- remove outer Agent.start_link for state. Keep bind_core injections for action fns.",
   "id": "opi-fin.5.4",
   "labels": [],
   "parent": "opi-fin.5",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Migrate Tools to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T23:43:17Z"
+  "updated_at": "2026-04-25T23:59:00Z"
 }
