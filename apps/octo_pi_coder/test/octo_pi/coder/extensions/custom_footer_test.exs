@@ -53,7 +53,28 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
       ext.commands["footer"].handler.("", ctx)
 
       [component] = Agent.get(footer_calls, & &1)
-      assert is_function(component, 1)
+      assert is_function(component, 2)
+    end
+
+    test "render fn produces a line list when called with width and footer_data" do
+      {:ok, footer_calls} = Agent.start_link(fn -> [] end)
+      {:ok, notify_calls} = Agent.start_link(fn -> [] end)
+      ctx = ui_ctx(footer_calls, notify_calls)
+
+      {ext, _} = ext_with_state()
+      ext.commands["footer"].handler.("", ctx)
+
+      [render_fn] = Agent.get(footer_calls, & &1)
+
+      footer_data = %{
+        get_git_branch: fn -> "main" end,
+        get_extension_statuses: fn -> %{} end,
+        on_branch_change: fn _cb -> fn -> :ok end end
+      }
+
+      lines = render_fn.(80, footer_data)
+      assert is_list(lines) and lines != []
+      assert hd(lines) =~ "main"
     end
 
     test "second call disables footer by calling set_footer with nil" do
@@ -80,7 +101,7 @@ defmodule OctoPi.Coder.Extensions.CustomFooterTest do
       ext.commands["footer"].handler.("", ctx)
 
       [last | _] = Agent.get(footer_calls, & &1)
-      assert is_function(last, 1)
+      assert is_function(last, 2)
     end
 
     test "notifies user on each toggle" do

@@ -1460,16 +1460,16 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "set_footer stores a render fn override" do
       s = %Interactive{}
-      render_fn = fn _width -> ["custom footer"] end
+      render_fn = fn _width, _footer_data -> ["custom footer"] end
       {s, :ok} = Interactive.handle_ui_request(s, {:set_footer, render_fn})
-      assert is_function(s.ui_overrides.footer, 1)
+      assert is_function(s.ui_overrides.footer, 2)
     end
 
-    test "set_footer render fn is called during render" do
+    test "set_footer render fn is called with width and footer_data during render" do
       test_pid = self()
 
-      render_fn = fn width ->
-        send(test_pid, {:rendered, width})
+      render_fn = fn width, footer_data ->
+        send(test_pid, {:rendered, width, footer_data})
         ["footer line"]
       end
 
@@ -1482,7 +1482,31 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       Interactive.render(s)
-      assert_receive {:rendered, 80}
+      assert_receive {:rendered, 80, footer_data}
+      assert is_function(footer_data.get_git_branch, 0)
+      assert is_function(footer_data.get_extension_statuses, 0)
+      assert is_function(footer_data.on_branch_change, 1)
+    end
+
+    test "footer_data.get_extension_statuses returns footer's extension_statuses" do
+      test_pid = self()
+
+      render_fn = fn _width, footer_data ->
+        send(test_pid, footer_data.get_extension_statuses.())
+        ["footer"]
+      end
+
+      s = %Interactive{
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 24,
+        footer: %Footer{extension_statuses: %{"ext-a" => "running"}},
+        ui_overrides: %{footer: render_fn}
+      }
+
+      Interactive.render(s)
+      assert_receive %{"ext-a" => "running"}
     end
 
     test "set_footer nil restores default footer rendering" do

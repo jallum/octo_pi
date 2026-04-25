@@ -732,12 +732,19 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp cursor_position(
-         %__MODULE__{input: input, width: width, height: height, footer: footer, ui_overrides: ui_overrides},
+         %__MODULE__{
+           input: input,
+           width: width,
+           height: height,
+           footer: footer,
+           ui_overrides: ui_overrides,
+           footer_data: footer_data_pid
+         },
          input_lines,
          lines
        ) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, width))
+    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, footer_data_pid, width))
     input_end = length(lines) - footer_height
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
@@ -1269,7 +1276,7 @@ defmodule OctoPi.TUI.Interactive do
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
     notification_lines = render_notification(state.notification, width)
-    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, width)
+    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
     all =
       banner_lines ++
@@ -1352,8 +1359,22 @@ defmodule OctoPi.TUI.Interactive do
   defp header_lines(render_fn, _banner, width) when is_function(render_fn, 1), do: render_fn.(width)
   defp header_lines(nil, banner, width), do: render_banner(banner, width)
 
-  defp footer_lines(render_fn, _footer, width) when is_function(render_fn, 1), do: render_fn.(width)
-  defp footer_lines(nil, footer, width), do: Footer.render(footer, width)
+  defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2) do
+    render_fn.(width, build_footer_context(footer, footer_data_pid))
+  end
+
+  defp footer_lines(nil, footer, _footer_data_pid, width), do: Footer.render(footer, width)
+
+  defp build_footer_context(footer, footer_data_pid) do
+    %{
+      get_git_branch: fn -> branch_from(footer_data_pid) end,
+      get_extension_statuses: fn -> footer.extension_statuses end,
+      on_branch_change: fn _cb -> fn -> :ok end end
+    }
+  end
+
+  defp branch_from(nil), do: nil
+  defp branch_from(pid), do: FooterData.get_git_branch(pid)
 
   defp render_resource_sections(nil, _theme, _expanded), do: []
 
