@@ -121,6 +121,66 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert [%BashExecution{status: :error, exit_code: 1}] = s.transcript
     end
 
+    test "/clear clears transcript without sending to AI" do
+      s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, transcript: [{:user, "hi"}]}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.transcript == []
+      assert s.input.value == ""
+    end
+
+    test "/clear does not call expand_prompt_fn" do
+      test_pid = self()
+
+      expand_fn = fn text ->
+        send(test_pid, {:expanded, text})
+        text
+      end
+
+      s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, expand_prompt_fn: expand_fn}
+      Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      refute_received {:expanded, _}
+    end
+
+    test "/model opens model selector" do
+      model = %OctoPi.AI.Model{
+        id: "m1",
+        name: "m1",
+        api: :fake,
+        provider: :fake,
+        base_url: "http://x",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      s = %Interactive{input: %Input{value: "/model", cursor: 6}, session: nil, models: [model], theme: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.model_selector
+      assert s.input.value == ""
+    end
+
+    test "/help sets a notification" do
+      s = %Interactive{input: %Input{value: "/help", cursor: 5}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.notification
+      assert s.input.value == ""
+    end
+
+    test "/cost shows cost notification from footer" do
+      footer = %Footer{cost: 0.042, input_tokens: 5_000, output_tokens: 1_000, context_window: 200_000}
+      s = %Interactive{input: %Input{value: "/cost", cursor: 5}, session: nil, footer: footer}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.notification
+      assert s.notification =~ "0.042"
+      assert s.input.value == ""
+    end
+
+    test "/unknown-builtin falls through to AI prompt" do
+      expand_fn = fn text -> text end
+      s = %Interactive{input: %Input{value: "/my-template", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.transcript == [{:user, "/my-template"}]
+    end
+
     test "Escape clears non-empty input" do
       s = %Interactive{input: %Input{value: "draft", cursor: 5}}
       s = Interactive.handle_event(s, {:key, %Key{key: :escape}})

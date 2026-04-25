@@ -996,17 +996,64 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  defp handle_submit(state, new_input, "/" <> command = value) do
+    cmd = String.downcase(String.trim(command))
+
+    if cmd in ~w(help clear compact cost model theme config) do
+      dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
+    else
+      do_handle_submit(state, new_input, value)
+    end
+  end
+
   defp handle_submit(state, new_input, "!" <> rest) do
     command = String.trim_leading(rest, " ")
     be = run_bash_command(command, state.theme)
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
   end
 
-  defp handle_submit(state, new_input, value) do
+  defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
+
+  defp do_handle_submit(state, new_input, value) do
     prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
     if state.session, do: OctoPi.Agent.prompt(state.session, prompt)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
+  end
+
+  defp dispatch_slash_command("clear", state) do
+    %{state | transcript: []}
+  end
+
+  defp dispatch_slash_command("model", state) do
+    current_id = state.model && state.model.id
+    ms = ModelSelector.new(state.models, state.theme, current: current_id)
+    %{state | model_selector: ms}
+  end
+
+  defp dispatch_slash_command("help", state) do
+    %{state | notification: "Commands: /clear /compact /cost /model /theme /config"}
+  end
+
+  defp dispatch_slash_command("cost", state) do
+    f = state.footer
+
+    msg =
+      "$#{Float.round(f.cost, 4)} · ↑#{Footer.format_tokens(f.input_tokens)} ↓#{Footer.format_tokens(f.output_tokens)}"
+
+    %{state | notification: msg}
+  end
+
+  defp dispatch_slash_command("compact", state) do
+    %{state | notification: "Compaction not yet implemented"}
+  end
+
+  defp dispatch_slash_command("theme", state) do
+    %{state | notification: "Theme picker not yet implemented"}
+  end
+
+  defp dispatch_slash_command("config", state) do
+    %{state | notification: "Config: use --help for startup options"}
   end
 
   defp run_bash_command(command, theme) do
