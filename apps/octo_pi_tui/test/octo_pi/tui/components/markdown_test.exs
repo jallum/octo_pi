@@ -58,6 +58,30 @@ defmodule OctoPi.TUI.Components.MarkdownTest do
       assert "First paragraph" in stripped
       assert "Second paragraph" in stripped
     end
+
+    test "long paragraph wraps to multiple lines within width" do
+      text = "You could check a site like weather.com or meteored.com for that"
+      lines = render(text, 40)
+      stripped = Enum.map(lines, &strip_ansi/1) |> Enum.reject(&(&1 == ""))
+
+      assert length(stripped) > 1, "paragraph should wrap at width 40"
+
+      for line <- stripped do
+        assert String.length(line) <= 40,
+               "line exceeds width: #{inspect(line)}"
+      end
+    end
+
+    test "paragraph wraps at word boundaries, not mid-word" do
+      text = "aaa bbb ccc ddd eee fff ggg hhh iii jjj"
+      lines = render(text, 15)
+      stripped = Enum.map(lines, &strip_ansi/1) |> Enum.reject(&(&1 == ""))
+
+      for line <- stripped do
+        refute String.match?(line, ~r/^[a-z]{1,2}\s/),
+               "line starts with a word fragment: #{inspect(line)}"
+      end
+    end
   end
 
   # ── Inline formatting ──────────────────────────────────────────

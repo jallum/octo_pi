@@ -3,7 +3,7 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.{SyntaxHighlight, Theme}
+  alias OctoPi.TUI.{SyntaxHighlight, Theme, WrapAnsi}
 
   @type t :: %__MODULE__{
           text: String.t(),
@@ -81,9 +81,10 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space([styled], next)
   end
 
-  defp render_node({"p", _, children, _}, _width, theme, next) do
+  defp render_node({"p", _, children, _}, width, theme, next) do
     text = render_inline(children, theme)
-    maybe_space([text], next)
+    lines = WrapAnsi.wrap(text, width)
+    maybe_space(lines, next)
   end
 
   defp render_node({"pre", _, [{"code", attrs, [code], _}], _}, _width, theme, next) do
