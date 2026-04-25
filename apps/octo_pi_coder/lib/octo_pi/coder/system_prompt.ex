@@ -29,8 +29,10 @@ defmodule OctoPi.Coder.SystemPrompt do
     custom_prompt = Keyword.get(opts, :custom_prompt)
     append = Keyword.get(opts, :append)
     context_files = Keyword.get(opts, :context_files, [])
+    skills = Keyword.get(opts, :skills, [])
 
     date = Date.to_iso8601(Date.utc_today())
+    tool_names = Enum.map(tools, & &1.name)
 
     body = build_body(custom_prompt, tools, extra_guidelines)
 
@@ -38,6 +40,7 @@ defmodule OctoPi.Coder.SystemPrompt do
       body,
       append_section(append),
       context_section(context_files),
+      skills_section(skills, tool_names),
       "\nCurrent date: #{date}",
       "\nCurrent working directory: #{cwd}"
     ])
@@ -119,5 +122,40 @@ defmodule OctoPi.Coder.SystemPrompt do
       end)
 
     "\n\n# Project Context\n\nProject-specific instructions and guidelines:\n\n#{body}"
+  end
+
+  defp skills_section(skills, tool_names) do
+    visible = Enum.reject(skills, & &1.disable_model_invocation)
+
+    if visible == [] or "read" not in tool_names do
+      ""
+    else
+      skill_entries = Enum.map_join(visible, "\n", &format_skill_entry/1)
+
+      "\n\nThe following skills provide specialized instructions for specific tasks.\n" <>
+        "Use the read tool to load a skill's file when the task matches its description.\n" <>
+        "When a skill file references a relative path, resolve it against the skill directory " <>
+        "(parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.\n\n" <>
+        "<available_skills>\n" <>
+        skill_entries <>
+        "\n</available_skills>"
+    end
+  end
+
+  defp format_skill_entry(skill) do
+    "  <skill>\n" <>
+      "    <name>#{xml_escape(skill.name)}</name>\n" <>
+      "    <description>#{xml_escape(skill.description)}</description>\n" <>
+      "    <location>#{xml_escape(skill.file_path)}</location>\n" <>
+      "  </skill>"
+  end
+
+  defp xml_escape(str) do
+    str
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&apos;")
   end
 end

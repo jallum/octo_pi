@@ -189,4 +189,103 @@ defmodule OctoPi.Coder.SystemPromptTest do
       assert prompt =~ "Prefer grep/find/ls tools over bash"
     end
   end
+
+  describe "render/1 — skills section" do
+    defp skill(name, desc, opts \\ []) do
+      %{
+        name: name,
+        description: desc,
+        file_path: "/skills/#{name}/SKILL.md",
+        disable_model_invocation: Keyword.get(opts, :disable_model_invocation, false)
+      }
+    end
+
+    test "no skills opt → no skills section" do
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")])
+      refute prompt =~ "<available_skills>"
+    end
+
+    test "empty skills list → no skills section" do
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [])
+      refute prompt =~ "<available_skills>"
+    end
+
+    test "single skill produces well-formed XML section" do
+      s = skill("my-skill", "Does something useful")
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [s])
+      assert prompt =~ "<available_skills>"
+      assert prompt =~ "<skill>"
+      assert prompt =~ "<name>my-skill</name>"
+      assert prompt =~ "<description>Does something useful</description>"
+      assert prompt =~ "<location>/skills/my-skill/SKILL.md</location>"
+      assert prompt =~ "</skill>"
+      assert prompt =~ "</available_skills>"
+    end
+
+    test "skills section intro text is present" do
+      s = skill("my-skill", "Desc")
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [s])
+      assert prompt =~ "The following skills provide specialized instructions"
+      assert prompt =~ "Use the read tool to load a skill"
+    end
+
+    test "skill with disable_model_invocation: true is excluded" do
+      hidden = skill("hidden", "Secret skill", disable_model_invocation: true)
+      visible = skill("visible", "Visible skill")
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [hidden, visible])
+      refute prompt =~ "hidden"
+      assert prompt =~ "visible"
+    end
+
+    test "all skills excluded → no section" do
+      hidden = skill("hidden", "Secret", disable_model_invocation: true)
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [hidden])
+      refute prompt =~ "<available_skills>"
+    end
+
+    test "no read tool → skills section omitted" do
+      s = skill("my-skill", "Desc")
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("bash")], skills: [s])
+      refute prompt =~ "<available_skills>"
+    end
+
+    test "multiple skills all appear in section" do
+      skills = [skill("a-skill", "First"), skill("b-skill", "Second")]
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: skills)
+      assert prompt =~ "<name>a-skill</name>"
+      assert prompt =~ "<name>b-skill</name>"
+    end
+
+    test "XML entities escaped in name, description, and location" do
+      s = %{
+        name: "a&b",
+        description: "Has <tags> and \"quotes\" and 'apostrophes'",
+        file_path: "/path/with/>/file.md",
+        disable_model_invocation: false
+      }
+
+      prompt = SystemPrompt.render(cwd: "/tmp", tools: [tool("read")], skills: [s])
+      assert prompt =~ "<name>a&amp;b</name>"
+      assert prompt =~ "Has &lt;tags&gt; and &quot;quotes&quot; and &apos;apostrophes&apos;"
+      assert prompt =~ "&gt;/file.md"
+    end
+
+    test "skills section appears after context section and before date/cwd" do
+      s = skill("my-skill", "Desc")
+
+      prompt =
+        SystemPrompt.render(
+          cwd: "/tmp",
+          tools: [tool("read")],
+          skills: [s],
+          context_files: [%{path: "/CLAUDE.md", content: "ctx"}]
+        )
+
+      skills_pos = prompt |> :binary.match("<available_skills>") |> elem(0)
+      cwd_pos = prompt |> :binary.match("Current working directory") |> elem(0)
+      ctx_pos = prompt |> :binary.match("# Project Context") |> elem(0)
+      assert ctx_pos < skills_pos
+      assert skills_pos < cwd_pos
+    end
+  end
 end
