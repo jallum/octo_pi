@@ -1192,7 +1192,6 @@ defmodule OctoPi.TUI.Interactive do
   defp next_thinking_level(:high), do: :off
   defp next_thinking_level(_), do: :low
 
-  defp thinking_level_label(:off), do: nil
   defp thinking_level_label(level), do: to_string(level)
 
   defp handle_dequeue_key(state, ov, %Key{key: :up}) do

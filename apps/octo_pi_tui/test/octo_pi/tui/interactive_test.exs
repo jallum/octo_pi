@@ -166,10 +166,17 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2.footer.thinking_level == "low"
     end
 
-    test "footer thinking_level is nil when off" do
+    test "footer thinking_level is 'off' when cycling back to off" do
       s = %Interactive{thinking_level: :high, footer: %Footer{}}
       s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
-      assert s2.footer.thinking_level == nil
+      assert s2.footer.thinking_level == "off"
+    end
+
+    test "footer thinking_level rendered in stats line after cycle" do
+      s = %Interactive{thinking_level: :off, footer: %Footer{context_window: 200_000}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      [_, stats | _] = Footer.render(s2.footer, 80)
+      assert String.replace(stats, ~r/\e\[[0-9;]*m/, "") =~ "low"
     end
 
     test "sets notification with new level" do
