@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:56Z",
+  "description": "Internal performance change. After load_all/1, populate an ETS :bag table keyed by event type instead of scanning Extension.t() list on every dispatch. Zero changes to extension authors or their tests.",
+  "id": "opi-fin.3",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 2,
+  "status": "open",
+  "title": "Phase 3: ETS dispatch table",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:56Z"
+}
