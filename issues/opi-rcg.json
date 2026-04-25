@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:31:49Z",
+  "description": "The coder extension examples (waves 1-4, opi-hix) each document divergences from the upstream TypeScript harness in their moduledocs. These represent real holes in the extension API / Context / UIContext that prevent full-fidelity ports of the upstream examples.\n\nEach child ticket captures one divergence: the upstream capability, the affected example extension(s), the current workaround, and what needs to be implemented to close the gap.\n\nSource: moduledocs in apps/octo_pi_coder/lib/octo_pi/coder/extensions/*.ex and upstream examples in tmp/pi-mono/packages/coding-agent/examples/extensions/.",
+  "id": "opi-rcg",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Extension API gaps surfaced by coder extension examples",
+  "type": "epic",
+  "updated_at": "2026-04-25T17:31:49Z"
+}
