@@ -19,7 +19,7 @@ defmodule OctoPi.TUI.Renderer do
 
   use GenServer
 
-  @clear_screen "\e[2J"
+  @clear_screen "\e[2J\e[3J"
   @cursor_home "\e[H"
   @erase_below "\e[J"
   @sgr_reset_and_clear "\e[m\e[K"
@@ -54,14 +54,30 @@ defmodule OctoPi.TUI.Renderer do
   @doc """
   Pure function used by the diff path and exposed for unit tests.
   Returns `{first_changed_index, last_changed_index}`. When nothing
-  changed, `first > last` (a convention callers can pattern-match
-  on).
+  changed, returns `{-1, -1}`. Compares index-by-index using
+  `max(length(new), length(old))`, treating out-of-bounds as `""`.
   """
   @spec find_diff_range([binary()], [binary()]) :: {integer(), integer()}
   def find_diff_range(new_lines, old_lines) do
-    first = find_first_diff(new_lines, old_lines, 0)
-    last = find_last_diff(new_lines, old_lines)
-    {first, last}
+    max_len = max(length(new_lines), length(old_lines))
+    find_diff_range(new_lines, old_lines, 0, max_len, -1, -1)
+  end
+
+  defp find_diff_range(_new, _old, i, max_len, first, last) when i >= max_len,
+    do: {first, last}
+
+  defp find_diff_range(new, old, i, max_len, first, last) do
+    new_line = Enum.at(new, i, "")
+    old_line = Enum.at(old, i, "")
+
+    {first, last} =
+      if new_line != old_line do
+        {if(first == -1, do: i, else: first), i}
+      else
+        {first, last}
+      end
+
+    find_diff_range(new, old, i + 1, max_len, first, last)
   end
 
   # --- GenServer callbacks ---
@@ -125,7 +141,7 @@ defmodule OctoPi.TUI.Renderer do
 
   defp diff(lines, cursor_seq, state) do
     case find_diff_range(lines, state.previous) do
-      {first, last} when first > last ->
+      {-1, -1} ->
         if cursor_seq == "" do
           {"", %{state | previous: lines}}
         else
@@ -145,22 +161,6 @@ defmodule OctoPi.TUI.Renderer do
     end
   end
 
-  # Scan forward until the two lists disagree.
-  defp find_first_diff([same | a_rest], [same | b_rest], idx),
-    do: find_first_diff(a_rest, b_rest, idx + 1)
-
-  defp find_first_diff(_, _, idx), do: idx
-
-  # Scan from the tail.
-  defp find_last_diff(new_lines, old_lines) do
-    len = length(new_lines)
-    find_last_diff_rev(Enum.reverse(new_lines), Enum.reverse(old_lines), len - 1)
-  end
-
-  defp find_last_diff_rev([same | a_rest], [same | b_rest], idx),
-    do: find_last_diff_rev(a_rest, b_rest, idx - 1)
-
-  defp find_last_diff_rev(_, _, idx), do: idx
 
   # --- output helpers ---
 

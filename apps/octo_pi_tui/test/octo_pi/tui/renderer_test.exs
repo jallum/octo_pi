@@ -241,9 +241,16 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   describe "find_diff_range/2" do
-    test "no changes → {first > last}" do
-      {first, last} = Renderer.find_diff_range(["a", "b", "c"], ["a", "b", "c"])
-      assert first > last
+    test "no changes → {-1, -1}" do
+      assert {-1, -1} = Renderer.find_diff_range(["a", "b", "c"], ["a", "b", "c"])
+    end
+
+    test "new lines appended → repaints shifted region" do
+      assert {3, 5} =
+               Renderer.find_diff_range(
+                 ["a", "b", "c", "d", "footer_hr", "footer_stats"],
+                 ["a", "b", "c", "footer_hr", "footer_stats"]
+               )
     end
 
     test "single change → first == last" do

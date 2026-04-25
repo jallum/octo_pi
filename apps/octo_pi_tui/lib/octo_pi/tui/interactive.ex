@@ -52,7 +52,8 @@ defmodule OctoPi.TUI.Interactive do
           banner: Components.WelcomeBanner.t() | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
-          extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}]
+          extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
+          debug_render_log: IO.device() | nil
         }
 
   defstruct session: nil,
@@ -71,7 +72,8 @@ defmodule OctoPi.TUI.Interactive do
             notification: nil,
             ui_overrides: %{},
             dialog: nil,
-            extension_shortcuts: []
+            extension_shortcuts: [],
+            debug_render_log: nil
 
   @doc """
   Build a `UIContext` whose functions send messages to `interactive_pid`.
@@ -305,6 +307,13 @@ defmodule OctoPi.TUI.Interactive do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
     model = Keyword.fetch!(opts, :model)
 
+    debug_render_log =
+      if Keyword.get(opts, :debug_render, false) do
+        path = Path.join(cwd, "debug_render.log")
+        {:ok, fd} = File.open(path, [:write, :utf8])
+        fd
+      end
+
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
@@ -333,13 +342,15 @@ defmodule OctoPi.TUI.Interactive do
       theme: theme,
       banner: Components.WelcomeBanner.new(theme, model: model.id),
       footer: footer,
-      footer_data: footer_data
+      footer_data: footer_data,
+      debug_render_log: debug_render_log
     }
 
     state = render_frame(state, renderer, terminal)
 
     loop(state, fsm, renderer, terminal)
 
+    if debug_render_log, do: File.close(debug_render_log)
     shutdown(terminal, fsm, renderer, footer_data)
     :ok
   end
@@ -451,11 +462,32 @@ defmodule OctoPi.TUI.Interactive do
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
     lines = render(state, input_lines)
+
+    if state.debug_render_log, do: log_overwide(state.debug_render_log, lines, state.width)
+
     cursor_seq = cursor_position(state, input_lines, lines)
     {:ok, bytes} = Renderer.render(renderer, lines, cursor_seq)
 
     if bytes != "", do: Terminal.write(terminal, bytes)
     state
+  end
+
+  defp log_overwide(fd, lines, width) do
+    overwide =
+      lines
+      |> Enum.with_index()
+      |> Enum.filter(fn {line, _idx} -> WrapAnsi.visible_width(line) > width end)
+
+    if overwide != [] do
+      ts = :erlang.system_time(:millisecond)
+      IO.write(fd, "--- frame #{ts} width=#{width} ---\n")
+
+      Enum.each(overwide, fn {line, idx} ->
+        vw = WrapAnsi.visible_width(line)
+        stripped = String.replace(line, ~r/\e\[[0-9;]*m/, "")
+        IO.write(fd, "  [#{idx}] vw=#{vw} #{inspect(String.slice(stripped, 0, 120))}\n")
+      end)
+    end
   end
 
   defp cursor_position(

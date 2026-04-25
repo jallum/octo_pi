@@ -4,7 +4,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.Components.Markdown
-  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.{Theme, WrapAnsi}
 
   @osc133_zone_start "\e]133;A\a"
   @osc133_zone_end "\e]133;B\a"
@@ -96,25 +96,30 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     end
   end
 
-  defp render_block({:thinking, text}, theme, msg, _width, has_after, _more) do
+  defp render_block({:thinking, text}, theme, msg, width, has_after, _more) do
     text = String.trim(text)
 
     if text == "" do
       []
     else
-      lines = render_thinking(text, theme, msg)
+      lines = render_thinking(text, theme, msg, width)
       if has_after, do: lines ++ [""], else: lines
     end
   end
 
-  defp render_thinking(_text, theme, %{hide_thinking: true} = msg) do
+  defp render_thinking(_text, theme, %{hide_thinking: true} = msg, _width) do
     label = msg.hidden_thinking_label
     [" " <> Theme.fg(theme, :thinking_text, Theme.italic(label))]
   end
 
-  defp render_thinking(text, theme, _msg) do
-    styled = Theme.fg(theme, :thinking_text, Theme.italic(text))
-    [" " <> styled]
+  defp render_thinking(text, theme, _msg, width) do
+    content_width = max(1, width - 1)
+
+    text
+    |> WrapAnsi.wrap(content_width)
+    |> Enum.map(fn line ->
+      " " <> Theme.fg(theme, :thinking_text, Theme.italic(line))
+    end)
   end
 
   defp render_status(%{stop_reason: nil}, _has_visible), do: []
