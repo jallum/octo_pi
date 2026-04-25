@@ -16,8 +16,8 @@
   "labels": [],
   "parent": "opi-8ee",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Load extensions at startup — discover, init, bind UIContext",
   "type": "task",
-  "updated_at": "2026-04-25T21:11:19.196967Z"
+  "updated_at": "2026-04-25T21:11:32.261491Z"
 }
