@@ -95,7 +95,8 @@ defmodule OctoPi.TUI.Components.ContainerTest do
     test "passes width to children" do
       c = Container.new([%Text{content: String.duplicate("x", 100)}])
       [line] = Container.render(c, 10)
-      assert String.length(line) == 10
+      visible = String.replace(line, ~r/\e\[[0-9;]*m/, "")
+      assert String.length(visible) == 10
     end
   end
 

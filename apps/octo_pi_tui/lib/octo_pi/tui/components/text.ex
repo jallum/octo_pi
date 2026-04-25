@@ -11,6 +11,8 @@ defmodule OctoPi.TUI.Components.Text do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.WrapAnsi
+
   @enforce_keys [:content]
   defstruct content: ""
 
@@ -24,11 +26,11 @@ defmodule OctoPi.TUI.Components.Text do
     |> Enum.map(&truncate(&1, width))
   end
 
-  # Keep lines that already fit as-is (fast path).
-  defp truncate(line, width) when byte_size(line) <= width, do: line
-
-  # Grapheme-based slice for everything else. `String.slice/3`
-  # handles invalid UTF-8 by falling back to bytes, so we don't
-  # need a separate head for that case.
-  defp truncate(line, width), do: String.slice(line, 0, width)
+  defp truncate(line, width) do
+    if WrapAnsi.visible_width(line) <= width do
+      line
+    else
+      WrapAnsi.truncate_to_width(line, width, "")
+    end
+  end
 end
