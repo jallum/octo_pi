@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Escape exits TUI during active generation instead of aborting",
   "type": "bug",
-  "updated_at": "2026-04-25T17:33:30.479049Z"
+  "updated_at": "2026-04-25T17:37:23.314259Z"
 }
