@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Keybindings: user config loading from ~/.octo_pi/keybindings.json",
   "type": "task",
-  "updated_at": "2026-04-25T14:25:53.020479Z"
+  "updated_at": "2026-04-25T14:40:20.808569Z"
 }
