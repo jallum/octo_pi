@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:31:56Z",
+  "description": "Affected extension: auto-commit-on-exit.ex\nUpstream: ctx.sessionManager.getEntries() returns all entries in the session transcript. Used by auto-commit-on-exit.ts to walk backwards through entries, find the last assistant message, and derive a meaningful commit message from its text content.\nCurrent workaround: commit message is derived from ctx.cwd (directory name) instead.\nWhat's needed: Context.t() must expose session entries (or a lazy accessor) so extensions can read the transcript. Likely a get_entries fn field on Context, or a new entries field populated by Interactive/AgentSession when dispatching events.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/auto-commit-on-exit.ts (ctx.sessionManager.getEntries())",
+  "id": "opi-rcg.1",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.sessionManager.getEntries() — expose full session transcript to Context",
+  "type": "task",
+  "updated_at": "2026-04-25T17:31:56Z"
+}
