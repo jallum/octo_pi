@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Terminal: drainInput on exit to prevent key leakage",
   "type": "task",
-  "updated_at": "2026-04-25T13:36:27.143191Z"
+  "updated_at": "2026-04-25T13:43:19.245687Z"
 }
