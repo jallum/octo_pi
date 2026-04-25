@@ -714,6 +714,7 @@ defmodule OctoPi.TUI.Interactive do
   # --- keybindings dispatch helpers ---
 
   @app_action_priority ~w(
+    app.interrupt
     app.clear
     app.exit
     app.suspend
@@ -835,6 +836,18 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp handle_event_after_app(state, key), do: handle_event_key(state, key)
+
+  defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}, input: %{value: v}} = state, _key)
+       when v != "" do
+    %{state | input: %{state.input | value: "", cursor: 0}}
+  end
+
+  defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
+    if state.session, do: OctoPi.Agent.abort(state.session)
+    state
+  end
+
+  defp dispatch_app_action("app.interrupt", state, key), do: handle_event_key(state, key)
 
   defp dispatch_app_action("app.clear", %{input: %{value: v}} = state, _key) when v != "",
     do: %{state | input: %{state.input | value: "", cursor: 0}}

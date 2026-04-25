@@ -135,6 +135,19 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.exit
     end
 
+    test "Escape with active loader does not exit (aborts generation)" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}, loader: %Loader{}, session: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      refute s2.exit
+    end
+
+    test "Escape with active loader and non-empty input clears input, does not exit" do
+      s = %Interactive{input: %Input{value: "draft", cursor: 5}, loader: %Loader{}, session: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      refute s2.exit
+      assert s2.input.value == ""
+    end
+
     test "paste markers buffer chars and insert atomically" do
       s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
       s = Interactive.handle_event(s, :paste_start)
