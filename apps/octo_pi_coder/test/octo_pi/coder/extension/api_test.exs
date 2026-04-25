@@ -116,6 +116,16 @@ defmodule OctoPi.Coder.Extension.APITest do
       api = API.new("x")
       assert_raise RuntimeError, ~r/not bound/, fn -> api.exec.("tool", %{}) end
     end
+
+    test "events.emit stub raises before bind_core" do
+      api = API.new("x")
+      assert_raise RuntimeError, ~r/not bound/, fn -> api.events.emit.("ch", %{}) end
+    end
+
+    test "events.on stub raises before bind_core" do
+      api = API.new("x")
+      assert_raise RuntimeError, ~r/not bound/, fn -> api.events.on.("ch", fn _ -> nil end) end
+    end
   end
 
   describe "bind_core/2" do
@@ -164,6 +174,26 @@ defmodule OctoPi.Coder.Extension.APITest do
       assert :executed == bound.exec.("bash", %{command: "ls"})
       assert [:tool_a] == bound.get_all_tools.()
       assert [:cmd_a] == bound.get_commands.()
+    end
+  end
+
+  describe "bind_core/2 events" do
+    test "binds events map from actions" do
+      api = API.new("x")
+
+      events = %{
+        emit: fn _ch, _data -> :emitted end,
+        on: fn _ch, _handler -> fn -> :off end end
+      }
+
+      bound = API.bind_core(api, %{events: events})
+      assert :emitted == bound.events.emit.("ch", %{})
+    end
+
+    test "leaves events stub when actions has no events key" do
+      api = API.new("x")
+      bound = API.bind_core(api, %{})
+      assert_raise RuntimeError, ~r/not bound/, fn -> bound.events.emit.("ch", %{}) end
     end
   end
 

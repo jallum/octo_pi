@@ -1,54 +1,55 @@
 defmodule OctoPi.Coder.Extensions.EventBusDemoTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.EventBus
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extensions.EventBusDemo
 
   setup do
     {:ok, bus} = start_supervised(EventBus)
-    %{bus: bus}
+
+    events = %{
+      emit: fn ch, data -> EventBus.emit(bus, ch, data) end,
+      on: fn ch, handler -> EventBus.on(bus, ch, handler) end
+    }
+
+    %{bus: bus, events: events}
   end
 
-  describe "init/2" do
-    test "registers a session_start handler", %{bus: bus} do
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
+  defp factory(events) do
+    fn api -> api |> API.bind_core(%{events: events}) |> EventBusDemo.init() end
+  end
 
+  describe "init/1" do
+    test "registers a session_start handler", %{events: events} do
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       assert Map.has_key?(ext.handlers, :session_start)
       assert length(ext.handlers[:session_start]) == 1
     end
 
-    test "registers an 'emit' command", %{bus: bus} do
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+    test "registers an 'emit' command", %{events: events} do
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       assert Map.has_key?(ext.commands, "emit")
     end
 
-    test "'emit' command has the expected description", %{bus: bus} do
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+    test "'emit' command has the expected description", %{events: events} do
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       assert ext.commands["emit"].description =~ "Emit"
     end
 
-    test "registers no tools", %{bus: bus} do
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+    test "registers no tools", %{events: events} do
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       assert ext.tools == %{}
     end
   end
 
   describe "session_start handler" do
-    test "emits a notification event on the bus when session starts", %{bus: bus} do
+    test "emits a notification event on the bus when session starts", %{bus: bus, events: events} do
       test_pid = self()
       EventBus.on(bus, "my:notification", fn data -> send(test_pid, {:notification, data}) end)
 
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       handler = hd(ext.handlers[:session_start])
       handler.(%{type: :session_start, reason: :startup}, %{cwd: "/tmp"})
 
@@ -59,13 +60,11 @@ defmodule OctoPi.Coder.Extensions.EventBusDemoTest do
   end
 
   describe "/emit command handler" do
-    test "emits a notification with the given message", %{bus: bus} do
+    test "emits a notification with the given message", %{bus: bus, events: events} do
       test_pid = self()
       EventBus.on(bus, "my:notification", fn data -> send(test_pid, {:notification, data}) end)
 
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       ext.commands["emit"].handler.("hello world", nil)
 
       assert_receive {:notification, data}
@@ -73,26 +72,22 @@ defmodule OctoPi.Coder.Extensions.EventBusDemoTest do
       assert data.from == "/emit command"
     end
 
-    test "defaults to 'hello' when args are empty", %{bus: bus} do
+    test "defaults to 'hello' when args are empty", %{bus: bus, events: events} do
       test_pid = self()
       EventBus.on(bus, "my:notification", fn data -> send(test_pid, {:notification, data}) end)
 
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       ext.commands["emit"].handler.("", nil)
 
       assert_receive {:notification, data}
       assert data.message == "hello"
     end
 
-    test "trims whitespace from the message arg", %{bus: bus} do
+    test "trims whitespace from the message arg", %{bus: bus, events: events} do
       test_pid = self()
       EventBus.on(bus, "my:notification", fn data -> send(test_pid, {:notification, data}) end)
 
-      factory = fn api -> EventBusDemo.init(api, bus) end
-      {:ok, ext} = Loader.load_from_factory("event-bus", factory)
-
+      {:ok, ext} = Loader.load_from_factory("event-bus", factory(events))
       ext.commands["emit"].handler.("  hi  ", nil)
 
       assert_receive {:notification, data}

@@ -1,38 +1,43 @@
 defmodule OctoPi.Coder.Extensions.EventBusDemo do
   @moduledoc """
-  Inter-extension event bus example. Demonstrates OctoPi.Coder.Extension.EventBus
-  for pub/sub messaging between extensions. Ported from
+  Inter-extension event bus example. Demonstrates `api.events` for pub/sub
+  messaging between extensions. Ported from
   examples/extensions/event-bus.ts.
 
-  Divergence: upstream uses `pi.events` (an EventEmitter built into the API).
-  Elixir uses a separate `EventBus` GenServer. The factory must capture a bus
-  pid and pass it to `init/2`:
+  The session wires a session-scoped `EventBus` into the API before calling
+  `init/1` via `bind_core`:
 
       {:ok, bus} = EventBus.start_link([])
+      events = %{
+        emit: fn ch, data -> EventBus.emit(bus, ch, data) end,
+        on: fn ch, handler -> EventBus.on(bus, ch, handler) end
+      }
       {:ok, ext} = Loader.load_from_factory("event-bus", fn api ->
-        EventBusDemo.init(api, bus)
+        api |> API.bind_core(%{events: events}) |> EventBusDemo.init()
       end)
   """
 
   alias OctoPi.Coder.Extension.API
-  alias OctoPi.Coder.Extension.EventBus
 
-  @spec init(API.t(), EventBus.server()) :: {:ok, API.t()}
-  def init(api, bus) do
-    {:ok, api} = API.on(api, :session_start, fn _event, _ctx -> on_session_start(bus) end)
+  @spec init(API.t()) :: {:ok, API.t()}
+  def init(api) do
+    events = api.events
+
+    {:ok, api} =
+      API.on(api, :session_start, fn _event, _ctx -> on_session_start(events) end)
 
     API.register_command(api, "emit", %{
       description: "Emit my:notification event (usage: /emit message)",
-      handler: fn args, _ctx -> emit_notification(bus, args) end
+      handler: fn args, _ctx -> emit_notification(events, args) end
     })
   end
 
-  defp on_session_start(bus) do
-    EventBus.emit(bus, "my:notification", %{message: "Session started", from: "event-bus-demo"})
+  defp on_session_start(events) do
+    events.emit.("my:notification", %{message: "Session started", from: "event-bus-demo"})
   end
 
-  defp emit_notification(bus, args) do
+  defp emit_notification(events, args) do
     message = if String.trim(args) == "", do: "hello", else: String.trim(args)
-    EventBus.emit(bus, "my:notification", %{message: message, from: "/emit command"})
+    events.emit.("my:notification", %{message: message, from: "/emit command"})
   end
 end

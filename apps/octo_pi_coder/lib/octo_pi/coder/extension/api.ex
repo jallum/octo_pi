@@ -5,11 +5,17 @@ defmodule OctoPi.Coder.Extension.API do
   alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.ProviderConfig
 
+  @type events :: %{
+          emit: (String.t(), term() -> :ok),
+          on: (String.t(), (term() -> term()) -> (-> :ok))
+        }
+
   @type t :: %__MODULE__{
           extension_id: String.t(),
           registered_handlers: [{Event.event_type(), Extension.handler_fn()}],
           registered_tools: [map()],
           registered_commands: [{String.t(), map()}],
+          events: events(),
           send_message: (String.t() -> :ok),
           send_user_message: (String.t() -> :ok),
           append_entry: (map() -> :ok),
@@ -68,7 +74,8 @@ defmodule OctoPi.Coder.Extension.API do
               registered_flags: [],
               registered_shortcuts: [],
               pending_providers: [],
-              bound?: false
+              bound?: false,
+              events: nil
             ] ++ Enum.map(@action_fields, &{&1, nil})
 
   @spec new(String.t()) :: t()
@@ -77,8 +84,14 @@ defmodule OctoPi.Coder.Extension.API do
     zero_stubs = Map.new(@zero_arity_actions, fn f -> {f, stub(f, 0)} end)
     two_stubs = Map.new(@two_arity_actions, fn f -> {f, stub(f, 2)} end)
 
-    attrs = one_stubs |> Map.merge(zero_stubs) |> Map.merge(two_stubs)
-    struct!(__MODULE__, Map.put(attrs, :extension_id, extension_id))
+    attrs =
+      one_stubs
+      |> Map.merge(zero_stubs)
+      |> Map.merge(two_stubs)
+      |> Map.put(:extension_id, extension_id)
+      |> Map.put(:events, events_stub())
+
+    struct!(__MODULE__, attrs)
   end
 
   @spec on(t(), Event.event_type(), Extension.handler_fn()) :: {:ok, t()} | {:error, String.t()}
@@ -177,6 +190,12 @@ defmodule OctoPi.Coder.Extension.API do
         end
       end)
 
+    api =
+      case Map.get(actions, :events) do
+        nil -> api
+        events -> %{api | events: events}
+      end
+
     %{api | bound?: true}
   end
 
@@ -185,4 +204,11 @@ defmodule OctoPi.Coder.Extension.API do
   defp stub(field, 1), do: fn _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
 
   defp stub(field, 2), do: fn _, _ -> raise RuntimeError, "#{field} not bound — call bind_core first" end
+
+  defp events_stub do
+    %{
+      emit: fn _, _ -> raise RuntimeError, "events not bound — call bind_core first" end,
+      on: fn _, _ -> raise RuntimeError, "events not bound — call bind_core first" end
+    }
+  end
 end
