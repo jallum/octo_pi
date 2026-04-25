@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:15:35.895466Z",
+  "description": "handle_submit/3 in interactive.ex sends all input to OctoPi.Agent.prompt/2 via expand_prompt_fn (which only expands custom prompt templates, not built-in commands). There is no dispatch for /help, /clear, /compact, /cost, /model, /theme, /config.\\n\\nUpstream pi intercepts these before sending to the LLM and performs local actions (clear transcript, show cost summary, open model picker, etc.).\\n\\nNeeds: prefix check in handle_submit for '/' inputs — match against builtin_commands() and route to local handlers before falling through to prompt expansion / AI.",
+  "id": "opi-7xj.8",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Built-in slash commands not handled — /help /clear /model etc. sent to AI",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:15:35.895466Z"
+}
