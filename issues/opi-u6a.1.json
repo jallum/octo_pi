@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-u6a.6"
+  ],
   "created": "2026-04-25T05:46:49Z",
   "description": "Port upstream resource-loader.ts getAgentsFiles() to Elixir.\n\nUpstream behavior (agent-session.ts:913, resource-loader.ts):\n- Walk from cwd upward to filesystem root looking for CLAUDE.md, then AGENTS.md\n- First match per directory wins (CLAUDE.md preferred over AGENTS.md)\n- Also load global ~/.pi/CLAUDE.md (or ~/.pi/AGENTS.md) if it exists\n- Return list of {path, content} maps injected as context_files into system prompt\n- Config dir name is \".pi\"\n\nImplementation:\n- New module: OctoPi.Coder.ResourceLoader.ContextFiles\n- walk_for_context_file/1 — walk dirs from cwd upward, return first CLAUDE.md/AGENTS.md found per level\n- load_global/0 — load ~/.pi/CLAUDE.md or ~/.pi/AGENTS.md\n- load_all/1 — combine project chain + global, dedup by path\n- Returns [{path: string, content: string}] matching SystemPrompt.render context_files format\n\nTests must cover:\n- cwd with CLAUDE.md present\n- ancestor directory has CLAUDE.md (no local)\n- AGENTS.md fallback when CLAUDE.md absent\n- Global file loaded alongside local chain\n- No files present → empty list\n- Dedup (same file path not returned twice)\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/resource-loader.ts getAgentsFiles()",
   "id": "opi-u6a.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Context file discovery: CLAUDE.md/AGENTS.md upward walk",
   "type": "task",
-  "updated_at": "2026-04-25T05:46:49Z"
+  "updated_at": "2026-04-25T05:47:59Z"
 }

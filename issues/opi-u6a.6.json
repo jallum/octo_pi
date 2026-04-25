@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-u6a.1"
+  ],
   "blocks": [],
   "created": "2026-04-25T05:47:53Z",
   "description": "Wire all prompt composition sources (opi-u6a.1–5) into the session bootstrap.\n\nUpstream integration point (agent-session.ts _rebuildSystemPrompt):\n  const loadedContextFiles = resourceLoader.getAgentsFiles().agentsFiles;\n  const loadedSkills = resourceLoader.getSkills().skills;\n  const loaderSystemPrompt = resourceLoader.getSystemPrompt();   // nil = use default\n  const appendParts = resourceLoader.getAppendSystemPrompt();    // []\n  const appendSystemPrompt = parts.length \u003e 0 ? parts.join(\"\\n\\n\") : undefined;\n\n  buildSystemPrompt({ cwd, skills, contextFiles, customPrompt, appendSystemPrompt, ... })\n\nImplementation:\n- New module: OctoPi.Coder.ResourceLoader\n- Struct with: cwd, context_files, system_prompt, append_system_prompt, skills, prompt_templates\n- load/1 — runs all sub-loaders and returns populated struct\n- Wire into OctoPi.Coder.Coder.session_opts/1 (or wherever sessions are created)\n- Wire into CLI interactive mode + print mode\n- Add context_files, skills, custom_prompt, append opts to session creation in cli.ex\n\nTests (integration):\n- ResourceLoader.load with real temp filesystem showing all sources combined\n- Context files from ancestor\n- Skills from project dir\n- System prompt file takes effect\n- Append prompt file appended\n- All combined into correct SystemPrompt.render/1 call\n\nDepends on: opi-u6a.1, opi-u6a.2, opi-u6a.3, opi-u6a.4, opi-u6a.5",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Resource loader: integrate all prompt composition sources into session",
   "type": "task",
-  "updated_at": "2026-04-25T05:47:53Z"
+  "updated_at": "2026-04-25T05:47:59Z"
 }
