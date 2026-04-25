@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:10:56Z",
+  "description": "Two correctness bugs in Dispatcher where Elixir semantics diverge from upstream. Both are internal changes -- no extension author API changes, no example extension changes. Only dispatcher.ex and dispatcher_test.exs are affected.",
+  "id": "opi-fin.1",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Phase 1: Fix dispatch semantics",
+  "type": "task",
+  "updated_at": "2026-04-25T21:10:56Z"
+}
