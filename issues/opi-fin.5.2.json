@@ -4,7 +4,9 @@
     "opi-fin.2.2",
     "opi-fin.2.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.7.2"
+  ],
   "created": "2026-04-25T21:12:38Z",
   "description": "FILES: extensions/custom_footer.ex, test/octo_pi/coder/extensions/custom_footer_test.exs\n\nREQUIRES: opi-fin.2.2, opi-fin.2.3\n\nSame migration pattern as opi-fin.5.1 (StatusLine). Read custom_footer.ex to identify the state shape, handler names, and Agent usage. Apply the same 4-step transformation: use macro, remove init/2, add mount/0, convert handlers to public 3-arity callbacks with state threading.\n\nDO NOT change any ctx.ui fn-field calls -- Phase 7 handles those.\nDO NOT change any bind_core usage if present -- Phase 6 handles that.\n\nTEST: Remove outer Agent setup from custom_footer_test.exs. Use \u0026CustomFooter.init/1 as factory.",
   "id": "opi-fin.5.2",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "Migrate CustomFooter to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:13Z"
+  "updated_at": "2026-04-25T21:14:26Z"
 }
