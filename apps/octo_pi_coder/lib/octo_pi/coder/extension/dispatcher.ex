@@ -7,7 +7,34 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
   require Logger
 
+  @doc """
+  Emit an `:input` event using transform/handled/continue chaining.
+
+  Each handler receives the current input state `%{type: :input, text:,
+  images:, source:, action:}`. Return values:
+
+    * `%{action: :transform, text:, images?: ...}` — updates text and
+      optionally images; the updated state is passed to the next handler.
+    * `%{action: :handled}` — short-circuits; no further handlers run.
+    * Anything else (`:continue`, `nil`, raise) — state is unchanged.
+
+  Returns the final state map.
+  """
+  @spec emit_input([Extension.t()], String.t(), [map()] | nil, atom(), Context.t()) :: map()
+  def emit_input(extensions, text, images, source, ctx) do
+    initial = %{type: :input, text: text, images: images, source: source, action: :continue}
+
+    Enum.reduce_while(all_handlers(extensions, :input), initial, fn {handler, ext}, state ->
+      result = safe_call(ext, :input, fn -> handler.(state, ctx) end)
+      apply_input_result(result, state)
+    end)
+  end
+
   @spec emit([Extension.t()], Event.t(), Context.t()) :: term()
+  def emit(extensions, %{type: :input, text: text, images: images, source: source}, ctx) do
+    emit_input(extensions, text, images, source, ctx)
+  end
+
   def emit(extensions, %{type: type} = event, ctx) do
     pattern = Event.pattern(type)
     handler_count = count_handlers(extensions, type)
@@ -215,6 +242,15 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   end
 
   # --- dispatch step helpers ---
+
+  defp apply_input_result(%{action: :handled} = result, _state), do: {:halt, result}
+
+  defp apply_input_result(%{action: :transform} = result, state) do
+    new_state = %{state | text: result.text, images: Map.get(result, :images, state.images), action: :transform}
+    {:cont, new_state}
+  end
+
+  defp apply_input_result(_, state), do: {:cont, %{state | action: :continue}}
 
   defp try_cancel(ext, event, ctx, handler) do
     case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
