@@ -5,10 +5,12 @@
   "created": "2026-04-25T03:01:31Z",
   "description": "Port three upstream rendering patterns from pi-mono (tui.ts, markdown.ts) that our TUI is missing, causing visual artifacts (stale content on screen, lines overflowing terminal width, garbled output during streaming).\n\nRoot cause: during streaming, content grows and `fit_to_height` crops to the last N lines, shifting indices every frame. The diff renderer sees \"unchanged\" content at shifted rows and skips repainting them, leaving stale terminal content. Additionally, several Markdown nodes (lists, headings, code blocks) produce lines wider than the terminal, causing terminal-level wrapping that desynchronizes cursor positioning.\n\nUpstream reference: tmp/pi-mono/packages/tui/src/tui.ts (lines 880-1204), tmp/pi-mono/packages/tui/src/components/markdown.ts (lines 116-158).\n\nThree changes, in priority order:\n\n1. **Markdown post-render width clamp** — After all tokens are rendered, wrap every line through `WrapAnsi.wrap(line, content_width)` before adding margins. Upstream does this at markdown.ts:152-158. Our `render_node` for `ol`/`ul` ignores `_width` (markdown.ex:124-131), headings don't wrap, code blocks don't truncate. The post-render clamp catches all of them.\n\n2. **Replace fit_to_height with viewport scrolling** — Keep the full line buffer. Use `\\r\\n` at the bottom of the screen to trigger real terminal scrolling. Track `previousViewportTop` and `hardwareCursorRow` in Renderer state. Diff compares buffer-absolute indices (stable across frames). `computeLineDiff` converts absolute→screen-relative for cursor movement. This eliminates the index-shifting root cause.\n\n3. **Clear-before-paint (`\\e[2K`) instead of clear-after (`\\e[K`)** — Upstream emits `\\e[2K` (erase entire line) before writing each changed line (tui.ts:1102). We emit `\\e[m\\e[K` after. Clear-before is more robust: the row is guaranteed blank regardless of cursor position or prior content width.\n\nAlready done this session:\n- Fixed diff algorithm: now compares index-by-index using max(len(new), len(old)), matching upstream (tui.ts:984-998). Previously scanned from tail, which aligned by position-from-end and missed shifted rows.\n- Fixed thinking blocks: `render_thinking` now wraps to width via `WrapAnsi.wrap`.",
   "id": "opi-uvo",
-  "labels": [],
+  "labels": [
+    "EPIC"
+  ],
   "priority": 1,
   "status": "open",
   "title": "TUI renderer correctness: width enforcement, viewport model, clear strategy",
   "type": "task",
-  "updated_at": "2026-04-25T03:01:31Z"
+  "updated_at": "2026-04-25T03:01:35Z"
 }
