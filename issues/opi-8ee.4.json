@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-8ee",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Register extension tools with the agent session",
   "type": "task",
-  "updated_at": "2026-04-25T21:27:30.458543Z"
+  "updated_at": "2026-04-25T21:39:23.052954Z"
 }
