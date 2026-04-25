@@ -48,7 +48,6 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
       dim("  Ctrl+C     clear / Ctrl+D exit"),
       dim("  /          commands"),
       dim("  !          run bash command"),
-      dim("  Ctrl+O     show full startup help"),
       dim("  ?          toggle this banner")
     ]
   end

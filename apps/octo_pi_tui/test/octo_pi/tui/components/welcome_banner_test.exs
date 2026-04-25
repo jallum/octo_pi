@@ -59,6 +59,13 @@ defmodule OctoPi.TUI.Components.WelcomeBannerTest do
       assert length(WelcomeBanner.render(expanded, 80)) >
                length(WelcomeBanner.render(compact, 80))
     end
+
+    test "expanded banner does not reference Ctrl+O (no handler exists)" do
+      banner = WelcomeBanner.new(@theme, model: "claude-opus-4-6", expanded: true)
+      text = banner |> WelcomeBanner.render(80) |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
+      refute text =~ "Ctrl+O"
+      refute text =~ "ctrl+o"
+    end
   end
 
   describe "handle_key/2" do
