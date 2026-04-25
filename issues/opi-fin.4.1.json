@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:12:09Z",
+  "description": "FILES: apps/octo_pi_coder/lib/octo_pi/coder/extension/event_bus.ex, extensions/event_bus_demo.ex, test/octo_pi/coder/extension/event_bus_test.exs, test/octo_pi/coder/extensions/event_bus_demo_test.exs\n\nCURRENT: event_bus.ex is a GenServer implementing pub/sub. api.events is a map %{emit: fn, on: fn} that wraps it. event_bus_demo.ex calls api.events.emit.(channel, data) and api.events.on.(channel, handler).\n\nTARGET: Replace with Elixir's built-in Registry.\n\nREGISTRY SETUP:\n- Start Registry with keys: :duplicate and a session-scoped name (not a global atom -- multiple sessions must coexist). The name can be a via-tuple or passed as a pid.\n- Subscribe: Registry.register(registry, channel, [])\n- Publish: Registry.dispatch(registry, channel, fn entries -\u003e Enum.each(entries, fn {pid, _} -\u003e send(pid, {:custom_event, channel, payload}) end) end)\n- Registry handles process cleanup automatically on subscriber crash/exit.\n\nAPI.t() CHANGE: The events field type changes from %{emit: fn, on: fn} to a registry reference (pid or name tuple). Update the @type in api.ex accordingly.\n\nevent_bus_demo.ex CHANGE: Replace api.events.emit.(ch, data) with Registry.dispatch(...). Replace api.events.on.(ch, handler) with Registry.register(...) + a receive loop or handle_info in the calling process. Document the new pattern in the moduledoc.\n\nNOTE: event_bus_demo is the ONLY extension using api.events. No other extension is affected.\n\nDELETE event_bus.ex once Registry is wired in. Update application supervision tree if event_bus is started there.\n\nTEST: Replace event_bus_test.exs tests with Registry-based equivalents. Update event_bus_demo_test.exs.",
+  "id": "opi-fin.4.1",
+  "labels": [],
+  "parent": "opi-fin.4",
+  "priority": 2,
+  "status": "open",
+  "title": "Replace EventBus GenServer with Registry",
+  "type": "task",
+  "updated_at": "2026-04-25T21:12:09Z"
+}
