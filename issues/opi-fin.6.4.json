@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.6.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:13:26Z",
   "description": "REQUIRES: opi-fin.6.2 (Host in supervisor), opi-fin.6.3 (ctx.host field), and opi-fin.5.x (stateful migrations) merged.\n\nFILES:\n- extensions/dynamic_tools.ex + test\n- extensions/permission_gate.ex + test\n\nFor each extension:\n1. Replace action fn-field calls (api.register_tool.(), api.get_active_tools.(), etc.) with Host client calls (Host.register_tool(ctx.host, tool), Host.get_active_tools(ctx.host)).\n2. The host pid comes from ctx.host, available in every handler because Context carries it.\n3. Remove API.bind_core usage for action fields in these extensions (the bind_core for exec or other non-action fields may remain if present -- check each extension).\n\nTEST: Replace API.bind_core(api, %{action_fn: fn}) mock pattern with Host.Stub:\n  {:ok, host} = Host.Stub.start_link(%{tools: [...]})\n  ctx = Context.new(%{cwd: '/tmp', host: host})\n  handler.(event, ctx)\n  assert Host.Stub.calls(host) == [{:register_tool, tool_def}]\n\nVERIFY: dynamic_tools.ex line ~21 captures api.register_tool as a closure. After migration this becomes Host.register_tool(ctx.host, tool_def) called inside the handler.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "6b: Migrate dynamic_tools and permission_gate to ctx.host",
   "type": "task",
-  "updated_at": "2026-04-25T21:13:26Z"
+  "updated_at": "2026-04-25T21:14:24Z"
 }
