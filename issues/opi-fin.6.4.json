@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-fin.6.2"
+    "opi-fin.6.2",
+    "opi-fin.6.3"
   ],
   "blocks": [],
   "created": "2026-04-25T21:13:26Z",
