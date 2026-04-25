@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-uvo.1"
+  ],
   "blocks": [
     "opi-uvo.3"
   ],

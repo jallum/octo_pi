@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-uvo.2"
+  ],
   "created": "2026-04-25T03:01:44Z",
   "description": "Port upstream's safety-net wrap from Markdown.render (pi-mono markdown.ts:152-158).\n\nAfter all tokens are rendered into lines, wrap every line through WrapAnsi.wrap(line, content_width) before adding margins. This catches list items, headings, code blocks, and any other node that doesn't respect width.\n\nCurrent state: render_node for ol/ul ignores _width entirely (markdown.ex:124-131). render_list_items doesn't receive width at all. Headings (h1-h6) don't wrap. Code block lines aren't truncated.\n\nUpstream pattern (markdown.ts:152-158):\n```typescript\nconst wrappedLines: string[] = [];\nfor (const line of renderedLines) {\n    wrappedLines.push(...wrapTextWithAnsi(line, contentWidth));\n}\n```\n\nApply between the token rendering loop and the margin/padding step in our do_render/1.",
   "id": "opi-uvo.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Markdown post-render width clamp",
   "type": "task",
-  "updated_at": "2026-04-25T03:01:44Z"
+  "updated_at": "2026-04-25T03:02:15Z"
 }
