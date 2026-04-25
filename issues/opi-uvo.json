@@ -9,8 +9,8 @@
     "EPIC"
   ],
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "TUI renderer correctness: width enforcement, viewport model, clear strategy",
   "type": "task",
-  "updated_at": "2026-04-25T03:01:35Z"
+  "updated_at": "2026-04-25T12:05:53.524280Z"
 }
