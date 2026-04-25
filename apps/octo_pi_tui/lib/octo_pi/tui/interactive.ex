@@ -22,6 +22,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.ModelSelector
   alias OctoPi.TUI.Components.ToolExecution
@@ -958,11 +959,24 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  defp handle_submit(state, new_input, "!" <> rest) do
+    command = String.trim_leading(rest, " ")
+    be = run_bash_command(command, state.theme)
+    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
+  end
+
   defp handle_submit(state, new_input, value) do
     prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
     if state.session, do: OctoPi.Agent.prompt(state.session, prompt)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
+  end
+
+  defp run_bash_command(command, theme) do
+    be = BashExecution.new(command, theme)
+    {output, exit_code} = System.shell(command, stderr_to_stdout: true)
+    be = BashExecution.append_output(be, output)
+    BashExecution.set_complete(be, exit_code)
   end
 
   defp try_extension_shortcut([], _key, _state), do: :pass

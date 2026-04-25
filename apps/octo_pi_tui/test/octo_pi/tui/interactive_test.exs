@@ -9,6 +9,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
@@ -74,6 +75,50 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: "/foo", cursor: 4}, session: nil, expand_prompt_fn: nil}
       s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
       assert s.transcript == [{:user, "/foo"}]
+    end
+
+    test "! prefix runs shell command and adds BashExecution to transcript" do
+      s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert [%BashExecution{}] = s.transcript
+      be = hd(s.transcript)
+      assert be.command == "echo hello"
+      assert be.status == :complete
+      assert be.exit_code == 0
+      output = BashExecution.get_output(be)
+      assert output =~ "hello"
+    end
+
+    test "! prefix without space also runs shell command" do
+      s = %Interactive{input: %Input{value: "!echo hi", cursor: 8}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert [%BashExecution{command: "echo hi"}] = s.transcript
+    end
+
+    test "! prefix clears input after execution" do
+      s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert s.input.value == ""
+      assert s.input.cursor == 0
+    end
+
+    test "! prefix does not send to AI session" do
+      test_pid = self()
+
+      expand_fn = fn text ->
+        send(test_pid, {:expanded, text})
+        text
+      end
+
+      s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
+      Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      refute_received {:expanded, _}
+    end
+
+    test "! prefix with non-zero exit sets error status" do
+      s = %Interactive{input: %Input{value: "! exit 1", cursor: 8}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      assert [%BashExecution{status: :error, exit_code: 1}] = s.transcript
     end
 
     test "Escape clears non-empty input" do
