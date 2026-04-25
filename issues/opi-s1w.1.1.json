@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-s1w.1"
+  ],
   "blocks": [],
   "created": "2026-04-25T05:14:34Z",
   "description": "Implement Claude OAuth + OpenAI/Google/Bedrock providers",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "OAuth \u0026 Additional Providers",
   "type": "task",
-  "updated_at": "2026-04-25T05:14:34Z"
+  "updated_at": "2026-04-25T05:17:19Z"
 }
