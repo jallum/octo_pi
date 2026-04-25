@@ -5,6 +5,10 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
   alias OctoPi.AI.Providers.OpenAI.Producer
   alias OctoPi.AI.TestSupport.FakeOpenAIPlug, as: Fake
 
+  def __telemetry_forward__(name, meas, meta, %{pid: pid, ref: ref}) do
+    send(pid, {ref, name, meas, meta})
+  end
+
   defp model do
     %Model{
       id: "gpt-4o",
@@ -222,8 +226,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       :telemetry.attach_many(
         handler,
         events,
-        fn name, meas, meta, _ -> send(test_pid, {ref, name, meas, meta}) end,
-        nil
+        &__MODULE__.__telemetry_forward__/4,
+        %{pid: test_pid, ref: ref}
       )
 
       on_exit(fn -> :telemetry.detach(handler) end)

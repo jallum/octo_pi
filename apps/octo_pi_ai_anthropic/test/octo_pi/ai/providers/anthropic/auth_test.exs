@@ -5,6 +5,11 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
   alias OctoPi.AI.Providers.Anthropic.Auth.{Credentials, NoopKeychain}
   alias OctoPi.AI.StreamOptions
 
+  # Remote-capture telemetry handler (avoids local-function perf warning).
+  def __telemetry_forward__(name, meas, meta, %{pid: pid, ref: ref}) do
+    send(pid, {ref, name, meas, meta})
+  end
+
   # Test doubles for the keychain reader.
   defmodule FakeKeychain do
     @behaviour OctoPi.AI.Providers.Anthropic.Auth.KeychainReader
@@ -119,8 +124,8 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
       :telemetry.attach(
         handler,
         [:octo_pi_ai_anthropic, :auth, :resolved],
-        fn name, meas, meta, _ -> send(test_pid, {ref, name, meas, meta}) end,
-        nil
+        &__MODULE__.__telemetry_forward__/4,
+        %{pid: test_pid, ref: ref}
       )
 
       on_exit(fn -> :telemetry.detach(handler) end)

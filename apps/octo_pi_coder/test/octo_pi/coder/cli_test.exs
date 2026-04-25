@@ -1,6 +1,10 @@
 defmodule OctoPi.Coder.CLITest do
   use ExUnit.Case, async: true
 
+  # See RpcTest: agent turn-Task teardown can race session stop and
+  # log an expected error.
+  @moduletag capture_log: true
+
   alias OctoPi.Coder.CLI
 
   describe "parse_args/1" do
@@ -76,6 +80,8 @@ defmodule OctoPi.Coder.CLITest do
       {:ok, session} =
         OctoPi.Agent.start_session(model: model(), transport: FakeTransport, tools: [])
 
+      on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session, :normal, 500) end)
+
       response = CLI.response_for(~s|{"id":"r1","method":"abort","params":{}}|, session)
       assert response["id"] == "r1"
       assert response["result"] == "ok"
@@ -84,6 +90,8 @@ defmodule OctoPi.Coder.CLITest do
     test "returns a parse error for malformed JSON" do
       {:ok, session} =
         OctoPi.Agent.start_session(model: model(), transport: FakeTransport, tools: [])
+
+      on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session, :normal, 500) end)
 
       response = CLI.response_for("not json\n", session)
       assert response["id"] == nil

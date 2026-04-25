@@ -5,7 +5,7 @@ defmodule OctoPi.TUI.FuzzyTest do
 
   describe "match/2" do
     test "empty query matches everything" do
-      assert %{matches: true, score: 0.0} = Fuzzy.match("", "anything")
+      assert %{matches: true, score: +0.0} = Fuzzy.match("", "anything")
     end
 
     test "query longer than text never matches" do

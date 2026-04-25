@@ -1,6 +1,12 @@
 defmodule OctoPi.Coder.Modes.RpcTest do
   use ExUnit.Case, async: false
 
+  # Sessions started here run scripted turns via FakeTransport. When
+  # a test ends we stop the session, but a mid-flight turn Task may
+  # still race the GenServer's :drain_follow_up call. That crash is
+  # expected teardown noise — capture it.
+  @moduletag capture_log: true
+
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Event, as: AIEvent
@@ -40,6 +46,13 @@ defmodule OctoPi.Coder.Modes.RpcTest do
   defp open_session do
     {:ok, session} =
       OctoPi.Agent.start_session(model: model(), transport: FakeTransport, tools: [])
+
+    # Stop the session before FakeTransport.clear/0 runs, so lingering
+    # Task-supervised turn runs don't race the agent being stopped and
+    # crash with "no process" / "script exhausted" error logs.
+    ExUnit.Callbacks.on_exit(fn ->
+      if Process.alive?(session), do: GenServer.stop(session, :normal, 500)
+    end)
 
     session
   end

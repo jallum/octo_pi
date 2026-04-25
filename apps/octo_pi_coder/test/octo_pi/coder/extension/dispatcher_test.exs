@@ -1,6 +1,10 @@
 defmodule OctoPi.Coder.Extension.DispatcherTest do
   use ExUnit.Case, async: true
 
+  # Many tests here intentionally raise inside handlers to exercise
+  # error-isolation semantics; the warnings they log are expected.
+  @moduletag capture_log: true
+
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
 

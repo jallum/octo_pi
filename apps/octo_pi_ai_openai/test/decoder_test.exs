@@ -1,7 +1,7 @@
 defmodule OctoPi.AI.Providers.OpenAI.DecoderTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{Content, Event, Message, Model, ToolCall, Usage}
+  alias OctoPi.AI.{Content, Event, Message, Model, ToolCall}
   alias OctoPi.AI.Providers.OpenAI.Decoder
 
   defp model(attrs \\ %{}) do

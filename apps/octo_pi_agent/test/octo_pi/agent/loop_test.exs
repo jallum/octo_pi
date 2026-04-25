@@ -1,6 +1,12 @@
 defmodule OctoPi.Agent.LoopTest do
   use ExUnit.Case, async: false
 
+  # The agent runs each turn inside a Task; transport-level abort/error
+  # tests deliberately leave the scripted stream in a state that makes
+  # that Task crash (script exhausted / brutal kill). ExUnit prints the
+  # Task supervisor's error log by default — capture it.
+  @moduletag capture_log: true
+
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.TestSupport.{EchoTool, FakeTransport, ProbeTool}
   alias OctoPi.AI.Event, as: AIEvent
@@ -42,21 +48,28 @@ defmodule OctoPi.Agent.LoopTest do
     pid
   end
 
-  # Attaches a telemetry handler that forwards each `[:tool, :start]`
-  # event to the calling test as `{:tool_started, tool_call_id}`. Use
-  # `assert_receive {:tool_started, _}` to synchronize mid-run events
-  # deterministically instead of sleeping.
+  # Named handlers — remote captures avoid telemetry's "local function"
+  # performance warning.
+  def telemetry_forward_tool_start(_event, _measurements, metadata, %{pid: pid}) do
+    send(pid, {:tool_started, metadata.tool_call_id})
+  end
+
+  def telemetry_forward_turn_start(_event, _measurements, metadata, %{pid: pid}) do
+    send(pid, {:turn_started, metadata.turn})
+  end
+
+  def telemetry_forward(event, measurements, metadata, %{pid: pid}) do
+    send(pid, {:telemetry, event, measurements, metadata})
+  end
+
   defp attach_tool_start_signal do
-    test_pid = self()
     handler_id = "await-tool-start-#{System.unique_integer([:positive])}"
 
     :telemetry.attach(
       handler_id,
       [:octo_pi_agent, :tool, :start],
-      fn _event, _measurements, metadata, _ ->
-        send(test_pid, {:tool_started, metadata.tool_call_id})
-      end,
-      nil
+      &__MODULE__.telemetry_forward_tool_start/4,
+      %{pid: self()}
     )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)
@@ -778,10 +791,8 @@ defmodule OctoPi.Agent.LoopTest do
       :telemetry.attach_many(
         handler_id,
         events,
-        fn event, measurements, metadata, _ ->
-          send(test_pid, {:telemetry, event, measurements, metadata})
-        end,
-        nil
+        &__MODULE__.telemetry_forward/4,
+        %{pid: test_pid}
       )
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
@@ -829,10 +840,8 @@ defmodule OctoPi.Agent.LoopTest do
       :telemetry.attach(
         handler_id,
         [:octo_pi_agent, :tool, :error],
-        fn event, measurements, metadata, _ ->
-          send(test_pid, {:telemetry, event, measurements, metadata})
-        end,
-        nil
+        &__MODULE__.telemetry_forward/4,
+        %{pid: test_pid}
       )
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
@@ -870,10 +879,8 @@ defmodule OctoPi.Agent.LoopTest do
       :telemetry.attach(
         handler_id,
         [:octo_pi_agent, :session, :stop],
-        fn event, measurements, metadata, _ ->
-          send(test_pid, {:telemetry, event, measurements, metadata})
-        end,
-        nil
+        &__MODULE__.telemetry_forward/4,
+        %{pid: test_pid}
       )
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
@@ -1078,8 +1085,8 @@ defmodule OctoPi.Agent.LoopTest do
       :telemetry.attach(
         handler_id,
         [:octo_pi_agent, :turn, :start],
-        fn _e, _m, metadata, _ -> send(test_pid, {:turn_started, metadata.turn}) end,
-        nil
+        &__MODULE__.telemetry_forward_turn_start/4,
+        %{pid: test_pid}
       )
 
       on_exit(fn -> :telemetry.detach(handler_id) end)

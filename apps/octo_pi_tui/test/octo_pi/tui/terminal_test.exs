@@ -3,6 +3,10 @@ defmodule OctoPi.TUI.TerminalTest do
 
   alias OctoPi.TUI.{Events, Terminal}
 
+  def __reader_exit_forward__(_event, _measurements, meta, %{pid: pid}) do
+    send(pid, {:reader_exit, meta.reason})
+  end
+
   # All tests use test-friendly opts that skip the real tty plumbing:
   # - skip_raw_mode:  don't call :shell.start_interactive (would break
   #   the test runner's terminal).
@@ -131,16 +135,16 @@ defmodule OctoPi.TUI.TerminalTest do
   end
 
   describe "reader exit diagnostics" do
+    @describetag capture_log: true
+
     test "emits telemetry on :eof" do
       test_pid = self()
 
       :telemetry.attach(
         "test-reader-eof-#{inspect(test_pid)}",
         [:octo_pi_tui, :terminal, :reader_exit],
-        fn _event, _measurements, meta, _ ->
-          send(test_pid, {:reader_exit, meta.reason})
-        end,
-        nil
+        &__MODULE__.__reader_exit_forward__/4,
+        %{pid: test_pid}
       )
 
       _pid =
@@ -161,10 +165,8 @@ defmodule OctoPi.TUI.TerminalTest do
       :telemetry.attach(
         "test-reader-err-#{inspect(test_pid)}",
         [:octo_pi_tui, :terminal, :reader_exit],
-        fn _event, _measurements, meta, _ ->
-          send(test_pid, {:reader_exit, meta.reason})
-        end,
-        nil
+        &__MODULE__.__reader_exit_forward__/4,
+        %{pid: test_pid}
       )
 
       _pid =

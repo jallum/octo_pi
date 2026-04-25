@@ -313,7 +313,7 @@ defmodule OctoPi.TUI.ThemeTest do
 
   # ── Helpers ─────────────────────────────────────────────────────
 
-  defp minimal_colors(overrides \\ %{}) do
+  defp minimal_colors(overrides) do
     base =
       Map.new(Theme.color_keys(), fn key ->
         {Theme.color_key_to_json(key), "#000000"}
