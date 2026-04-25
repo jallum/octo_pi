@@ -118,6 +118,68 @@ defmodule OctoPi.TUI.KeybindingsTest do
     end
   end
 
+  describe "app-level bindings (opi-0g4.7)" do
+    setup do
+      {:ok, kb: Keybindings.new()}
+    end
+
+    test "app.interrupt matches escape", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: :escape}, "app.interrupt")
+    end
+
+    test "app.clear matches ctrl+c", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?c, modifiers: [:ctrl]}, "app.clear")
+    end
+
+    test "app.exit matches ctrl+d", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?d, modifiers: [:ctrl]}, "app.exit")
+    end
+
+    test "app.suspend matches ctrl+z", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?z, modifiers: [:ctrl]}, "app.suspend")
+    end
+
+    test "app.thinking.cycle matches shift+tab", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: :tab, modifiers: [:shift]}, "app.thinking.cycle")
+    end
+
+    test "app.model.cycleForward matches ctrl+p", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?p, modifiers: [:ctrl]}, "app.model.cycleForward")
+    end
+
+    test "app.model.cycleBackward matches shift+ctrl+p", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?p, modifiers: [:shift, :ctrl]}, "app.model.cycleBackward")
+    end
+
+    test "app.model.select matches ctrl+l", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?l, modifiers: [:ctrl]}, "app.model.select")
+    end
+
+    test "app.tools.expand matches ctrl+o", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?o, modifiers: [:ctrl]}, "app.tools.expand")
+    end
+
+    test "app.thinking.toggle matches ctrl+t", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?t, modifiers: [:ctrl]}, "app.thinking.toggle")
+    end
+
+    test "app.editor.external matches ctrl+g", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?g, modifiers: [:ctrl]}, "app.editor.external")
+    end
+
+    test "app.message.followUp matches alt+enter", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: :enter, modifiers: [:alt]}, "app.message.followUp")
+    end
+
+    test "app.message.dequeue matches alt+up", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: :up, modifiers: [:alt]}, "app.message.dequeue")
+    end
+
+    test "app.clipboard.pasteImage matches ctrl+v", %{kb: kb} do
+      assert Keybindings.matches?(kb, %Key{key: ?v, modifiers: [:ctrl]}, "app.clipboard.pasteImage")
+    end
+  end
+
   describe "set_user_bindings/2" do
     test "rebuilds with new user bindings" do
       kb = Keybindings.new()

@@ -63,7 +63,21 @@ defmodule OctoPi.TUI.Keybindings do
     "tui.select.pageUp" => %{keys: ["pageUp"], description: "Selection page up"},
     "tui.select.pageDown" => %{keys: ["pageDown"], description: "Selection page down"},
     "tui.select.confirm" => %{keys: ["enter"], description: "Confirm selection"},
-    "tui.select.cancel" => %{keys: ["escape", "ctrl+c"], description: "Cancel selection"}
+    "tui.select.cancel" => %{keys: ["escape", "ctrl+c"], description: "Cancel selection"},
+    "app.interrupt" => %{keys: ["escape"], description: "Cancel/abort"},
+    "app.clear" => %{keys: ["ctrl+c"], description: "Clear editor"},
+    "app.exit" => %{keys: ["ctrl+d"], description: "Exit when editor is empty"},
+    "app.suspend" => %{keys: ["ctrl+z"], description: "Suspend to shell"},
+    "app.thinking.cycle" => %{keys: ["shift+tab"], description: "Cycle thinking level"},
+    "app.model.cycleForward" => %{keys: ["ctrl+p"], description: "Next model"},
+    "app.model.cycleBackward" => %{keys: ["shift+ctrl+p"], description: "Previous model"},
+    "app.model.select" => %{keys: ["ctrl+l"], description: "Open model selector"},
+    "app.tools.expand" => %{keys: ["ctrl+o"], description: "Toggle tool output expansion"},
+    "app.thinking.toggle" => %{keys: ["ctrl+t"], description: "Toggle thinking block visibility"},
+    "app.editor.external" => %{keys: ["ctrl+g"], description: "Open external editor"},
+    "app.message.followUp" => %{keys: ["alt+enter"], description: "Queue follow-up message"},
+    "app.message.dequeue" => %{keys: ["alt+up"], description: "Edit queued messages"},
+    "app.clipboard.pasteImage" => %{keys: ["ctrl+v"], description: "Paste image from clipboard"}
   }
 
   @spec new(map()) :: t()
