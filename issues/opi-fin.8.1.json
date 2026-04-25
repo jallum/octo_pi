@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.6.5"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:14:06Z",
   "description": "REQUIRES: opi-fin.6.5 (Host fully wired) merged.\n\nFILE: apps/octo_pi_coder/lib/octo_pi/coder/extension/command_context.ex\n\nCommandContext.t() has 6 session navigation fn-fields: wait_for_idle, new_session, fork, navigate_tree, switch_session, reload. These follow the same stub/bind pattern as API.t() and UIContext.t().\n\nSTEP 1 -- AUDIT (do this before any code changes):\ngrep -r 'CommandContext' apps/ to find all callers.\nExpected finding: CommandContext is used only in the CLI/session runner layer, NOT by any extensions. Confirm this.\n\nSTEP 2 -- DECISION based on audit:\nA) If no extensions use CommandContext session actions: these are CLI-layer concerns, not extension concerns. Document this in command_context.ex moduledoc. No migration needed for the extension framework. Leave the fn-field pattern in place since it is not part of the extension author API.\n\nB) If extensions DO use CommandContext actions: fold those actions into the Host behaviour (new_session, fork, etc. become Host callbacks). Follow the same migration pattern as Phase 6.\n\nDocument the audit finding and decision in this ticket before closing.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Audit and resolve CommandContext",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:06Z"
+  "updated_at": "2026-04-25T21:14:26Z"
 }
