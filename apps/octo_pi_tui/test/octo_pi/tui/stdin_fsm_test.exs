@@ -206,6 +206,56 @@ defmodule OctoPi.TUI.StdinFSMTest do
     end
   end
 
+  describe "DCS sequences (opi-0g4.4)" do
+    test "complete DCS with ST terminator is emitted as one sequence", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\ePq#0\e\\")
+      assert drain() == ["\ePq#0\e\\"]
+    end
+
+    test "incomplete DCS waits for more data", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\ePq#0")
+      assert drain() == []
+    end
+
+    test "DCS split across chunks buffers until ST arrives", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\ePq")
+      assert drain() == []
+      :ok = StdinFSM.process(fsm, "#0\e\\")
+      assert drain() == ["\ePq#0\e\\"]
+    end
+
+    test "DCS does not emit spurious alt-prefix for ESC+P", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\ePdata\e\\")
+      seqs = drain()
+      refute "\eP" in seqs
+    end
+  end
+
+  describe "APC sequences (opi-0g4.4)" do
+    test "complete APC with ST terminator is emitted as one sequence", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\e_G;payload\e\\")
+      assert drain() == ["\e_G;payload\e\\"]
+    end
+
+    test "incomplete APC waits for more data", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\e_G;pay")
+      assert drain() == []
+    end
+
+    test "APC split across chunks buffers until ST arrives", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\e_G;")
+      assert drain() == []
+      :ok = StdinFSM.process(fsm, "payload\e\\")
+      assert drain() == ["\e_G;payload\e\\"]
+    end
+
+    test "APC does not emit spurious alt-prefix for ESC+_", %{fsm: fsm} do
+      :ok = StdinFSM.process(fsm, "\e_data\e\\")
+      seqs = drain()
+      refute "\e_" in seqs
+    end
+  end
+
   describe "alt-prefix (ESC + char)" do
     test "ESC + letter emits immediately", %{fsm: fsm} do
       :ok = StdinFSM.process(fsm, "\eb")

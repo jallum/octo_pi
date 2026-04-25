@@ -133,7 +133,13 @@ defmodule OctoPi.TUI.StdinFSM do
   # SS3 prefix alone at end of buffer — wait for the final byte.
   defp extract(<<"\eO">>), do: {[], "\eO"}
 
-  # Alt-prefix: \e followed by a byte that isn't [, ], or O.
+  # DCS: \eP<any>... terminated by ST (\e\)
+  defp extract(<<"\eP", rest::binary>> = buf), do: extract_dcs_apc(rest, buf)
+
+  # APC: \e_<any>... terminated by ST (\e\)
+  defp extract(<<"\e_", rest::binary>> = buf), do: extract_dcs_apc(rest, buf)
+
+  # Alt-prefix: \e followed by a byte that isn't [, ], O, P, or _.
   # Emitted immediately as a 2-byte meta sequence.
   defp extract(<<"\e", b::8, rest::binary>>) do
     {more, tail} = extract(rest)
@@ -204,4 +210,25 @@ defmodule OctoPi.TUI.StdinFSM do
   defp find_osc_end(<<0x07, _::binary>>, idx), do: {:found, idx, 1}
   defp find_osc_end(<<"\e\\", _::binary>>, idx), do: {:found, idx, 2}
   defp find_osc_end(<<_::8, rest::binary>>, idx), do: find_osc_end(rest, idx + 1)
+
+  # --- DCS / APC extraction ---
+  # Both use only ST (\e\) as terminator; prefix is already consumed (2 bytes).
+
+  defp extract_dcs_apc(rest, buf) do
+    case find_st_end(rest, 0) do
+      :incomplete ->
+        {[], buf}
+
+      {:found, body_len} ->
+        seq_len = 2 + body_len + 2
+        seq = binary_part(buf, 0, seq_len)
+        remaining = binary_part(buf, seq_len, byte_size(buf) - seq_len)
+        {more, tail} = extract(remaining)
+        {[seq | more], tail}
+    end
+  end
+
+  defp find_st_end(<<>>, _idx), do: :incomplete
+  defp find_st_end(<<"\e\\", _::binary>>, idx), do: {:found, idx}
+  defp find_st_end(<<_::8, rest::binary>>, idx), do: find_st_end(rest, idx + 1)
 end
