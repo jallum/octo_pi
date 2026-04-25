@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-7xj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Slash command autocomplete not wired in — no dropdown on /",
   "type": "bug",
-  "updated_at": "2026-04-25T17:37:28.499222Z"
+  "updated_at": "2026-04-25T17:40:03.480976Z"
 }
