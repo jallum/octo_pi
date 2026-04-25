@@ -7,13 +7,13 @@
     "opi-uvo.3"
   ],
   "created": "2026-04-25T03:01:55Z",
-  "description": "Port upstream's buffer+viewport architecture (pi-mono tui.ts:870-1204).\n\nCurrently fit_to_height crops the line buffer to the last height lines, shifting indices every time content grows past the screen. This causes the diff to see \"unchanged\" content at shifted rows, leaving stale terminal content even with the corrected index-by-index diff algorithm.\n\nUpstream approach:\n- Keep the full line buffer (no cropping)\n- Diff compares buffer-absolute indices (stable across frames)\n- Track previousViewportTop, viewportTop, hardwareCursorRow in Renderer state\n- Use \\r\\n at bottom of screen to trigger real terminal scrolling\n- computeLineDiff converts buffer-absolute → screen-relative positions\n- When firstChanged \u003c prevViewportTop, trigger full redraw (change is in scrollback)\n\nKey state to add to Renderer:\n- previous_viewport_top :: non_neg_integer()\n- hardware_cursor_row :: non_neg_integer()\n- max_lines_rendered :: non_neg_integer()\n\nRemove fit_to_height from Interactive.render/2. The Renderer handles viewport windowing internally.",
+  "description": "Port upstream's buffer+viewport architecture (pi-mono tui.ts:870-1204).\n\nCurrently fit_to_height crops the line buffer to the last height lines, shifting indices every time content grows past the screen. This causes the diff to see \"unchanged\" content at shifted rows, leaving stale terminal content even with the corrected index-by-index diff algorithm.\n\nUpstream approach:\n- Keep the full line buffer (no cropping)\n- Diff compares buffer-absolute indices (stable across frames)\n- Track previousViewportTop, viewportTop, hardwareCursorRow in Renderer state\n- Use \\r\\n at bottom of screen to trigger real terminal scrolling\n- computeLineDiff converts buffer-absolute → screen-relative positions\n- When firstChanged < prevViewportTop, trigger full redraw (change is in scrollback)\n\nKey state to add to Renderer:\n- previous_viewport_top :: non_neg_integer()\n- hardware_cursor_row :: non_neg_integer()\n- max_lines_rendered :: non_neg_integer()\n\nRemove fit_to_height from Interactive.render/2. The Renderer handles viewport windowing internally.",
   "id": "opi-uvo.2",
   "labels": [],
   "parent": "opi-uvo",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Replace fit_to_height with viewport scrolling model",
   "type": "task",
-  "updated_at": "2026-04-25T03:09:59Z"
+  "updated_at": "2026-04-25T15:07:07.921117Z"
 }
