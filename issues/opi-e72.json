@@ -12,8 +12,8 @@
   ],
   "parent": "",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Render: stale partial-stream content not cleared after response completes",
   "type": "bug",
-  "updated_at": "2026-04-25T14:54:21.142239Z"
+  "updated_at": "2026-04-25T15:02:18.740974Z"
 }
