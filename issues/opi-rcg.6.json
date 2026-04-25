@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "pi.events — built-in event bus on the extension API",
   "type": "task",
-  "updated_at": "2026-04-25T18:16:06.681000Z"
+  "updated_at": "2026-04-25T18:23:29.712378Z"
 }
