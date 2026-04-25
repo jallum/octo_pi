@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Example extensions wave 4: UI, rendering & providers (message-renderer, custom-header, custom-footer, status-line, provider-payload)",
   "type": "task",
-  "updated_at": "2026-04-25T17:11:08.128819Z"
+  "updated_at": "2026-04-25T17:16:35.992386Z"
 }
