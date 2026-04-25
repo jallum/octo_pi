@@ -2,8 +2,8 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
   @moduledoc """
   Displays turn progress in the status area via ctx.ui.set_status.
 
-  Diverges from status-line.ts: ctx.ui.theme is not available; status text
-  uses plain strings without ANSI theming.
+  Uses ctx.ui.apply_fg for themed ANSI color, matching upstream status-line.ts
+  which uses ctx.ui.theme.fg('accent'/'success'/'dim').
   Ported from examples/extensions/status-line.ts.
   """
 
@@ -17,7 +17,10 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
     {:ok, api}
   end
 
-  defp on_session_start(%{has_ui?: true, ui: ui}), do: ui.set_status.("Ready")
+  defp on_session_start(%{has_ui?: true, ui: ui}) do
+    ui.set_status.(ui.apply_fg.(:success, "● ") <> "Ready")
+  end
+
   defp on_session_start(_ctx), do: :ok
 
   defp on_turn_start(%{has_ui?: true, ui: ui}, state) do
@@ -27,7 +30,7 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
         {n, %{s | turn_count: n}}
       end)
 
-    ui.set_status.("Turn #{turn}...")
+    ui.set_status.(ui.apply_fg.(:accent, "● ") <> ui.apply_fg.(:dim, "Turn #{turn}..."))
   end
 
   defp on_turn_start(_ctx, state) do
@@ -37,7 +40,7 @@ defmodule OctoPi.Coder.Extensions.StatusLine do
 
   defp on_turn_end(%{has_ui?: true, ui: ui}, state) do
     turn = Agent.get(state, & &1.turn_count)
-    ui.set_status.("Turn #{turn} complete")
+    ui.set_status.(ui.apply_fg.(:success, "✓ ") <> ui.apply_fg.(:dim, "Turn #{turn} complete"))
   end
 
   defp on_turn_end(_ctx, _state), do: :ok

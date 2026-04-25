@@ -16,7 +16,13 @@ defmodule OctoPi.Coder.Extensions.StatusLineTest do
   defp no_ui_ctx, do: Context.new(%{cwd: "/tmp"})
 
   defp ui_ctx(status_calls) do
-    ui = %UIContext{set_status: fn text -> Agent.update(status_calls, fn acc -> [text | acc] end) end}
+    ui =
+      UIContext.bind(UIContext.new(), %{
+        set_status: fn text -> Agent.update(status_calls, fn acc -> [text | acc] end) end,
+        apply_fg: fn _color, text -> text end,
+        apply_bg: fn _color, text -> text end
+      })
+
     Context.new(%{cwd: "/tmp", has_ui?: true, ui: ui})
   end
 

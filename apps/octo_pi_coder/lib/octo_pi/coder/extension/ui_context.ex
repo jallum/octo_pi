@@ -27,7 +27,9 @@ defmodule OctoPi.Coder.Extension.UIContext do
           get_theme: (-> String.t() | no_return()),
           set_theme: (String.t() -> :ok | no_return()),
           get_tools_expanded: (-> boolean() | no_return()),
-          set_tools_expanded: (boolean() -> :ok | no_return())
+          set_tools_expanded: (boolean() -> :ok | no_return()),
+          apply_fg: (atom(), String.t() -> String.t() | no_return()),
+          apply_bg: (atom(), String.t() -> String.t() | no_return())
         }
 
   @one_arity_fields [
@@ -55,7 +57,7 @@ defmodule OctoPi.Coder.Extension.UIContext do
     :get_tools_expanded
   ]
 
-  @two_arity_fields [:custom, :editor, :confirm]
+  @two_arity_fields [:custom, :editor, :confirm, :apply_fg, :apply_bg]
 
   @var_arity_fields [:select, :input]
 

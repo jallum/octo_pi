@@ -76,6 +76,29 @@ defmodule OctoPi.Coder.Extension.UIContextTest do
       assert :ok == ctx.set_theme.("dark")
       assert ["dark", "light", "monokai"] == ctx.get_all_themes.()
     end
+
+    test "apply_fg applies color to text" do
+      ctx =
+        UIContext.bind(UIContext.new(), %{
+          apply_fg: fn _color, text -> "\e[32m#{text}\e[39m" end
+        })
+
+      assert ctx.apply_fg.(:success, "done") =~ "done"
+    end
+
+    test "apply_fg stub raises when not bound" do
+      ctx = UIContext.new()
+      assert_raise RuntimeError, ~r/not bound/, fn -> ctx.apply_fg.(:accent, "x") end
+    end
+
+    test "apply_bg applies background color to text" do
+      ctx =
+        UIContext.bind(UIContext.new(), %{
+          apply_bg: fn _color, text -> "\e[42m#{text}\e[49m" end
+        })
+
+      assert ctx.apply_bg.(:tool_success_bg, "ok") =~ "ok"
+    end
   end
 
   describe "editor control" do

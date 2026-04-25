@@ -142,6 +142,8 @@ defmodule OctoPi.TUI.Interactive do
       get_editor_text: fn -> req.(:get_editor_text) end,
       get_theme: fn -> req.(:get_theme) end,
       get_all_themes: fn -> req.(:get_all_themes) end,
+      apply_fg: fn color, text -> req.({:apply_fg, color, text}) end,
+      apply_bg: fn color, text -> req.({:apply_bg, color, text}) end,
       get_tools_expanded: fn -> req.(:get_tools_expanded) end,
       set_editor_text: fn text -> fire.({:set_editor_text, text}) end,
       paste_to_editor: fn text -> fire.({:paste_to_editor, text}) end,
@@ -214,6 +216,12 @@ defmodule OctoPi.TUI.Interactive do
   def handle_ui_request(state, :get_theme), do: {state, state.theme && state.theme.name}
 
   def handle_ui_request(state, :get_all_themes), do: {state, Theme.available_themes()}
+
+  def handle_ui_request(%{theme: nil} = state, {:apply_fg, _color, text}), do: {state, text}
+  def handle_ui_request(state, {:apply_fg, color, text}), do: {state, Theme.fg(state.theme, color, text)}
+
+  def handle_ui_request(%{theme: nil} = state, {:apply_bg, _color, text}), do: {state, text}
+  def handle_ui_request(state, {:apply_bg, color, text}), do: {state, Theme.bg(state.theme, color, text)}
 
   def handle_ui_request(state, {:set_editor_text, text}) do
     input = %{state.input | value: text, cursor: String.length(text)}

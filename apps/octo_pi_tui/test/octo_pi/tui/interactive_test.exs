@@ -1310,6 +1310,34 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert is_list(themes)
       assert "dark" in themes
     end
+
+    test "apply_fg returns ANSI-styled text using theme" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{theme: theme}
+      {^s, result} = Interactive.handle_ui_request(s, {:apply_fg, :accent, "hello"})
+      assert result =~ "hello"
+      assert result =~ "\e["
+    end
+
+    test "apply_fg with nil theme returns text unchanged" do
+      s = %Interactive{theme: nil}
+      {^s, result} = Interactive.handle_ui_request(s, {:apply_fg, :accent, "hello"})
+      assert result == "hello"
+    end
+
+    test "apply_bg returns ANSI-styled text using theme" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{theme: theme}
+      {^s, result} = Interactive.handle_ui_request(s, {:apply_bg, :tool_success_bg, "ok"})
+      assert result =~ "ok"
+      assert result =~ "\e["
+    end
+
+    test "apply_bg with nil theme returns text unchanged" do
+      s = %Interactive{theme: nil}
+      {^s, result} = Interactive.handle_ui_request(s, {:apply_bg, :tool_success_bg, "ok"})
+      assert result == "ok"
+    end
   end
 
   describe "handle_ui_request — setters" do
