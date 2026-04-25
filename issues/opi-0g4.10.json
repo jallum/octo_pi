@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0g4",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Interactive: Ctrl+Z process suspend (unix)",
   "type": "task",
-  "updated_at": "2026-04-25T13:43:27.738428Z"
+  "updated_at": "2026-04-25T13:49:04.717351Z"
 }
