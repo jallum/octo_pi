@@ -298,18 +298,19 @@ defmodule OctoPi.TUI.TuiRenderTest do
       assert Enum.at(rows, 2) == "Header"
       assert Enum.at(rows, 9) == "───"
 
-      # Grow past height — clipping kicks in, top lines drop off
-      lines2 = clip_to_height(Enum.map(1..8, &"Line #{&1}") ++ ["───", "", "───"], 10)
+      # Grow past height — viewport scrolls, top lines off-screen
+      lines2 = Enum.map(1..8, &"Line #{&1}") ++ ["───", "", "───"]
       vt = render_frame(r, vt, lines2)
       rows = visible(vt)
-      # First visible line should be Line 2 (Line 1 clipped)
+      # 11 lines, viewport shows last 10 → Line 1 scrolled off
       assert Enum.at(rows, 0) == "Line 2"
       assert Enum.at(rows, 9) == "───"
 
-      # Continue growing — more lines clip from top
-      lines3 = clip_to_height(Enum.map(1..12, &"Line #{&1}") ++ ["───", "", "───"], 10)
+      # Continue growing — more lines scroll off top
+      lines3 = Enum.map(1..12, &"Line #{&1}") ++ ["───", "", "───"]
       vt = render_frame(r, vt, lines3)
       rows = visible(vt)
+      # 15 lines, viewport shows last 10 → Lines 1-5 scrolled off
       assert Enum.at(rows, 0) == "Line 6"
       assert Enum.at(rows, 9) == "───"
       # No stale content in any row
@@ -372,30 +373,26 @@ defmodule OctoPi.TUI.TuiRenderTest do
       assert Enum.at(rows, 11) == "footer2"
 
       # Frame 4: tool completes, more streaming text
-      frame4 =
-        clip_to_height(
-          [
-            "> what's new?",
-            "Let me check...",
-            "",
-            "┌ v bash ───────────────────────────┐",
-            "│ ls -la                            │",
-            "└──────────────────────────────────┘",
-            "Here are the results:",
-            "- file1.ex",
-            "- file2.ex",
-            "───",
-            "",
-            "───",
-            "footer1",
-            "footer2"
-          ],
-          12
-        )
+      frame4 = [
+        "> what's new?",
+        "Let me check...",
+        "",
+        "┌ v bash ───────────────────────────┐",
+        "│ ls -la                            │",
+        "└──────────────────────────────────┘",
+        "Here are the results:",
+        "- file1.ex",
+        "- file2.ex",
+        "───",
+        "",
+        "───",
+        "footer1",
+        "footer2"
+      ]
 
       vt = render_frame(r, vt, frame4)
       rows = visible(vt)
-      # 14 lines clipped to 12 → first 2 lines dropped
+      # 14 lines, viewport shows last 12 → first 2 scrolled off
       # Row 0 = "" (tool separator), Row 1 = tool box top
       assert Enum.at(rows, 0) == ""
       assert Enum.at(rows, 1) =~ "bash"
@@ -567,7 +564,4 @@ defmodule OctoPi.TUI.TuiRenderTest do
       else: List.duplicate("", height - len) ++ lines
   end
 
-  defp clip_to_height(lines, height) do
-    Enum.take(lines, -height)
-  end
 end

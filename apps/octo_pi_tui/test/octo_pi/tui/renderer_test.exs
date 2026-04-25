@@ -198,17 +198,13 @@ defmodule OctoPi.TUI.RendererTest do
     end
   end
 
-  describe "each line ends with clear-to-eol" do
-    test "every rendered line has \\e[K to clear stale content" do
+  describe "each line is preceded by erase-line" do
+    test "every rendered line has \\e[2K to clear the row before painting" do
       pid = new()
       {:ok, bytes} = Renderer.render(pid, ["short", "longer line here"])
 
-      lines = String.split(bytes, "\r\n")
-
-      for line <- lines, strip_csi(line) != "" do
-        assert line =~ "\e[K",
-               "Line should end with clear-to-eol: #{inspect(line)}"
-      end
+      assert bytes =~ "\e[2Kshort"
+      assert bytes =~ "\e[2Klonger line here"
     end
   end
 

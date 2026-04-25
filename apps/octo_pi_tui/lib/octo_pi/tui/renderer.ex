@@ -1,20 +1,23 @@
 defmodule OctoPi.TUI.Renderer do
   @moduledoc """
-  Differential screen renderer. Holds the previous frame; on each
-  `render/2`, computes a line-level diff against it, emits cursor
-  repositioning + the changed range, and returns the bytes for
-  the caller (usually `OctoPi.TUI.Terminal`) to write.
+  Differential screen renderer with viewport scrolling.
 
-  Full-redraw triggers: first render, dimension change, line-count
-  change. Under Termux (detected via `TERMUX_VERSION`), height-only
-  changes suppress the clear-screen because Termux's console
-  doesn't reflow the scrollback the same way xterm does.
+  Receives the full line buffer from the caller (no cropping).
+  Internally computes `viewport_top = max(0, len - height)` so the
+  viewport is always anchored to the bottom. Diffs at buffer-absolute
+  indices for stability, but only paints lines within the visible
+  viewport.
+
+  Full-redraw triggers: first render, dimension change, content
+  shrink, or a change above the viewport (in scrollback). Under
+  Termux (detected via `TERMUX_VERSION`), height-only changes
+  suppress the clear-screen.
+
+  Each changed line is cleared with `\\e[2K` (erase entire line)
+  before painting, matching upstream pi-mono.
 
   CSI 2026 (synchronized output) wrapping is opt-in via
-  `:csi_2026?` at start_link time; when enabled, diff output is
-  bracketed in `\\e[?2026h` and `\\e[?2026l` so the terminal
-  composites the whole frame before displaying it. Auto-detection
-  via DCS query is deferred to 4.1.
+  `:csi_2026?` at start_link time.
   """
 
   use GenServer
@@ -22,7 +25,7 @@ defmodule OctoPi.TUI.Renderer do
   @clear_screen "\e[2J\e[3J"
   @cursor_home "\e[H"
   @erase_below "\e[J"
-  @sgr_reset_and_clear "\e[m\e[K"
+  @erase_line "\e[2K"
   @sync_on "\e[?2026h"
   @sync_off "\e[?2026l"
 
@@ -34,8 +37,10 @@ defmodule OctoPi.TUI.Renderer do
   @doc """
   Render a list of lines. Returns the bytes to write.
 
-  An optional `cursor_seq` (e.g. `"\\e[5;3H"`) is appended inside
-  the sync block so the cursor move is atomic with the frame update.
+  Lines may exceed the terminal height — the renderer computes the
+  viewport internally. An optional `cursor_seq` (e.g. `"\\e[5;3H"`)
+  is appended inside the sync block so the cursor move is atomic
+  with the frame update.
   """
   @spec render(GenServer.server(), [binary()], binary()) :: {:ok, binary()}
   def render(pid, lines, cursor_seq \\ "")
@@ -88,6 +93,7 @@ defmodule OctoPi.TUI.Renderer do
       previous: nil,
       width: Keyword.get(opts, :width, 80),
       height: Keyword.get(opts, :height, 24),
+      viewport_top: 0,
       csi_2026?: Keyword.get(opts, :csi_2026?, false),
       termux?: termux?(),
       full_redraws: 0
@@ -103,9 +109,6 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   def handle_call({:resize, w, h}, _from, state) do
-    # Termux suppresses clear-screen on height-only changes — but we
-    # still need to invalidate the previous frame so the diff path
-    # notices the new dimensions on the next render.
     suppress? = state.termux? and w == state.width
     new_prev = if suppress?, do: state.previous, else: nil
     {:reply, :ok, %{state | width: w, height: h, previous: new_prev}}
@@ -114,11 +117,7 @@ defmodule OctoPi.TUI.Renderer do
   def handle_call(:full_redraws, _from, state),
     do: {:reply, state.full_redraws, state}
 
-  # --- compute dispatch (multi-head on state shape) ---
-  #
-  # Full redraw when: first render, or previous frame was longer
-  # (need to clear stale rows). Growth is handled by the diff path
-  # — new lines simply paint below the previous content.
+  # --- compute dispatch ---
 
   defp compute(lines, cursor_seq, %{previous: nil} = state),
     do: full_redraw(lines, cursor_seq, state)
@@ -132,51 +131,106 @@ defmodule OctoPi.TUI.Renderer do
   # --- full redraw ---
 
   defp full_redraw(lines, cursor_seq, state) do
-    body = [@clear_screen, @cursor_home, render_lines(lines, 0), @erase_below, cursor_seq]
+    vp_top = viewport_top(lines, state.height)
+    visible = viewport_slice(lines, vp_top, state.height)
+
+    body = [
+      @clear_screen,
+      @cursor_home,
+      render_visible(visible),
+      @erase_below,
+      cursor_seq
+    ]
+
     bytes = IO.iodata_to_binary(wrap_sync(body, state))
-    {bytes, %{state | previous: lines, full_redraws: state.full_redraws + 1}}
+
+    new_state = %{
+      state
+      | previous: lines,
+        viewport_top: vp_top,
+        full_redraws: state.full_redraws + 1
+    }
+
+    {bytes, new_state}
   end
 
   # --- diff ---
 
-  defp diff(lines, cursor_seq, state) do
-    case find_diff_range(lines, state.previous) do
-      {-1, -1} ->
-        if cursor_seq == "" do
-          {"", %{state | previous: lines}}
-        else
-          bytes = IO.iodata_to_binary(wrap_sync([cursor_seq], state))
-          {bytes, %{state | previous: lines}}
-        end
+  defp diff(lines, cursor_seq, %{viewport_top: old_vp_top} = state) do
+    new_vp_top = viewport_top(lines, state.height)
 
-      {first, last} ->
-        body = [
-          move_to_row(first),
-          render_lines(Enum.slice(lines, first..last), first),
-          cursor_seq
-        ]
-
-        bytes = IO.iodata_to_binary(wrap_sync(body, state))
-        {bytes, %{state | previous: lines}}
+    if new_vp_top != old_vp_top do
+      repaint_viewport(lines, cursor_seq, new_vp_top, state)
+    else
+      diff_within_viewport(lines, cursor_seq, new_vp_top, state)
     end
   end
 
+  defp repaint_viewport(lines, cursor_seq, new_vp_top, state) do
+    vp_bottom = new_vp_top + state.height - 1
+    paint_last = min(vp_bottom, length(lines) - 1)
+
+    body = paint_range(lines, new_vp_top, paint_last, new_vp_top) ++ [@erase_below, cursor_seq]
+    bytes = IO.iodata_to_binary(wrap_sync(body, state))
+    {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
+  end
+
+  defp diff_within_viewport(lines, cursor_seq, new_vp_top, state) do
+    case find_diff_range(lines, state.previous) do
+      {-1, -1} ->
+        if cursor_seq == "" do
+          {"", %{state | previous: lines, viewport_top: new_vp_top}}
+        else
+          bytes = IO.iodata_to_binary(wrap_sync([cursor_seq], state))
+          {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
+        end
+
+      {first, _last} when first < new_vp_top ->
+        full_redraw(lines, cursor_seq, state)
+
+      {first, last} ->
+        vp_bottom = new_vp_top + state.height - 1
+        paint_first = max(first, new_vp_top)
+        paint_last = min(last, vp_bottom)
+
+        body =
+          if paint_first > paint_last do
+            [cursor_seq]
+          else
+            paint_range(lines, paint_first, paint_last, new_vp_top) ++ [cursor_seq]
+          end
+
+        bytes = IO.iodata_to_binary(wrap_sync(body, state))
+        {bytes, %{state | previous: lines, viewport_top: new_vp_top}}
+    end
+  end
+
+  # --- viewport helpers ---
+
+  defp viewport_top(lines, height), do: max(0, length(lines) - height)
+
+  defp viewport_slice(lines, vp_top, height) do
+    Enum.slice(lines, vp_top, height)
+  end
 
   # --- output helpers ---
 
-  # Render lines starting at forward-order `start_idx`. Each line
-  # is followed by clear-to-eol to wipe leftover bytes from the
-  # previous frame's (longer) row. Rows are separated by CRLF so
-  # cursor positioning tracks line-by-line.
-  defp render_lines([], _idx), do: []
+  defp render_visible([]), do: []
 
-  defp render_lines([line], _idx), do: [line, @sgr_reset_and_clear]
+  defp render_visible([line]), do: [@erase_line, line]
 
-  defp render_lines([line | rest], idx),
-    do: [line, @sgr_reset_and_clear, "\r\n" | render_lines(rest, idx + 1)]
+  defp render_visible([line | rest]),
+    do: [@erase_line, line, "\r\n" | render_visible(rest)]
 
-  # CSI cursor position is 1-indexed; column 1 for row start.
-  defp move_to_row(idx), do: "\e[#{idx + 1};1H"
+  defp paint_range(lines, first, last, vp_top) do
+    Enum.flat_map(first..last, fn i ->
+      screen_row = i - vp_top + 1
+      line = Enum.at(lines, i, "")
+      [move_to(screen_row, 1), @erase_line, line]
+    end)
+  end
+
+  defp move_to(row, col), do: "\e[#{row};#{col}H"
 
   defp wrap_sync(body, %{csi_2026?: true}), do: [@sync_on, body, @sync_off]
   defp wrap_sync(body, %{csi_2026?: false}), do: body
