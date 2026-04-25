@@ -4,7 +4,9 @@
     "opi-fin.2.2",
     "opi-fin.2.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-fin.6.5"
+  ],
   "created": "2026-04-25T21:12:38Z",
   "description": "FILES: extensions/trigger_compact.ex, test/octo_pi/coder/extensions/trigger_compact_test.exs\n\nREQUIRES: opi-fin.2.2, opi-fin.2.3\n\nSame migration pattern as opi-fin.5.1. Read trigger_compact.ex to identify state shape and Agent usage. Apply the same transformation: use macro, remove init/2, add mount/0, convert handlers to 3-arity callbacks.\n\nDO NOT change any bind_core usage if present (Phase 6).\n\nTEST: Remove outer Agent setup from trigger_compact_test.exs. Use \u0026TriggerCompact.init/1 as factory.",
   "id": "opi-fin.5.5",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "Migrate TriggerCompact to mount/0 pattern",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:14Z"
+  "updated_at": "2026-04-25T21:14:25Z"
 }
