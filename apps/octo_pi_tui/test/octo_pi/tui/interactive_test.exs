@@ -100,6 +100,20 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Ctrl+Z process suspend (opi-0g4.10)" do
+    test "Ctrl+Z sets suspend_pending to true" do
+      s = %Interactive{}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?z, modifiers: [:ctrl]}})
+      assert s2.suspend_pending
+    end
+
+    test "Ctrl+Z does not set exit" do
+      s = %Interactive{}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?z, modifiers: [:ctrl]}})
+      refute s2.exit
+    end
+  end
+
   describe "handle_event — Ctrl+T thinking visibility (opi-0g4.13)" do
     test "Ctrl+T toggles thinking_visible from true to false" do
       s = %Interactive{thinking_visible: true}

@@ -82,6 +82,10 @@ defmodule OctoPi.TUI.Terminal do
   @spec kitty_protocol_active?(GenServer.server()) :: boolean()
   def kitty_protocol_active?(pid), do: GenServer.call(pid, :kitty_protocol_active?)
 
+  @doc "Suspend: exit raw mode, send SIGTSTP, re-enter raw mode on resume."
+  @spec suspend(GenServer.server()) :: :ok
+  def suspend(pid), do: GenServer.call(pid, :suspend, :infinity)
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -94,6 +98,7 @@ defmodule OctoPi.TUI.Terminal do
     probe_timeout_ms = Keyword.get(opts, :probe_timeout_ms, 150)
     drain_idle_ms = Keyword.get(opts, :drain_idle_ms, 50)
     drain_timeout_ms = Keyword.get(opts, :drain_timeout_ms, 1000)
+    send_sigtstp_fn = Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0)
 
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
     tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
@@ -118,6 +123,7 @@ defmodule OctoPi.TUI.Terminal do
       probe_timeout_ms: probe_timeout_ms,
       drain_idle_ms: drain_idle_ms,
       drain_timeout_ms: drain_timeout_ms,
+      send_sigtstp_fn: send_sigtstp_fn,
       keyboard_mode: :none,
       probe_start: nil
     }
@@ -139,6 +145,13 @@ defmodule OctoPi.TUI.Terminal do
 
   def handle_call(:kitty_protocol_active?, _from, state) do
     {:reply, state.keyboard_mode == :kitty, state}
+  end
+
+  def handle_call(:suspend, _from, state) do
+    state.raw_mode_fn.(:exit)
+    state.send_sigtstp_fn.()
+    state.raw_mode_fn.(:enter)
+    {:reply, :ok, state}
   end
 
   def handle_call({:feed_chunk, bin}, _from, state) do
@@ -203,6 +216,15 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   # --- helpers ---
+
+  defp default_send_sigtstp do
+    if match?({:unix, _}, :os.type()) do
+      pid_str = List.to_string(:os.getpid())
+      System.cmd("kill", ["-TSTP", pid_str])
+    end
+
+    :ok
+  end
 
   defp drain_input(deadline_ms, idle_ms) do
     remaining = deadline_ms - System.monotonic_time(:millisecond)

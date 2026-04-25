@@ -265,6 +265,64 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "suspend (opi-0g4.10)" do
+    test "suspend calls raw_mode exit then enter" do
+      test_pid = self()
+
+      raw_mode_fn = fn action ->
+        send(test_pid, {:raw_mode, action})
+        :ok
+      end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: raw_mode_fn,
+          tty_fn: fn _ -> :ok end,
+          send_sigtstp_fn: fn -> send(test_pid, :sigtstp_sent) end
+        )
+
+      assert_receive {:raw_mode, :enter}, 500
+
+      Terminal.suspend(pid)
+
+      assert_receive {:raw_mode, :exit}, 500
+      assert_receive :sigtstp_sent, 500
+      assert_receive {:raw_mode, :enter}, 500
+    end
+
+    test "suspend invokes send_sigtstp_fn" do
+      test_pid = self()
+      sigtstp_fn = fn -> send(test_pid, :sigtstp) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: fn _ -> :ok end,
+          send_sigtstp_fn: sigtstp_fn
+        )
+
+      Terminal.suspend(pid)
+      assert_receive :sigtstp, 500
+    end
+
+    test "suspend returns :ok" do
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: fn _ -> :ok end,
+          send_sigtstp_fn: fn -> :ok end
+        )
+
+      assert :ok = Terminal.suspend(pid)
+    end
+  end
+
   describe "drain input on exit (opi-0g4.3)" do
     test "terminate waits at least drain_idle_ms when no pending chunks" do
       test_pid = self()

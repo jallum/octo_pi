@@ -53,6 +53,7 @@ defmodule OctoPi.TUI.Interactive do
           width: pos_integer(),
           height: pos_integer(),
           exit: boolean(),
+          suspend_pending: boolean(),
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -80,6 +81,7 @@ defmodule OctoPi.TUI.Interactive do
             width: 80,
             height: 24,
             exit: false,
+            suspend_pending: false,
             paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -539,9 +541,17 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp advance(new_state, fsm, renderer, terminal) do
+    new_state = maybe_suspend(new_state, terminal)
     new_state = render_frame(new_state, renderer, terminal)
     loop(new_state, fsm, renderer, terminal)
   end
+
+  defp maybe_suspend(%{suspend_pending: true} = state, terminal) do
+    Terminal.suspend(terminal)
+    %{state | suspend_pending: false}
+  end
+
+  defp maybe_suspend(state, _terminal), do: state
 
   defp render_frame(state, renderer, terminal) do
     input = Components.Input.update_scroll(state.input, state.width)
@@ -623,6 +633,8 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: ?d, modifiers: [:ctrl]}}) do
     %{state | exit: true}
   end
+
+  def handle_event(state, {:key, %Key{key: ?z, modifiers: [:ctrl]}}), do: %{state | suspend_pending: true}
 
   def handle_event(state, {:key, %Key{key: ?t, modifiers: [:ctrl]}}),
     do: %{state | thinking_visible: !state.thinking_visible}
