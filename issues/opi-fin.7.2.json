@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T21:13:48Z",
+  "description": "REQUIRES: opi-fin.7.1 (UI behaviour + Stub), opi-fin.5.x (stateful migrations) merged.\n\nFILES: All extensions that call ctx.ui fn-fields. Identified by grep for 'ctx.ui.' or 'ui.':\n- status_line.ex (already stateful-migrated) + test\n- custom_header.ex + test\n- custom_footer.ex (already stateful-migrated) + test\n- git_checkpoint.ex (already stateful-migrated) + test\n- permission_gate.ex + test\n- session_name.ex + test\n\nFOR EACH EXTENSION:\n1. Replace ctx.ui.set_status.(slot, text) with UI.set_status(ctx.ui, slot, text).\n2. Replace ctx.ui.apply_fg.(color, text) with UI.apply_fg(ctx.ui, color, text).\n3. Replace ctx.ui.notify.(msg) with UI.notify(ctx.ui, msg).\n4. Replace ctx.ui.select.(opts, kw) with UI.select(ctx.ui, opts, kw).\n5. Replace any other fn-field call patterns similarly.\n6. Guards like 'if ctx.has_ui?' continue to work -- has_ui? stays on Context.\n\nFOR EACH TEST:\nReplace UIContext.new() + UIContext.bind(ui, %{set_status: fn, ...}) with:\n  {:ok, ui} = UI.Stub.start_link()\n  ctx = Context.new(%{cwd: '/tmp', has_ui?: true, ui: ui})\n  handler.(event, ctx)\n  assert UI.Stub.calls(ui) == [{:set_status, 'slot', 'text'}]\n\nMigrate extensions one at a time. Each can be a separate commit.",
+  "id": "opi-fin.7.2",
+  "labels": [],
+  "parent": "opi-fin.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Migrate UI-using extensions to UI behaviour",
+  "type": "task",
+  "updated_at": "2026-04-25T21:13:48Z"
+}
