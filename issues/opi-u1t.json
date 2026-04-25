@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-25T22:19:29Z",
@@ -7,8 +7,8 @@
   "id": "opi-u1t",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Remove directory gates from read tool",
   "type": "task",
-  "updated_at": "2026-04-25T22:19:29Z"
+  "updated_at": "2026-04-25T22:22:08Z"
 }
