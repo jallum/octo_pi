@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:20Z",
+  "description": "Affected extension: event-bus-demo.ex\nUpstream: pi.events is an EventEmitter built directly into the ExtensionAPI. Extensions call pi.events.on(name, handler) to subscribe and pi.events.emit(name, data) to publish. Multiple extensions sharing a session share the same bus instance, enabling true inter-extension messaging.\nCurrent workaround: a separate EventBus GenServer must be started externally and passed to init/2 as a pid. The factory that loads the extension is responsible for providing the bus, breaking the self-contained extension model.\nWhat's needed: API.t() must include an events field (a pid or fn-pair for emit/subscribe) that is wired at bind_core time. The bus should be session-scoped so all extensions in a session share it.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/event-bus.ts (pi.events.on + pi.events.emit)",
+  "id": "opi-rcg.6",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "pi.events — built-in event bus on the extension API",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:20Z"
+}
