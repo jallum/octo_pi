@@ -6,5 +6,7 @@ tmp/
 erl_crash.dump
 *.ez
 *.beam
+*.o
+*.log
 .elixir_ls/
 .DS_Store
