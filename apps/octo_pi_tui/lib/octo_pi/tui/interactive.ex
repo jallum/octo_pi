@@ -728,6 +728,10 @@ defmodule OctoPi.TUI.Interactive do
     advance(new_state, fsm, renderer, terminal)
   end
 
+  defp handle_loop_msg(state, {:bash_done, _id, _output, _exit_code} = msg, fsm, renderer, terminal) do
+    advance(handle_event(state, msg), fsm, renderer, terminal)
+  end
+
   defp handle_loop_msg(state, {:EXIT, _pid, _reason}, fsm, renderer, terminal) do
     loop(%{state | exit: true}, fsm, renderer, terminal)
   end
@@ -993,6 +997,19 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
     do: %{state | loader: Components.Loader.advance_frame(loader)}
 
+  def handle_event(state, {:bash_done, id, output, exit_code}) do
+    transcript =
+      Enum.map(state.transcript, fn
+        %BashExecution{id: ^id} = be ->
+          be |> BashExecution.append_output(output) |> BashExecution.set_complete(exit_code)
+
+        other ->
+          other
+      end)
+
+    %{state | transcript: transcript}
+  end
+
   def handle_event(state, _), do: state
 
   defp handle_event_after_app(%{extension_shortcuts: [_ | _] = shortcuts} = state, key) do
@@ -1146,7 +1163,15 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_submit(state, new_input, "!" <> rest) do
     command = String.trim_leading(rest, " ")
-    be = run_bash_command(command, state.theme)
+    id = make_ref()
+    be = BashExecution.new(command, state.theme, id: id)
+    interactive_pid = self()
+
+    Task.start(fn ->
+      {output, exit_code} = System.shell(command, stderr_to_stdout: true)
+      send(interactive_pid, {:bash_done, id, output, exit_code})
+    end)
+
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
   end
 
@@ -1230,13 +1255,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_slash_command("config", state) do
     %{state | notification: "Config: use --help for startup options"}
-  end
-
-  defp run_bash_command(command, theme) do
-    be = BashExecution.new(command, theme)
-    {output, exit_code} = System.shell(command, stderr_to_stdout: true)
-    be = BashExecution.append_output(be, output)
-    BashExecution.set_complete(be, exit_code)
   end
 
   defp try_extension_shortcut([], _key, _state), do: :pass

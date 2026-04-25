@@ -77,22 +77,30 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.transcript == [{:user, "/foo"}]
     end
 
-    test "! prefix runs shell command and adds BashExecution to transcript" do
+    test "! prefix adds a running BashExecution to transcript immediately" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
       s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
-      assert [%BashExecution{}] = s.transcript
+      assert [%BashExecution{command: "echo hello", status: :running}] = s.transcript
+    end
+
+    test "! prefix completes BashExecution on :bash_done event" do
+      s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
+      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
       be = hd(s.transcript)
-      assert be.command == "echo hello"
-      assert be.status == :complete
-      assert be.exit_code == 0
-      output = BashExecution.get_output(be)
-      assert output =~ "hello"
+      id = be.id
+      assert_receive {:bash_done, ^id, output, exit_code}, 2_000
+      s = Interactive.handle_event(s, {:bash_done, id, output, exit_code})
+      assert [%BashExecution{status: :complete, exit_code: 0}] = s.transcript
+      assert BashExecution.get_output(hd(s.transcript)) =~ "hello"
     end
 
     test "! prefix without space also runs shell command" do
       s = %Interactive{input: %Input{value: "!echo hi", cursor: 8}, session: nil}
       s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
-      assert [%BashExecution{command: "echo hi"}] = s.transcript
+      assert [%BashExecution{command: "echo hi", status: :running}] = s.transcript
+      be = hd(s.transcript)
+      id = be.id
+      assert_receive {:bash_done, ^id, _output, _exit_code}, 2_000
     end
 
     test "! prefix clears input after execution" do
@@ -115,9 +123,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       refute_received {:expanded, _}
     end
 
-    test "! prefix with non-zero exit sets error status" do
+    test "! prefix with non-zero exit sets error status on :bash_done event" do
       s = %Interactive{input: %Input{value: "! exit 1", cursor: 8}, session: nil}
       s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      be = hd(s.transcript)
+      id = be.id
+      assert_receive {:bash_done, ^id, _output, exit_code}, 2_000
+      s = Interactive.handle_event(s, {:bash_done, id, "", exit_code})
       assert [%BashExecution{status: :error, exit_code: 1}] = s.transcript
     end
 

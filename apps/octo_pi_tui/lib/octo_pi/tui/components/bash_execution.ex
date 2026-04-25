@@ -11,6 +11,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
 
   @type status :: :running | :complete | :cancelled | :error
   @type t :: %__MODULE__{
+          id: reference() | nil,
           command: String.t(),
           theme: Theme.t(),
           output_lines: [String.t()],
@@ -21,6 +22,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
         }
 
   defstruct [
+    :id,
     :command,
     :theme,
     output_lines: [],
@@ -33,6 +35,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
   @spec new(String.t(), Theme.t(), keyword()) :: t()
   def new(command, theme, opts \\ []) do
     %__MODULE__{
+      id: Keyword.get(opts, :id),
       command: command,
       theme: theme,
       excluded: Keyword.get(opts, :excluded, false)
