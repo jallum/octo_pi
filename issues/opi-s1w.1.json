@@ -5,13 +5,13 @@
     "opi-s1w.1.1"
   ],
   "created": "2026-04-25T05:14:19Z",
-  "description": "Deferred items consolidated from port-map review:\n- OAuth support (Claude Code)\n- Additional providers (OpenAI, Google, Bedrock)\n- TUI renderer correctness improvements\n- Provider extensions\n- Extension examples \u0026 tests\n- TUI feature parity work (opim4h)\n\nDefer date: 2026-05-01",
+  "description": "Deferred items consolidated from port-map review:\n- OAuth support (Claude Code)\n- Additional providers (OpenAI, Google, Bedrock)\n- TUI renderer correctness improvements\n- Provider extensions\n- Extension examples & tests\n- TUI feature parity work (opim4h)\n\nDefer date: 2026-05-01",
   "id": "opi-s1w.1",
   "labels": [],
   "parent": "opi-s1w",
   "priority": 2,
-  "status": "open",
-  "title": "Deferred \u0026 Skipped Work Review",
+  "status": "closed",
+  "title": "Deferred & Skipped Work Review",
   "type": "epic",
-  "updated_at": "2026-04-25T05:17:28Z"
+  "updated_at": "2026-04-25T12:01:02.658699Z"
 }
