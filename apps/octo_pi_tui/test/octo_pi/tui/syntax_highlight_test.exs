@@ -56,6 +56,28 @@ defmodule OctoPi.TUI.SyntaxHighlightTest do
       assert length(result) == 3
       assert Enum.at(result, 1) == ""
     end
+
+    test "later patterns do not shred ANSI codes from earlier patterns" do
+      code = "# comment"
+      [line] = SyntaxHighlight.highlight(code, "bash", theme())
+      stripped = String.replace(line, ~r/\e\[[0-9;]*m/, "")
+      assert stripped == "# comment",
+             "visible text should be unchanged but got: #{inspect(stripped)}"
+
+      refute Regex.match?(~r/(?<!\e)\[\d/, line),
+             "raw bracket-digit fragments should not appear: #{inspect(line)}"
+    end
+
+    test "number highlighting does not match inside existing ANSI sequences" do
+      code = "x = 42"
+      [line] = SyntaxHighlight.highlight(code, "elixir", theme())
+      stripped = String.replace(line, ~r/\e\[[0-9;]*m/, "")
+      assert stripped == "x = 42"
+
+      # "42" should be wrapped exactly once, not have nested escapes
+      parts = String.split(line, "42")
+      assert length(parts) == 2, "42 should appear exactly once in output"
+    end
   end
 
   describe "supported?/1" do

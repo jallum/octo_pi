@@ -64,9 +64,17 @@ defmodule OctoPi.TUI.SyntaxHighlight do
     end)
   end
 
+  @ansi_sequence ~r/\e\[[0-9;]*m/
+
   defp apply_one_pattern(text, regex, color_key, theme) do
-    Regex.replace(regex, text, fn match ->
-      if String.contains?(match, "\e["), do: match, else: Theme.fg(theme, color_key, match)
+    segments = Regex.split(@ansi_sequence, text, include_captures: true)
+
+    Enum.map_join(segments, "", fn segment ->
+      if Regex.match?(@ansi_sequence, segment) do
+        segment
+      else
+        Regex.replace(regex, segment, fn match -> Theme.fg(theme, color_key, match) end)
+      end
     end)
   end
 
