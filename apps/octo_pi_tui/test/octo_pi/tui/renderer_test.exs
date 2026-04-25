@@ -129,6 +129,57 @@ defmodule OctoPi.TUI.RendererTest do
 
       assert bytes =~ @erase_line
     end
+
+    # opi-e72: streaming shrink — partial frame (2 lines) collapses to final (1 line)
+    test "2-to-1 shrink erases the stale second line" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["partial line 1", "partial line 2"])
+      {:ok, bytes} = Renderer.render(pid, ["final line"])
+
+      # No full redraw — diff path only
+      refute bytes =~ "\e[2J"
+      # The stale second line must be erased
+      assert bytes =~ @erase_line
+      # Final content must appear
+      assert strip_csi(bytes) =~ "final line"
+    end
+
+    test "4-to-1 shrink erases all three stale lines" do
+      pid = new()
+      {:ok, _} = Renderer.render(pid, ["s1", "s2", "s3", "s4"])
+      {:ok, bytes} = Renderer.render(pid, ["final"])
+
+      refute bytes =~ "\e[2J"
+      # Three stale lines (s2, s3, s4) must be cleared — need at least 3 erase-line seqs
+      count = bytes |> String.split(@erase_line) |> length() |> Kernel.-(1)
+      assert count >= 3
+    end
+
+    # opi-e72: max_lines_rendered must track current frame, not historical max.
+    # After a shrink, subsequent growth must NOT trigger clear_on_shrink.
+    test "shrink then grow does not trigger spurious full redraw (max_lines_rendered tracks current)" do
+      prev = System.get_env("PI_CLEAR_ON_SHRINK")
+      System.put_env("PI_CLEAR_ON_SHRINK", "1")
+
+      try do
+        # Must start renderer after setting env var — clear_on_shrink is read at init time.
+        pid = new()
+        {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
+
+        # Shrink to 2 lines via diff path. With the fix, max_lines_rendered is now 2.
+        {:ok, _} = Renderer.render(pid, ["a", "b"])
+
+        # Grow back to 4 lines. Bug: max_lines_rendered was still 5, so 4 < 5 → full redraw.
+        # Fix: max_lines_rendered is 2, so 4 < 2 is false → diff path.
+        {:ok, bytes} = Renderer.render(pid, ["a", "b", "c", "d"])
+        refute bytes =~ "\e[2J"
+      after
+        case prev do
+          nil -> System.delete_env("PI_CLEAR_ON_SHRINK")
+          v -> System.put_env("PI_CLEAR_ON_SHRINK", v)
+        end
+      end
+    end
   end
 
   describe "termux suppression" do
@@ -247,42 +298,6 @@ defmodule OctoPi.TUI.RendererTest do
       {:ok, _} = Renderer.render(pid, changed)
 
       assert Renderer.full_redraws(pid) == 1
-    end
-  end
-
-  describe "max_lines_rendered resets on content change (opi-e72)" do
-    # max_lines_rendered must track the *current* line count, not a
-    # historical maximum.  When clear_on_shrink is active, a monotonically
-    # growing counter would trigger a full clear-redraw whenever content
-    # later renders at fewer lines than the all-time peak — even when those
-    # extra lines were already removed by a handled deletion.
-    test "shrink-then-grow does not trigger spurious clear-redraw" do
-      prev = System.get_env("PI_CLEAR_ON_SHRINK")
-      System.put_env("PI_CLEAR_ON_SHRINK", "1")
-
-      try do
-        pid = new()
-        # Render 5 lines — max_lines_rendered = 5
-        {:ok, _} = Renderer.render(pid, ["a", "b", "c", "d", "e"])
-
-        # Render 3 lines with a content change at row 0 (goes through
-        # handle_changed_lines, not handle_deleted_lines).
-        # Bug:  max_lines_rendered stays 5.
-        # Fix:  max_lines_rendered reset to 3.
-        {:ok, _} = Renderer.render(pid, ["X", "b", "c"])
-
-        # Render the same 3 lines with a change.
-        # Bug:  3 < 5 → compute triggers full_render → full_redraws = 2.
-        # Fix:  3 < 3 is false → diff path → full_redraws = 1.
-        {:ok, _} = Renderer.render(pid, ["X", "b", "Y"])
-
-        assert Renderer.full_redraws(pid) == 1
-      after
-        case prev do
-          nil -> System.delete_env("PI_CLEAR_ON_SHRINK")
-          v -> System.put_env("PI_CLEAR_ON_SHRINK", v)
-        end
-      end
     end
   end
 
