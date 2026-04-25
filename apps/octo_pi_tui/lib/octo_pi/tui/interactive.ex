@@ -62,6 +62,7 @@ defmodule OctoPi.TUI.Interactive do
           model: Model.t() | nil,
           models: [Model.t()],
           model_selector: ModelSelector.t() | nil,
+          dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -95,6 +96,7 @@ defmodule OctoPi.TUI.Interactive do
             model: nil,
             models: [],
             model_selector: nil,
+            dequeue_overlay: nil,
             paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -595,6 +597,7 @@ defmodule OctoPi.TUI.Interactive do
     input_lines = Components.Input.render(input, state.width)
     lines = render(state, input_lines)
     lines = maybe_composite_model_selector(state, lines)
+    lines = maybe_composite_dequeue_overlay(state, lines)
 
     if state.debug_render_log, do: log_overwide(state.debug_render_log, lines, state.width)
 
@@ -612,6 +615,25 @@ defmodule OctoPi.TUI.Interactive do
     ov_lines = ModelSelector.render(ms, ov_w)
     ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [ov], w, h)
+  end
+
+  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: nil}, lines), do: lines
+
+  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) do
+    ov_w = min(70, w)
+    ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
+    overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
+    Overlay.composite(lines, [overlay], w, h)
+  end
+
+  defp render_dequeue_items(items, selected, _width, theme) do
+    Enum.with_index(items, fn {type, msg}, idx ->
+      prefix = if idx == selected, do: "→ ", else: "  "
+      type_tag = dim("[#{type}]")
+      text = if is_map(msg) and Map.has_key?(msg, :content), do: to_string(msg.content), else: inspect(msg)
+      label = "#{prefix}#{type_tag} #{text}"
+      if idx == selected and theme, do: Theme.fg(theme, :accent, label), else: label
+    end)
   end
 
   defp log_overwide(fd, lines, width) do
@@ -683,6 +705,10 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  def handle_event(%{dequeue_overlay: ov} = state, {:key, %Key{} = key}) when not is_nil(ov) do
+    handle_dequeue_key(state, ov, key)
+  end
+
   # Ctrl+C: clear non-empty editor; abort running agent; no-op when idle+empty.
   def handle_event(%{input: %{value: v}} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) when v != "" do
     %{state | input: %{state.input | value: "", cursor: 0}}
@@ -731,6 +757,20 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_event(state, {:key, %Key{key: ?g, modifiers: [:ctrl]}}), do: %{state | editor_pending: true}
+
+  def handle_event(%{session: nil} = state, {:key, %Key{key: :up, modifiers: [:alt]}}), do: state
+
+  def handle_event(state, {:key, %Key{key: :up, modifiers: [:alt]}}) do
+    steering = OctoPi.Agent.drain_steering(state.session)
+    follow_up = OctoPi.Agent.drain_follow_up(state.session)
+    items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
+
+    if items == [] do
+      %{state | notification: "No queued messages"}
+    else
+      %{state | dequeue_overlay: %{items: items, selected: 0}}
+    end
+  end
 
   def handle_event(%{loader: %Components.Loader{}} = state, {:key, %Key{key: :enter, modifiers: [:alt]}}) do
     text = state.input.value
@@ -1077,6 +1117,37 @@ defmodule OctoPi.TUI.Interactive do
 
   defp thinking_level_label(:off), do: nil
   defp thinking_level_label(level), do: to_string(level)
+
+  defp handle_dequeue_key(state, ov, %Key{key: :up}) do
+    %{state | dequeue_overlay: %{ov | selected: max(0, ov.selected - 1)}}
+  end
+
+  defp handle_dequeue_key(state, ov, %Key{key: :down}) do
+    max_sel = max(0, length(ov.items) - 1)
+    %{state | dequeue_overlay: %{ov | selected: min(max_sel, ov.selected + 1)}}
+  end
+
+  defp handle_dequeue_key(state, ov, %Key{key: k}) when k in [:delete, :backspace] do
+    new_items = List.delete_at(ov.items, ov.selected)
+
+    if new_items == [] do
+      %{state | dequeue_overlay: nil}
+    else
+      max_sel = max(0, length(new_items) - 1)
+      %{state | dequeue_overlay: %{ov | items: new_items, selected: min(ov.selected, max_sel)}}
+    end
+  end
+
+  defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
+    Enum.each(ov.items, fn
+      {:steering, msg} -> if state.session, do: OctoPi.Agent.steer(state.session, msg)
+      {:follow_up, msg} -> if state.session, do: OctoPi.Agent.follow_up(state.session, msg)
+    end)
+
+    %{state | dequeue_overlay: nil}
+  end
+
+  defp handle_dequeue_key(state, _ov, _key), do: state
 
   defp cycle_model(models, current, dir) do
     idx = Enum.find_index(models, &(&1 == current)) || -1

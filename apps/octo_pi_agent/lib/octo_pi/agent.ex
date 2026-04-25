@@ -72,6 +72,14 @@ defmodule OctoPi.Agent do
   @spec set_model(session(), OctoPi.AI.Model.t()) :: :ok
   def set_model(pid, model), do: Session.set_model(pid, model)
 
+  @doc "Drain all messages from the steering queue and return them."
+  @spec drain_steering(session()) :: [Message.t()]
+  def drain_steering(pid), do: Session.drain_steering(pid)
+
+  @doc "Drain all messages from the follow-up queue and return them."
+  @spec drain_follow_up(session()) :: [Message.t()]
+  def drain_follow_up(pid), do: Session.drain_follow_up(pid)
+
   @doc """
   Subscribe `listener_pid` to session events. Returns an unsubscribe
   function. The 1- and 2-arity forms default the listener to

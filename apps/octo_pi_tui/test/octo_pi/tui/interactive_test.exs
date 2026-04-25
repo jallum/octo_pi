@@ -134,6 +134,124 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Alt+Up dequeue overlay (opi-0g4.16)" do
+    defp dequeue_state(items, selected) do
+      %Interactive{dequeue_overlay: %{items: items, selected: selected}}
+    end
+
+    defp tagged(type, text) do
+      msg = %OctoPi.AI.Message.User{
+        content: text,
+        timestamp: 0
+      }
+
+      {type, msg}
+    end
+
+    test "Alt+Up with nil session is a no-op" do
+      s = %Interactive{session: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      assert s2 == s
+    end
+
+    test "Alt+Up with live session and queued follow-up opens overlay" do
+      {:ok, session} =
+        OctoPi.Agent.start_session(
+          model: %OctoPi.AI.Model{
+            id: "fake",
+            name: "fake",
+            api: :fake,
+            provider: :fake,
+            base_url: "http://fake",
+            context_window: 100,
+            max_tokens: 100
+          }
+        )
+
+      OctoPi.Agent.follow_up(session, "queued message")
+      s = %Interactive{session: session}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      assert s2.dequeue_overlay
+      items = s2.dequeue_overlay.items
+      assert length(items) == 1
+      assert match?([{:follow_up, _}], items)
+    end
+
+    test "Alt+Up with live session and empty queues shows notification" do
+      {:ok, session} =
+        OctoPi.Agent.start_session(
+          model: %OctoPi.AI.Model{
+            id: "fake",
+            name: "fake",
+            api: :fake,
+            provider: :fake,
+            base_url: "http://fake",
+            context_window: 100,
+            max_tokens: 100
+          }
+        )
+
+      s = %Interactive{session: session}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      assert s2.dequeue_overlay == nil
+      assert s2.notification =~ "No queued"
+    end
+
+    test "when dequeue_overlay open, Up moves selection toward first item" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
+      s = dequeue_state(items, 2)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :up}})
+      assert s2.dequeue_overlay.selected == 1
+    end
+
+    test "when dequeue_overlay open, Up does not go below 0" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
+      s = dequeue_state(items, 0)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :up}})
+      assert s2.dequeue_overlay.selected == 0
+    end
+
+    test "when dequeue_overlay open, Down moves selection toward last item" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
+      s = dequeue_state(items, 0)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :down}})
+      assert s2.dequeue_overlay.selected == 1
+    end
+
+    test "when dequeue_overlay open, Down does not go past last item" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
+      s = dequeue_state(items, 1)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :down}})
+      assert s2.dequeue_overlay.selected == 1
+    end
+
+    test "when dequeue_overlay open, Delete removes selected item" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
+      s = dequeue_state(items, 1)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :delete}})
+      assert length(s2.dequeue_overlay.items) == 2
+      assert match?([{:follow_up, _}, {:follow_up, _}], s2.dequeue_overlay.items)
+    end
+
+    test "when dequeue_overlay open, Delete on last remaining item closes overlay" do
+      items = [tagged(:follow_up, "only")]
+      s = dequeue_state(items, 0)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :delete}})
+      assert s2.dequeue_overlay == nil
+    end
+
+    test "when dequeue_overlay open, Escape closes overlay" do
+      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
+      s = dequeue_state(items, 0, session: nil)
+      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      assert s2.dequeue_overlay == nil
+    end
+  end
+
+  defp dequeue_state(items, selected, opts) do
+    struct(%Interactive{dequeue_overlay: %{items: items, selected: selected}}, opts)
+  end
+
   describe "handle_event — Alt+Enter follow-up queuing (opi-0g4.15)" do
     test "Alt+Enter while loader active clears input" do
       s = %Interactive{
