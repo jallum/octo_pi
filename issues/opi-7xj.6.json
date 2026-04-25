@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T16:15:12.472935Z",
+  "description": "WelcomeBanner hint says 'escape interrupt' implying Escape aborts in-progress generation. Actual behavior: `app.interrupt` is defined in keybindings.ex (mapped to Escape) but is NOT in @app_action_priority in interactive.ex, so it never matches. The Escape key falls through to handle_event_key which either exits (empty input) or clears the input.\\n\\nWhen the AI is actively generating and input is empty, Escape exits the TUI entirely rather than calling OctoPi.Agent.abort/1.\\n\\nFix: add 'app.interrupt' to @app_action_priority and add a dispatch_app_action handler that aborts when a loader is active (similar to how app.clear handles Ctrl+C abort).",
+  "id": "opi-7xj.6",
+  "labels": [],
+  "parent": "opi-7xj",
+  "priority": 2,
+  "status": "open",
+  "title": "Escape exits TUI during active generation instead of aborting",
+  "type": "bug",
+  "updated_at": "2026-04-25T16:15:12.472935Z"
+}
