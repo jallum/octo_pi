@@ -21,6 +21,7 @@ defmodule Mix.Tasks.Pi do
   def run(argv) do
     Mix.Task.run("app.config")
     Application.ensure_all_started(:octo_pi_ai_anthropic)
+    Application.ensure_all_started(:octo_pi_ai_openai)
     Application.ensure_all_started(:octo_pi_agent)
     Application.ensure_all_started(:octo_pi_coder)
 

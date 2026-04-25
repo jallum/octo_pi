@@ -29,6 +29,7 @@ defmodule OctoPi.Coder.MixProject do
   defp deps do
     [
       {:octo_pi_agent, in_umbrella: true},
+      {:octo_pi_ai_openai, in_umbrella: true},
       {:erlexec, "~> 2.3"}
     ]
   end

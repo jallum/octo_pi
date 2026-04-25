@@ -15,14 +15,15 @@ defmodule OctoPi.Coder.CLI do
   # `defaultModelPerProvider.anthropic`). Override with `--model`.
   # The full resolver (scoped models, saved settings, provider
   # priority with valid-auth fallback) is a Phase 8 follow-up.
-  @default_model "claude-opus-4-6"
+  @default_model "qwen3.5:latest"
 
   @switches [
     print: :boolean,
     mode: :string,
     model: :string,
     cwd: :string,
-    help: :boolean
+    help: :boolean,
+    debug_render: :boolean
   ]
 
   @aliases [p: :print, m: :model, h: :help]
@@ -64,7 +65,8 @@ defmodule OctoPi.Coder.CLI do
   defp base_opts(switches) do
     %{
       model: resolve_model(switches[:model] || @default_model),
-      cwd: switches[:cwd] || File.cwd!()
+      cwd: switches[:cwd] || File.cwd!(),
+      debug_render: switches[:debug_render] || false
     }
   end
 
@@ -193,15 +195,37 @@ defmodule OctoPi.Coder.CLI do
   end
 
   defp resolve_model(id) do
-    %Model{
-      id: id,
-      name: id,
-      api: :anthropic_messages,
-      provider: :anthropic,
-      base_url: "https://api.anthropic.com/v1",
-      context_window: 200_000,
-      max_tokens: 8000
-    }
+    case provider_from_model_id(id) do
+      :ollama ->
+        %Model{
+          id: id,
+          name: id,
+          api: :openai_completions,
+          provider: :ollama,
+          base_url: "http://localhost:11434/v1",
+          context_window: 32_768,
+          max_tokens: 4_096
+        }
+
+      :anthropic ->
+        %Model{
+          id: id,
+          name: id,
+          api: :anthropic_messages,
+          provider: :anthropic,
+          base_url: "https://api.anthropic.com/v1",
+          context_window: 200_000,
+          max_tokens: 8000
+        }
+    end
+  end
+
+  defp provider_from_model_id(id) do
+    if String.starts_with?(id, "claude") do
+      :anthropic
+    else
+      :ollama
+    end
   end
 
   defp usage_text do
@@ -215,7 +239,7 @@ defmodule OctoPi.Coder.CLI do
     Flags:
       --print, -p    force print mode (default when a prompt is given)
       --mode rpc     run as a JSON-line RPC server on stdin/stdout
-      --model, -m    Anthropic model id (default: #{@default_model})
+      --model, -m    model id (default: #{@default_model}; claude* → Anthropic, else → Ollama)
       --cwd          working dir (default: current dir)
       --help, -h     show this message
     """
