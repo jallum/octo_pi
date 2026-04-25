@@ -40,7 +40,7 @@ defmodule OctoPi.Coder.Tools.Ls do
 
   @impl true
   def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
-    cwd = Map.fetch!(args, "_cwd")
+    _cwd = Map.fetch!(args, "_cwd")
     limit = Map.get(args, "limit", @default_limit)
 
     with {:ok, %File.Stat{type: :directory}} <- File.stat(path),
