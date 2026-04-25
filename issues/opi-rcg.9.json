@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:45Z",
+  "description": "Affected extension: custom-footer.ex\nUpstream: the footer factory receives a footerData argument with:\n  - footerData.getGitBranch(): returns the current git branch name.\n  - footerData.onBranchChange(cb): subscribes to git branch change events; returns an unsubscribe fn.\n  - footerData.getExtensionStatuses(): returns texts from ctx.ui.setStatus() calls.\nThese are only exposed inside the footer factory — not available via ctx directly — because they are UI-lifecycle-scoped data that require the footer to register/unregister subscriptions on mount/unmount.\nCurrent workaround: branch name and token stats are omitted from the custom footer.\nWhat's needed: when the TUI calls a footer render factory (see opi-rcg.8), pass a footerData struct. footerData.getGitBranch() can call git rev-parse --abbrev-ref HEAD. onBranchChange needs a pubsub mechanism (e.g. a git poller or terminal title-change hook).\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/custom-footer.ts (footerData parameter)",
+  "id": "opi-rcg.9",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "footerData — git branch accessor and onBranchChange subscription for footer components",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:45Z"
+}
