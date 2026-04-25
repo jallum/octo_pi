@@ -13,6 +13,17 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.signal == nil
     end
 
+    test "get_entries defaults to a function returning an empty list" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.get_entries.() == []
+    end
+
+    test "accepts a custom get_entries function" do
+      entries = [:a, :b]
+      ctx = Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
+      assert ctx.get_entries.() == entries
+    end
+
     test "accepts all fields" do
       ctx =
         Context.new(%{

@@ -1,6 +1,8 @@
 defmodule OctoPi.Coder.Extensions.AutoCommitOnExitTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Event
@@ -18,6 +20,17 @@ defmodule OctoPi.Coder.Extensions.AutoCommitOnExitTest do
   end
 
   defp ctx, do: Context.new(%{cwd: "/tmp"})
+
+  defp ctx_with_entries(entries), do: Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
+
+  defp assistant_msg(text),
+    do: %Assistant{
+      api: :anthropic,
+      provider: :anthropic,
+      model: "claude-test",
+      timestamp: 0,
+      content: [%Text{text: text}]
+    }
 
   defp shutdown_event, do: Event.new(:session_shutdown, %{reason: :exit})
 
@@ -117,6 +130,134 @@ defmodule OctoPi.Coder.Extensions.AutoCommitOnExitTest do
 
       assert_receive {:commit, msg}
       assert String.starts_with?(msg, "[pi]")
+    end
+
+    test "commit message uses last assistant message text" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      entries = [assistant_msg("Fixed the authentication bug")]
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries(entries))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] Fixed the authentication bug"
+    end
+
+    test "commit message uses the last assistant message when multiple exist" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      entries = [
+        assistant_msg("First response"),
+        assistant_msg("Second response — the final one")
+      ]
+
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries(entries))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] Second response — the final one"
+    end
+
+    test "commit message truncates long text with ellipsis" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      long_text = String.duplicate("a", 60)
+      entries = [assistant_msg(long_text)]
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries(entries))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] #{String.duplicate("a", 50)}..."
+    end
+
+    test "commit message uses first line of multi-line text" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      entries = [assistant_msg("Summary line\n\nMore details here")]
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries(entries))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] Summary line"
+    end
+
+    test "commit message falls back to Work in progress when entries is empty" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries([]))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] Work in progress"
+    end
+
+    test "commit message falls back when no assistant messages in entries" do
+      test_pid = self()
+
+      exec_fn = fn cmd, args ->
+        case {cmd, args} do
+          {"git", ["status", "--porcelain"]} -> %{stdout: "M lib/foo.ex\n", code: 0}
+          {"git", ["commit", "-m", msg]} -> send(test_pid, {:commit, msg}) && %{stdout: "", code: 0}
+          _ -> %{stdout: "", code: 0}
+        end
+      end
+
+      user_msg = %OctoPi.AI.Message.User{
+        content: [%Text{text: "do the thing"}],
+        timestamp: 0
+      }
+
+      ext = ext_with_exec(exec_fn)
+      handler = hd(ext.handlers[:session_shutdown])
+      handler.(shutdown_event(), ctx_with_entries([user_msg]))
+
+      assert_receive {:commit, msg}
+      assert msg == "[pi] Work in progress"
     end
   end
 end

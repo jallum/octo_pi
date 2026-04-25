@@ -1,14 +1,12 @@
 defmodule OctoPi.Coder.Extensions.AutoCommitOnExit do
   @moduledoc """
   Automatically commits uncommitted changes when the session shuts down.
-  Uses a [pi] prefixed commit message.
-
-  Diverges from auto-commit-on-exit.ts: ctx.sessionManager.getEntries() is not
-  available, so the commit message is derived from the cwd rather than the last
-  assistant message.
+  Uses the last assistant message text as the commit message.
   Ported from examples/extensions/auto-commit-on-exit.ts.
   """
 
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.Coder.Extension.API
 
   @spec init(API.t()) :: {:ok, API.t()}
@@ -31,8 +29,25 @@ defmodule OctoPi.Coder.Extensions.AutoCommitOnExit do
     :ok
   end
 
-  defp build_message(%{cwd: cwd}) do
-    dir = Path.basename(cwd)
-    "[pi] Work in progress in #{dir}"
+  defp build_message(%{get_entries: get_entries}) do
+    text = find_last_assistant_text(get_entries.())
+    first_line = text |> String.split("\n") |> hd()
+    suffix = if String.length(first_line) > 50, do: "...", else: ""
+    "[pi] #{String.slice(first_line, 0, 50)}#{suffix}"
+  end
+
+  defp find_last_assistant_text(entries) do
+    Enum.find_value(Enum.reverse(entries), "Work in progress", fn
+      %Assistant{content: content} ->
+        text =
+          content
+          |> Enum.filter(&match?(%Text{}, &1))
+          |> Enum.map_join("\n", & &1.text)
+
+        if text == "", do: nil, else: text
+
+      _ ->
+        nil
+    end)
   end
 end
