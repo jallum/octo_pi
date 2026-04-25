@@ -171,7 +171,13 @@ defmodule OctoPi.Coder.Test.Harness do
   OTP Registry entry is owned by that process.
   """
 
+  alias OctoPi.Agent.MessageLog
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Test.EventCollector
   alias OctoPi.Coder.Test.FauxTransport
@@ -200,17 +206,21 @@ defmodule OctoPi.Coder.Test.Harness do
   def create(opts \\ []) do
     tools = Keyword.get(opts, :tools, [])
     factories = Keyword.get(opts, :factories, [])
+    extra_extensions = Keyword.get(opts, :extensions, [])
+    ctx = Context.new(%{cwd: "/tmp"})
+    extensions = load_factories(factories) ++ extra_extensions
 
     {:ok, session} =
       OctoPi.Agent.start_session(
         model: @faux_model,
         transport: FauxTransport,
-        tools: tools
+        tools: tools,
+        before_tool_call: build_before_tool_call(extensions, ctx),
+        after_tool_call: build_after_tool_call(extensions, ctx)
       )
 
     {:ok, collector} = EventCollector.start_link()
     unsubscribe = OctoPi.Agent.subscribe(session, collector, :async)
-    extensions = load_factories(factories)
 
     %__MODULE__{
       session: session,
@@ -218,6 +228,31 @@ defmodule OctoPi.Coder.Test.Harness do
       extensions: extensions,
       unsubscribe: unsubscribe
     }
+  end
+
+  @doc "Emit `session_start` with reason `:startup` to all loaded extensions."
+  @spec bind_extensions(t()) :: :ok
+  def bind_extensions(%__MODULE__{extensions: extensions}) do
+    ctx = Context.new(%{cwd: "/tmp"})
+    Dispatcher.fire_and_forget(extensions, Event.new(:session_start, %{reason: :startup}), ctx)
+  end
+
+  @doc "Emit `session_shutdown:reload` then `session_start:reload` to all extensions."
+  @spec reload(t()) :: :ok
+  def reload(%__MODULE__{extensions: extensions}) do
+    ctx = Context.new(%{cwd: "/tmp"})
+    Dispatcher.fire_and_forget(extensions, Event.new(:session_shutdown, %{reason: :reload}), ctx)
+    Dispatcher.fire_and_forget(extensions, Event.new(:session_start, %{reason: :reload}), ctx)
+  end
+
+  @doc "Return all text strings from assistant messages in the session transcript."
+  @spec get_assistant_texts(t()) :: [String.t()]
+  def get_assistant_texts(%__MODULE__{session: session}) do
+    state = OctoPi.Agent.state(session)
+
+    state.messages
+    |> MessageLog.to_list()
+    |> Enum.flat_map(&extract_text_blocks/1)
   end
 
   defp load_factories(factories) do
@@ -228,4 +263,35 @@ defmodule OctoPi.Coder.Test.Harness do
       end
     end)
   end
+
+  defp build_before_tool_call([], _ctx), do: nil
+
+  defp build_before_tool_call(extensions, ctx) do
+    fn %{id: id, name: name, arguments: args} ->
+      event = Event.new(:tool_call, %{id: id, name: name, arguments: args})
+      apply_tool_call_result(Dispatcher.mutate_in_place(extensions, event, ctx))
+    end
+  end
+
+  defp apply_tool_call_result({:block, reason}), do: {:block, reason}
+  defp apply_tool_call_result(_), do: :allow
+
+  defp build_after_tool_call([], _ctx), do: nil
+
+  defp build_after_tool_call(extensions, ctx) do
+    fn %{id: id, name: name, arguments: args, result: result} ->
+      event = Event.new(:tool_result, %{id: id, name: name, arguments: args, result: result})
+      apply_tool_result_patch(Dispatcher.patch_merge(extensions, event, ctx))
+    end
+  end
+
+  defp apply_tool_result_patch({:ok, patches}), do: {:patch, patches}
+  defp apply_tool_result_patch(:unchanged), do: :unchanged
+
+  defp extract_text_blocks(%Assistant{content: content}), do: Enum.flat_map(content, &text_content/1)
+
+  defp extract_text_blocks(_), do: []
+
+  defp text_content(%Text{text: t}), do: [t]
+  defp text_content(_), do: []
 end
