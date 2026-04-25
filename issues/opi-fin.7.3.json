@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.7.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:13:48Z",
   "description": "REQUIRES: opi-fin.7.2 (all UI-using extensions migrated) merged. Also requires opi-fin.6.5 (Harness updated) if Harness uses UIContext.\n\nFILES: ui_context.ex, ui_context_test.exs, any remaining UIContext references.\n\n1. Grep for UIContext across the codebase: grep -r 'UIContext' apps/\n2. Verify zero remaining call sites (should all be gone after opi-fin.7.2).\n3. Delete ui_context.ex.\n4. Delete ui_context_test.exs (or repurpose as UI behaviour tests if applicable).\n5. Remove UIContext alias declarations from any files that still have them.\n\nIf any UIContext references remain after opi-fin.7.2, this ticket is blocked -- do not delete the module with live callers.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Remove UIContext.t() struct",
   "type": "task",
-  "updated_at": "2026-04-25T21:13:48Z"
+  "updated_at": "2026-04-25T21:14:25Z"
 }
