@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-25T17:32:04Z",
+  "description": "Affected extensions: custom-footer.ex, tools.ex\nUpstream: ctx.sessionManager.getBranch() returns all entries on the current session branch (the path from root to leaf). Used by:\n  - custom-footer.ts: iterates branch entries to sum token usage (input/output/cost) for display.\n  - tools.ts: scans branch entries for 'tools-config' custom entries to restore persisted tool selection state when navigating branches.\nCurrent workaround: token stats and git info are omitted from custom-footer; tools.ex does not restore from branch entries.\nWhat's needed: Context must expose a branch entry list (or lazy accessor). Entries should include type, customType, data fields matching what appendEntry/custom entries emit.\nUpstream: tmp/pi-mono/packages/coding-agent/examples/extensions/custom-footer.ts + tools.ts",
+  "id": "opi-rcg.3",
+  "labels": [],
+  "parent": "opi-rcg",
+  "priority": 1,
+  "status": "open",
+  "title": "ctx.sessionManager.getBranch() — expose current branch entries to Context",
+  "type": "task",
+  "updated_at": "2026-04-25T17:32:04Z"
+}
