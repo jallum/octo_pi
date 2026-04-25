@@ -25,10 +25,11 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.input.cursor == 1
     end
 
-    test "Ctrl+C sets exit = true" do
+    test "Ctrl+C with empty editor and idle is a no-op (opi-0g4.9)" do
       s = %Interactive{}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
-      assert s.exit
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      refute s2.exit
+      assert s2 == s
     end
 
     test "left arrow routes to Input cursor movement" do
@@ -99,6 +100,41 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Ctrl+C and Ctrl+D (opi-0g4.9)" do
+    test "Ctrl+C with non-empty editor clears editor text" do
+      s = %Interactive{input: %Input{value: "hello", cursor: 5}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      assert s2.input.value == ""
+      assert s2.input.cursor == 0
+      refute s2.exit
+    end
+
+    test "Ctrl+C with empty editor and idle is a no-op" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}, loader: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      refute s2.exit
+      assert s2 == s
+    end
+
+    test "Ctrl+C with empty editor and agent running does not exit" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}, loader: %Loader{}, session: nil}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      refute s2.exit
+    end
+
+    test "Ctrl+D with empty editor exits" do
+      s = %Interactive{input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      assert s2.exit
+    end
+
+    test "Ctrl+D with non-empty editor does not exit" do
+      s = %Interactive{input: %Input{value: "abc", cursor: 1}}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      refute s2.exit
+    end
+  end
+
   describe "handle_event — key release/repeat filtering (opi-0g4.6)" do
     test "release event is dropped — state unchanged" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
@@ -120,9 +156,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "press event is processed normally" do
-      s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl], event_type: :press}})
-      assert s2.exit
+      s = %Interactive{tools_expanded: false}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl], event_type: :press}})
+      assert s2.tools_expanded
     end
   end
 
@@ -495,8 +531,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       # agent's streamed response). receive_until is defined below.
       receive_until_containing("pong", 2_000)
 
-      # Ctrl+C exits.
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x03>>)
+      # Ctrl+D exits (empty editor after response clears input).
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
       assert_receive {:run_done, :ok}, 2_000
 
       Task.await(runner, 1_000)
@@ -577,7 +613,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert_receive {:raw_mode, :enter}, 1_000
       assert_receive :frame_rendered, 1_000
 
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x03>>)
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
       assert :ok = Task.await(runner, 2_000)
 
       assert_receive {:raw_mode, :exit}, 1_000
@@ -986,13 +1022,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s.notification == "first"
     end
 
-    test "Ctrl+C always exits regardless of shortcuts" do
+    test "Ctrl+C bypasses extension shortcuts (clears non-empty editor)" do
       match_fn = fn _ -> true end
       handler = fn state -> %{state | notification: "blocked"} end
 
-      s = %Interactive{extension_shortcuts: [{match_fn, handler}]}
+      s = %Interactive{input: %Input{value: "hi", cursor: 2}, extension_shortcuts: [{match_fn, handler}]}
       s = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
-      assert s.exit
+      assert s.input.value == ""
       assert s.notification == nil
     end
 

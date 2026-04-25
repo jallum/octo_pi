@@ -605,7 +605,22 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{event_type: :release}}), do: state
 
-  def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: %{state | exit: true}
+  # Ctrl+C: clear non-empty editor; abort running agent; no-op when idle+empty.
+  def handle_event(%{input: %{value: v}} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) when v != "" do
+    %{state | input: %{state.input | value: "", cursor: 0}}
+  end
+
+  def handle_event(%{loader: %Components.Loader{}, session: session} = state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}) do
+    if session, do: OctoPi.Agent.abort(session)
+    state
+  end
+
+  def handle_event(state, {:key, %Key{key: ?c, modifiers: [:ctrl]}}), do: state
+
+  # Ctrl+D: exit when editor is empty; otherwise fall through to Input delete-forward.
+  def handle_event(%{input: %{value: ""}} = state, {:key, %Key{key: ?d, modifiers: [:ctrl]}}) do
+    %{state | exit: true}
+  end
 
   def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
     expanded = !state.tools_expanded
