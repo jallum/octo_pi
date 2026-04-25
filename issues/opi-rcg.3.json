@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-rcg",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "ctx.sessionManager.getBranch() — expose current branch entries to Context",
   "type": "task",
-  "updated_at": "2026-04-25T18:06:07.401158Z"
+  "updated_at": "2026-04-25T18:10:03.730079Z"
 }
