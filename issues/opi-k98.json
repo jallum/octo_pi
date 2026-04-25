@@ -5,12 +5,12 @@
   ],
   "blocks": [],
   "created": "2026-04-23T23:50:24Z",
-  "description": "Several tests attach telemetry handlers with inline/anonymous function captures, which causes `:telemetry` itself to emit an [info] log warning on every attach:\n\n  [info] The function passed as a handler with ID \"await-tool-start-6597\" is a local function.\n  This means that it is either an anonymous function or a capture of a function without a module specified...\n\nThis noise was previously drowned out by the telemetry→Logger bridge (now gated off by default via `config :octo_pi_ai, OctoPi.Telemetry.Logger, enabled: true`). With the bridge silent, these warnings dominate test output.\n\nFix: give the affected test helpers a module-level `handle_event/4` and attach with `\u0026Module.handle_event/4` instead of closures like `\u0026send(self(), {:telemetry, ...})`.\n\nKnown hotspots (loop_test.exs surfaces them most):\n  apps/octo_pi_agent/test/octo_pi/agent/loop_test.exs\n  apps/octo_pi_agent/test/octo_pi/agent/subscribers_test.exs\nSweep the rest of `apps/*/test/` for other inline captures while we're here.\n\nDeferred as cleanup behind octo-3di (Phase 4 TUI) so tests stay stable during that epic.",
+  "description": "Several tests attach telemetry handlers with inline/anonymous function captures, which causes `:telemetry` itself to emit an [info] log warning on every attach:\n\n  [info] The function passed as a handler with ID \"await-tool-start-6597\" is a local function.\n  This means that it is either an anonymous function or a capture of a function without a module specified...\n\nThis noise was previously drowned out by the telemetry→Logger bridge (now gated off by default via `config :octo_pi_ai, OctoPi.Telemetry.Logger, enabled: true`). With the bridge silent, these warnings dominate test output.\n\nFix: give the affected test helpers a module-level `handle_event/4` and attach with `&Module.handle_event/4` instead of closures like `&send(self(), {:telemetry, ...})`.\n\nKnown hotspots (loop_test.exs surfaces them most):\n  apps/octo_pi_agent/test/octo_pi/agent/loop_test.exs\n  apps/octo_pi_agent/test/octo_pi/agent/subscribers_test.exs\nSweep the rest of `apps/*/test/` for other inline captures while we're here.\n\nDeferred as cleanup behind octo-3di (Phase 4 TUI) so tests stay stable during that epic.",
   "id": "opi-k98",
   "labels": [],
   "priority": 3,
-  "status": "open",
+  "status": "closed",
   "title": "Tests: replace local-function telemetry handlers with module captures",
   "type": "task",
-  "updated_at": "2026-04-23T23:50:26Z"
+  "updated_at": "2026-04-25T12:00:35.669354Z"
 }
