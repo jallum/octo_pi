@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-uvo.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T03:02:05Z",
   "description": "Port upstream's per-line clear strategy (pi-mono tui.ts:1102).\n\nCurrently our renderer emits line + \\e[m\\e[K (paint then clear-to-EOL). Upstream emits \\e[2K (erase entire line) BEFORE writing each changed line.\n\nClear-before is more robust: the row is guaranteed blank before painting, regardless of cursor position or prior content width. Our \\e[K only clears from cursor-to-EOL, which depends on the cursor being at column 1 after the move_to_row sequence.\n\nThis change naturally falls out of opi-uvo.2 (viewport model) since we'll be building a buffer string with relative cursor movement rather than iodata lists with absolute positioning.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Clear-before-paint: use \\e[2K instead of \\e[K",
   "type": "task",
-  "updated_at": "2026-04-25T03:02:05Z"
+  "updated_at": "2026-04-25T03:02:15Z"
 }
