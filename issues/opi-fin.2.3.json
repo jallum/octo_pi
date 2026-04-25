@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.2.2"
+  ],
   "blocks": [],
   "created": "2026-04-25T21:11:41Z",
   "description": "VERIFICATION TASK (may require small fixes, not a full implementation).\n\nThe macro generates init/1 at compile time. Loader.load_from_factory/2 (loader.ex:91) compiles extensions at runtime via Code.compile_file or accepts a factory fn. The two loading paths need to be verified as compatible.\n\nSCENARIO TO VERIFY:\n1. A module using 'use OctoPi.Coder.Extension' compiled as part of the app (not dynamic) -- should work trivially since init/1 is generated at compile time.\n2. A module using 'use OctoPi.Coder.Extension' loaded dynamically via Loader.load/1 (Code.compile_file) -- the macro runs during compile_file, so init/1 is generated. Verify this works end-to-end.\n3. Test pattern: Loader.load_from_factory('name', \u0026MacroExtension.init/1) -- should work since the macro generates a standard init/1.\n\nIf any incompatibility is found, fix it in Loader or the macro. Document the finding in this ticket.\n\nALSO: Confirm that load_from_factory with a factory fn that does NOT use the macro (old pattern) still works. No regression.\n\nThis ticket is a gate: Phase 5 migration tickets must not start until this verification passes.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Verify load_from_factory compatibility with macro-based extensions",
   "type": "task",
-  "updated_at": "2026-04-25T21:11:41Z"
+  "updated_at": "2026-04-25T21:14:12Z"
 }
