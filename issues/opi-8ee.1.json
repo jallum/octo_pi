@@ -1,0 +1,23 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-8ee.2",
+    "opi-8ee.3",
+    "opi-8ee.4",
+    "opi-8ee.5",
+    "opi-8ee.6"
+  ],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "In Interactive.do_run, call Loader.discover_and_load/2 with standard_dirs(cwd). For each loaded extension, call Loader.init_extension/2 with an API bound via Interactive.build_ui_context(self()). Store extensions: [Extension.t()] in Interactive state. Fire :session_start event via Dispatcher.emit after session is started.\n\nUpstream ref: interactive-mode.ts loadExtensions(), initializeExtension().\nAffected file: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex",
+  "id": "opi-8ee.1",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Load extensions at startup — discover, init, bind UIContext",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

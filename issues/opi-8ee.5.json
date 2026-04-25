@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-8ee.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "After extensions are loaded, call Dispatcher.get_registered_commands(extensions) and inject the command names into the SlashCommandProvider so /tab-complete surfaces extension commands alongside builtins.\n\nAffected file: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex (build_autocomplete_provider / do_run)",
+  "id": "opi-8ee.5",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Add extension commands to slash-command autocomplete",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

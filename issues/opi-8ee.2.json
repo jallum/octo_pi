@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-8ee.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "In handle_submit, after the hardcoded built-in check, call Dispatcher.get_command_by_invocation(state.extensions, cmd) before falling through to do_handle_submit. Run the handler in a Task.start (fire-and-forget, non-blocking) with a Context built from state. Any return value that is a string or list of strings gets appended to the transcript as a notification.\n\nUpstream ref: interactive-mode.ts handleInput() command dispatch.\nAffected file: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex",
+  "id": "opi-8ee.2",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Route extension slash commands in handle_submit",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

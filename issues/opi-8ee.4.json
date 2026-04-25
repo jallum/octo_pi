@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-8ee.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "When an extension calls api.register_tool.(spec), the tool must be added to the live agent session. In build_ui_context / bind_core, wire register_tool to call OctoPi.Agent.add_tool(session, spec) so the new tool is available for the next turn.\n\nNote: api.register_tool is already a field on API.t() and tested; this ticket adds the runtime side in Interactive.\nAffected files: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex, apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex",
+  "id": "opi-8ee.4",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Register extension tools with the agent session",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

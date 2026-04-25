@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-8ee.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "run_bash_command/2 calls System.shell/2 synchronously inside handle_event, freezing the render loop for the duration. Move execution to Task.start: create the BashExecution entry immediately (status :running), append to transcript, run the shell in background, send {:bash_done, id, output, exit_code} back to the Interactive loop, update the entry on receipt.\n\nAffected file: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex",
+  "id": "opi-8ee.6",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Fix ! bash blocking — run shell commands in a Task",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

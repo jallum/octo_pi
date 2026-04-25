@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "The extension framework (Loader, Dispatcher, Context, API, UIContext) is fully built and tested but Interactive.run never loads or connects extensions. Three observable symptoms: (1) /footer, /tools etc. fall through to the AI agent as plain prompts; (2) extension lifecycle events (session_start, turn_start, turn_end) never fire; (3) extension-registered tools are never added to the agent session.\n\nScope:\n- Load extensions from standard dirs at startup, store in Interactive state\n- Build and bind UIContext per extension using Interactive.build_ui_context/1\n- Route extension slash commands: check Dispatcher before falling through to agent\n- Fire lifecycle events: session_start on init, turn_start/turn_end from AgentStart/AgentEnd events\n- Register extension tools with the agent session (api.register_tool → agent)\n- Expose extension commands to slash-command autocomplete\n- Fix ! bash blocking: run System.shell in a Task so the TUI loop stays live\n\nRef: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex, apps/octo_pi_coder/lib/octo_pi/coder/extension/",
+  "id": "opi-8ee",
+  "labels": [],
+  "parent": "",
+  "priority": 1,
+  "status": "open",
+  "title": "Wire extensions into Interactive — load, dispatch, lifecycle events",
+  "type": "epic",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}

@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-8ee.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-25T21:11:19.196967Z",
+  "description": "In handle_event for {:octo_pi_agent_event, %Event.AgentStart{}} and %Event.AgentEnd{}, call Dispatcher.emit(state.extensions, event, ctx) in a Task. Build a minimal Context from state (cwd, has_ui?: true, ui: already-bound UIContext).\n\nUpstream ref: interactive-mode.ts agent event subscriptions.\nAffected files: apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex",
+  "id": "opi-8ee.3",
+  "labels": [],
+  "parent": "opi-8ee",
+  "priority": 2,
+  "status": "open",
+  "title": "Fire turn_start / turn_end extension lifecycle events",
+  "type": "task",
+  "updated_at": "2026-04-25T21:11:19.196967Z"
+}
