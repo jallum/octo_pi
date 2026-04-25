@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-hix",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port extensions-discovery tests (filesystem loading, fallback hierarchy)",
   "type": "task",
-  "updated_at": "2026-04-25T15:42:39.617276Z"
+  "updated_at": "2026-04-25T15:48:45.919026Z"
 }
