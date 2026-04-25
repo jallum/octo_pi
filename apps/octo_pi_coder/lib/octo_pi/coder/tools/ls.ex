@@ -10,6 +10,7 @@ defmodule OctoPi.Coder.Tools.Ls do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
+
   @default_limit 500
 
   @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."

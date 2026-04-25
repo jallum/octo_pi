@@ -21,7 +21,6 @@ defmodule OctoPi.Coder.Tools.Bash do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
 
-
   @default_timeout_ms 120_000
   @abort_poll_ms 50
   @max_output_bytes 32 * 1024

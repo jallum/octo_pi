@@ -62,6 +62,7 @@ defmodule OctoPi.Coder.Tools.Find do
 
   defp do_find(requested_base, _cwd, pattern, limit) do
     base = Path.expand(requested_base)
+
     matches =
       base
       |> Path.join(pattern)

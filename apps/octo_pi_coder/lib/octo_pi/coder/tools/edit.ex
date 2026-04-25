@@ -16,7 +16,6 @@ defmodule OctoPi.Coder.Tools.Edit do
   alias OctoPi.AI.Content
   alias OctoPi.Coder.FileMutex
 
-
   @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
   @spec tool(String.t()) :: Tool.t()
   def tool(cwd) when is_binary(cwd) do

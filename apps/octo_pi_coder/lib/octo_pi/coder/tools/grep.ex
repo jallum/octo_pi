@@ -12,7 +12,6 @@ defmodule OctoPi.Coder.Tools.Grep do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
 
-
   @default_limit 100
   @max_context_lines 10
   @rg_cache_key {__MODULE__, :rg_available?}
