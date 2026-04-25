@@ -55,6 +55,7 @@ defmodule OctoPi.TUI.Interactive do
           exit: boolean(),
           paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
+          thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
           working_message: String.t() | nil,
           notification: String.t() | nil,
@@ -81,6 +82,7 @@ defmodule OctoPi.TUI.Interactive do
             exit: false,
             paste_buffer: nil,
             tools_expanded: false,
+            thinking_visible: true,
             loader: nil,
             working_message: nil,
             notification: nil,
@@ -622,6 +624,9 @@ defmodule OctoPi.TUI.Interactive do
     %{state | exit: true}
   end
 
+  def handle_event(state, {:key, %Key{key: ?t, modifiers: [:ctrl]}}),
+    do: %{state | thinking_visible: !state.thinking_visible}
+
   def handle_event(state, {:key, %Key{key: ?o, modifiers: [:ctrl]}}) do
     expanded = !state.tools_expanded
 
@@ -903,7 +908,7 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     banner_lines = render_banner(banner, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
-    transcript_lines = render_transcript(transcript, width)
+    transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
     footer_lines = Footer.render(footer, width)
 
@@ -992,22 +997,26 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 
-  defp render_transcript(transcript, width) do
+  defp render_transcript(transcript, width, thinking_visible) do
     transcript
     |> Enum.with_index()
     |> Enum.flat_map(fn {entry, idx} ->
       spacer = if idx > 0 and match?(%UserMessage{}, entry), do: [""], else: []
-      spacer ++ render_entry(entry, width)
+      spacer ++ render_entry(entry, width, thinking_visible)
     end)
   end
 
-  defp render_entry(%mod{} = component, width), do: mod.render(component, width)
+  defp render_entry(%AssistantMessage{} = msg, width, thinking_visible) do
+    AssistantMessage.render(%{msg | hide_thinking: not thinking_visible}, width)
+  end
 
-  defp render_entry({:user, text}, width) do
+  defp render_entry(%mod{} = component, width, _thinking_visible), do: mod.render(component, width)
+
+  defp render_entry({:user, text}, width, _thinking_visible) do
     WrapAnsi.wrap("> #{text}", width)
   end
 
-  defp render_entry({:assistant, text, _}, width) do
+  defp render_entry({:assistant, text, _}, width, _thinking_visible) do
     WrapAnsi.wrap(Safe.sanitize(text), width)
   end
 end

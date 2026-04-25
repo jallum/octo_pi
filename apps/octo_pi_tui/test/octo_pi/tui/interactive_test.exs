@@ -100,6 +100,53 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "handle_event — Ctrl+T thinking visibility (opi-0g4.13)" do
+    test "Ctrl+T toggles thinking_visible from true to false" do
+      s = %Interactive{thinking_visible: true}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?t, modifiers: [:ctrl]}})
+      refute s2.thinking_visible
+    end
+
+    test "Ctrl+T toggles thinking_visible from false to true" do
+      s = %Interactive{thinking_visible: false}
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ?t, modifiers: [:ctrl]}})
+      assert s2.thinking_visible
+    end
+
+    test "render hides thinking blocks when thinking_visible is false" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      msg = AssistantMessage.new(theme, content: [thinking: "my thought"])
+
+      s = %Interactive{
+        thinking_visible: false,
+        transcript: [msg],
+        input: %Input{},
+        width: 80
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      refute text =~ "my thought"
+      assert text =~ "Thinking..."
+    end
+
+    test "render shows thinking blocks when thinking_visible is true" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      msg = AssistantMessage.new(theme, content: [thinking: "my thought"])
+
+      s = %Interactive{
+        thinking_visible: true,
+        transcript: [msg],
+        input: %Input{},
+        width: 80
+      }
+
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      assert text =~ "my thought"
+    end
+  end
+
   describe "handle_event — Ctrl+C and Ctrl+D (opi-0g4.9)" do
     test "Ctrl+C with non-empty editor clears editor text" do
       s = %Interactive{input: %Input{value: "hello", cursor: 5}}
