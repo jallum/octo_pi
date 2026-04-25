@@ -332,7 +332,7 @@ defmodule OctoPi.TUI.Renderer do
       state
       | previous: lines,
         hardware_cursor_row: hw_row,
-        max_lines_rendered: max(state.max_lines_rendered, length(lines)),
+        max_lines_rendered: length(lines),
         previous_viewport_top: new_vp_top
     }
 
