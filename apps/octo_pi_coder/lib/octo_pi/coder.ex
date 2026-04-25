@@ -14,7 +14,7 @@ defmodule OctoPi.Coder do
 
   @doc """
   The seven built-in tools (read/write/edit/ls/bash/grep/find),
-  each rooted at `cwd` per the session's PathGuard contract.
+  each rooted at `cwd`.
   Used by Print mode, RPC mode, and the TUI's Interactive mode so
   they present an identical tool surface to the agent.
   """

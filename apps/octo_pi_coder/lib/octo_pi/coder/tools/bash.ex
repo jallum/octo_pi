@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.Tools.Bash do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools.PathGuard
+
 
   @default_timeout_ms 120_000
   @abort_poll_ms 50
@@ -60,18 +60,12 @@ defmodule OctoPi.Coder.Tools.Bash do
     session_cwd = Map.fetch!(args, "_cwd")
     timeout_ms = Map.get(args, "timeout_ms", @default_timeout_ms)
 
-    case resolve_cwd(args, session_cwd) do
-      {:error, %Result{} = r} -> {:ok, r}
-      {:ok, cwd} -> run_with_cwd(cmd, cwd, timeout_ms, abort_ref, on_update)
-    end
+    cwd = resolve_cwd(Map.get(args, "cwd"), session_cwd)
+    run_with_cwd(cmd, cwd, timeout_ms, abort_ref, on_update)
   end
 
-  defp resolve_cwd(args, session_cwd) do
-    case Map.get(args, "cwd") do
-      nil -> {:ok, session_cwd}
-      requested -> PathGuard.resolve_or_error(requested, session_cwd)
-    end
-  end
+  defp resolve_cwd(nil, session_cwd), do: session_cwd
+  defp resolve_cwd(requested, session_cwd), do: Path.expand(requested, session_cwd)
 
   defp run_with_cwd(cmd, cwd, timeout_ms, abort_ref, on_update) do
     start_mono = System.monotonic_time()
