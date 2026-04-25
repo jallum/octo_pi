@@ -833,6 +833,127 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  describe "run/1 — extension loading (opi-8ee.1)" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Model
+    alias OctoPi.Coder.Extension.API
+    alias OctoPi.Coder.Extension.Loader
+    alias Terminal, as: TUITerminal
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    defp ext_model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    test "session_start event is fired to extensions with has_ui?: true" do
+      test_pid = self()
+
+      {:ok, ext} =
+        Loader.load_from_factory("test_ext", fn api ->
+          API.on(api, :session_start, fn _event, ctx ->
+            send(test_pid, {:session_start, ctx.has_ui?})
+          end)
+        end)
+
+      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+
+      Task.async(fn ->
+        Interactive.run(
+          model: ext_model(),
+          transport: FakeTransport,
+          tools: [],
+          extensions: [ext],
+          write_fn: fn _ -> :ok end,
+          skip_raw_mode: true,
+          skip_sigwinch: true,
+          auto_start_reader: false,
+          dimensions: {80, 24},
+          terminal_name: terminal_name
+        )
+      end)
+
+      assert_receive {:session_start, true}, 2_000
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+    end
+
+    test "session_start context includes cwd" do
+      test_pid = self()
+
+      {:ok, ext} =
+        Loader.load_from_factory("test_ext", fn api ->
+          API.on(api, :session_start, fn _event, ctx ->
+            send(test_pid, {:cwd, ctx.cwd})
+          end)
+        end)
+
+      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+
+      Task.async(fn ->
+        Interactive.run(
+          model: ext_model(),
+          transport: FakeTransport,
+          tools: [],
+          extensions: [ext],
+          cwd: "/test/workdir",
+          write_fn: fn _ -> :ok end,
+          skip_raw_mode: true,
+          skip_sigwinch: true,
+          auto_start_reader: false,
+          dimensions: {80, 24},
+          terminal_name: terminal_name
+        )
+      end)
+
+      assert_receive {:cwd, "/test/workdir"}, 2_000
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+    end
+
+    test "extensions field defaults to empty list" do
+      s = %Interactive{}
+      assert s.extensions == []
+    end
+
+    test "no extensions — no session_start messages sent" do
+      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      runner =
+        Task.async(fn ->
+          Interactive.run(
+            model: ext_model(),
+            transport: FakeTransport,
+            tools: [],
+            extensions: [],
+            write_fn: fn _ ->
+              send(test_pid, :rendered)
+              :ok
+            end,
+            skip_raw_mode: true,
+            skip_sigwinch: true,
+            auto_start_reader: false,
+            dimensions: {80, 24},
+            terminal_name: terminal_name
+          )
+        end)
+
+      assert_receive :rendered, 2_000
+      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      Task.await(runner, 2_000)
+    end
+  end
+
   describe "run/1 end-to-end" do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent

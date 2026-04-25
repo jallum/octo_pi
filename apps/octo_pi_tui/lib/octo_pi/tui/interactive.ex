@@ -19,6 +19,11 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
   alias OctoPi.Coder
+  alias OctoPi.Coder.Extension
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.Event, as: ExtEvent
+  alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
@@ -81,7 +86,7 @@ defmodule OctoPi.TUI.Interactive do
           dialog: tuple() | nil,
           custom_widget: {reference(), pid(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
-          debug_render_log: IO.device() | nil
+          extensions: [Extension.t()]
         }
 
   defstruct session: nil,
@@ -114,7 +119,7 @@ defmodule OctoPi.TUI.Interactive do
             dialog: nil,
             custom_widget: nil,
             extension_shortcuts: [],
-            debug_render_log: nil
+            extensions: []
 
   @doc """
   Build a `UIContext` whose functions send messages to `interactive_pid`.
@@ -409,6 +414,7 @@ defmodule OctoPi.TUI.Interactive do
       if Keyword.get(opts, :debug_render, false) do
         path = Path.join(cwd, "debug_render.log")
         {:ok, fd} = File.open(path, [:write, :utf8])
+        Process.put(:debug_render_log, fd)
         fd
       end
 
@@ -417,6 +423,8 @@ defmodule OctoPi.TUI.Interactive do
         path = Path.join(cwd, "debug_events.log")
         EventLogger.attach(path)
       end
+
+    extensions = load_extensions(opts, cwd)
 
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
@@ -461,14 +469,20 @@ defmodule OctoPi.TUI.Interactive do
       expand_prompt_fn: Keyword.get(opts, :expand_prompt_fn),
       model: model,
       models: Keyword.get(opts, :models, []),
-      debug_render_log: debug_render_log
+      extensions: extensions
     }
+
+    fire_session_start(extensions, cwd, self())
 
     state = render_frame(state, renderer, terminal)
 
     loop(state, fsm, renderer, terminal)
 
-    if debug_render_log, do: File.close(debug_render_log)
+    if debug_render_log do
+      File.close(debug_render_log)
+      Process.delete(:debug_render_log)
+    end
+
     if debug_events_log, do: EventLogger.detach(debug_events_log)
     shutdown(terminal, fsm, renderer, footer_data)
     :ok
@@ -547,6 +561,26 @@ defmodule OctoPi.TUI.Interactive do
           prompt_templates: Enum.map(loader.prompt_templates, &%{name: &1.name})
         }
     end
+  end
+
+  defp load_extensions(opts, cwd) do
+    case Keyword.get(opts, :extensions) do
+      nil ->
+        cwd
+        |> Loader.standard_dirs()
+        |> Loader.discover_all()
+        |> Loader.load_all()
+
+      exts when is_list(exts) ->
+        exts
+    end
+  end
+
+  defp fire_session_start([], _cwd, _interactive_pid), do: :ok
+
+  defp fire_session_start(extensions, cwd, interactive_pid) do
+    ctx = Context.new(%{cwd: cwd, has_ui?: true, ui: build_ui_context(interactive_pid)})
+    Dispatcher.emit(extensions, ExtEvent.new(:session_start, %{reason: :startup}), ctx)
   end
 
   defp start_terminal(opts, write_fn) do
@@ -702,7 +736,10 @@ defmodule OctoPi.TUI.Interactive do
     lines = maybe_composite_model_selector(state, lines)
     lines = maybe_composite_dequeue_overlay(state, lines)
 
-    if state.debug_render_log, do: log_overwide(state.debug_render_log, lines, state.width)
+    case Process.get(:debug_render_log) do
+      nil -> :ok
+      fd -> log_overwide(fd, lines, state.width)
+    end
 
     cursor_seq = cursor_position(state, input_lines, lines)
     {:ok, bytes} = Renderer.render(renderer, lines, cursor_seq)
