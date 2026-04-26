@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-fin",
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Session implements Host callbacks; set ctx.host",
   "type": "task",
-  "updated_at": "2026-04-26T05:44:02Z"
+  "updated_at": "2026-04-26T13:45:00.558967Z"
 }
