@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.19"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-26T23:11:44.409489Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "D3b. Live thinking-model compaction end-to-end test",
   "type": "task",
-  "updated_at": "2026-04-26T23:11:44.409489Z"
+  "updated_at": "2026-04-26T23:11:49.996281Z"
 }

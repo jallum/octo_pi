@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-ixp.18"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.44"
+  ],
   "created": "2026-04-26T20:01:57Z",
   "description": "**Phase D — Summarization LLM call. Deps: D2.**\n\nAdd the reasoning conditional from `tmp/pi-mono/.../compaction/compaction.ts:569-572`:\n- Condition: `model.reasoning && thinking_level && thinking_level !== \"off\"`\n- When true: thread `reasoning: thinking_level` into the producer's `StreamOptions`.\n- When false: omit `reasoning` field entirely.\n\nThread `thinking_level` param through `Compaction.Summary.generate/N` callers.\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/compaction-summary-reasoning.test.ts` — three unit cases against the producer-injection seam from D2:\n- reasoning model + level → `reasoning:` set on StreamOptions\n- reasoning model + `:off` → omitted\n- non-reasoning model + any level → omitted\n\nThe live end-to-end thinking-model compaction test from\n`tmp/pi-mono/packages/coding-agent/test/compaction-thinking-model.test.ts`\nis split off into a separate ticket because it requires Session.compact/2 (E4),\nCompaction.compact (E1), CompactionSummaryMessage serialization (E3),\nCompactionEntry append (E5b), and SettingsManager (A4) — none of which exist yet\nwhen D3 lands.",
   "id": "opi-ixp.19",
@@ -13,5 +15,5 @@
   "status": "in_progress",
   "title": "D3. Reasoning/thinking-level support in generate_summary",
   "type": "task",
-  "updated_at": "2026-04-26T23:11:32.391058Z"
+  "updated_at": "2026-04-26T23:11:49.996281Z"
 }
