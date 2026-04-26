@@ -15,10 +15,12 @@ defmodule OctoPi.AgentTest do
   alias OctoPi.AI.Model
 
   describe "contract structs" do
-    test "Message union types include User/Assistant/ToolResult/Custom" do
-      assert %Message.Custom{kind: :note, payload: %{msg: "x"}, timestamp: 0}
-      # User / Assistant / ToolResult are reused from octo_pi_ai;
-      # see OctoPi.AITest for construction assertions.
+    test "Message union types include User/Assistant/ToolResult" do
+      # All three are reused from octo_pi_ai; see OctoPi.AITest for
+      # construction assertions. The union is purely a type, so this
+      # test exists to anchor the documentation that the membership is
+      # exactly these three.
+      assert Message
     end
 
     test "Event structs exist for the full lifecycle" do

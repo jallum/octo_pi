@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.Extension.Context do
 
   alias OctoPi.Agent.Message
   alias OctoPi.AI.Model
+  alias OctoPi.Coder.Session
 
   @type t :: %__MODULE__{
           cwd: String.t(),
@@ -12,7 +13,8 @@ defmodule OctoPi.Coder.Extension.Context do
           signal: reference() | nil,
           has_ui?: boolean(),
           ui: OctoPi.Coder.Extension.UIContext.t() | nil,
-          get_entries: (-> [Message.t()]),
+          get_entries: (-> [Session.Entry.t()]),
+          get_messages: (-> [Message.t()]),
           get_branch: (-> [Message.t()]),
           get_leaf_entry_id: (-> String.t() | nil),
           find_model: (atom(), String.t() -> Model.t() | nil),
@@ -26,15 +28,16 @@ defmodule OctoPi.Coder.Extension.Context do
             signal: nil,
             has_ui?: false,
             ui: nil,
-            get_entries: &__MODULE__.empty_entries/0,
-            get_branch: &__MODULE__.empty_entries/0,
+            get_entries: &__MODULE__.empty_list/0,
+            get_messages: &__MODULE__.empty_list/0,
+            get_branch: &__MODULE__.empty_list/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0,
             find_model: &OctoPi.Coder.Models.find/2,
             get_model_auth: &__MODULE__.no_auth/1
 
   @doc false
-  @spec empty_entries() :: []
-  def empty_entries, do: []
+  @spec empty_list() :: []
+  def empty_list, do: []
 
   @doc false
   @spec nil_entry_id() :: nil

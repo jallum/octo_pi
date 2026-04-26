@@ -5,7 +5,6 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
   alias OctoPi.AI.Message.{Assistant, ToolResult, User}
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
-  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Compaction.Tokens
 
@@ -140,10 +139,6 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
   end
 
   describe "estimate_tokens/1 — other shapes" do
-    test "Custom message is invisible to the model and contributes 0" do
-      assert Tokens.estimate_tokens(%Custom{kind: :note, payload: "anything", timestamp: 0}) == 0
-    end
-
     test "unknown struct returns 0" do
       assert Tokens.estimate_tokens(%{}) == 0
     end

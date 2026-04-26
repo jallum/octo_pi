@@ -28,7 +28,6 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
-  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
@@ -352,6 +351,5 @@ defmodule OctoPi.Agent.Session do
   defp normalize(msgs) when is_list(msgs), do: Enum.map(msgs, &normalize/1)
 
   defp normalize(%User{} = m), do: m
-  defp normalize(%Custom{} = m), do: m
   defp normalize(%{__struct__: _} = m), do: m
 end

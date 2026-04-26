@@ -4,12 +4,14 @@ defmodule OctoPi.Coder.Extensions.Tools do
   When a UI is available, opens a full-screen tool selector via ctx.ui.custom.
   Falls back to returning a status list when no UI is available.
   Tool selection state is synced on session_start and session_tree events.
-  When branch entries contain a tools-config custom entry, it restores from there.
+  When the entry stream contains a `Session.Entry.Custom` entry with
+  `custom_type: "tools_config"`, the most recent one restores the
+  previously-enabled set.
   Ported from examples/extensions/tools.ts.
   """
 
-  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Session.Entry.Custom, as: CustomEntry
 
   @spec init(API.t(), pid()) :: {:ok, API.t()}
   def init(api, state) do
@@ -92,23 +94,30 @@ defmodule OctoPi.Coder.Extensions.Tools do
       end)
 
     api.set_active_tools.(MapSet.to_list(enabled))
-    api.append_entry.(%{type: "tools-config", data: %{enabled_tools: MapSet.to_list(enabled)}})
+
+    api.append_entry.(
+      CustomEntry.new("tools_config", %{"enabled_tools" => MapSet.to_list(enabled)})
+    )
   end
 
   defp sync_state(api, ctx, state) do
-    case restore_from_branch(api, ctx, state) do
+    case restore_from_entries(api, ctx, state) do
       :ok -> :ok
       :no_config -> sync_from_active(api, state)
     end
   end
 
-  defp restore_from_branch(api, ctx, state) do
-    branch = ctx.get_branch.()
-
+  defp restore_from_entries(api, ctx, state) do
     saved =
-      Enum.find_value(Enum.reverse(branch), fn
-        %Custom{kind: :tools_config, payload: %{enabled_tools: names}} when is_list(names) -> names
-        _ -> nil
+      ctx.get_entries.()
+      |> Enum.reverse()
+      |> Enum.find_value(fn
+        %CustomEntry{custom_type: "tools_config", data: %{"enabled_tools" => names}}
+        when is_list(names) ->
+          names
+
+        _ ->
+          nil
       end)
 
     if saved do

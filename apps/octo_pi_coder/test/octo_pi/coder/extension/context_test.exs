@@ -13,7 +13,7 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.signal == nil
     end
 
-    test "get_entries defaults to a function returning an empty list" do
+    test "get_entries defaults to a function returning an empty list (Session.Entry stream)" do
       ctx = Context.new(%{cwd: "/tmp"})
       assert ctx.get_entries.() == []
     end
@@ -22,6 +22,17 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       entries = [:a, :b]
       ctx = Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
       assert ctx.get_entries.() == entries
+    end
+
+    test "get_messages defaults to a function returning an empty list (Message stream)" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.get_messages.() == []
+    end
+
+    test "accepts a custom get_messages function" do
+      msgs = [:msg1, :msg2]
+      ctx = Context.new(%{cwd: "/tmp", get_messages: fn -> msgs end})
+      assert ctx.get_messages.() == msgs
     end
 
     test "get_leaf_entry_id defaults to a function returning nil" do
@@ -45,9 +56,9 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.get_branch.() == entries
     end
 
-    test "find_model defaults to a function returning nil" do
+    test "find_model defaults to the Models registry; nil for unmodelled providers" do
       ctx = Context.new(%{cwd: "/tmp"})
-      assert ctx.find_model.(:google, "gemini-2.5-flash") == nil
+      assert ctx.find_model.(:azure, "anything") == nil
     end
 
     test "accepts a custom find_model function" do

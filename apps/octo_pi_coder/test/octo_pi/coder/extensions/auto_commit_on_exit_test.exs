@@ -21,7 +21,7 @@ defmodule OctoPi.Coder.Extensions.AutoCommitOnExitTest do
 
   defp ctx, do: Context.new(%{cwd: "/tmp"})
 
-  defp ctx_with_entries(entries), do: Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
+  defp ctx_with_entries(entries), do: Context.new(%{cwd: "/tmp", get_messages: fn -> entries end})
 
   defp assistant_msg(text),
     do: %Assistant{

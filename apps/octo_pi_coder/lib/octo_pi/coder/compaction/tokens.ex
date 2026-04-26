@@ -17,7 +17,6 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   alias OctoPi.AI.Message.{Assistant, ToolResult, User}
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
-  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Coder.Compaction.Settings
 
   @type estimate :: %{
@@ -44,12 +43,9 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   @doc """
   Conservative chars/4 estimator. Mirrors upstream's `estimateTokens`
-  per-role logic.
-
-  `OctoPi.Agent.Message.Custom` is invisible to the LLM (stripped before
-  the call — see its docstring), so it contributes zero. Future tickets
-  add heads for `branch_summary` and `compaction_summary` message kinds
-  as those structs land.
+  per-role logic. Future tickets add heads for `bash_execution`,
+  `branch_summary`, and `compaction_summary` message kinds as those
+  structs land (tracked under opi-ixp.43).
   """
   @spec estimate_tokens(struct()) :: non_neg_integer()
   def estimate_tokens(%User{content: content}), do: ceil_div4(user_chars(content))
@@ -59,8 +55,6 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   def estimate_tokens(%ToolResult{content: content}),
     do: ceil_div4(tool_result_chars(content))
-
-  def estimate_tokens(%Custom{}), do: 0
 
   def estimate_tokens(_other), do: 0
 

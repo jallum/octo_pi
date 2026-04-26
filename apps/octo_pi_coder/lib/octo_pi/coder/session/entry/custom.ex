@@ -21,6 +21,24 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
           extras: %{optional(String.t()) => term()}
         }
 
+  @doc """
+  Construct a fresh `Custom` entry with a generated 8-hex-char id and
+  current ISO-8601 timestamp. Mirrors upstream `generateId` /
+  `new Date().toISOString()` defaults so extensions don't have to
+  hand-roll id generation when persisting state.
+  """
+  @spec new(String.t(), term()) :: t()
+  def new(custom_type, data \\ nil) when is_binary(custom_type) do
+    %__MODULE__{
+      id: gen_id(),
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      custom_type: custom_type,
+      data: data
+    }
+  end
+
+  defp gen_id, do: :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
     [

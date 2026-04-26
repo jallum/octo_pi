@@ -29,8 +29,8 @@ defmodule OctoPi.Coder.Extensions.AutoCommitOnExit do
     :ok
   end
 
-  defp build_message(%{get_entries: get_entries}) do
-    text = find_last_assistant_text(get_entries.())
+  defp build_message(%{get_messages: get_messages}) do
+    text = find_last_assistant_text(get_messages.())
     first_line = text |> String.split("\n") |> hd()
     suffix = if String.length(first_line) > 50, do: "...", else: ""
     "[pi] #{String.slice(first_line, 0, 50)}#{suffix}"

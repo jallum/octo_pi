@@ -1,13 +1,13 @@
 defmodule OctoPi.Coder.Extensions.ToolsTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.Agent.Message.Custom
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Extensions.Tools
+  alias OctoPi.Coder.Session.Entry.Custom, as: CustomEntry
 
   defp all_tools do
     [
@@ -41,9 +41,9 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
     {ext, state, applied}
   end
 
-  defp ctx(branch \\ []), do: Context.new(%{cwd: "/tmp", get_branch: fn -> branch end})
+  defp ctx(entries \\ []), do: Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
 
-  defp ctx_with_ui(custom_calls, branch \\ []) do
+  defp ctx_with_ui(custom_calls, entries \\ []) do
     ui = %UIContext{
       custom: fn factory, _opts ->
         Agent.update(custom_calls, fn acc -> [factory | acc] end)
@@ -51,7 +51,7 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
       end
     }
 
-    Context.new(%{cwd: "/tmp", has_ui?: true, ui: ui, get_branch: fn -> branch end})
+    Context.new(%{cwd: "/tmp", has_ui?: true, ui: ui, get_entries: fn -> entries end})
   end
 
   defp call_factory(custom_calls) do
@@ -64,7 +64,13 @@ defmodule OctoPi.Coder.Extensions.ToolsTest do
     {component, done_box}
   end
 
-  defp tools_config_entry(names), do: %Custom{kind: :tools_config, payload: %{enabled_tools: names}, timestamp: 0}
+  defp tools_config_entry(names),
+    do: %CustomEntry{
+      id: "test-#{:erlang.unique_integer([:positive])}",
+      timestamp: "2026-04-26T00:00:00Z",
+      custom_type: "tools_config",
+      data: %{"enabled_tools" => names}
+    }
 
   describe "init/2" do
     test "registers a 'tools' command" do
