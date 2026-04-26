@@ -3,6 +3,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
   alias OctoPi.TUI.Events
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.TerminalHelpers
 
   def __reader_exit_forward__(_event, _measurements, meta, %{pid: pid}) do
     send(pid, {:reader_exit, meta.reason})
@@ -62,7 +63,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
       # Drive the resize with an explicit dims override — in
       # production we'd read :io.columns/0, but tests inject.
-      :ok = Terminal.simulate_resize(pid, 120, 40)
+      :ok = TerminalHelpers.simulate_resize(pid, 120, 40)
 
       assert_receive {:resize, 120, 40}, 500
       assert %{width: 120, height: 40} = Terminal.info(pid)
@@ -97,7 +98,7 @@ defmodule OctoPi.TUI.TerminalTest do
       tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
       pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
       assert_receive {:tty, "\e[?u"}, 500
-      Terminal.simulate_stdin(pid, "\e[?1u")
+      TerminalHelpers.simulate_stdin(pid, "\e[?1u")
       Terminal.info(pid)
       assert_receive {:tty, "\e[>7u"}, 500
       assert Terminal.kitty_protocol_active?(pid)
@@ -142,7 +143,7 @@ defmodule OctoPi.TUI.TerminalTest do
       tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
       pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
       assert_receive {:tty, "\e[?u"}, 500
-      Terminal.simulate_stdin(pid, "\e[?1u")
+      TerminalHelpers.simulate_stdin(pid, "\e[?1u")
       Terminal.info(pid)
       assert_receive {:tty, "\e[>7u"}, 500
       GenServer.stop(pid, :normal)
@@ -189,7 +190,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
       assert_receive {:tty, "\e[?u"}, 500
       {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
-      Terminal.simulate_stdin(pid, "a")
+      TerminalHelpers.simulate_stdin(pid, "a")
       assert_receive {:stdin_event, "a"}, 500
     end
   end
@@ -223,7 +224,7 @@ defmodule OctoPi.TUI.TerminalTest do
       # During probe, send a bare ESC: flush deadline (20ms) is
       # nearer than probe deadline (100ms). The flush should fire
       # first, then the probe should still fall back.
-      Terminal.simulate_stdin(pid, "\e")
+      TerminalHelpers.simulate_stdin(pid, "\e")
 
       assert_receive {:stdin_event, "\e"}, 200
       assert_receive {:tty, "\e[>4;2m"}, 500

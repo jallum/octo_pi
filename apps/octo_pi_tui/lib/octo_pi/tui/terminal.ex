@@ -77,17 +77,6 @@ defmodule OctoPi.TUI.Terminal do
   @spec feed_chunk(GenServer.server(), binary()) :: :ok
   def feed_chunk(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:feed_chunk, bin})
 
-  @doc false
-  @spec simulate_resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
-  def simulate_resize(pid, width, height), do: GenServer.call(pid, {:resize, width, height})
-
-  @doc "Inject a raw stdin chunk as if it arrived from the reader (for tests)."
-  @spec simulate_stdin(GenServer.server(), binary()) :: :ok
-  def simulate_stdin(pid, bin) when is_binary(bin) do
-    send(pid, {:stdin_chunk, bin})
-    :ok
-  end
-
   @doc "Returns true if the Kitty keyboard protocol is currently active."
   @spec kitty_protocol_active?(GenServer.server()) :: boolean()
   def kitty_protocol_active?(pid), do: GenServer.call(pid, :kitty_protocol_active?)
