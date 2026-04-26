@@ -5,6 +5,7 @@
   ],
   "blocks": [
     "opi-ixp.10",
+    "opi-ixp.36",
     "opi-ixp.6",
     "opi-ixp.7",
     "opi-ixp.8",
@@ -19,5 +20,5 @@
   "status": "open",
   "title": "B1. SessionManager.load/1",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:04Z"
+  "updated_at": "2026-04-26T20:02:15Z"
 }
