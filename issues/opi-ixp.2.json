@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-ixp.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.5"
+  ],
   "created": "2026-04-26T20:01:53Z",
   "description": "**Phase A — Foundation. Deps: A1.**\n\nAdd a read-side counterpart to existing `SessionStore.append/2` (`apps/octo_pi_coder/lib/octo_pi/coder/session_store.ex` is currently write-only: open/path/append/close).\n\n`read_entries/1` streams the JSONL file and decodes each line into the typed union from A1.\n\nTests: round-trip both `tmp/pi-mono/packages/coding-agent/test/fixtures/before-compaction.jsonl` and `large-session.jsonl`.",
   "id": "opi-ixp.2",
