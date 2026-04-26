@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-ixp.32",
     "opi-ixp.6",
     "opi-ixp.7"
   ],
@@ -14,5 +15,5 @@
   "status": "open",
   "title": "G2. Session.navigate_tree/2 + TreePreparation + :session_before_tree dispatch",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:14Z"
+  "updated_at": "2026-04-26T20:02:15Z"
 }
