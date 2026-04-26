@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-26T00:07:55Z",
   "created": "2026-04-25T21:10:57Z",
   "description": "Migrate the 6 stateful extensions from init(api, agent_pid) to init(api) + mount/0 + 3-arity handle_* callbacks. Each extension migrates independently. Requires Phase 2 macro to be complete. provider_payload.ex does NOT migrate -- it takes a log_fn callback, not state.",
   "id": "opi-fin.5",
   "labels": [],
   "parent": "opi-fin",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 5: Migrate stateful extensions to mount/0",
   "type": "task",
-  "updated_at": "2026-04-25T21:10:57Z"
+  "updated_at": "2026-04-26T00:07:55Z"
 }
