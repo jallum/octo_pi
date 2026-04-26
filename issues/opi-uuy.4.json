@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-uuy.2"
   ],
@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Migrate Session.State from MessageLog to SessionManager",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:36Z"
+  "updated_at": "2026-04-26T02:54:59Z"
 }
