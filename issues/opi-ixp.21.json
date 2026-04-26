@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.20"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:58Z",
   "description": "**Phase E — Compaction orchestration. Deps: E1.**\n\nAdd `is_split_turn?: true` branch (compaction.ts:742-765):\n- Parallel `Task.async` for `generate_summary(messages_to_summarize)` and `generate_turn_prefix_summary(turn_prefix_messages)`.\n- Merge with separator: `\\\\n\\\\n---\\\\n\\\\n**Turn Context (split turn):**\\\\n\\\\n`.\n- `generate_turn_prefix_summary` uses `TURN_PREFIX_SUMMARIZATION_PROMPT` with `max_tokens = 0.5 × reserve_tokens`.\n\nTests: port the split-turn cases from `compaction.test.ts`.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "E2. Compaction.compact/2 — split-turn parallel path",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:58Z"
+  "updated_at": "2026-04-26T20:02:08Z"
 }
