@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:02:01Z",
+  "description": "**Phase G — Tree session integration. Deps: G5b, G2.**\n\nWire post-selection flow. The 'Summarize?' prompt itself is in `tmp/pi-mono/.../interactive-mode.ts:4129-4141` (NOT in tree-selector.ts):\n\\`showExtensionSelector(\\\"Summarize?\\\", [\\\"Summarize\\\", \\\"Summarize with custom prompt\\\", \\\"No summary\\\"])\\`\n\nMap result to G2's three-valued `user_wants_summary` (`:no | :yes | {:yes, custom_instructions}`). 'Summarize with custom prompt' opens an editor for the custom instructions.\n\nTests: end-to-end UI flow exercising each branch.",
+  "id": "opi-ixp.38",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "G5c. Tree-selector: three-way 'Summarize?' prompt integration",
+  "type": "task",
+  "updated_at": "2026-04-26T20:02:01Z"
+}
