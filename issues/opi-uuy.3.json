@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T01:41:31Z",
+  "description": "Add file-backed persistence to SessionManager using the same JSONL format as\npi-mono (one JSON-encoded entry per line).\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/session-manager.ts lines 775-819.\n\n## Format\n\nEach entry is written as: Jason.encode!(entry) \u003c\u003e \"\\n\"\nLoading: split file contents by \"\\n\", Jason.decode! each non-empty line.\n\n## Serialization\n\nEach entry struct must round-trip through JSON. Use a \"type\" discriminator field:\n  \"message\", \"compaction\", \"branch_summary\", \"custom\", \"custom_message\",\n  \"model_change\", \"label\", \"session_info\"\n\nImplement in SessionEntry:\n  to_json/1   :: (SessionEntry.t()) -\u003e map()\n  from_json/1 :: (map()) -\u003e SessionEntry.t()\n\nThe message field of MessageEntry contains polymorphic AI message structs\n(User/Assistant/ToolResult). Include a \"role\" discriminator in their JSON\nserialization: \"user\", \"assistant\", \"tool_result\".\n\n## Deferred first write (matches pi-mono behavior)\n\nDO NOT create the file when session_manager is initialized. Buffer entries in\nmemory. Write the full buffer to disk the first time a MessageEntry wrapping an\n%Assistant{} message is appended. After that initial flush, append incrementally\n(one JSONL line per new entry).\n\nThis prevents creating session files for empty or aborted sessions.\n\n## Changes to SessionManager\n\nAdd session_file field to the struct (default nil).\n\nnew/1 opts: add session_file: path option (stores path, does not open file).\nnew_from_file/1 :: (path) -\u003e {:ok, SessionManager.t()} | {:error, reason}\n  — reads file, decodes each line, rebuilds entries + by_id + leaf_id\n\nInternal persist_entry/2: called after every append_* when session_file is set\nand the initial-flush condition has been met.\n\n## Tests\n\nCreate apps/octo_pi_agent/test/octo_pi/agent/session_manager_persistence_test.exs.\nUse System.tmp_dir! for temp files; clean up in on_exit.\n  - No file created until first Assistant MessageEntry appended\n  - Full buffer written on first Assistant message\n  - Subsequent entries appended as single lines\n  - new_from_file/1 round-trips all entry types\n  - MessageEntry with User/Assistant/ToolResult all round-trip correctly",
+  "id": "opi-uuy.3",
+  "labels": [],
+  "parent": "opi-uuy",
+  "priority": 2,
+  "status": "open",
+  "title": "JSONL persistence in SessionManager",
+  "type": "task",
+  "updated_at": "2026-04-26T01:41:31Z"
+}
