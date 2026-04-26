@@ -36,20 +36,22 @@ defmodule OctoPi.TUI.TerminalTest do
   end
 
   describe "feed_chunk/2" do
-    test "broadcasts the chunk via Events under {:stdin_chunk, scope} topic" do
+    test "broadcasts cooked stdin events under {:stdin_event, scope} topic" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
       :ok = Terminal.feed_chunk(pid, "abc")
-      assert_receive {:stdin_chunk, "abc"}, 500
+      assert_receive {:stdin_event, "a"}, 500
+      assert_receive {:stdin_event, "b"}, 500
+      assert_receive {:stdin_event, "c"}, 500
     end
 
     test "forwards multiple chunks in order" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
       :ok = Terminal.feed_chunk(pid, "a")
       :ok = Terminal.feed_chunk(pid, "b")
-      assert_receive {:stdin_chunk, "a"}, 500
-      assert_receive {:stdin_chunk, "b"}, 500
+      assert_receive {:stdin_event, "a"}, 500
+      assert_receive {:stdin_event, "b"}, 500
     end
   end
 
@@ -72,13 +74,13 @@ defmodule OctoPi.TUI.TerminalTest do
       t1 = start_terminal(name: nil)
       t2 = start_terminal(name: nil)
 
-      {:ok, _} = Registry.register(Events, {:stdin_chunk, t1}, nil)
+      {:ok, _} = Registry.register(Events, {:stdin_event, t1}, nil)
 
-      Terminal.feed_chunk(t1, "from_t1")
-      Terminal.feed_chunk(t2, "from_t2")
+      Terminal.feed_chunk(t1, "x")
+      Terminal.feed_chunk(t2, "y")
 
-      assert_receive {:stdin_chunk, "from_t1"}, 500
-      refute_receive {:stdin_chunk, "from_t2"}, 100
+      assert_receive {:stdin_event, "x"}, 500
+      refute_receive {:stdin_event, "y"}, 100
     end
   end
 
@@ -186,9 +188,9 @@ defmodule OctoPi.TUI.TerminalTest do
         )
 
       assert_receive {:tty, "\e[?u"}, 500
-      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
       Terminal.simulate_stdin(pid, "a")
-      assert_receive {:stdin_chunk, "a"}, 500
+      assert_receive {:stdin_event, "a"}, 500
     end
   end
 
@@ -475,17 +477,17 @@ defmodule OctoPi.TUI.TerminalTest do
       assert_receive {:tty, "\e[?u"}, 500
       assert_receive {:tty, "\e[>4;2m"}, 500
 
-      {:ok, _} = Registry.register(Events, {:stdin_chunk, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
 
       stop_task = Task.async(fn -> GenServer.stop(pid, :normal) end)
 
       # Wait until disable_keyboard_protocol fires — drain starts immediately after
       assert_receive {:tty, "\e[>4m"}, 500
-      send(pid, {:stdin_chunk, "key_release"})
+      send(pid, {:stdin_chunk, "z"})
 
       Task.await(stop_task, 2000)
 
-      refute_receive {:stdin_chunk, "key_release"}, 100
+      refute_receive {:stdin_event, _}, 100
     end
   end
 

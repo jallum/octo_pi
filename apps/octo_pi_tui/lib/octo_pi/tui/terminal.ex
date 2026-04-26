@@ -9,7 +9,9 @@ defmodule OctoPi.TUI.Terminal do
       through `OctoPi.TUI.Events`.
     * Spawn a linked reader that calls `:io.get_chars("", N)` in a
       loop and forwards each chunk back as a `{:stdin_chunk, bin}`
-      message, which Terminal rebroadcasts via `Events`.
+      message; Terminal feeds these into a `StdinFSM` and
+      broadcasts each cooked sequence as `{:stdin_event, seq}` via
+      `Events`.
 
   Tests inject mocks via opts so they don't flip the real tty:
 
@@ -29,11 +31,18 @@ defmodule OctoPi.TUI.Terminal do
 
   `Events` is a Registry keyed on `{topic, scope}` tuples.
   Subscribers register via
-  `Registry.register(Events, {:stdin_chunk, terminal_pid}, nil)`;
+  `Registry.register(Events, {:stdin_event, terminal_pid}, nil)`;
   Terminal dispatches via
-  `Registry.dispatch(Events, {:stdin_chunk, scope}, fn entries -> ... end)`.
+  `Registry.dispatch(Events, {:stdin_event, scope}, fn entries -> ... end)`.
   The scope defaults to `self()` (the Terminal pid), isolating
   concurrent Interactive sessions from each other's events.
+
+  Terminal owns the `%StdinFSM{}` directly: incoming reader chunks
+  are fed through the FSM and broadcast as cooked sequences. Raw
+  chunks never leave the Terminal. Two GenServer-timeout deadlines
+  coexist — the Kitty probe and the FSM flush — multiplexed via a
+  `:deadlines` map keyed by kind; the next `:timeout` fires at the
+  nearest deadline and re-arms whichever remains.
   """
 
   use GenServer
@@ -41,6 +50,7 @@ defmodule OctoPi.TUI.Terminal do
   alias OctoPi.TUI.Events
   alias OctoPi.TUI.RawMode
   alias OctoPi.TUI.SigwinchHandler
+  alias OctoPi.TUI.StdinFSM
 
   # --- public API ---
 
@@ -100,6 +110,7 @@ defmodule OctoPi.TUI.Terminal do
     auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
     probe_timeout_ms = Keyword.get(opts, :probe_timeout_ms, 150)
+    flush_ms = Keyword.get(opts, :flush_ms, 10)
     drain_idle_ms = Keyword.get(opts, :drain_idle_ms, 50)
     drain_timeout_ms = Keyword.get(opts, :drain_timeout_ms, 1000)
     send_sigtstp_fn = Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0)
@@ -130,12 +141,14 @@ defmodule OctoPi.TUI.Terminal do
       send_sigtstp_fn: send_sigtstp_fn,
       open_editor_fn: open_editor_fn,
       keyboard_mode: :none,
-      probe_start: nil
+      fsm: StdinFSM.new(flush_ms: flush_ms),
+      deadlines: %{}
     }
 
     if skip_raw_mode do
       reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-      {:ok, %{base_state | reader_pid: reader_pid}}
+      state = %{base_state | reader_pid: reader_pid}
+      {:ok, state, next_timeout(state)}
     else
       raw_mode_fn.(:enter)
       # Spawn the reader after entering raw mode so it inherits the
@@ -144,44 +157,49 @@ defmodule OctoPi.TUI.Terminal do
       reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
       tty_fn.("\e[?2004h")
       tty_fn.("\e[?u")
-      probe_start = System.monotonic_time(:millisecond)
-      state = %{base_state | reader_pid: reader_pid, keyboard_mode: :probing, probe_start: probe_start}
-      {:ok, state, probe_timeout_ms}
+
+      state =
+        base_state
+        |> Map.put(:reader_pid, reader_pid)
+        |> Map.put(:keyboard_mode, :probing)
+        |> arm_deadline(:probe, System.monotonic_time(:millisecond) + probe_timeout_ms)
+
+      {:ok, state, next_timeout(state)}
     end
   end
 
   @impl true
-  def handle_call(:info, _from, state), do: {:reply, state, state}
+  def handle_call(:info, _from, state), do: {:reply, state, state, next_timeout(state)}
 
   def handle_call(:kitty_protocol_active?, _from, state) do
-    {:reply, state.keyboard_mode == :kitty, state}
+    {:reply, state.keyboard_mode == :kitty, state, next_timeout(state)}
   end
 
   def handle_call(:suspend, _from, state) do
     state.raw_mode_fn.(:exit)
     state.send_sigtstp_fn.()
     state.raw_mode_fn.(:enter)
-    {:reply, :ok, state}
+    {:reply, :ok, state, next_timeout(state)}
   end
 
   def handle_call({:open_editor, initial_text}, _from, state) do
     result = do_open_editor(initial_text, state)
-    {:reply, result, state}
+    {:reply, result, state, next_timeout(state)}
   end
 
   def handle_call({:feed_chunk, bin}, _from, state) do
-    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
-    {:reply, :ok, state}
+    state = process_chunk(bin, state)
+    {:reply, :ok, state, next_timeout(state)}
   end
 
   def handle_call({:write, bytes}, _from, state) do
     state.write_fn.(bytes)
-    {:reply, :ok, state}
+    {:reply, :ok, state, next_timeout(state)}
   end
 
   def handle_call({:resize, w, h}, _from, state) do
     broadcast(state, :resize, {:resize, w, h})
-    {:reply, :ok, %{state | width: w, height: h}}
+    {:reply, :ok, %{state | width: w, height: h}, next_timeout(state)}
   end
 
   @impl true
@@ -190,30 +208,32 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_info({:stdin_chunk, bin}, state) do
-    :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
-    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
-    {:noreply, state}
+    state = process_chunk(bin, state)
+    {:noreply, state, next_timeout(state)}
   end
 
   def handle_info({:signal, :sigwinch}, state) do
     case window_size() do
       {:ok, {w, h}} when w != state.width or h != state.height ->
         broadcast(state, :resize, {:resize, w, h})
-        {:noreply, %{state | width: w, height: h}}
+        {:noreply, %{state | width: w, height: h}, next_timeout(state)}
 
       _ ->
-        {:noreply, state}
+        {:noreply, state, next_timeout(state)}
     end
   end
 
-  def handle_info(:timeout, %{keyboard_mode: :probing} = state) do
-    state.tty_fn.("\e[>4;2m")
-    {:noreply, %{state | keyboard_mode: :modify_other_keys, probe_start: nil}}
+  def handle_info(:timeout, state) do
+    now = System.monotonic_time(:millisecond)
+    {due, remaining} = pop_due(state.deadlines, now)
+    state = %{state | deadlines: remaining}
+    state = Enum.reduce(due, state, &fire_deadline/2)
+    {:noreply, state, next_timeout(state)}
   end
 
   def handle_info(:stdin_eof, state), do: {:stop, :normal, state}
 
-  def handle_info(_, state), do: {:noreply, state}
+  def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
   @impl true
   def terminate(_reason, state) do
@@ -311,14 +331,62 @@ defmodule OctoPi.TUI.Terminal do
 
   defp handle_probing_stdin({:kitty, _flags}, _bin, state) do
     state.tty_fn.("\e[>7u")
-    {:noreply, %{state | keyboard_mode: :kitty, probe_start: nil}}
+    state = state |> Map.put(:keyboard_mode, :kitty) |> disarm_deadline(:probe)
+    {:noreply, state, next_timeout(state)}
   end
 
   defp handle_probing_stdin(:not_kitty, bin, state) do
+    state = process_chunk(bin, state)
+    {:noreply, state, next_timeout(state)}
+  end
+
+  defp process_chunk(bin, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
-    broadcast(state, :stdin_chunk, {:stdin_chunk, bin})
-    elapsed = System.monotonic_time(:millisecond) - state.probe_start
-    {:noreply, state, max(0, state.probe_timeout_ms - elapsed)}
+    {fsm, events, next_flush} = StdinFSM.process(state.fsm, bin)
+    Enum.each(events, &broadcast(state, :stdin_event, {:stdin_event, &1}))
+    state = %{state | fsm: fsm}
+    arm_or_disarm_flush(state, next_flush)
+  end
+
+  defp arm_or_disarm_flush(state, :infinity), do: disarm_deadline(state, :flush)
+
+  defp arm_or_disarm_flush(state, ms) do
+    arm_deadline(state, :flush, System.monotonic_time(:millisecond) + ms)
+  end
+
+  defp fire_deadline(:probe, %{keyboard_mode: :probing} = state) do
+    state.tty_fn.("\e[>4;2m")
+    %{state | keyboard_mode: :modify_other_keys}
+  end
+
+  defp fire_deadline(:probe, state), do: state
+
+  defp fire_deadline(:flush, state) do
+    {fsm, events} = StdinFSM.flush(state.fsm)
+    Enum.each(events, &broadcast(state, :stdin_event, {:stdin_event, &1}))
+    %{state | fsm: fsm}
+  end
+
+  defp arm_deadline(state, kind, abs_ms) do
+    %{state | deadlines: Map.put(state.deadlines, kind, abs_ms)}
+  end
+
+  defp disarm_deadline(state, kind) do
+    %{state | deadlines: Map.delete(state.deadlines, kind)}
+  end
+
+  defp next_timeout(%{deadlines: deadlines}) when map_size(deadlines) == 0, do: :infinity
+
+  defp next_timeout(%{deadlines: deadlines}) do
+    now = System.monotonic_time(:millisecond)
+    earliest = deadlines |> Map.values() |> Enum.min()
+    max(0, earliest - now)
+  end
+
+  defp pop_due(deadlines, now) do
+    Enum.reduce(deadlines, {[], %{}}, fn {kind, ms}, {due, keep} ->
+      if ms <= now, do: {[kind | due], keep}, else: {due, Map.put(keep, kind, ms)}
+    end)
   end
 
   defp broadcast(state, topic, msg) do

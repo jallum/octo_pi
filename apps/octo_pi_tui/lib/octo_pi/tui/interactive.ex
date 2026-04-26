@@ -382,6 +382,7 @@ defmodule OctoPi.TUI.Interactive do
     footer_data = child_pid(sup, FooterData)
 
     {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
+    {:ok, _} = Registry.register(Events, {:stdin_event, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
