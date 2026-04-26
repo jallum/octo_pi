@@ -39,6 +39,8 @@ defmodule OctoPi.Agent.Event do
           | Event.ToolExecutionStart.t()
           | Event.ToolExecutionUpdate.t()
           | Event.ToolExecutionEnd.t()
+          | Event.CompactionStart.t()
+          | Event.CompactionEnd.t()
 
   defmodule AgentStart do
     @moduledoc "Emitted once at the start of a run."
@@ -116,5 +118,27 @@ defmodule OctoPi.Agent.Event do
             result: Tool.Result.t()
           }
     defstruct [:tool_call_id, :tool_name, :result]
+  end
+
+  defmodule CompactionStart do
+    @moduledoc "Emitted when context compaction begins."
+    @enforce_keys [:reason]
+    @type reason :: :manual | :threshold | :overflow
+    @type t :: %__MODULE__{reason: reason()}
+    defstruct [:reason]
+  end
+
+  defmodule CompactionEnd do
+    @moduledoc "Emitted when compaction finishes, is cancelled, or fails."
+    @enforce_keys [:reason, :aborted?, :will_retry?]
+    @type reason :: :manual | :threshold | :overflow
+    @type t :: %__MODULE__{
+            reason: reason(),
+            result: map() | nil,
+            aborted?: boolean(),
+            will_retry?: boolean(),
+            error_message: String.t() | nil
+          }
+    defstruct [:reason, :result, :error_message, aborted?: false, will_retry?: false]
   end
 end
