@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-gfy.3"
+  ],
   "blocks": [],
   "created": "2026-04-26T13:42:41Z",
   "description": "Depends on opi-gfy.3 (Interactive as GenServer).\n\nCurrently do_run/1 starts Terminal, StdinFSM, Renderer, FooterData as bare linked processes and detects crashes via trapped :EXIT messages (interactive.ex:735-748). With Interactive as a GenServer, start these four under a child Supervisor with strategy :one_for_all (any one dying takes all down).\n\nChanges:\n- Start a Supervisor as a child of Interactive in init/1 (or start_link in do_run before GenServer.start_link)\n- Remove Process.flag(:trap_exit, true) from run/1\n- Remove handle_info({:EXIT, pid, reason}) clauses\n- shutdown/4 becomes Supervisor.stop(sup) in terminate/2",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Supervise TUI children under one_for_all Supervisor",
   "type": "task",
-  "updated_at": "2026-04-26T13:42:41Z"
+  "updated_at": "2026-04-26T13:42:45Z"
 }
