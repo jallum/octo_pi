@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.TerminalImage do
+defmodule OctoPi.TUI.Terminal.Image do
   @moduledoc """
   Terminal image protocol helpers: Kitty/iTerm2 encoding, capability
   detection, OSC 8 hyperlinks, and `image_line?/1` detection.

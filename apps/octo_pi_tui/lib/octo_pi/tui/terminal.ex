@@ -137,35 +137,34 @@ defmodule OctoPi.TUI.Terminal do
       deadlines: %{}
     }
 
-    if skip_raw_mode do
-      reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-      state = %{base_state | reader_pid: reader_pid}
-      {:ok, state, next_timeout(state)}
-    else
-      raw_mode_fn.(:enter)
-      # Spawn the reader after entering raw mode so it inherits the
-      # updated group leader and `:io.get_chars/2` reads from the
-      # live TTY rather than the noshell null device.
-      reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-      tty_write(base_state, "\e[?2004h")
-      tty_write(base_state, "\e[?u")
+    state =
+      if skip_raw_mode do
+        reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
+        %{base_state | reader_pid: reader_pid}
+      else
+        raw_mode_fn.(:enter)
 
-      state =
+        # Spawn the reader after entering raw mode so it inherits the
+        # updated group leader and `:io.get_chars/2` reads from the
+        # live TTY rather than the noshell null device.
+        reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
+        tty_write(base_state, "\e[?2004h")
+        tty_write(base_state, "\e[?u")
+
         base_state
         |> Map.put(:reader_pid, reader_pid)
         |> Map.put(:keyboard_mode, :probing)
         |> arm_deadline(:probe, System.monotonic_time(:millisecond) + probe_timeout_ms)
+      end
 
-      {:ok, state, next_timeout(state)}
-    end
+    {:ok, state, next_timeout(state)}
   end
 
   @impl true
   def handle_call(:info, _from, state), do: {:reply, state, state, next_timeout(state)}
 
-  def handle_call(:kitty_protocol_active?, _from, state) do
-    {:reply, state.keyboard_mode == :kitty, state, next_timeout(state)}
-  end
+  def handle_call(:kitty_protocol_active?, _from, state),
+    do: {:reply, state.keyboard_mode == :kitty, state, next_timeout(state)}
 
   def handle_call(:suspend, _from, state) do
     state.raw_mode_fn.(:exit)
@@ -195,9 +194,8 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   @impl true
-  def handle_info({:stdin_chunk, bin}, %{keyboard_mode: :probing} = state) do
-    handle_probing_stdin(extract_kitty_flags(bin), bin, state)
-  end
+  def handle_info({:stdin_chunk, bin}, %{keyboard_mode: :probing} = state),
+    do: handle_probing_stdin(extract_kitty_flags(bin), bin, state)
 
   def handle_info({:stdin_chunk, bin}, state) do
     state = process_chunk(bin, state)
