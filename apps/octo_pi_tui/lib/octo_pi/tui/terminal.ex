@@ -211,6 +211,8 @@ defmodule OctoPi.TUI.Terminal do
     {:noreply, %{state | keyboard_mode: :modify_other_keys, probe_start: nil}}
   end
 
+  def handle_info(:stdin_eof, state), do: {:stop, :normal, state}
+
   def handle_info(_, state), do: {:noreply, state}
 
   @impl true
@@ -342,9 +344,11 @@ defmodule OctoPi.TUI.Terminal do
     case reader_fn.() do
       :eof ->
         reader_exit(:eof, parent)
+        send(parent, :stdin_eof)
 
       {:error, reason} ->
         reader_exit({:error, reason}, parent)
+        send(parent, :stdin_eof)
 
       data when is_list(data) or is_binary(data) ->
         send(parent, {:stdin_chunk, IO.iodata_to_binary(data)})

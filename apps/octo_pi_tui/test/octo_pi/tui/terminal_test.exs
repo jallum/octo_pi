@@ -489,6 +489,22 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "stdin EOF stops terminal" do
+    @describetag capture_log: true
+
+    test "terminal stops normally when reader returns :eof" do
+      pid = start_terminal(name: nil, auto_start_reader: true, reader_fn: fn -> :eof end)
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+    end
+
+    test "terminal stops normally when reader returns {:error, reason}" do
+      pid = start_terminal(name: nil, auto_start_reader: true, reader_fn: fn -> {:error, :closed} end)
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+    end
+  end
+
   describe "reader exit diagnostics" do
     @describetag capture_log: true
 

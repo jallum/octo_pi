@@ -135,6 +135,20 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
       assert hd(extensions).id == "good"
     end
 
+    test "emits load_start telemetry before attempting each extension", %{dir: dir} do
+      ref =
+        :telemetry_test.attach_event_handlers(self(), [
+          [:octo_pi_coder, :extension, :load_start]
+        ])
+
+      File.write!(Path.join(dir, "start.ex"), sample_extension("LoadStartExt"))
+      [path] = Loader.discover(dir)
+      Loader.load_all([path])
+
+      assert_received {[:octo_pi_coder, :extension, :load_start], ^ref, %{}, meta}
+      assert meta.path == path
+    end
+
     test "emits telemetry for loaded extensions", %{dir: dir} do
       ref =
         :telemetry_test.attach_event_handlers(self(), [

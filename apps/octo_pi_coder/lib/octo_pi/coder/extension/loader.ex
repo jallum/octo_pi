@@ -46,6 +46,7 @@ defmodule OctoPi.Coder.Extension.Loader do
 
   @spec load(String.t()) :: {:ok, Extension.t()} | {:error, term()}
   def load(path) do
+    :telemetry.execute([:octo_pi_coder, :extension, :load_start], %{}, %{path: path})
     id = extension_id(path)
 
     with {:ok, modules} <- compile_file(path),
