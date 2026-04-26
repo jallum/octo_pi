@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-uuy.7",
     "opi-uuy.8"
@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Manual compaction API in Session",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:36Z"
+  "updated_at": "2026-04-26T03:27:51Z"
 }
