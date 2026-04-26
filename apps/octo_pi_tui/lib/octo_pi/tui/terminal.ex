@@ -99,18 +99,18 @@ defmodule OctoPi.TUI.Terminal do
 
   @doc """
   Open a handle on this Terminal. The first open activates the
-  Terminal (raw mode, SIGWINCH, reader, kitty probe). The holder is
-  monitored; an unexpected exit acts as an implicit `close/2`.
+  Terminal (raw mode, SIGWINCH, reader, kitty probe). The caller
+  is monitored; an unexpected exit acts as an implicit `close/1`.
   """
-  @spec open(GenServer.server(), pid()) :: :ok
-  def open(pid, holder \\ self()), do: GenServer.call(pid, {:open, holder})
+  @spec open(GenServer.server()) :: :ok
+  def open(pid), do: GenServer.call(pid, :open)
 
   @doc """
-  Close `holder`'s handle. When the last handle is released, the
+  Close the caller's handle. When the last handle is released, the
   Terminal tears itself down.
   """
-  @spec close(GenServer.server(), pid()) :: :ok
-  def close(pid, holder \\ self()), do: GenServer.call(pid, {:close, holder})
+  @spec close(GenServer.server()) :: :ok
+  def close(pid), do: GenServer.call(pid, :close)
 
   # --- GenServer callbacks ---
 
@@ -210,13 +210,13 @@ defmodule OctoPi.TUI.Terminal do
     {:reply, :ok, %{state | width: w, height: h}, next_timeout(state)}
   end
 
-  def handle_call({:open, pid}, _from, state) do
-    state = state |> activate() |> add_subscriber(pid)
+  def handle_call(:open, {caller, _tag}, state) do
+    state = state |> activate() |> add_subscriber(caller)
     {:reply, :ok, state, next_timeout(state)}
   end
 
-  def handle_call({:close, pid}, _from, state) do
-    state |> remove_subscriber(pid) |> maybe_stop_reply()
+  def handle_call(:close, {caller, _tag}, state) do
+    state |> remove_subscriber(caller) |> maybe_stop_reply()
   end
 
   @impl true
