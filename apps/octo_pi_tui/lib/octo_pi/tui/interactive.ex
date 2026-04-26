@@ -3,8 +3,8 @@ defmodule OctoPi.TUI.Interactive do
   Main loop for `mix pi` interactive mode.
 
   Composes the Phase 4 pieces end-to-end: `Terminal` owns the tty,
-  `StdinFSM` assembles sequences, `KeyParser` decodes them, the
-  `Input` component accumulates the prompt, and the `Renderer`
+  assembles cooked stdin sequences, and parses them into key events;
+  the `Input` component accumulates the prompt, and the `Renderer`
   paints the transcript + input to the screen. Agent events from
   `OctoPi.Agent.Session` drive the transcript updates.
 
@@ -15,9 +15,9 @@ defmodule OctoPi.TUI.Interactive do
   `:ok`.
   """
 
-  use GenServer
-
   @behaviour OctoPi.Coder.UIHost
+
+  use GenServer
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
@@ -29,6 +29,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.Event, as: ExtEvent
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.Coder.UIHost
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Components
@@ -39,18 +40,16 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.EventLogger
-  alias OctoPi.TUI.Events
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
-  alias OctoPi.TUI.KeyParser
   alias OctoPi.TUI.Overlay
-  alias OctoPi.TUI.RawMode
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
-  alias OctoPi.TUI.StdinFSM
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Tracer
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -62,11 +61,11 @@ defmodule OctoPi.TUI.Interactive do
   @type t :: %__MODULE__{
           session: pid() | nil,
           sup: pid() | nil,
-          fsm: pid() | nil,
           renderer: pid() | nil,
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
           skip_raw_mode: boolean(),
+          send_sigtstp_fn: (-> :ok),
           keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
           transcript: [struct()],
@@ -83,7 +82,6 @@ defmodule OctoPi.TUI.Interactive do
           models: [Model.t()],
           model_selector: ModelSelector.t() | nil,
           dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
-          paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
@@ -99,13 +97,14 @@ defmodule OctoPi.TUI.Interactive do
           extensions: [Extension.t()]
         }
 
+  # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
             sup: nil,
-            fsm: nil,
             renderer: nil,
             terminal: nil,
             raw_mode_fn: nil,
             skip_raw_mode: false,
+            send_sigtstp_fn: &__MODULE__.default_send_sigtstp/0,
             keybindings: nil,
             input: %Components.Input{},
             transcript: [],
@@ -125,7 +124,6 @@ defmodule OctoPi.TUI.Interactive do
             models: [],
             model_selector: nil,
             dequeue_overlay: nil,
-            paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
@@ -140,7 +138,7 @@ defmodule OctoPi.TUI.Interactive do
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
-    OctoPi.Coder.UIHost.build_ui_context(interactive_pid)
+    UIHost.build_ui_context(interactive_pid)
   end
 
   @doc """
@@ -150,7 +148,7 @@ defmodule OctoPi.TUI.Interactive do
   Blocking dialogs return `{state, :pending}` — the caller must
   wait for resolution through key events.
   """
-  @impl OctoPi.Coder.UIHost
+  @impl UIHost
   @spec handle_ui_request(t(), term()) :: {t(), term()}
   def handle_ui_request(state, :get_editor_text), do: {state, state.input.value}
   def handle_ui_request(state, :get_tools_expanded), do: {state, state.tools_expanded}
@@ -362,6 +360,15 @@ defmodule OctoPi.TUI.Interactive do
       EventLogger.attach(path)
     end
 
+    case Keyword.get(opts, :trace) do
+      nil ->
+        :ok
+
+      trace_path ->
+        fd = Tracer.attach(trace_path)
+        Process.put(:tracer_fd, fd)
+    end
+
     extensions = load_extensions(opts, cwd)
     session = start_agent_session(opts)
 
@@ -369,7 +376,6 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: StdinFSM, start: {StdinFSM, :start_link, [[subscriber: self()]]}},
       %{id: Renderer, start: {Renderer, :start_link, [[width: w, height: h, csi_2026?: true]]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
@@ -377,12 +383,10 @@ defmodule OctoPi.TUI.Interactive do
     {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
 
     terminal = child_pid(sup, Terminal)
-    fsm = child_pid(sup, StdinFSM)
     renderer = child_pid(sup, Renderer)
     footer_data = child_pid(sup, FooterData)
 
-    {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
-    {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
+    :ok = Terminal.open(terminal)
     OctoPi.Agent.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
@@ -401,11 +405,11 @@ defmodule OctoPi.TUI.Interactive do
     state = %__MODULE__{
       session: session,
       sup: sup,
-      fsm: fsm,
       renderer: renderer,
       terminal: terminal,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
+      send_sigtstp_fn: Keyword.get(opts, :send_sigtstp_fn, &__MODULE__.default_send_sigtstp/0),
       keybindings: keybindings,
       input: %Components.Input{
         width: w,
@@ -439,18 +443,17 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:stdin_chunk, bin}, state) do
-    :ok = StdinFSM.process(state.fsm, bin)
-    {:noreply, state, loader_timeout(state)}
-  end
-
-  def handle_info({:stdin_event, seq}, state) do
-    parsed = KeyParser.parse(seq)
-    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
-
+  def handle_info({:key_event, parsed}, state) do
     state
     |> Map.put(:notification, nil)
     |> handle_event(parsed)
+    |> advance()
+  end
+
+  def handle_info({:paste, _content} = msg, state) do
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(msg)
     |> advance()
   end
 
@@ -539,15 +542,45 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def terminate(_reason, state) do
-    shutdown(state)
-    safe_raw_mode_exit(state.raw_mode_fn, state.skip_raw_mode)
+    # Synchronously shut the supervisor down so Terminal.terminate/2
+    # (and through it Reader.terminate/2) runs before we return —
+    # otherwise the BEAM proceeds to halt while the kitty/MOK disable
+    # sequences and raw-mode exit are still queued, and the user's
+    # shell inherits a TTY in kitty mode.
+    if state.sup && Process.alive?(state.sup) do
+      Supervisor.stop(state.sup, :normal, :infinity)
+    end
+
+    # Catastrophe path: if Terminal was already killed brutally (e.g.
+    # :kill'd outside the normal stop chain), Reader's terminate never
+    # ran, so kick raw-mode exit ourselves as a backstop. Bracketed
+    # paste / kitty bytes are unrecoverable in that case.
+    if terminal_dead?(state.terminal), do: safe_raw_mode_exit(state)
 
     if fd = Process.get(:debug_render_log) do
       File.close(fd)
       Process.delete(:debug_render_log)
     end
 
+    if fd = Process.get(:tracer_fd) do
+      Tracer.detach(fd)
+      Process.delete(:tracer_fd)
+    end
+
     :ok
+  end
+
+  defp terminal_dead?(nil), do: false
+  defp terminal_dead?(pid) when is_pid(pid), do: not Process.alive?(pid)
+
+  defp safe_raw_mode_exit(%{skip_raw_mode: true}), do: :ok
+
+  defp safe_raw_mode_exit(%{raw_mode_fn: fun}) do
+    fun.(:exit)
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
   end
 
   # --- private helpers ---
@@ -557,8 +590,7 @@ defmodule OctoPi.TUI.Interactive do
   defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
   defp loader_timeout(_), do: :infinity
 
-  defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from),
-    do: %{state | dialog: {type, from, a, b}}
+  defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from), do: %{state | dialog: {type, from, a, b}}
 
   defp put_dialog_from(state, _from), do: state
 
@@ -581,16 +613,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
-
-  defp safe_raw_mode_exit(_fun, true), do: :ok
-
-  defp safe_raw_mode_exit(fun, false) do
-    fun.(:exit)
-  rescue
-    _ -> :ok
-  catch
-    _, _ -> :ok
-  end
 
   defp start_agent_session(opts) do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
@@ -718,12 +740,25 @@ defmodule OctoPi.TUI.Interactive do
     pid
   end
 
+  # Suspend cycles the Terminal: close (deactivates → cooked mode for
+  # the parent shell) → SIGTSTP → open (re-activates after fg).
   defp maybe_suspend(%{suspend_pending: true} = state) do
-    Terminal.suspend(state.terminal)
+    Terminal.close(state.terminal)
+    state.send_sigtstp_fn.()
+    Terminal.open(state.terminal)
     %{state | suspend_pending: false}
   end
 
   defp maybe_suspend(state), do: state
+
+  @doc false
+  def default_send_sigtstp do
+    if match?({:unix, _}, :os.type()) do
+      System.cmd("kill", ["-TSTP", List.to_string(:os.getpid())])
+    end
+
+    :ok
+  end
 
   defp maybe_launch_editor(%{editor_pending: false} = state), do: state
 
@@ -763,12 +798,6 @@ defmodule OctoPi.TUI.Interactive do
     if bytes != "", do: Terminal.write(state.terminal, bytes)
     state
   end
-
-  defp shutdown(%{sup: sup}) when is_pid(sup) do
-    if Process.alive?(sup), do: Supervisor.stop(sup, :normal)
-  end
-
-  defp shutdown(_), do: :ok
 
   defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
 
@@ -923,15 +952,8 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  def handle_event(state, :paste_start), do: %{state | paste_buffer: ""}
-
-  def handle_event(%{paste_buffer: buf} = state, {:key, %Key{key: cp}}) when is_binary(buf) and is_integer(cp),
-    do: %{state | paste_buffer: buf <> <<cp::utf8>>}
-
-  def handle_event(%{paste_buffer: buf, input: input} = state, :paste_end) when is_binary(buf),
-    do: %{state | input: Components.Input.paste(input, buf), paste_buffer: nil}
-
-  def handle_event(state, :paste_end), do: %{state | paste_buffer: nil}
+  def handle_event(%{input: input} = state, {:paste, content}) when is_binary(content),
+    do: %{state | input: Components.Input.paste(input, content)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
     fire_extension_event(state.extensions, :agent_start, state)
@@ -1116,8 +1138,16 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
     do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
 
-  defp handle_event_key(%{input: input} = state, %Key{key: cp}) when is_integer(cp),
+  defp handle_event_key(%{input: input} = state, %Key{key: cp, modifiers: []}) when is_integer(cp),
     do: %{state | input: Components.Input.insert(input, <<cp::utf8>>)}
+
+  # shift+printable: insert what the terminal said the user typed
+  # (kitty CSI-u flag 4 reports it as `shifted_key`). Without that field
+  # — modifyOtherKeys, legacy CSI, or kitty without flag 4 — we have no
+  # layout-correct way to recover the shifted character on the wire,
+  # so the keystroke falls through to keybinding dispatch unchanged.
+  defp handle_event_key(%{input: input} = state, %Key{modifiers: [:shift], shifted_key: sk}) when is_integer(sk),
+    do: %{state | input: Components.Input.insert(input, <<sk::utf8>>)}
 
   defp handle_event_key(%{input: input} = state, %Key{} = key) do
     kb = get_keybindings(state)
@@ -1215,14 +1245,11 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: msg}
   end
 
-  defp dispatch_slash_command("compact", state),
-    do: %{state | notification: "Compaction not yet implemented"}
+  defp dispatch_slash_command("compact", state), do: %{state | notification: "Compaction not yet implemented"}
 
-  defp dispatch_slash_command("theme", state),
-    do: %{state | notification: "Theme picker not yet implemented"}
+  defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 
-  defp dispatch_slash_command("config", state),
-    do: %{state | notification: "Config: use --help for startup options"}
+  defp dispatch_slash_command("config", state), do: %{state | notification: "Config: use --help for startup options"}
 
   defp try_extension_shortcut([], _key, _state), do: :pass
 

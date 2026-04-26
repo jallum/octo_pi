@@ -1,118 +1,36 @@
-defmodule OctoPi.TUI.StdinFSM do
+defmodule OctoPi.TUI.Terminal.StdinFSM do
   @moduledoc """
-  Escape-sequence assembly. Takes raw byte chunks from the stdin
-  reader, pattern-matches them into complete sequences (CSI, OSC,
-  SS3, alt-prefix) + individual printable UTF-8 codepoints, and
-  forwards each complete event to a subscriber as
-  `{:stdin_event, binary}`.
+  Stateless escape-sequence decoder. Pattern-matches a binary into a
+  list of complete cooked sequences (CSI, OSC, SS3, DCS, APC,
+  alt-prefix) plus individual UTF-8 codepoints, and returns whatever
+  unresolved tail is left over for the caller to feed back in.
 
-  A 10ms flush timeout (configurable via `:flush_ms`) handles one
-  disambiguation case: a bare `\\e` at end of buffer could be
-  either the Escape key or the start of an escape sequence
-  arriving in pieces. We wait, and if nothing follows, flush it.
+  The caller (Terminal) owns the buffer and decides what to do with
+  the tail — typically: prepend it to the next chunk, and after some
+  idle period emit the tail as-is to disambiguate a bare `\\e` from
+  the start of a longer sequence.
 
-  `\\e<char>` where char isn't `[`, `]`, or `O` is treated as a
-  complete alt-prefix meta sequence and emitted immediately.
-
-  The timeout is driven by the GenServer's own `{:reply, state,
-  ms}` return tuple — no `Process.send_after/3`, no timer refs.
-  When the buffer is empty, we return `:infinity` so an idle FSM
-  doesn't wake every 10ms for nothing.
+  `\\e<char>` where char isn't `[`, `]`, `O`, `P`, or `_` is treated
+  as a complete alt-prefix meta sequence and emitted immediately.
 
   ## Divergence from upstream: bracketed paste as data events
 
   Upstream pi-mono's StdinBuffer exposes a separate `paste` event
   whose payload is the content between `\\e[200~` and `\\e[201~`
-  and suppresses `data` events during a paste. StdinFSM does not
-  replicate that: paste markers and content are emitted through the
-  same `{:stdin_event, binary}` channel. Consumers that need paste
-  atomicity collect events between the two markers (see the Input
-  component's paste handling). Keeping one channel avoids a second
-  subscription surface and matches existing caller code.
+  and suppresses `data` events during a paste. This module does not
+  replicate that: paste markers and content come back through the
+  same channel. Consumers that need paste atomicity collect events
+  between the two markers.
   """
 
-  use GenServer
-
-  @default_flush_ms 10
-
-  # --- public API ---
-
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
-  end
-
-  @doc "Feed a chunk of bytes into the FSM."
-  @spec process(GenServer.server(), binary()) :: :ok
-  def process(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:process, bin})
-
-  @doc "Flush any buffered content, emitting it to the subscriber. Returns the flushed sequences."
-  @spec flush(GenServer.server()) :: [binary()]
-  def flush(pid), do: GenServer.call(pid, :flush)
-
-  @doc "Discard any buffered content without emitting."
-  @spec clear(GenServer.server()) :: :ok
-  def clear(pid), do: GenServer.call(pid, :clear)
-
-  @doc "Return the current buffer contents (for testing)."
-  @spec get_buffer(GenServer.server()) :: binary()
-  def get_buffer(pid), do: GenServer.call(pid, :get_buffer)
-
-  # --- GenServer callbacks ---
-
-  @impl true
-  def init(opts) do
-    state = %{
-      subscriber: Keyword.fetch!(opts, :subscriber),
-      flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms),
-      buffer: ""
-    }
-
-    {:ok, state}
-  end
-
-  @impl true
-  def handle_call({:process, chunk}, _from, state) do
-    buffer = state.buffer <> chunk
-    {events, remainder} = extract(buffer)
-    Enum.each(events, &emit(state.subscriber, &1))
-    {:reply, :ok, %{state | buffer: remainder}, flush_timeout(remainder, state.flush_ms)}
-  end
-
-  def handle_call(:flush, _from, %{buffer: ""} = state) do
-    {:reply, [], state, :infinity}
-  end
-
-  def handle_call(:flush, _from, %{buffer: buf} = state) do
-    emit(state.subscriber, buf)
-    {:reply, [buf], %{state | buffer: ""}, :infinity}
-  end
-
-  def handle_call(:clear, _from, state) do
-    {:reply, :ok, %{state | buffer: ""}, :infinity}
-  end
-
-  def handle_call(:get_buffer, _from, state) do
-    {:reply, state.buffer, state, flush_timeout(state.buffer, state.flush_ms)}
-  end
-
-  @impl true
-  def handle_info(:timeout, %{buffer: ""} = state), do: {:noreply, state}
-
-  def handle_info(:timeout, %{buffer: buf} = state) do
-    emit(state.subscriber, buf)
-    {:noreply, %{state | buffer: ""}}
-  end
-
-  # --- helpers ---
-
-  defp flush_timeout("", _ms), do: :infinity
-  defp flush_timeout(_buffer, ms), do: ms
-
-  defp emit(subscriber, event) do
-    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: event})
-    send(subscriber, {:stdin_event, event})
-  end
+  @doc """
+  Decode `bin` into `{events, tail}`. `events` is the list of
+  complete cooked sequences (in order); `tail` is whatever
+  unresolved bytes remain — typically a partial escape sequence
+  awaiting more data.
+  """
+  @spec decode(binary()) :: {[binary()], binary()}
+  def decode(bin) when is_binary(bin), do: extract(bin)
 
   # --- sequence extraction (multi-head pattern matching) ---
 
@@ -146,7 +64,7 @@ defmodule OctoPi.TUI.StdinFSM do
     {[<<"\e", b>> | more], tail}
   end
 
-  # Bare \e at end of buffer — wait for the flush timeout.
+  # Bare \e at end of buffer — wait for more bytes.
   defp extract(<<"\e">>), do: {[], "\e"}
 
   # UTF-8 codepoint.

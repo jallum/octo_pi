@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.TtyNif do
+defmodule OctoPi.TUI.Terminal.TtyNif do
   @moduledoc false
 
   # NIF wrapper for clearing/restoring IEXTEN on stdin.

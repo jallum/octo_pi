@@ -27,7 +27,8 @@ defmodule OctoPi.Coder.CLI do
     cwd: :string,
     help: :boolean,
     debug_render: :boolean,
-    debug_events: :boolean
+    debug_events: :boolean,
+    trace: :string
   ]
 
   @aliases [p: :print, m: :model, h: :help]
@@ -75,7 +76,8 @@ defmodule OctoPi.Coder.CLI do
       model: resolve_model(switches[:model] || @default_model),
       cwd: switches[:cwd] || File.cwd!(),
       debug_render: switches[:debug_render] || false,
-      debug_events: switches[:debug_events] || false
+      debug_events: switches[:debug_events] || false,
+      trace: switches[:trace]
     }
   end
 
@@ -281,6 +283,8 @@ defmodule OctoPi.Coder.CLI do
       --cwd          working dir (default: current dir)
       --help, -h     show this message
       --debug-events log stdin/key pipeline to debug_events.log
+      --trace=PATH   write a timestamped tty/stdin trace to PATH (use to diagnose
+                     shutdown leaks; install Tracer telemetry handler on startup)
     """
   end
 end

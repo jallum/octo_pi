@@ -9,6 +9,11 @@ defmodule OctoPi.TUI.Key do
       sorted alphabetically for stable equality.
     * `:event_type` — `:press | :repeat | :release`. `:press` for
       non-Kitty sources; Kitty CSI-u with flag 2 reports the full set.
+    * `:shifted_key` — the codepoint the user actually typed (e.g. `?!`
+      for shift+1) when the terminal reports it via Kitty CSI-u flag 4.
+      `nil` when not reported (modifyOtherKeys, legacy CSI, etc.). Use
+      this for *insertion* into text inputs; leave `:key` + `:shift`
+      modifier alone for *binding* matches.
   """
 
   @type modifier :: :ctrl | :shift | :alt | :super
@@ -17,11 +22,12 @@ defmodule OctoPi.TUI.Key do
   @type t :: %__MODULE__{
           key: atom() | non_neg_integer(),
           modifiers: [modifier()],
-          event_type: event_type()
+          event_type: event_type(),
+          shifted_key: non_neg_integer() | nil
         }
 
   @enforce_keys [:key]
-  defstruct key: nil, modifiers: [], event_type: :press
+  defstruct key: nil, modifiers: [], event_type: :press, shifted_key: nil
 
   @doc """
   Render a `Key` as a stable string id (e.g. `"ctrl+97"`, `"up"`)
@@ -53,7 +59,7 @@ defmodule OctoPi.TUI.Key do
 
   Layout-aware matching relies on the key parser having already
   resolved non-Latin codepoints to their Latin base (see
-  `OctoPi.TUI.KeyParser` Kitty CSI-u alternate-key handling), so
+  `OctoPi.TUI.Terminal.KeyParser` Kitty CSI-u alternate-key handling), so
   this function does not need to re-resolve layouts.
   """
   @spec matches?(t(), String.t()) :: boolean()

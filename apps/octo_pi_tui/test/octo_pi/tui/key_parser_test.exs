@@ -1,9 +1,9 @@
-defmodule OctoPi.TUI.KeyParserTest do
+defmodule OctoPi.TUI.Terminal.KeyParserTest do
   # async: false — "Windows Terminal 0x08" tests mutate WT/SSH env vars.
   use ExUnit.Case, async: false
 
   alias OctoPi.TUI.Key
-  alias OctoPi.TUI.KeyParser
+  alias OctoPi.TUI.Terminal.KeyParser
 
   @wt_env_keys ~w(WT_SESSION SSH_CONNECTION SSH_CLIENT SSH_TTY)
 
@@ -343,11 +343,26 @@ defmodule OctoPi.TUI.KeyParserTest do
       assert {:key, %Key{key: ?1, modifiers: [:ctrl]}} = KeyParser.parse("\e[27;5;49~")
     end
 
-    test "shift+1" do
-      assert {:key, %Key{key: ?1, modifiers: [:shift]}} = KeyParser.parse("\e[27;2;49~")
+    # modifyOtherKeys reports the unshifted keysym + modifier bits;
+    # there is no alternate-keys field on the wire here, so the parser
+    # cannot recover the shifted character. Bindings use "shift+1" form.
+    test "shift+1 reports keysym 1 + shift" do
+      assert {:key, %Key{key: ?1, modifiers: [:shift], shifted_key: nil}} =
+               KeyParser.parse("\e[27;2;49~")
     end
 
-    test "shift+e (uppercase E normalized)" do
+    test "shift+/ reports keysym / + shift" do
+      assert {:key, %Key{key: ?/, modifiers: [:shift]}} = KeyParser.parse("\e[27;2;47~")
+    end
+
+    test "ctrl+shift+1 reports keysym 1 + ctrl + shift" do
+      result = KeyParser.parse("\e[27;6;49~")
+      assert {:key, %Key{key: ?1}} = result
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+    end
+
+    # mok_key/1 lowercases A-Z so binding "shift+e" matches uniformly.
+    test "shift+e (uppercase 69 normalized to lowercase)" do
       assert {:key, %Key{key: ?e, modifiers: [:shift]}} = KeyParser.parse("\e[27;2;69~")
     end
 
@@ -374,8 +389,14 @@ defmodule OctoPi.TUI.KeyParserTest do
       assert {:key, %Key{key: ?a, modifiers: [:ctrl]}} = KeyParser.parse("\e[97;5u")
     end
 
-    test "with Shift: \\e[97;2u" do
-      assert {:key, %Key{key: ?a, modifiers: [:shift]}} = KeyParser.parse("\e[97;2u")
+    test "with Shift (no alternate-keys field): \\e[97;2u" do
+      assert {:key, %Key{key: ?a, modifiers: [:shift], shifted_key: nil}} =
+               KeyParser.parse("\e[97;2u")
+    end
+
+    test "with Shift + alternate-keys field: \\e[97:65:97;2u → shifted_key=A" do
+      assert {:key, %Key{key: ?a, modifiers: [:shift], shifted_key: ?A}} =
+               KeyParser.parse("\e[97:65:97;2u")
     end
 
     test "with Alt: \\e[97;3u" do
@@ -383,8 +404,9 @@ defmodule OctoPi.TUI.KeyParserTest do
     end
 
     test "with Ctrl+Shift: \\e[97;6u" do
-      mods = "\e[97;6u" |> KeyParser.parse() |> elem(1) |> Map.fetch!(:modifiers) |> Enum.sort()
-      assert mods == [:ctrl, :shift]
+      result = KeyParser.parse("\e[97;6u")
+      assert {:key, %Key{key: ?a}} = result
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "with event_type repeat: \\e[97;1:2u" do
@@ -405,8 +427,24 @@ defmodule OctoPi.TUI.KeyParserTest do
       assert {:key, %Key{key: ?1, modifiers: [:ctrl]}} = KeyParser.parse("\e[49;5u")
     end
 
-    test "shift+e (uppercase 69 via CSI-u)" do
-      assert {:key, %Key{key: ?E, modifiers: [:shift]}} = KeyParser.parse("\e[69;2u")
+    test "shift+1 via CSI-u (no alternate-keys field): keysym + shift, shifted_key=nil" do
+      assert {:key, %Key{key: ?1, modifiers: [:shift], shifted_key: nil}} =
+               KeyParser.parse("\e[49;2u")
+    end
+
+    test "shift+1 via CSI-u with alternate-keys field: shifted_key=!" do
+      assert {:key, %Key{key: ?1, modifiers: [:shift], shifted_key: ?!}} =
+               KeyParser.parse("\e[49:33:49;2u")
+    end
+
+    test "ctrl+shift+1 via CSI-u: keysym + ctrl + shift" do
+      result = KeyParser.parse("\e[49;6u")
+      assert {:key, %Key{key: ?1}} = result
+      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+    end
+
+    test "shift+e via CSI-u (cp uppercase) normalizes to lowercase + shift" do
+      assert {:key, %Key{key: ?e, modifiers: [:shift]}} = KeyParser.parse("\e[69;2u")
     end
   end
 
@@ -471,9 +509,9 @@ defmodule OctoPi.TUI.KeyParserTest do
                KeyParser.parse("\e[47::91;5u")
     end
 
-    test "shifted key in format" do
+    test "shifted field in format populates :shifted_key" do
       # cp=99 (c), shifted=67 (C), base=99 (c), shift mod
-      assert {:key, %Key{key: ?c, modifiers: [:shift]}} =
+      assert {:key, %Key{key: ?c, modifiers: [:shift], shifted_key: ?C}} =
                KeyParser.parse("\e[99:67:99;2u")
     end
 
@@ -484,9 +522,11 @@ defmodule OctoPi.TUI.KeyParserTest do
     end
 
     test "full format: cp:shifted:base;mod:event" do
-      # cp=1089, shifted=1057, base=99, mod=6 (ctrl+shift), event=2 (repeat)
+      # cp=1089, shifted=1057, base=99, mod=6 (ctrl+shift), event=2 (repeat).
+      # Resolves to base 'c'; alternate-keys field carries the Cyrillic
+      # uppercase shifted_key for callers that want to insert it.
       result = KeyParser.parse("\e[1089:1057:99;6:2u")
-      assert {:key, %Key{key: ?c, event_type: :repeat}} = result
+      assert {:key, %Key{key: ?c, event_type: :repeat, shifted_key: 1057}} = result
       assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
     end
   end
