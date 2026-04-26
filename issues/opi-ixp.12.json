@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.1"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:56Z",
   "description": "**Phase C — Pure compaction core. Deps: A1.**\n\nPort from `tmp/pi-mono/.../compaction/compaction.ts`:\n- `estimateTokens` (lines 232-290) — chars÷4 heuristic per role; handles assistant thinking + tool calls.\n- `estimateContextTokens` (lines 186-214) — uses last assistant `usage` as baseline + trailing-message estimate.\n- `calculateContextTokens` (lines 135-137) — sums totalTokens or reconstructs from usage components.\n- `shouldCompact` (lines 219-222) — exact signature: `shouldCompact(contextTokens, contextWindow, settings) -\u003e contextTokens \u003e contextWindow - settings.reserveTokens` (returns false if !settings.enabled).\n\nTests: parity against upstream estimator on fixture messages.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "C1. Token estimator (estimate_tokens, estimate_context_tokens, should_compact?)",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:56Z"
+  "updated_at": "2026-04-26T20:02:05Z"
 }

@@ -2,6 +2,7 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
+    "opi-ixp.12",
     "opi-ixp.2"
   ],
   "created": "2026-04-26T20:01:53Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "A1. SessionEntry typed union (types only)",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:03Z"
+  "updated_at": "2026-04-26T20:02:05Z"
 }
