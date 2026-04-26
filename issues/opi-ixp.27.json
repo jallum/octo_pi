@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E7a. Wire Context.find_model to real model registry",
   "type": "task",
-  "updated_at": "2026-04-26T20:56:41.797910Z"
+  "updated_at": "2026-04-26T20:59:18.307692Z"
 }
