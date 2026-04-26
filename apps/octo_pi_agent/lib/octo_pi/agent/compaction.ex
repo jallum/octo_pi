@@ -122,6 +122,38 @@ defmodule OctoPi.Agent.Compaction do
     end
   end
 
+  @doc """
+  Run compaction from an already-computed preparation map (skips the `prepare/2`
+  step). Used when a `session_before_compact` hook has already called `prepare/2`.
+
+  Returns `{:ok, result}` or `{:error, reason}`.
+  """
+  @spec compact_prepared(map(), module(), OctoPi.AI.Model.t()) ::
+          {:ok, %{summary: String.t(), first_kept_entry_id: String.t(), tokens_before: integer()}}
+          | {:error, term()}
+  def compact_prepared(
+        %{
+          messages_to_summarize: to_summarize,
+          first_kept_entry_id: first_kept_id,
+          tokens_before: tokens_before
+        },
+        transport,
+        model
+      ) do
+    case summarize(to_summarize, transport, model) do
+      {:ok, summary} ->
+        {:ok,
+         %{
+           summary: summary,
+           first_kept_entry_id: first_kept_id,
+           tokens_before: tokens_before
+         }}
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
   # ── Private helpers ──────────────────────────────────────────────────────────
 
   # Walk backward through the branch (newest-first), accumulating token estimates.

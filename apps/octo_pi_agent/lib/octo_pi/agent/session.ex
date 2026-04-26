@@ -268,10 +268,11 @@ defmodule OctoPi.Agent.Session do
         keep = Keyword.get(opts, :keep_recent_tokens, 8_000)
         sm = session.session_manager
         transport = session.transport
+        runner = session.extension_runner
 
         task =
           Task.Supervisor.async_nolink(LoopSupervisor, fn ->
-            Compaction.compact(sm, transport, model, keep_recent_tokens: keep)
+            run_compaction_with_hooks(sm, transport, model, keep, runner)
           end)
 
         session = %{session | compaction_task: task}
@@ -366,10 +367,17 @@ defmodule OctoPi.Agent.Session do
 
   defp on_compaction_done(
          store,
-         {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}}
+         {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before},
+          from_extension}
        ) do
-    sm = SessionManager.append_compaction(store.session.session_manager, summary, first_kept_id, tokens_before)
+    sm =
+      SessionManager.append_compaction(store.session.session_manager, summary, first_kept_id, tokens_before,
+        from_hook: from_extension
+      )
+
     result = %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}
+
+    emit_session_compact_hook(sm, from_extension, store.session.extension_runner)
 
     Subscribers.dispatch(self(), %Event.CompactionEnd{
       reason: :manual,
@@ -379,6 +387,20 @@ defmodule OctoPi.Agent.Session do
     })
 
     session = %{store.session | session_manager: sm, is_compacting?: false, compaction_task: nil}
+    %{store | session: session}
+  end
+
+  defp on_compaction_done(store, {:cancelled, reason}) do
+    msg = "compaction cancelled: #{inspect(reason)}"
+
+    Subscribers.dispatch(self(), %Event.CompactionEnd{
+      reason: :manual,
+      aborted?: true,
+      will_retry?: false,
+      error_message: msg
+    })
+
+    session = %{store.session | is_compacting?: false, compaction_task: nil}
     %{store | session: session}
   end
 
@@ -510,6 +532,51 @@ defmodule OctoPi.Agent.Session do
   defp normalize(%User{} = m), do: m
   defp normalize(%Custom{} = m), do: m
   defp normalize(%{__struct__: _} = m), do: m
+
+  # Run prepare → session_before_compact hook → LLM summarize (or use custom).
+  # Returns {:ok, result, from_extension?}, {:cancelled, reason}, or {:error, reason}.
+  defp run_compaction_with_hooks(sm, transport, model, keep, runner) do
+    case Compaction.prepare(sm, keep) do
+      nil -> {:error, :nothing_to_compact}
+      preparation -> apply_before_compact_hook(preparation, transport, model, runner)
+    end
+  end
+
+  defp apply_before_compact_hook(preparation, transport, model, nil) do
+    compact_via_llm(preparation, transport, model)
+  end
+
+  defp apply_before_compact_hook(preparation, transport, model, runner) do
+    case ExtensionRunner.emit(runner, :session_before_compact, %{preparation: preparation}) do
+      {:cancelled, reason} -> {:cancelled, reason}
+      {:modified, %{compaction: custom}} -> {:ok, custom, true}
+      _ -> compact_via_llm(preparation, transport, model)
+    end
+  end
+
+  defp compact_via_llm(preparation, transport, model) do
+    case Compaction.compact_prepared(preparation, transport, model) do
+      {:ok, result} -> {:ok, result, false}
+      err -> err
+    end
+  end
+
+  defp emit_session_compact_hook(sm, from_extension, runner) when not is_nil(runner) do
+    compaction_entry =
+      Enum.find(Enum.reverse(sm.entries), fn
+        %OctoPi.Agent.SessionEntry.CompactionEntry{} -> true
+        _ -> false
+      end)
+
+    if compaction_entry do
+      ExtensionRunner.emit(runner, :session_compact, %{
+        compaction_entry: compaction_entry,
+        from_extension: from_extension
+      })
+    end
+  end
+
+  defp emit_session_compact_hook(_sm, _from_extension, nil), do: :ok
 
   defp maybe_start_extension_runner(_session_pid, []), do: nil
 
