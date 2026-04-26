@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E1. Compaction.compact/2 — single-pass path",
   "type": "task",
-  "updated_at": "2026-04-26T23:27:40.703378Z"
+  "updated_at": "2026-04-26T23:32:12.544146Z"
 }
