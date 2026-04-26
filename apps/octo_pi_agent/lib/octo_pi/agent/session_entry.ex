@@ -21,6 +21,13 @@ defmodule OctoPi.Agent.SessionEntry do
   alias OctoPi.Agent.SessionEntry.MessageEntry
   alias OctoPi.Agent.SessionEntry.ModelChangeEntry
   alias OctoPi.Agent.SessionEntry.SessionInfoEntry
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.Usage
 
   @type t ::
           MessageEntry.t()
@@ -182,4 +189,302 @@ defmodule OctoPi.Agent.SessionEntry do
           }
     defstruct [:id, :parent_id, :timestamp, :display_name]
   end
+
+  # ── JSON serialization ───────────────────────────────────────────────────────
+
+  @doc "Encode an entry as a JSON-compatible map (with \"type\" discriminator)."
+  @spec to_json(t()) :: map()
+  def to_json(%MessageEntry{} = e) do
+    %{
+      "type" => "message",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "message" => message_to_json(e.message)
+    }
+  end
+
+  def to_json(%CompactionEntry{} = e) do
+    %{
+      "type" => "compaction",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "summary" => e.summary,
+      "first_kept_entry_id" => e.first_kept_entry_id,
+      "tokens_before" => e.tokens_before,
+      "details" => e.details,
+      "from_hook" => e.from_hook?
+    }
+  end
+
+  def to_json(%BranchSummaryEntry{} = e) do
+    %{
+      "type" => "branch_summary",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "from_id" => e.from_id,
+      "summary" => e.summary,
+      "details" => e.details,
+      "from_hook" => e.from_hook?
+    }
+  end
+
+  def to_json(%CustomEntry{} = e) do
+    %{
+      "type" => "custom",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "custom_type" => e.custom_type,
+      "data" => e.data
+    }
+  end
+
+  def to_json(%CustomMessageEntry{} = e) do
+    %{
+      "type" => "custom_message",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "custom_type" => e.custom_type,
+      "content" => e.content,
+      "display" => e.display,
+      "details" => e.details
+    }
+  end
+
+  def to_json(%ModelChangeEntry{} = e) do
+    %{
+      "type" => "model_change",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "provider" => Atom.to_string(e.provider),
+      "model_id" => e.model_id
+    }
+  end
+
+  def to_json(%LabelEntry{} = e) do
+    %{
+      "type" => "label",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "entry_id" => e.entry_id,
+      "label" => e.label
+    }
+  end
+
+  def to_json(%SessionInfoEntry{} = e) do
+    %{
+      "type" => "session_info",
+      "id" => e.id,
+      "parent_id" => e.parent_id,
+      "timestamp" => e.timestamp,
+      "display_name" => e.display_name
+    }
+  end
+
+  @doc "Decode a JSON-compatible map (with \"type\" discriminator) into an entry struct."
+  @spec from_json(map()) :: t()
+  def from_json(%{"type" => "message"} = m) do
+    %MessageEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      message: message_from_json(m["message"])
+    }
+  end
+
+  def from_json(%{"type" => "compaction"} = m) do
+    %CompactionEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      summary: m["summary"],
+      first_kept_entry_id: m["first_kept_entry_id"],
+      tokens_before: m["tokens_before"],
+      details: m["details"],
+      from_hook?: m["from_hook"] || false
+    }
+  end
+
+  def from_json(%{"type" => "branch_summary"} = m) do
+    %BranchSummaryEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      from_id: m["from_id"],
+      summary: m["summary"],
+      details: m["details"],
+      from_hook?: m["from_hook"] || false
+    }
+  end
+
+  def from_json(%{"type" => "custom"} = m) do
+    %CustomEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      custom_type: m["custom_type"],
+      data: m["data"]
+    }
+  end
+
+  def from_json(%{"type" => "custom_message"} = m) do
+    %CustomMessageEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      custom_type: m["custom_type"],
+      content: m["content"],
+      display: m["display"] || false,
+      details: m["details"]
+    }
+  end
+
+  def from_json(%{"type" => "model_change"} = m) do
+    %ModelChangeEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      provider: String.to_existing_atom(m["provider"]),
+      model_id: m["model_id"]
+    }
+  end
+
+  def from_json(%{"type" => "label"} = m) do
+    %LabelEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      entry_id: m["entry_id"],
+      label: m["label"]
+    }
+  end
+
+  def from_json(%{"type" => "session_info"} = m) do
+    %SessionInfoEntry{
+      id: m["id"],
+      parent_id: m["parent_id"],
+      timestamp: m["timestamp"],
+      display_name: m["display_name"]
+    }
+  end
+
+  # ── Message serialization ────────────────────────────────────────────────────
+
+  defp message_to_json(%User{} = msg) do
+    %{"role" => "user", "content" => msg.content, "timestamp" => msg.timestamp}
+  end
+
+  defp message_to_json(%Assistant{} = msg) do
+    %{
+      "role" => "assistant",
+      "api" => Atom.to_string(msg.api),
+      "provider" => Atom.to_string(msg.provider),
+      "model" => msg.model,
+      "response_id" => msg.response_id,
+      "content" => Enum.map(msg.content, &content_block_to_json/1),
+      "stop_reason" => stop_reason_to_json(msg.stop_reason),
+      "error_message" => msg.error_message,
+      "timestamp" => msg.timestamp,
+      "usage" => usage_to_json(msg.usage)
+    }
+  end
+
+  defp message_to_json(%ToolResult{} = msg) do
+    %{
+      "role" => "tool_result",
+      "tool_call_id" => msg.tool_call_id,
+      "tool_name" => msg.tool_name,
+      "content" => Enum.map(msg.content, &content_block_to_json/1),
+      "details" => msg.details,
+      "is_error" => msg.is_error?,
+      "timestamp" => msg.timestamp
+    }
+  end
+
+  defp message_from_json(%{"role" => "user"} = m) do
+    %User{content: m["content"], timestamp: m["timestamp"]}
+  end
+
+  defp message_from_json(%{"role" => "assistant"} = m) do
+    %Assistant{
+      api: String.to_existing_atom(m["api"]),
+      provider: String.to_existing_atom(m["provider"]),
+      model: m["model"],
+      response_id: m["response_id"],
+      content: Enum.map(m["content"] || [], &content_block_from_json/1),
+      stop_reason: stop_reason_from_json(m["stop_reason"]),
+      error_message: m["error_message"],
+      timestamp: m["timestamp"],
+      usage: usage_from_json(m["usage"])
+    }
+  end
+
+  defp message_from_json(%{"role" => "tool_result"} = m) do
+    %ToolResult{
+      tool_call_id: m["tool_call_id"],
+      tool_name: m["tool_name"],
+      content: Enum.map(m["content"] || [], &content_block_from_json/1),
+      details: m["details"],
+      is_error?: m["is_error"] || false,
+      timestamp: m["timestamp"]
+    }
+  end
+
+  defp content_block_to_json(%Text{} = b), do: %{"type" => "text", "text" => b.text, "signature" => b.signature}
+
+  defp content_block_to_json(%Thinking{} = b),
+    do: %{"type" => "thinking", "thinking" => b.thinking, "signature" => b.signature, "redacted" => b.redacted?}
+
+  defp content_block_to_json(%ToolCall{} = b),
+    do: %{
+      "type" => "tool_call",
+      "id" => b.id,
+      "name" => b.name,
+      "arguments" => b.arguments,
+      "thought_signature" => b.thought_signature
+    }
+
+  defp content_block_to_json(other), do: inspect(other)
+
+  defp content_block_from_json(%{"type" => "text"} = b), do: %Text{text: b["text"], signature: b["signature"]}
+
+  defp content_block_from_json(%{"type" => "thinking"} = b),
+    do: %Thinking{thinking: b["thinking"], signature: b["signature"], redacted?: b["redacted"] || false}
+
+  defp content_block_from_json(%{"type" => "tool_call"} = b),
+    do: %ToolCall{
+      id: b["id"],
+      name: b["name"],
+      arguments: b["arguments"] || %{},
+      thought_signature: b["thought_signature"]
+    }
+
+  defp content_block_from_json(_other), do: nil
+
+  defp stop_reason_to_json(nil), do: nil
+  defp stop_reason_to_json(atom), do: Atom.to_string(atom)
+
+  defp stop_reason_from_json(nil), do: nil
+  defp stop_reason_from_json(str), do: String.to_existing_atom(str)
+
+  defp usage_to_json(nil), do: %{"input" => 0, "output" => 0, "cache_read" => 0, "cache_write" => 0}
+
+  defp usage_to_json(%Usage{} = u),
+    do: %{"input" => u.input, "output" => u.output, "cache_read" => u.cache_read, "cache_write" => u.cache_write}
+
+  defp usage_from_json(nil), do: %Usage{}
+
+  defp usage_from_json(m),
+    do: %Usage{
+      input: m["input"] || 0,
+      output: m["output"] || 0,
+      cache_read: m["cache_read"] || 0,
+      cache_write: m["cache_write"] || 0
+    }
 end

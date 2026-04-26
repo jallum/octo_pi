@@ -19,15 +19,18 @@ defmodule OctoPi.Agent.SessionManager do
   alias OctoPi.Agent.SessionEntry.LabelEntry
   alias OctoPi.Agent.SessionEntry.MessageEntry
   alias OctoPi.Agent.SessionEntry.ModelChangeEntry
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
 
   @type t :: %__MODULE__{
           entries: [SessionEntry.t()],
           by_id: %{String.t() => SessionEntry.t()},
-          leaf_id: String.t() | nil
+          leaf_id: String.t() | nil,
+          session_file: String.t() | nil,
+          flushed?: boolean()
         }
 
-  defstruct entries: [], by_id: %{}, leaf_id: nil
+  defstruct entries: [], by_id: %{}, leaf_id: nil, session_file: nil, flushed?: false
 
   # ── Construction ─────────────────────────────────────────────────────────────
 
@@ -41,18 +44,43 @@ defmodule OctoPi.Agent.SessionManager do
   Options:
     - `initial_entries` — oldest-first list of `SessionEntry.t()` to seed from.
       `by_id` and `leaf_id` are derived from the list.
+    - `session_file` — path to a JSONL file for persistence. The file is NOT
+      created until the first `%Assistant{}` message is appended.
   """
   @spec new(keyword()) :: t()
   def new(opts) when is_list(opts) do
+    session_file = Keyword.get(opts, :session_file)
+
     case Keyword.get(opts, :initial_entries, []) do
       [] ->
-        %__MODULE__{}
+        %__MODULE__{session_file: session_file}
 
       entries ->
         by_id = Map.new(entries, &{&1.id, &1})
         leaf_id = List.last(entries).id
-        %__MODULE__{entries: entries, by_id: by_id, leaf_id: leaf_id}
+        %__MODULE__{entries: entries, by_id: by_id, leaf_id: leaf_id, session_file: session_file}
     end
+  end
+
+  @doc """
+  Load a SessionManager from a JSONL file.
+
+  Each non-empty line must be a JSON-encoded entry map with a `"type"` field.
+  Returns `{:ok, t()}` or `{:error, reason}`.
+  """
+  @spec new_from_file(String.t()) :: {:ok, t()} | {:error, term()}
+  def new_from_file(path) when is_binary(path) do
+    with {:ok, contents} <- File.read(path) do
+      entries =
+        contents
+        |> String.split("\n", trim: true)
+        |> Enum.map(&(&1 |> Jason.decode!() |> SessionEntry.from_json()))
+
+      sm = new(initial_entries: entries, session_file: path)
+      {:ok, %{sm | flushed?: true}}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
   end
 
   # ── Append operations ────────────────────────────────────────────────────────
@@ -230,7 +258,26 @@ defmodule OctoPi.Agent.SessionManager do
   defp timestamp, do: DateTime.to_iso8601(DateTime.utc_now())
 
   defp append_entry(%__MODULE__{entries: entries, by_id: by_id} = sm, entry) do
-    %{sm | entries: entries ++ [entry], by_id: Map.put(by_id, entry.id, entry), leaf_id: entry.id}
+    sm = %{sm | entries: entries ++ [entry], by_id: Map.put(by_id, entry.id, entry), leaf_id: entry.id}
+    persist_entry(sm, entry)
+  end
+
+  defp persist_entry(%__MODULE__{session_file: nil} = sm, _entry), do: sm
+
+  defp persist_entry(%__MODULE__{session_file: path, flushed?: false} = sm, _entry) do
+    has_assistant = Enum.any?(sm.entries, &match?(%MessageEntry{message: %Assistant{}}, &1))
+
+    if has_assistant do
+      File.write!(path, Enum.map_join(sm.entries, "\n", &Jason.encode!(SessionEntry.to_json(&1))) <> "\n")
+      %{sm | flushed?: true}
+    else
+      sm
+    end
+  end
+
+  defp persist_entry(%__MODULE__{session_file: path, flushed?: true} = sm, entry) do
+    File.write!(path, Jason.encode!(SessionEntry.to_json(entry)) <> "\n", [:append])
+    sm
   end
 
   defp walk_to_root(_sm, nil, acc), do: acc
