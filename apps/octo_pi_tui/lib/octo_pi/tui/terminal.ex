@@ -343,9 +343,14 @@ defmodule OctoPi.TUI.Terminal do
   defp process_chunk(bin, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
     {fsm, events, next_flush} = StdinFSM.process(state.fsm, bin)
-    Enum.each(events, &broadcast(state, :stdin_event, {:stdin_event, &1}))
+    Enum.each(events, &emit_stdin_event(state, &1))
     state = %{state | fsm: fsm}
     arm_or_disarm_flush(state, next_flush)
+  end
+
+  defp emit_stdin_event(state, seq) do
+    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: seq})
+    broadcast(state, :stdin_event, {:stdin_event, seq})
   end
 
   defp arm_or_disarm_flush(state, :infinity), do: disarm_deadline(state, :flush)
@@ -363,7 +368,7 @@ defmodule OctoPi.TUI.Terminal do
 
   defp fire_deadline(:flush, state) do
     {fsm, events} = StdinFSM.flush(state.fsm)
-    Enum.each(events, &broadcast(state, :stdin_event, {:stdin_event, &1}))
+    Enum.each(events, &emit_stdin_event(state, &1))
     %{state | fsm: fsm}
   end
 

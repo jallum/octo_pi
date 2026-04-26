@@ -194,6 +194,42 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
+  describe "stdin FSM ownership (opi-445.2)" do
+    test "bare ESC is held, then flushed as cooked event after flush_ms" do
+      pid = start_terminal(flush_ms: 20)
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      Terminal.feed_chunk(pid, "\e")
+      refute_receive {:stdin_event, "\e"}, 5
+      assert_receive {:stdin_event, "\e"}, 200
+    end
+
+    test "flush deadline coexists with probe deadline (multiplexed)" do
+      test_pid = self()
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: fn _ -> :ok end,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 100,
+          flush_ms: 20
+        )
+
+      assert_receive {:tty, "\e[?u"}, 500
+      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+
+      # During probe, send a bare ESC: flush deadline (20ms) is
+      # nearer than probe deadline (100ms). The flush should fire
+      # first, then the probe should still fall back.
+      Terminal.simulate_stdin(pid, "\e")
+
+      assert_receive {:stdin_event, "\e"}, 200
+      assert_receive {:tty, "\e[>4;2m"}, 500
+    end
+  end
+
   describe "bracketed paste mode (opi-0g4.2)" do
     test "sends enable sequence on init" do
       test_pid = self()

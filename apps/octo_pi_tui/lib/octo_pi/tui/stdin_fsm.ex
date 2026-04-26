@@ -5,11 +5,10 @@ defmodule OctoPi.TUI.StdinFSM do
   + individual printable UTF-8 codepoints, and returns a list of
   cooked sequences plus the next flush deadline.
 
-  The module is a pure struct + pure functions; the caller (Terminal)
-  owns the buffer state, dispatches events, and arms the flush
-  timeout.
+  Pure struct + pure functions; the caller (Terminal) owns the
+  buffer state, dispatches events, and arms the flush timeout.
 
-  A 10ms flush timeout (configurable via `:flush_ms`) handles one
+  A 10 ms flush timeout (configurable via `:flush_ms`) handles one
   disambiguation case: a bare `\\e` at end of buffer could be
   either the Escape key or the start of an escape sequence
   arriving in pieces. After the timeout the caller should call
@@ -26,13 +25,6 @@ defmodule OctoPi.TUI.StdinFSM do
   replicate that: paste markers and content are emitted through the
   same channel. Consumers that need paste atomicity collect events
   between the two markers.
-
-  ## GenServer wrapper
-
-  A thin GenServer wrapper is retained as a transitional shim for
-  callers that still own the FSM as a child process. It delegates
-  to the pure API and is scheduled for removal once Terminal owns
-  the FSM directly (see opi-445.2 / opi-445.4).
   """
 
   @default_flush_ms 10
@@ -42,10 +34,6 @@ defmodule OctoPi.TUI.StdinFSM do
   @type t :: %__MODULE__{buffer: binary(), flush_ms: pos_integer()}
   @type process_result :: {t(), [binary()], non_neg_integer() | :infinity}
 
-  use GenServer
-
-  # --- pure API + GenServer wrapper ---
-
   @doc "Build a new FSM state."
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -54,8 +42,9 @@ defmodule OctoPi.TUI.StdinFSM do
 
   @doc """
   Feed a chunk of bytes into the FSM. Returns `{state, events,
-  next_timeout_ms | :infinity}` for a `%StdinFSM{}` state, or `:ok`
-  for the GenServer wrapper.
+  next_timeout_ms | :infinity}`. The caller is responsible for
+  emitting `events` and arming a flush deadline at the returned
+  timeout.
   """
   @spec process(t(), binary()) :: process_result()
   def process(%__MODULE__{} = state, bin) when is_binary(bin) do
@@ -64,73 +53,18 @@ defmodule OctoPi.TUI.StdinFSM do
     {%{state | buffer: remainder}, events, flush_timeout(remainder, state.flush_ms)}
   end
 
-  @spec process(GenServer.server(), binary()) :: :ok
-  def process(server, bin) when is_binary(bin), do: GenServer.call(server, {:process, bin})
-
   @doc """
-  Flush any buffered content as a single sequence. For a struct
-  state returns `{state, events}`; for the GenServer wrapper returns
-  `events`.
+  Flush any buffered content as a single sequence. Returns
+  `{state, events}` where `events` is `[]` when the buffer is empty
+  or `[buffer]` otherwise.
   """
   @spec flush(t()) :: {t(), [binary()]}
   def flush(%__MODULE__{buffer: ""} = state), do: {state, []}
   def flush(%__MODULE__{buffer: buf} = state), do: {%{state | buffer: ""}, [buf]}
 
-  @spec flush(GenServer.server()) :: [binary()]
-  def flush(server), do: GenServer.call(server, :flush)
-
   @doc "Discard any buffered content without emitting."
   @spec clear(t()) :: t()
   def clear(%__MODULE__{} = state), do: %{state | buffer: ""}
-
-  @spec clear(GenServer.server()) :: :ok
-  def clear(server), do: GenServer.call(server, :clear)
-
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
-
-  @doc "Return the current buffer contents (for testing)."
-  @spec get_buffer(GenServer.server()) :: binary()
-  def get_buffer(server), do: GenServer.call(server, :get_buffer)
-
-  @impl true
-  def init(opts) do
-    fsm = new(flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms))
-    {:ok, %{fsm: fsm, subscriber: Keyword.fetch!(opts, :subscriber)}}
-  end
-
-  @impl true
-  def handle_call({:process, bin}, _from, %{fsm: fsm} = state) do
-    {fsm, events, timeout} = process(fsm, bin)
-    Enum.each(events, &emit(state.subscriber, &1))
-    {:reply, :ok, %{state | fsm: fsm}, timeout}
-  end
-
-  def handle_call(:flush, _from, %{fsm: fsm} = state) do
-    {fsm, events} = flush(fsm)
-    Enum.each(events, &emit(state.subscriber, &1))
-    {:reply, events, %{state | fsm: fsm}, :infinity}
-  end
-
-  def handle_call(:clear, _from, %{fsm: fsm} = state) do
-    {:reply, :ok, %{state | fsm: clear(fsm)}, :infinity}
-  end
-
-  def handle_call(:get_buffer, _from, %{fsm: fsm} = state) do
-    {:reply, fsm.buffer, state, flush_timeout(fsm.buffer, fsm.flush_ms)}
-  end
-
-  @impl true
-  def handle_info(:timeout, %{fsm: fsm} = state) do
-    {fsm, events} = flush(fsm)
-    Enum.each(events, &emit(state.subscriber, &1))
-    {:noreply, %{state | fsm: fsm}}
-  end
-
-  defp emit(subscriber, event) do
-    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: event})
-    send(subscriber, {:stdin_event, event})
-  end
 
   # --- helpers ---
 
