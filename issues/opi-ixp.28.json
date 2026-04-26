@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.25"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:59Z",
   "description": "**Phase E — Compaction orchestration. Deps: E5b, D2, E7a.**\n\nKill canned-summary stub at `apps/octo_pi_coder/lib/octo_pi/coder/extensions/custom_compaction.ex:59-65` (currently returns `\\\"Summary of #{count} message(s) from this session...\\\"` — never uses the resolved alternate model).\n\n- Resolve alternate model via E7a's wired `find_model`.\n- Call `generate_summary/N` (D2) with the alternate model.\n- Return real `%CompactionResult{}` from the `:session_before_compact` handler.\n\nTests: rewrite `apps/octo_pi_coder/test/octo_pi/coder/extensions/custom_compaction_test.exs` for the real path.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "E7. Wire CustomCompaction extension to real implementation",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:59Z"
+  "updated_at": "2026-04-26T20:02:11Z"
 }
