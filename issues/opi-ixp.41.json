@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.40"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:02:02Z",
   "description": "**Phase H — TUI parity. Deps: H1, G4.**\n\nPort `tmp/pi-mono/packages/coding-agent/test/interactive-mode-compaction.test.ts`. Covers visual transitions across compaction and tree navigation.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "H2. interactive-mode-compaction.test.ts parity",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:02Z"
+  "updated_at": "2026-04-26T20:02:17Z"
 }

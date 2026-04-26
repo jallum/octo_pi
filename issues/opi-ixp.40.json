@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-ixp.25"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.41"
+  ],
   "created": "2026-04-26T20:02:02Z",
   "description": "**Phase H — TUI parity. Deps: E5b.**\n\nPort `tmp/pi-mono/.../components/compaction-summary-message.ts` (59 LOC).\n\nRenders a collapsible box with label \\`[compaction]\\` and token count. When collapsed: \\`\\\"Compacted from X tokens (press \u003ckey\u003e to expand)\\\"\\`. When expanded: full summary as Markdown. Uses theme colors `customMessageBg` / `customMessageLabel` / `customMessageText`.\n\nTests: collapsed/expanded snapshot.",
   "id": "opi-ixp.40",
