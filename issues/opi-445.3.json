@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-445",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Update Interactive to consume cooked stdin events",
   "type": "task",
-  "updated_at": "2026-04-26T15:06:12.767514Z"
+  "updated_at": "2026-04-26T15:19:00.812399Z"
 }
