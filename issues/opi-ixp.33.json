@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.9"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:02:00Z",
   "description": "**Phase G — Tree session integration. Deps: B5.**\n\nImplement fork via `SessionManager.fork/3` (B5). Emit `:session_before_fork` event (cancel-on-result; defined at `apps/octo_pi_coder/lib/octo_pi/coder/extension/event.ex:25`) before fork; extensions may cancel.\n\nTests: fork copies session, rewrites `parentSession`, new session loads correctly; cancel path aborts cleanly.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "G1. Session.fork/2 + :session_before_fork dispatch",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:00Z"
+  "updated_at": "2026-04-26T20:02:14Z"
 }
