@@ -83,10 +83,6 @@ defmodule OctoPi.TUI.Terminal do
   @spec info(GenServer.server()) :: map()
   def info(pid), do: GenServer.call(pid, :info)
 
-  @doc "Suspend: exit raw mode, send SIGTSTP, re-enter raw mode on resume."
-  @spec suspend(GenServer.server()) :: :ok
-  def suspend(pid), do: GenServer.call(pid, :suspend, :infinity)
-
   @doc "Open external editor with initial text; return {:ok, new_text} or {:error, reason}."
   @spec open_editor(GenServer.server(), String.t()) :: {:ok, String.t()} | {:error, atom()}
   def open_editor(pid, initial_text), do: GenServer.call(pid, {:open_editor, initial_text}, :infinity)
@@ -123,7 +119,6 @@ defmodule OctoPi.TUI.Terminal do
       reader_fn: Keyword.get(opts, :reader_fn, &default_reader/0),
       tty_fn: Keyword.get(opts, :tty_fn, &IO.write/1),
       write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
-      send_sigtstp_fn: Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0),
       open_editor_fn: Keyword.get(opts, :open_editor_fn, &default_open_editor/1),
       probe_timeout_ms: Keyword.get(opts, :probe_timeout_ms, 150),
       drain_idle_ms: Keyword.get(opts, :drain_idle_ms, 50),
@@ -216,13 +211,6 @@ defmodule OctoPi.TUI.Terminal do
 
   @impl true
   def handle_call(:info, _from, state), do: {:reply, state, state, next_timeout(state)}
-
-  def handle_call(:suspend, _from, state) do
-    state.raw_mode_fn.(:exit)
-    state.send_sigtstp_fn.()
-    state.raw_mode_fn.(:enter)
-    {:reply, :ok, state, next_timeout(state)}
-  end
 
   def handle_call({:open_editor, initial_text}, _from, state) do
     result = do_open_editor(initial_text, state)
@@ -341,15 +329,6 @@ defmodule OctoPi.TUI.Terminal do
     else
       {:error, :no_editor}
     end
-  end
-
-  defp default_send_sigtstp do
-    if match?({:unix, _}, :os.type()) do
-      pid_str = List.to_string(:os.getpid())
-      System.cmd("kill", ["-TSTP", pid_str])
-    end
-
-    :ok
   end
 
   defp drain_input(deadline_ms, idle_ms, round) do

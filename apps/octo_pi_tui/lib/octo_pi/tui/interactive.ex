@@ -63,6 +63,7 @@ defmodule OctoPi.TUI.Interactive do
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
           skip_raw_mode: boolean(),
+          send_sigtstp_fn: (-> :ok),
           keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
           transcript: [struct()],
@@ -100,6 +101,7 @@ defmodule OctoPi.TUI.Interactive do
             terminal: nil,
             raw_mode_fn: nil,
             skip_raw_mode: false,
+            send_sigtstp_fn: &__MODULE__.default_send_sigtstp/0,
             keybindings: nil,
             input: %Components.Input{},
             transcript: [],
@@ -404,6 +406,7 @@ defmodule OctoPi.TUI.Interactive do
       terminal: terminal,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
+      send_sigtstp_fn: Keyword.get(opts, :send_sigtstp_fn, &__MODULE__.default_send_sigtstp/0),
       keybindings: keybindings,
       input: %Components.Input{
         width: w,
@@ -731,12 +734,25 @@ defmodule OctoPi.TUI.Interactive do
     pid
   end
 
+  # Suspend cycles the Terminal: close (deactivates → cooked mode for
+  # the parent shell) → SIGTSTP → open (re-activates after fg).
   defp maybe_suspend(%{suspend_pending: true} = state) do
-    Terminal.suspend(state.terminal)
+    Terminal.close(state.terminal)
+    state.send_sigtstp_fn.()
+    Terminal.open(state.terminal)
     %{state | suspend_pending: false}
   end
 
   defp maybe_suspend(state), do: state
+
+  @doc false
+  def default_send_sigtstp do
+    if match?({:unix, _}, :os.type()) do
+      System.cmd("kill", ["-TSTP", List.to_string(:os.getpid())])
+    end
+
+    :ok
+  end
 
   defp maybe_launch_editor(%{editor_pending: false} = state), do: state
 
