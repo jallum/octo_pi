@@ -732,8 +732,19 @@ defmodule OctoPi.TUI.Interactive do
     advance(handle_event(state, msg), fsm, renderer, terminal)
   end
 
-  defp handle_loop_msg(state, {:EXIT, _pid, _reason}, fsm, renderer, terminal) do
+  defp handle_loop_msg(
+         %__MODULE__{session: session, footer_data: footer_data} = state,
+         {:EXIT, pid, _reason},
+         fsm,
+         renderer,
+         terminal
+       )
+       when pid == session or pid == fsm or pid == renderer or pid == terminal or pid == footer_data do
     loop(%{state | exit: true}, fsm, renderer, terminal)
+  end
+
+  defp handle_loop_msg(state, {:EXIT, _pid, _reason}, fsm, renderer, terminal) do
+    loop(state, fsm, renderer, terminal)
   end
 
   defp handle_loop_msg(state, _msg, fsm, renderer, terminal) do
