@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-26T00:58:17Z",
   "created": "2026-04-25T21:10:57Z",
   "description": "Replace UIContext.t() fn-field struct with a UI behaviour + GenServer. ctx.ui becomes a pid. 6 extensions use UI calls -- they migrate to UI.behaviour_function(ctx.ui, ...) syntax. Requires Phase 5 complete (extensions already use new state pattern).",
   "id": "opi-fin.7",
   "labels": [],
   "parent": "opi-fin",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 7: UI behaviour replaces UIContext fn-fields",
   "type": "task",
-  "updated_at": "2026-04-25T21:10:57Z"
+  "updated_at": "2026-04-26T00:58:17Z"
 }
