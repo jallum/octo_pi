@@ -5,7 +5,8 @@
   ],
   "blocks": [
     "opi-ixp.25",
-    "opi-ixp.43"
+    "opi-ixp.43",
+    "opi-ixp.44"
   ],
   "comments": [
     {
@@ -23,5 +24,5 @@
   "status": "open",
   "title": "E3. createCompactionSummaryMessage + provider serialization for 'compactionSummary' role",
   "type": "task",
-  "updated_at": "2026-04-26T22:21:07.856733Z"
+  "updated_at": "2026-04-26T23:11:59.525575Z"
 }
