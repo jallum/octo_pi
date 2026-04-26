@@ -11,9 +11,11 @@ defmodule OctoPi.TUI.Interactive do
   The state machine is a pure function: `handle_event/2` takes a
   state and an event (key, agent event, or resize) and returns a
   new state. Tests drive it directly without any tty.
-  `run/1` spins up the real plumbing and pumps messages into
-  `handle_event/2`.
+  `run/1` starts this GenServer, blocks until it exits, and returns
+  `:ok`.
   """
+
+  use GenServer
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
@@ -57,6 +59,11 @@ defmodule OctoPi.TUI.Interactive do
 
   @type t :: %__MODULE__{
           session: pid() | nil,
+          fsm: pid() | nil,
+          renderer: pid() | nil,
+          terminal: pid() | nil,
+          raw_mode_fn: (atom() -> :ok) | nil,
+          skip_raw_mode: boolean(),
           keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
           transcript: [struct()],
@@ -90,6 +97,11 @@ defmodule OctoPi.TUI.Interactive do
         }
 
   defstruct session: nil,
+            fsm: nil,
+            renderer: nil,
+            terminal: nil,
+            raw_mode_fn: nil,
+            skip_raw_mode: false,
             keybindings: nil,
             input: %Components.Input{},
             transcript: [],
@@ -125,7 +137,7 @@ defmodule OctoPi.TUI.Interactive do
   Build a `UIContext` whose functions send messages to `interactive_pid`.
 
   Extension code calls these functions from its own process; the
-  Interactive receive loop handles the messages and replies.
+  Interactive GenServer handles the messages and replies.
   """
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
@@ -375,9 +387,8 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @doc """
-  Entry point for the CLI. Wires up the full pipeline — Session,
-  Terminal, StdinFSM, Renderer — subscribes to the events each
-  produces, and runs the receive loop until `state.exit` flips.
+  Entry point for the CLI. Starts the Interactive GenServer, then
+  blocks until it exits.
 
   Options:
 
@@ -397,40 +408,39 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec run(keyword()) :: :ok
   def run(opts) do
-    raw_mode_fn = Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1)
-    skip_raw_mode = Keyword.get(opts, :skip_raw_mode, false)
-    old_trap = Process.flag(:trap_exit, true)
+    {:ok, pid} = GenServer.start_link(__MODULE__, opts)
+    ref = Process.monitor(pid)
 
-    try do
-      do_run(opts)
-    after
-      safe_raw_mode_exit(raw_mode_fn, skip_raw_mode)
-      Process.flag(:trap_exit, old_trap)
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
     end
   end
 
-  defp do_run(opts) do
+  # --- GenServer callbacks ---
+
+  @impl GenServer
+  def init(opts) do
+    Process.flag(:trap_exit, true)
+
     {w, h} = Keyword.get_lazy(opts, :dimensions, &detect_dimensions/0)
     write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
     cwd = Keyword.get(opts, :cwd, File.cwd!())
     model = Keyword.fetch!(opts, :model)
+    raw_mode_fn = Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1)
+    skip_raw_mode = Keyword.get(opts, :skip_raw_mode, false)
 
-    debug_render_log =
-      if Keyword.get(opts, :debug_render, false) do
-        path = Path.join(cwd, "debug_render.log")
-        {:ok, fd} = File.open(path, [:write, :utf8])
-        Process.put(:debug_render_log, fd)
-        fd
-      end
+    if Keyword.get(opts, :debug_render, false) do
+      path = Path.join(cwd, "debug_render.log")
+      {:ok, fd} = File.open(path, [:write, :utf8])
+      Process.put(:debug_render_log, fd)
+    end
 
-    debug_events_log =
-      if Keyword.get(opts, :debug_events, false) do
-        path = Path.join(cwd, "debug_events.log")
-        EventLogger.attach(path)
-      end
+    if Keyword.get(opts, :debug_events, false) do
+      path = Path.join(cwd, "debug_events.log")
+      EventLogger.attach(path)
+    end
 
     extensions = load_extensions(opts, cwd)
-
     session = start_agent_session(opts)
     {:ok, terminal} = start_terminal(opts, write_fn)
     {:ok, fsm} = StdinFSM.start_link(subscriber: self())
@@ -452,11 +462,15 @@ defmodule OctoPi.TUI.Interactive do
     }
 
     loaded_resources = build_loaded_resources(opts)
-
     keybindings = load_keybindings(Keyword.take(opts, [:keybindings_path]))
 
     state = %__MODULE__{
       session: session,
+      fsm: fsm,
+      renderer: renderer,
+      terminal: terminal,
+      raw_mode_fn: raw_mode_fn,
+      skip_raw_mode: skip_raw_mode,
       keybindings: keybindings,
       input: %Components.Input{
         width: w,
@@ -480,18 +494,133 @@ defmodule OctoPi.TUI.Interactive do
     register_extension_tools(extensions, session)
     fire_session_start(extensions, cwd, self())
 
-    state = render_frame(state, renderer, terminal)
+    {:ok, state, {:continue, :first_render}}
+  end
 
-    loop(state, fsm, renderer, terminal)
+  @impl GenServer
+  def handle_continue(:first_render, state) do
+    state = render_frame(state)
+    {:noreply, state, loader_timeout(state)}
+  end
 
-    if debug_render_log do
-      File.close(debug_render_log)
+  @impl GenServer
+  def handle_info({:stdin_chunk, bin}, state) do
+    :ok = StdinFSM.process(state.fsm, bin)
+    {:noreply, state, loader_timeout(state)}
+  end
+
+  def handle_info({:stdin_event, seq}, state) do
+    parsed = KeyParser.parse(seq)
+    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
+
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(parsed)
+    |> advance()
+  end
+
+  def handle_info({:resize, w, h} = resize_msg, state) do
+    Renderer.resize(state.renderer, w, h)
+
+    state
+    |> handle_event(resize_msg)
+    |> advance()
+  end
+
+  def handle_info({:octo_pi_agent_event, _} = agent_msg, state) do
+    state
+    |> handle_event(agent_msg)
+    |> advance()
+  end
+
+  def handle_info({:extension_result, text}, state) do
+    advance(%{state | notification: text})
+  end
+
+  def handle_info({:ui_request, from, ref, {:custom, ref, factory, _opts}}, state) do
+    interactive_pid = self()
+    tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
+    theme = build_custom_theme(state)
+    done = fn result -> send(interactive_pid, {:custom_done, ref, from, result}) end
+    component = factory.(tui, theme, done)
+    advance(%{state | custom_widget: {ref, from, component}})
+  end
+
+  def handle_info({:custom_done, ref, from, result}, %{custom_widget: {ref, from, _}} = state) do
+    send(from, {:ui_reply, ref, result})
+    advance(%{state | custom_widget: nil})
+  end
+
+  def handle_info(:force_render, state) do
+    advance(state)
+  end
+
+  def handle_info({:ui_request, from, ref, ui_msg}, state) do
+    {new_state, reply} = handle_ui_request(state, ui_msg)
+    if reply != :pending, do: send(from, {:ui_reply, ref, reply})
+    advance(new_state)
+  end
+
+  def handle_info({:ui_fire, ui_msg}, state) do
+    {new_state, _reply} = handle_ui_request(state, ui_msg)
+    advance(new_state)
+  end
+
+  def handle_info({:bash_done, _id, _output, _exit_code} = msg, state) do
+    state
+    |> handle_event(msg)
+    |> advance()
+  end
+
+  def handle_info(:timeout, state) do
+    state
+    |> handle_event(:loader_tick)
+    |> advance()
+  end
+
+  def handle_info(
+        {:EXIT, pid, _reason},
+        %__MODULE__{session: s, fsm: f, renderer: r, terminal: t, footer_data: fd} = state
+      )
+      when pid == s or pid == f or pid == r or pid == t or pid == fd do
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:noreply, state, loader_timeout(state)}
+  end
+
+  def handle_info(_msg, state) do
+    {:noreply, state, loader_timeout(state)}
+  end
+
+  @impl GenServer
+  def terminate(_reason, state) do
+    shutdown(state)
+    safe_raw_mode_exit(state.raw_mode_fn, state.skip_raw_mode)
+
+    if fd = Process.get(:debug_render_log) do
+      File.close(fd)
       Process.delete(:debug_render_log)
     end
 
-    if debug_events_log, do: EventLogger.detach(debug_events_log)
-    shutdown(terminal, fsm, renderer, footer_data)
     :ok
+  end
+
+  # --- private helpers ---
+
+  @loader_interval_ms 80
+
+  defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
+  defp loader_timeout(_), do: :infinity
+
+  defp advance(%{exit: true} = state), do: {:stop, :normal, state}
+
+  defp advance(state) do
+    state = maybe_suspend(state)
+    state = maybe_launch_editor(state)
+    state = render_frame(state)
+    {:noreply, state, loader_timeout(state)}
   end
 
   defp detect_dimensions do
@@ -637,140 +766,19 @@ defmodule OctoPi.TUI.Interactive do
     Terminal.start_link(terminal_opts)
   end
 
-  # --- main message loop ---
-
-  @loader_interval_ms 80
-
-  defp loop(%__MODULE__{exit: true}, _fsm, _renderer, _terminal), do: :ok
-
-  defp loop(%__MODULE__{loader: %Components.Loader{}} = state, fsm, renderer, terminal) do
-    receive do
-      msg -> handle_loop_msg(state, msg, fsm, renderer, terminal)
-    after
-      @loader_interval_ms ->
-        state
-        |> handle_event(:loader_tick)
-        |> advance(fsm, renderer, terminal)
-    end
-  end
-
-  defp loop(state, fsm, renderer, terminal) do
-    receive do
-      msg -> handle_loop_msg(state, msg, fsm, renderer, terminal)
-    end
-  end
-
-  defp handle_loop_msg(state, {:stdin_chunk, bin}, fsm, renderer, terminal) do
-    :ok = StdinFSM.process(fsm, bin)
-    loop(state, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:stdin_event, seq}, fsm, renderer, terminal) do
-    parsed = KeyParser.parse(seq)
-    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
-
-    state
-    |> Map.put(:notification, nil)
-    |> handle_event(parsed)
-    |> advance(fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:resize, w, h} = resize_msg, fsm, renderer, terminal) do
-    Renderer.resize(renderer, w, h)
-
-    state
-    |> handle_event(resize_msg)
-    |> advance(fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:octo_pi_agent_event, _} = agent_msg, fsm, renderer, terminal) do
-    state
-    |> handle_event(agent_msg)
-    |> advance(fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:extension_result, text}, fsm, renderer, terminal) do
-    advance(%{state | notification: text}, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:ui_request, from, ref, {:custom, ref, factory, _opts}}, fsm, renderer, terminal) do
-    interactive_pid = self()
-    tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
-    theme = build_custom_theme(state)
-    done = fn result -> send(interactive_pid, {:custom_done, ref, from, result}) end
-    component = factory.(tui, theme, done)
-    advance(%{state | custom_widget: {ref, from, component}}, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(
-         %{custom_widget: {ref, from, _}} = state,
-         {:custom_done, ref, from, result},
-         fsm,
-         renderer,
-         terminal
-       ) do
-    send(from, {:ui_reply, ref, result})
-    advance(%{state | custom_widget: nil}, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, :force_render, fsm, renderer, terminal) do
-    advance(state, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:ui_request, from, ref, ui_msg}, fsm, renderer, terminal) do
-    {new_state, reply} = handle_ui_request(state, ui_msg)
-    if reply != :pending, do: send(from, {:ui_reply, ref, reply})
-    advance(new_state, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:ui_fire, ui_msg}, fsm, renderer, terminal) do
-    {new_state, _reply} = handle_ui_request(state, ui_msg)
-    advance(new_state, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:bash_done, _id, _output, _exit_code} = msg, fsm, renderer, terminal) do
-    advance(handle_event(state, msg), fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(
-         %__MODULE__{session: session, footer_data: footer_data} = state,
-         {:EXIT, pid, _reason},
-         fsm,
-         renderer,
-         terminal
-       )
-       when pid == session or pid == fsm or pid == renderer or pid == terminal or pid == footer_data do
-    loop(%{state | exit: true}, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, {:EXIT, _pid, _reason}, fsm, renderer, terminal) do
-    loop(state, fsm, renderer, terminal)
-  end
-
-  defp handle_loop_msg(state, _msg, fsm, renderer, terminal) do
-    loop(state, fsm, renderer, terminal)
-  end
-
-  defp advance(new_state, fsm, renderer, terminal) do
-    new_state = maybe_suspend(new_state, terminal)
-    new_state = maybe_launch_editor(new_state, terminal)
-    new_state = render_frame(new_state, renderer, terminal)
-    loop(new_state, fsm, renderer, terminal)
-  end
-
-  defp maybe_suspend(%{suspend_pending: true} = state, terminal) do
-    Terminal.suspend(terminal)
+  defp maybe_suspend(%{suspend_pending: true} = state) do
+    Terminal.suspend(state.terminal)
     %{state | suspend_pending: false}
   end
 
-  defp maybe_suspend(state, _terminal), do: state
+  defp maybe_suspend(state), do: state
 
-  defp maybe_launch_editor(%{editor_pending: false} = state, _terminal), do: state
+  defp maybe_launch_editor(%{editor_pending: false} = state), do: state
 
-  defp maybe_launch_editor(%{editor_pending: true} = state, terminal) do
+  defp maybe_launch_editor(%{editor_pending: true} = state) do
     state = %{state | editor_pending: false}
 
-    case Terminal.open_editor(terminal, state.input.value) do
+    case Terminal.open_editor(state.terminal, state.input.value) do
       {:ok, new_text} ->
         input = %{state.input | value: new_text, cursor: String.length(new_text)}
         %{state | input: input}
@@ -783,7 +791,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp render_frame(state, renderer, terminal) do
+  defp render_frame(state) do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
@@ -798,10 +806,18 @@ defmodule OctoPi.TUI.Interactive do
 
     post_input_h = post_input_height(state)
     cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
-    {:ok, bytes} = Renderer.render(renderer, lines, cursor_seq)
+    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)
 
-    if bytes != "", do: Terminal.write(terminal, bytes)
+    if bytes != "", do: Terminal.write(state.terminal, bytes)
     state
+  end
+
+  defp shutdown(state) do
+    pids = Enum.reject([state.footer_data, state.renderer, state.fsm, state.terminal], &is_nil/1)
+
+    Enum.each(pids, fn pid ->
+      if Process.alive?(pid), do: GenServer.stop(pid, :normal)
+    end)
   end
 
   defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
@@ -878,14 +894,6 @@ defmodule OctoPi.TUI.Interactive do
     viewport_top = max(0, length(lines) - height)
     screen_row = input_start + crow - viewport_top + 1
     "\e[#{screen_row};#{ccol + 1}H"
-  end
-
-  defp shutdown(terminal, fsm, renderer, footer_data) do
-    pids = Enum.reject([footer_data, renderer, fsm, terminal], &is_nil/1)
-
-    Enum.each(pids, fn pid ->
-      if Process.alive?(pid), do: GenServer.stop(pid, :normal)
-    end)
   end
 
   # --- keybindings dispatch helpers ---
@@ -1237,9 +1245,7 @@ defmodule OctoPi.TUI.Interactive do
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
 
-  defp dispatch_slash_command("clear", state) do
-    %{state | transcript: []}
-  end
+  defp dispatch_slash_command("clear", state), do: %{state | transcript: []}
 
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
@@ -1247,9 +1253,8 @@ defmodule OctoPi.TUI.Interactive do
     %{state | model_selector: ms}
   end
 
-  defp dispatch_slash_command("help", state) do
-    %{state | notification: "Commands: /clear /compact /cost /model /theme /config"}
-  end
+  defp dispatch_slash_command("help", state),
+    do: %{state | notification: "Commands: /clear /compact /cost /model /theme /config"}
 
   defp dispatch_slash_command("cost", state) do
     f = state.footer
@@ -1260,17 +1265,14 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: msg}
   end
 
-  defp dispatch_slash_command("compact", state) do
-    %{state | notification: "Compaction not yet implemented"}
-  end
+  defp dispatch_slash_command("compact", state),
+    do: %{state | notification: "Compaction not yet implemented"}
 
-  defp dispatch_slash_command("theme", state) do
-    %{state | notification: "Theme picker not yet implemented"}
-  end
+  defp dispatch_slash_command("theme", state),
+    do: %{state | notification: "Theme picker not yet implemented"}
 
-  defp dispatch_slash_command("config", state) do
-    %{state | notification: "Config: use --help for startup options"}
-  end
+  defp dispatch_slash_command("config", state),
+    do: %{state | notification: "Config: use --help for startup options"}
 
   defp try_extension_shortcut([], _key, _state), do: :pass
 
@@ -1484,7 +1486,6 @@ defmodule OctoPi.TUI.Interactive do
   defp default_working_message, do: "Thinking…"
 
   defp render_loader(nil, _width, _theme), do: []
-
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_notification(nil, _width), do: []
@@ -1498,9 +1499,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp thinking_level_label(level), do: to_string(level)
 
-  defp handle_dequeue_key(state, ov, %Key{key: :up}) do
-    %{state | dequeue_overlay: %{ov | selected: max(0, ov.selected - 1)}}
-  end
+  defp handle_dequeue_key(state, ov, %Key{key: :up}),
+    do: %{state | dequeue_overlay: %{ov | selected: max(0, ov.selected - 1)}}
 
   defp handle_dequeue_key(state, ov, %Key{key: :down}) do
     max_sel = max(0, length(ov.items) - 1)
@@ -1554,9 +1554,8 @@ defmodule OctoPi.TUI.Interactive do
   defp header_lines(render_fn, _banner, width) when is_function(render_fn, 1), do: render_fn.(width)
   defp header_lines(nil, banner, width), do: render_banner(banner, width)
 
-  defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2) do
-    render_fn.(width, build_footer_context(footer, footer_data_pid))
-  end
+  defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2),
+    do: render_fn.(width, build_footer_context(footer, footer_data_pid))
 
   defp footer_lines(nil, footer, _footer_data_pid, width), do: Footer.render(footer, width)
 
