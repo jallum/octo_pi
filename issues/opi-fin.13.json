@@ -5,7 +5,8 @@
   ],
   "blocks": [
     "opi-fin.14",
-    "opi-fin.15"
+    "opi-fin.15",
+    "opi-fin.16"
   ],
   "created": "2026-04-26T05:42:03Z",
   "description": "Connect file-based extension discovery (existing OctoPi.Coder.Extension.Loader) to the runtime Runner so .octo_pi/extensions/ extensions actually load when a session starts. PR #5's runner only supports programmatic registration; this ticket adds the disk-discovery bridge.\n\n## Deliverable\n\nSession.init/1 returns {:ok, state, {:continue, :load_extensions}}. handle_continue starts the Runner, runs Loader on standard_dirs, registers each loaded extension with the runner. Heavy work happens after init returns so the supervisor isn't blocked.\n\n## Steps\n\nSTEP 1 — Update Session.init/1 to call Process.flag(:trap_exit, true) and return {:ok, state, {:continue, :load_extensions}}.\n\nSTEP 2 — Implement Session.handle_continue(:load_extensions, state):\n  - :telemetry.execute([:octo_pi_coder, :extensions, :load_started], %{}, %{session_pid: self()})\n  - {:ok, runner} = OctoPi.Coder.Extension.Runner.start_link(session_pid: self())\n  - results = state.cwd |\u003e Loader.standard_dirs() |\u003e Loader.discover_all() |\u003e Loader.load_all()\n  - Enum.each(results, \u0026Runner.register(runner, \u00261))\n  - :telemetry.execute([:octo_pi_coder, :extensions, :load_complete], %{count: length(results)}, %{session_pid: self(), extension_ids: Enum.map(results, \u0026 \u00261.id)})\n  - {:noreply, %{state | runner: runner}}\n\n## Acceptance Criteria\n\n- [ ] Session.init/1 source contains `{:continue, :load_extensions}` (verifiable via grep)\n- [ ] Session.handle_continue(:load_extensions, _) function defined\n- [ ] Process.flag(:trap_exit, true) called in Session.init\n- [ ] Telemetry events :load_started and :load_complete are emitted (verify via attached test handler)\n- [ ] Test: place a fixture extension in a tmp dir, start Session with cwd=tmp, attach to :load_complete telemetry, assert_receive within 1s with the expected extension_ids in metadata. NO Process.sleep.\n- [ ] When `mix pi` runs with .octo_pi/extensions/ping.ex present, telemetry fires :loaded for \"ping\" (verifiable via --debug-telemetry log)\n- [ ] Session is responsive (handle_call replies) after init returns even if extension load is mid-flight\n\n## Dependencies\n\nBlocked by: opi-fin.12",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "Wire Loader to Runner via Session.handle_continue",
   "type": "task",
-  "updated_at": "2026-04-26T05:44:01Z"
+  "updated_at": "2026-04-26T05:44:02Z"
 }

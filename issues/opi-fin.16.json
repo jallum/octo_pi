@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.13"
+  ],
   "blocks": [],
   "created": "2026-04-26T05:42:55Z",
   "description": "Add telemetry events that bookend the extension loading lifecycle. Tests synchronize via :telemetry instead of Process.sleep. Per-extension :loaded and :load_error events already exist (telemetry_handler.ex:6-12) — this ticket adds the lifecycle bookends.\n\n## Deliverable\n\n[:octo_pi_coder, :extensions, :load_started] emitted when handle_continue begins. [:octo_pi_coder, :extensions, :load_complete] emitted with count measurement and extension_ids metadata at the end. TelemetryHandler logs both. --debug-telemetry captures both to debug_telemetry.log.\n\n## Steps\n\nSTEP 1 — Verify both telemetry events are emitted from Session.handle_continue (covered structurally by opi-fin.13; this ticket verifies the pipeline end-to-end).\n\nSTEP 2 — Update OctoPi.Coder.Extension.TelemetryHandler @events list (apps/octo_pi_coder/lib/octo_pi/coder/extension/telemetry_handler.ex:6-12) to include both new events.\n\nSTEP 3 — Add handle_event/4 clauses for the two new event names. Add handle_file_event/4 clauses (the --debug-telemetry path).\n\nSTEP 4 — Document the pattern in a test helper module so any extension test can: subscribe → start session → assert_receive within 1s.\n\n## Acceptance Criteria\n\n- [ ] OctoPi.Coder.Extension.TelemetryHandler.@events module attribute includes both [:octo_pi_coder, :extensions, :load_started] and [:octo_pi_coder, :extensions, :load_complete]\n- [ ] handle_event/4 clauses exist for both events (verify via grep)\n- [ ] handle_file_event/4 clauses exist for both events (--debug-telemetry path)\n- [ ] Test: attach to :load_complete, start Session, assert_receive {:loaded, %{count: N}, %{extension_ids: ids}} within 1s. NO Process.sleep.\n- [ ] When `mix pi --debug-telemetry` runs, debug_telemetry.log contains a [load_started] line and a [load_complete] line with the expected count and extension_ids\n- [ ] No test in the suite uses Process.sleep to wait for extension loading\n\n## Dependencies\n\nBlocked by: opi-fin.13",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Telemetry: load lifecycle bookends",
   "type": "task",
-  "updated_at": "2026-04-26T05:42:55Z"
+  "updated_at": "2026-04-26T05:44:02Z"
 }
