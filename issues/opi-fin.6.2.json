@@ -8,14 +8,15 @@
     "opi-fin.6.4",
     "opi-fin.6.5"
   ],
+  "closed_at": "2026-04-26T00:22:38Z",
   "created": "2026-04-25T21:13:25Z",
   "description": "REQUIRES: opi-fin.6.1 (Host behaviour + Stub) and opi-fin.3.1 (Extension.Manager) merged first.\n\nFILES: wherever OctoPi.Agent.start_session is implemented, api.ex\n\nGOAL: Host behaviour is implemented by the coding agent process itself -- no separate Host.Server GenServer. The coding agent IS the host. ctx.host is the agent's own pid.\n\nRATIONALE: A separate Host GenServer was considered but rejected. The coding agent already owns everything the Host needs to implement: the transport layer (for send_message), session state (for get_active_tools), abort capability. Adding a separate process creates coupling and coordination overhead with no benefit. The deadlock concern (handler calling back to a dispatching process) does not apply because the agent dispatches from a spawned Task, not from within its own GenServer callback.\n\nWHAT THIS TICKET DOES:\n\nSTEP 1 -- Coding agent implements Host behaviour:\nAdd @behaviour OctoPi.Coder.Extension.Host to the coding agent module. Implement all Host callbacks: handle_call for queries (get_active_tools, get_model, etc.), handle_cast for fire-and-forget actions (send_message, append_entry, etc.).\n\nSTEP 2 -- Wire bind_core to use self():\nIn API.bind_core/2 (api.ex), add a :host_pid key. When the coding agent calls bind_core before loading extensions, it passes host_pid: self(). The generated fn-fields delegate to Host client functions:\n  send_message: fn msg -\u003e Host.send_message(host_pid, msg) end\n  get_active_tools: fn -\u003e Host.get_active_tools(host_pid) end\n  etc.\nExisting call sites passing individual fn values to bind_core continue to work unchanged.\n\nSTEP 3 -- Session startup sequence:\n  {:ok, manager} = Extension.Manager.start_link(%{extension_paths: paths})  # linked\n  ctx_base = %Context{\n    host: self(),\n    ui: ui_pid,\n    handlers_table: Extension.Manager.table_refs(manager).handlers\n  }\nThe agent holds the manager pid. All per-session infrastructure (Agents, ETS, Registry) lives under the Manager.\n\nVALIDATION: Run full test suite. Zero extension tests should fail. Verify that Host.Stub (from opi-fin.6.1) can be used as a drop-in replacement for the coding agent pid in extension tests.",
   "id": "opi-fin.6.2",
   "labels": [],
   "parent": "opi-fin.6",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "6a: Introduce Host GenServer into session supervision tree",
   "type": "task",
-  "updated_at": "2026-04-26T00:15:28Z"
+  "updated_at": "2026-04-26T00:22:38Z"
 }
