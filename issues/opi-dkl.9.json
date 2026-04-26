@@ -3,13 +3,13 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-23T22:48:27Z",
-  "description": "Follow-up from opi-dkl.5 investigation. `:kill_group` in erlexec\nworks for single-shot invocations but destabilizes the `:exec`\nsingleton GenServer when multiple commands run back-to-back —\ncrashes with `{:exit_status, N}` on the second or third call.\n\nReproduction: apps/octo_pi_coder/test/octo_pi/coder/tools/bash_test.exs\nwith `:kill_group` added to exec_opts, run\n`mix test apps/octo_pi_coder/test/octo_pi/coder/tools/bash_test.exs`.\nFirst test passes; subsequent calls into :exec exit with\n`{:exit_status, 1}` or `{:exit_status, 137}`.\n\nOptions:\n1. File upstream issue against saleyn/erlexec with minimal repro.\n2. Write a small custom port helper (~50 LOC of C) that setpgids\n   before exec, then use stdlib `Port.open`.\n3. Wrap command in `setsid -w` where available; kill via\n   `kill -TERM -\u003cpid\u003e` after capturing the sid.\n\nDeferred to Phase 8 polish unless orphan processes become a real\noperational issue.",
+  "description": "Follow-up from opi-dkl.5 investigation. `:kill_group` in erlexec\nworks for single-shot invocations but destabilizes the `:exec`\nsingleton GenServer when multiple commands run back-to-back —\ncrashes with `{:exit_status, N}` on the second or third call.\n\nReproduction: apps/octo_pi_coder/test/octo_pi/coder/tools/bash_test.exs\nwith `:kill_group` added to exec_opts, run\n`mix test apps/octo_pi_coder/test/octo_pi/coder/tools/bash_test.exs`.\nFirst test passes; subsequent calls into :exec exit with\n`{:exit_status, 1}` or `{:exit_status, 137}`.\n\nOptions:\n1. File upstream issue against saleyn/erlexec with minimal repro.\n2. Write a small custom port helper (~50 LOC of C) that setpgids\n   before exec, then use stdlib `Port.open`.\n3. Wrap command in `setsid -w` where available; kill via\n   `kill -TERM -<pid>` after capturing the sid.\n\nDeferred to Phase 8 polish unless orphan processes become a real\noperational issue.",
   "id": "opi-dkl.9",
   "labels": [],
   "parent": "opi-dkl",
   "priority": 3,
-  "status": "open",
+  "status": "closed",
   "title": "Bash process-group kill: custom port helper or erlexec patch",
   "type": "task",
-  "updated_at": "2026-04-23T22:48:27Z"
+  "updated_at": "2026-04-26T13:46:19.803356Z"
 }
