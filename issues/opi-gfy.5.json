@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-gfy",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Supervise TUI children under one_for_all Supervisor",
   "type": "task",
-  "updated_at": "2026-04-26T13:42:45Z"
+  "updated_at": "2026-04-26T14:53:25.472252Z"
 }
