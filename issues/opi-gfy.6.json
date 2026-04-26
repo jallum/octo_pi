@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-gfy.3"
+  ],
   "blocks": [],
   "created": "2026-04-26T13:51:07Z",
   "description": "Depends on opi-gfy.3 (Interactive as GenServer) and opi-gfy.4 (UIContext refactor).\n\nOnce Interactive is a GenServer, define OctoPi.Coder.UIHost @behaviour in octo_pi_coder that captures the handle_call/handle_cast surface extensions need. Interactive implements it; Modes.Rpc can implement it over JSONL stdout (matching pi-mono's RpcExtensionUIContext vs InteractiveExtensionUIContext split).\n\nChanges:\n- Define @behaviour OctoPi.Coder.UIHost in octo_pi_coder with callbacks matching UIContext operations (select, confirm, input, notify, set_status, set_widget, etc.)\n- Interactive implements UIHost via its handle_call/handle_cast clauses\n- UIContext.bind closures call into UIHost instead of Interactive directly\n- Rpc mode implements UIHost stubs (JSONL encoding path)\n\nThis makes the Coder→TUI dependency explicit and the headless path fillable.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "UIHost behaviour: Coder-owned interface for extension UI calls",
   "type": "task",
-  "updated_at": "2026-04-26T13:51:07Z"
+  "updated_at": "2026-04-26T13:51:10Z"
 }
