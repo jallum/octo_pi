@@ -56,45 +56,33 @@ defmodule OctoPi.TUI.Tracer do
   defp format([:octo_pi_tui, :reader, :read], %{byte_count: n}, %{bytes: b}),
     do: "reader.read #{n}B hex=#{hex(b)} #{inspect(b)}"
 
-  defp format([:octo_pi_tui, :stdin, :chunk], %{byte_count: n}, %{bytes: b}),
-    do: "stdin.chunk #{n}B hex=#{hex(b)}"
+  defp format([:octo_pi_tui, :stdin, :chunk], %{byte_count: n}, %{bytes: b}), do: "stdin.chunk #{n}B hex=#{hex(b)}"
 
-  defp format([:octo_pi_tui, :stdin, :sequence], _, %{seq: s}),
-    do: "stdin.sequence hex=#{hex(s)} #{inspect(s)}"
+  defp format([:octo_pi_tui, :stdin, :sequence], _, %{seq: s}), do: "stdin.sequence hex=#{hex(s)} #{inspect(s)}"
 
-  defp format([:octo_pi_tui, :key, :event], _, %{parsed: p}),
-    do: "key.event #{inspect(p)}"
+  defp format([:octo_pi_tui, :key, :event], _, %{parsed: p}), do: "key.event #{inspect(p)}"
 
-  defp format([:octo_pi_tui, :terminal, :reader_exit], _, %{reason: r}),
-    do: "terminal.reader_exit #{inspect(r)}"
+  defp format([:octo_pi_tui, :terminal, :reader_exit], _, %{reason: r}), do: "terminal.reader_exit #{inspect(r)}"
 
-  defp format([:octo_pi_tui, :terminal, :reader_down], _, %{reason: r}),
-    do: "terminal.reader_down #{inspect(r)}"
+  defp format([:octo_pi_tui, :terminal, :reader_down], _, %{reason: r}), do: "terminal.reader_down #{inspect(r)}"
 
   defp format([:octo_pi_tui, :terminal, :tty_write], %{byte_count: n}, %{bytes: b}),
     do: "terminal.tty_write #{n}B hex=#{hex(b)} #{inspect(b)}"
 
-  defp format([:octo_pi_tui, :terminal, :terminate, :start], _, meta),
-    do: "terminal.terminate.start #{inspect(meta)}"
+  defp format([:octo_pi_tui, :terminal, :terminate, :start], _, meta), do: "terminal.terminate.start #{inspect(meta)}"
 
-  defp format([:octo_pi_tui, :terminal, :terminate, :stop], _, _),
-    do: "terminal.terminate.stop"
+  defp format([:octo_pi_tui, :terminal, :terminate, :stop], _, _), do: "terminal.terminate.stop"
 
   defp format([:octo_pi_tui, :terminal, :drain, :round], m, %{outcome: o}),
     do: "terminal.drain.round outcome=#{o} #{inspect(m)}"
 
-  defp format([:octo_pi_tui, :raw_mode, :enter, :start], _, _),
-    do: "raw_mode.enter.start"
+  defp format([:octo_pi_tui, :raw_mode, :enter, :start], _, _), do: "raw_mode.enter.start"
 
-  defp format([:octo_pi_tui, :raw_mode, :enter, :stop], _, meta),
-    do: "raw_mode.enter.stop #{inspect(meta)}"
+  defp format([:octo_pi_tui, :raw_mode, :enter, :stop], _, meta), do: "raw_mode.enter.stop #{inspect(meta)}"
 
-  defp format([:octo_pi_tui, :raw_mode, :exit, :start], _, _),
-    do: "raw_mode.exit.start"
+  defp format([:octo_pi_tui, :raw_mode, :exit, :start], _, _), do: "raw_mode.exit.start"
 
-  defp format([:octo_pi_tui, :raw_mode, :exit, :phase], _, meta),
-    do: "raw_mode.exit.phase #{inspect(meta)}"
+  defp format([:octo_pi_tui, :raw_mode, :exit, :phase], _, meta), do: "raw_mode.exit.phase #{inspect(meta)}"
 
-  defp format([:octo_pi_tui, :raw_mode, :exit, :stop], _, _),
-    do: "raw_mode.exit.stop"
+  defp format([:octo_pi_tui, :raw_mode, :exit, :stop], _, _), do: "raw_mode.exit.stop"
 end

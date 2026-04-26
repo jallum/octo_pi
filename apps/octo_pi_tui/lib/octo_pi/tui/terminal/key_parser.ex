@@ -362,7 +362,7 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
 
       nil ->
         resolved = resolve_key_with_base(raw_cp, base)
-        key = csi_u_named_key(resolved) |> normalize_shifted_letter(modifiers)
+        key = resolved |> csi_u_named_key() |> normalize_shifted_letter(modifiers)
 
         {:key,
          %Key{
@@ -378,8 +378,7 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
   # canonical layout, terminals may still report the keysym in upper-case.
   # Normalize A-Z → a-z so binding "shift+a" matches uniformly across
   # protocols (modifyOtherKeys' mok_key/1 already does the same).
-  defp normalize_shifted_letter(cp, modifiers)
-       when is_integer(cp) and cp in ?A..?Z do
+  defp normalize_shifted_letter(cp, modifiers) when is_integer(cp) and cp in ?A..?Z do
     if :shift in modifiers, do: cp + 32, else: cp
   end
 
@@ -453,7 +452,7 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
     case Enum.at(parts, idx) do
       "" -> nil
       nil -> nil
-      s -> parse_int(s) |> elem_or_nil()
+      s -> s |> parse_int() |> elem_or_nil()
     end
   end
 

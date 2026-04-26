@@ -15,9 +15,9 @@ defmodule OctoPi.TUI.Interactive do
   `:ok`.
   """
 
-  use GenServer
-
   @behaviour OctoPi.Coder.UIHost
+
+  use GenServer
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
@@ -29,6 +29,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.Event, as: ExtEvent
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.Coder.UIHost
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Components
@@ -43,11 +44,12 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Overlay
-  alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Tracer
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -135,7 +137,7 @@ defmodule OctoPi.TUI.Interactive do
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
-    OctoPi.Coder.UIHost.build_ui_context(interactive_pid)
+    UIHost.build_ui_context(interactive_pid)
   end
 
   @doc """
@@ -145,7 +147,7 @@ defmodule OctoPi.TUI.Interactive do
   Blocking dialogs return `{state, :pending}` — the caller must
   wait for resolution through key events.
   """
-  @impl OctoPi.Coder.UIHost
+  @impl UIHost
   @spec handle_ui_request(t(), term()) :: {t(), term()}
   def handle_ui_request(state, :get_editor_text), do: {state, state.input.value}
   def handle_ui_request(state, :get_tools_expanded), do: {state, state.tools_expanded}
@@ -362,7 +364,7 @@ defmodule OctoPi.TUI.Interactive do
         :ok
 
       trace_path ->
-        fd = OctoPi.TUI.Tracer.attach(trace_path)
+        fd = Tracer.attach(trace_path)
         Process.put(:tracer_fd, fd)
     end
 
@@ -560,7 +562,7 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     if fd = Process.get(:tracer_fd) do
-      OctoPi.TUI.Tracer.detach(fd)
+      Tracer.detach(fd)
       Process.delete(:tracer_fd)
     end
 
@@ -587,8 +589,7 @@ defmodule OctoPi.TUI.Interactive do
   defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
   defp loader_timeout(_), do: :infinity
 
-  defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from),
-    do: %{state | dialog: {type, from, a, b}}
+  defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from), do: %{state | dialog: {type, from, a, b}}
 
   defp put_dialog_from(state, _from), do: state
 
@@ -1243,14 +1244,11 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: msg}
   end
 
-  defp dispatch_slash_command("compact", state),
-    do: %{state | notification: "Compaction not yet implemented"}
+  defp dispatch_slash_command("compact", state), do: %{state | notification: "Compaction not yet implemented"}
 
-  defp dispatch_slash_command("theme", state),
-    do: %{state | notification: "Theme picker not yet implemented"}
+  defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 
-  defp dispatch_slash_command("config", state),
-    do: %{state | notification: "Config: use --help for startup options"}
+  defp dispatch_slash_command("config", state), do: %{state | notification: "Config: use --help for startup options"}
 
   defp try_extension_shortcut([], _key, _state), do: :pass
 

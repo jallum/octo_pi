@@ -477,7 +477,10 @@ defmodule OctoPi.TUI.TerminalTest do
       test_pid = self()
       handler_id = "test-reader-eof-#{inspect(test_pid)}"
 
-      :telemetry.attach(handler_id, [:octo_pi_tui, :terminal, :reader_exit], &__MODULE__.__reader_exit_forward__/4, %{pid: test_pid})
+      :telemetry.attach(handler_id, [:octo_pi_tui, :terminal, :reader_exit], &__MODULE__.__reader_exit_forward__/4, %{
+        pid: test_pid
+      })
+
       pid = start_terminal(name: nil, auto_start_reader: true, reader_fn: fn -> :eof end)
       :ok = Terminal.open(pid)
 
@@ -490,7 +493,10 @@ defmodule OctoPi.TUI.TerminalTest do
       test_pid = self()
       handler_id = "test-reader-err-#{inspect(test_pid)}"
 
-      :telemetry.attach(handler_id, [:octo_pi_tui, :terminal, :reader_exit], &__MODULE__.__reader_exit_forward__/4, %{pid: test_pid})
+      :telemetry.attach(handler_id, [:octo_pi_tui, :terminal, :reader_exit], &__MODULE__.__reader_exit_forward__/4, %{
+        pid: test_pid
+      })
+
       pid = start_terminal(name: nil, auto_start_reader: true, reader_fn: fn -> {:error, :closed} end)
       :ok = Terminal.open(pid)
 

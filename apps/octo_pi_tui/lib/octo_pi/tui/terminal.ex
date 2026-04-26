@@ -167,8 +167,7 @@ defmodule OctoPi.TUI.Terminal do
 
   # Reader exited spontaneously (its blocker hit EOF/error, or it
   # crashed) — TTY is gone. Stop ourselves.
-  def handle_info({:EXIT, pid, _reason}, %{reader_pid: pid} = state),
-    do: {:stop, :normal, %{state | reader_pid: nil}}
+  def handle_info({:EXIT, pid, _reason}, %{reader_pid: pid} = state), do: {:stop, :normal, %{state | reader_pid: nil}}
 
   def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
 
@@ -191,8 +190,7 @@ defmodule OctoPi.TUI.Terminal do
     %{state | reader_pid: reader}
   end
 
-  defp deactivate(%{reader_pid: nil} = state),
-    do: %{state | stdin_buffer: "", paste_buffer: nil, flush_at: nil}
+  defp deactivate(%{reader_pid: nil} = state), do: %{state | stdin_buffer: "", paste_buffer: nil, flush_at: nil}
 
   defp deactivate(%{reader_pid: pid} = state) when is_pid(pid) do
     GenServer.stop(pid, :normal, :infinity)
