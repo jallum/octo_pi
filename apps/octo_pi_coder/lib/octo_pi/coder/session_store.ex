@@ -64,6 +64,33 @@ defmodule OctoPi.Coder.SessionStore do
   @spec close(pid()) :: :ok
   def close(pid), do: GenServer.call(pid, :close)
 
+  @doc """
+  Stream a session JSONL file as decoded entries (header + body).
+
+  Returns a lazy `Stream` that yields one entry per non-empty line:
+  the first element is an `OctoPi.Coder.Session.Header.t()`, followed by
+  values from the `OctoPi.Coder.Session.Entry` union. Malformed JSON
+  lines are silently skipped (mirrors upstream `parseSessionEntries`,
+  `tmp/pi-mono/.../session-manager.ts:284-299`).
+  """
+  @spec read_entries(Path.t()) :: Enumerable.t()
+  def read_entries(path) do
+    path
+    |> File.stream!()
+    |> Stream.map(&String.trim_trailing(&1, "\n"))
+    |> Stream.reject(&(&1 == ""))
+    |> Stream.map(&decode_line/1)
+    |> Stream.reject(&is_nil/1)
+  end
+
+  defp decode_line(line) do
+    case Jason.decode(line) do
+      {:ok, %{"type" => "session"} = m} -> OctoPi.Coder.Session.Header.decode(m)
+      {:ok, %{"type" => _} = m} -> OctoPi.Coder.Session.Entry.decode(m)
+      _ -> nil
+    end
+  end
+
   @doc false
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
