@@ -17,6 +17,8 @@ defmodule OctoPi.TUI.Interactive do
 
   use GenServer
 
+  @behaviour OctoPi.Coder.UIHost
+
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
@@ -135,56 +137,10 @@ defmodule OctoPi.TUI.Interactive do
             extension_shortcuts: [],
             extensions: []
 
-  @doc """
-  Build a `UIContext` whose functions call into `interactive_pid`.
-
-  Extension code calls these functions from its own process; the
-  Interactive GenServer handles them via `handle_call/3` and
-  `handle_cast/2`.
-  """
+  @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
-    call = fn msg -> GenServer.call(interactive_pid, {:ui_request, msg}, 5_000) end
-    cast = fn msg -> GenServer.cast(interactive_pid, {:ui_fire, msg}) end
-
-    UIContext.bind(UIContext.new(), %{
-      get_editor_text: fn -> call.(:get_editor_text) end,
-      get_theme: fn -> call.(:get_theme) end,
-      get_all_themes: fn -> call.(:get_all_themes) end,
-      apply_fg: fn color, text -> call.({:apply_fg, color, text}) end,
-      apply_bg: fn color, text -> call.({:apply_bg, color, text}) end,
-      get_tools_expanded: fn -> call.(:get_tools_expanded) end,
-      set_editor_text: fn text -> cast.({:set_editor_text, text}) end,
-      paste_to_editor: fn text -> cast.({:paste_to_editor, text}) end,
-      set_theme: fn name -> cast.({:set_theme, name}) end,
-      set_tools_expanded: fn val -> cast.({:set_tools_expanded, val}) end,
-      notify: fn text -> cast.({:notify, text}) end,
-      set_status: fn id, text -> cast.({:set_status, id, text}) end,
-      set_working_message: fn msg -> cast.({:set_working_message, msg}) end,
-      set_working_indicator: fn val -> cast.({:set_working_indicator, val}) end,
-      set_hidden_thinking_label: fn label -> cast.({:set_hidden_thinking_label, label}) end,
-      set_widget: fn w -> cast.({:set_widget, w}) end,
-      set_footer: fn f -> cast.({:set_footer, f}) end,
-      set_header: fn h -> cast.({:set_header, h}) end,
-      set_title: fn t -> cast.({:set_title, t}) end,
-      set_editor_component: fn c -> cast.({:set_editor_component, c}) end,
-      add_autocomplete_provider: fn p -> cast.({:add_autocomplete_provider, p}) end,
-      select: fn opts, kw ->
-        GenServer.call(interactive_pid, {:ui_request, {:select, opts, kw}}, :infinity)
-      end,
-      confirm: fn prompt, kw ->
-        GenServer.call(interactive_pid, {:ui_request, {:confirm, prompt, kw}}, :infinity)
-      end,
-      input: fn prompt, kw ->
-        GenServer.call(interactive_pid, {:ui_request, {:input, prompt, kw}}, :infinity)
-      end,
-      editor: fn content, kw ->
-        GenServer.call(interactive_pid, {:ui_request, {:editor, content, kw}}, :infinity)
-      end,
-      custom: fn term, kw ->
-        GenServer.call(interactive_pid, {:ui_request, {:custom, term, kw}}, :infinity)
-      end
-    })
+    OctoPi.Coder.UIHost.build_ui_context(interactive_pid)
   end
 
   @doc """
@@ -194,6 +150,7 @@ defmodule OctoPi.TUI.Interactive do
   Blocking dialogs return `{state, :pending}` — the caller must
   wait for resolution through key events.
   """
+  @impl OctoPi.Coder.UIHost
   @spec handle_ui_request(t(), term()) :: {t(), term()}
   def handle_ui_request(state, :get_editor_text), do: {state, state.input.value}
   def handle_ui_request(state, :get_tools_expanded), do: {state, state.tools_expanded}
