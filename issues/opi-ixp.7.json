@@ -4,7 +4,8 @@
     "opi-ixp.5"
   ],
   "blocks": [
-    "opi-ixp.30"
+    "opi-ixp.30",
+    "opi-ixp.34"
   ],
   "created": "2026-04-26T20:01:55Z",
   "description": "**Phase B — SessionManager. Deps: B1.**\n\nReverse-walk target path looking for a node in old path. Used by branch summarization (Phase F).\n\nTests: forked-session fixtures, multi-level fork cases.",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "B3. SessionManager.find_common_ancestor/3",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:12Z"
+  "updated_at": "2026-04-26T20:02:14Z"
 }
