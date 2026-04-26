@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "closed",
+  "status": "in_review",
   "title": "[EPIC] Fold StdinFSM into Terminal; emit cooked stdin events",
   "type": "epic",
-  "updated_at": "2026-04-26T15:22:25.587731Z"
+  "updated_at": "2026-04-26T15:49:12.870734Z"
 }
