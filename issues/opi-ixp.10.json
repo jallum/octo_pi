@@ -4,7 +4,9 @@
     "opi-ixp.5",
     "opi-ixp.6"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.16"
+  ],
   "created": "2026-04-26T20:01:55Z",
   "description": "**Phase B — SessionManager. Deps: B1, B2.**\n\nPort of `buildSessionContext` from `tmp/pi-mono/.../session-manager.ts`. Assembles LLM-ready message list from current branch.\n\nCritical detail (verified at `session-manager.ts:390-392`): when a `CompactionEntry` exists, the synthetic `createCompactionSummaryMessage` is inserted at the **START** of the kept-message list (NOT interleaved). Skip entries before `firstKeptEntryId`; inject the synthetic message; then append the kept window.\n\nSynthetic message construction lives in E3; this ticket owns the placement logic.\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/session-manager/build-context.test.ts`.",
   "id": "opi-ixp.10",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "B6. SessionManager.build_session_context/2",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:04Z"
+  "updated_at": "2026-04-26T20:02:07Z"
 }

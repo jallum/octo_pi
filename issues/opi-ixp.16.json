@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-ixp.10",
     "opi-ixp.12",
     "opi-ixp.13",
     "opi-ixp.14"
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "C5. Compaction.prepare/2 → %CompactionPreparation{}",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:06Z"
+  "updated_at": "2026-04-26T20:02:07Z"
 }
