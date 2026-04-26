@@ -182,10 +182,57 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
       assert {:ok, "part 1\npart 2"} = Summary.generate(messages(), model(), 1000, producer: producer)
     end
 
-    test "no reasoning option is set when not requested (D2 baseline; D3 layers reasoning)" do
+    test "no reasoning option is set when thinking_level is omitted" do
       producer = recording_producer(done_with(""))
       assert {:ok, _} = Summary.generate(messages(), model(true), 1000, producer: producer)
       assert_received {:producer_call, _, _, %{reasoning: nil}}
+    end
+  end
+
+  describe "generate/4 — reasoning conditional (port of compaction-summary-reasoning.test.ts)" do
+    test "uses the provided thinking level for reasoning-capable models" do
+      producer = recording_producer(done_with(""))
+
+      assert {:ok, _} =
+               Summary.generate(messages(), model(true), 2000,
+                 producer: producer,
+                 api_key: "test-key",
+                 thinking_level: :medium
+               )
+
+      assert_received {:producer_call, _, _, opts}
+      assert opts.reasoning == :medium
+      assert opts.api_key == "test-key"
+    end
+
+    test "does not set reasoning when thinking is off" do
+      producer = recording_producer(done_with(""))
+
+      assert {:ok, _} =
+               Summary.generate(messages(), model(true), 2000,
+                 producer: producer,
+                 api_key: "test-key",
+                 thinking_level: :off
+               )
+
+      assert_received {:producer_call, _, _, opts}
+      assert opts.reasoning == nil
+      assert opts.api_key == "test-key"
+    end
+
+    test "does not set reasoning for non-reasoning models" do
+      producer = recording_producer(done_with(""))
+
+      assert {:ok, _} =
+               Summary.generate(messages(), model(false), 2000,
+                 producer: producer,
+                 api_key: "test-key",
+                 thinking_level: :medium
+               )
+
+      assert_received {:producer_call, _, _, opts}
+      assert opts.reasoning == nil
+      assert opts.api_key == "test-key"
     end
   end
 

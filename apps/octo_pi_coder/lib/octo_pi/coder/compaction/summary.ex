@@ -1,12 +1,8 @@
 defmodule OctoPi.Coder.Compaction.Summary do
   @moduledoc """
   Generate a compaction summary from an oldest-first list of agent
-  messages. Port of `generateSummary` (basic path)
+  messages. Port of `generateSummary`
   (`tmp/pi-mono/.../compaction/compaction.ts:526-590`).
-
-  D2 covers everything except the reasoning/thinking-level conditional
-  on `completionOptions` — D3 (`opi-ixp.19`) layers that on without
-  changing the surface defined here.
 
   ## Prompt construction
 
@@ -49,7 +45,8 @@ defmodule OctoPi.Coder.Compaction.Summary do
           api_key: String.t() | nil,
           headers: map() | nil,
           producer: module() | (Model.t(), AIContext.t(), StreamOptions.t() -> Enumerable.t()),
-          variant: variant()
+          variant: variant(),
+          thinking_level: StreamOptions.thinking_level() | :off | nil
         ]
 
   @default_producer OctoPi.AI.Providers.Anthropic
@@ -85,7 +82,8 @@ defmodule OctoPi.Coder.Compaction.Summary do
     stream_opts = %StreamOptions{
       max_tokens: max_tokens,
       api_key: Keyword.get(opts, :api_key),
-      headers: Keyword.get(opts, :headers)
+      headers: Keyword.get(opts, :headers),
+      reasoning: resolve_reasoning(model, Keyword.get(opts, :thinking_level))
     }
 
     producer = Keyword.get(opts, :producer, @default_producer)
@@ -97,6 +95,15 @@ defmodule OctoPi.Coder.Compaction.Summary do
 
   defp reserve_factor(:turn_prefix), do: 0.5
   defp reserve_factor(_), do: 0.8
+
+  # Mirrors `compaction.ts:569-572` —
+  # `model.reasoning && thinkingLevel && thinkingLevel !== "off"`.
+  # Off / nil / non-reasoning model → omit `reasoning` from StreamOptions.
+  defp resolve_reasoning(%Model{reasoning: true}, level)
+       when level in [:minimal, :low, :medium, :high, :xhigh],
+       do: level
+
+  defp resolve_reasoning(_model, _level), do: nil
 
   defp base_prompt(:turn_prefix, _prev), do: Prompts.turn_prefix()
   defp base_prompt(_, nil), do: Prompts.summarize()
