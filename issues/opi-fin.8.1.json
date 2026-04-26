@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-fin.6.5"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-fin.8",
   "priority": 3,
-  "status": "open",
+  "status": "in_progress",
   "title": "Audit and resolve CommandContext",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:27Z"
+  "updated_at": "2026-04-26T00:58:29Z"
 }
