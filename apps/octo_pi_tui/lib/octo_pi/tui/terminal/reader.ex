@@ -89,8 +89,7 @@ defmodule OctoPi.TUI.Terminal.Reader do
     {:noreply, state}
   end
 
-  def handle_info({:EXIT, pid, _reason}, %{blocker_pid: pid} = state),
-    do: {:stop, :normal, state}
+  def handle_info({:EXIT, pid, _reason}, %{blocker_pid: pid} = state), do: {:stop, :normal, state}
 
   def handle_info({:EXIT, _, reason}, state), do: {:stop, reason, state}
 
@@ -186,21 +185,14 @@ defmodule OctoPi.TUI.Terminal.Reader do
 
   defp blocker_loop(parent, reader_fn) do
     case reader_fn.() do
-      :eof ->
-        emit_blocker_exit(parent, :eof)
-
-      {:error, reason} ->
-        emit_blocker_exit(parent, {:error, reason})
-
       data when is_list(data) or is_binary(data) ->
         bin = IO.iodata_to_binary(data)
-        :telemetry.execute([:octo_pi_tui, :reader, :read], %{byte_count: byte_size(bin)}, %{bytes: bin})
+        :telemetry.execute([:octo_pi_tui, :terminal, :read_bytes], %{byte_count: byte_size(bin)}, %{bytes: bin})
         send(parent, {:tty_chunk, bin})
         blocker_loop(parent, reader_fn)
-    end
-  end
 
-  defp emit_blocker_exit(parent, reason) do
-    :telemetry.execute([:octo_pi_tui, :terminal, :reader_exit], %{}, %{reason: reason, terminal: parent})
+      reason ->
+        :telemetry.execute([:octo_pi_tui, :terminal, :reader_exit], %{}, %{reason: reason, terminal: parent})
+    end
   end
 end

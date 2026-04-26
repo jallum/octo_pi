@@ -1132,8 +1132,16 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
     do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
 
-  defp handle_event_key(%{input: input} = state, %Key{key: cp}) when is_integer(cp),
+  defp handle_event_key(%{input: input} = state, %Key{key: cp, modifiers: []}) when is_integer(cp),
     do: %{state | input: Components.Input.insert(input, <<cp::utf8>>)}
+
+  # shift+printable: insert what the terminal said the user typed
+  # (kitty CSI-u flag 4 reports it as `shifted_key`). Without that field
+  # — modifyOtherKeys, legacy CSI, or kitty without flag 4 — we have no
+  # layout-correct way to recover the shifted character on the wire,
+  # so the keystroke falls through to keybinding dispatch unchanged.
+  defp handle_event_key(%{input: input} = state, %Key{modifiers: [:shift], shifted_key: sk}) when is_integer(sk),
+    do: %{state | input: Components.Input.insert(input, <<sk::utf8>>)}
 
   defp handle_event_key(%{input: input} = state, %Key{} = key) do
     kb = get_keybindings(state)

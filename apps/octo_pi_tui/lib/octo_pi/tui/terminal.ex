@@ -113,7 +113,6 @@ defmodule OctoPi.TUI.Terminal do
       reader_opts: Keyword.take(opts, @reader_opt_keys),
       reader_pid: nil,
       subscribers: %{},
-      active: false,
       stdin_buffer: "",
       paste_buffer: nil,
       flush_at: nil
@@ -169,7 +168,7 @@ defmodule OctoPi.TUI.Terminal do
   # Reader exited spontaneously (its blocker hit EOF/error, or it
   # crashed) — TTY is gone. Stop ourselves.
   def handle_info({:EXIT, pid, _reason}, %{reader_pid: pid} = state),
-    do: {:stop, :normal, %{state | reader_pid: nil, active: false}}
+    do: {:stop, :normal, %{state | reader_pid: nil}}
 
   def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
 
@@ -185,14 +184,15 @@ defmodule OctoPi.TUI.Terminal do
 
   # --- activation lifecycle ---
 
-  defp activate(%{active: true} = state), do: state
+  defp activate(%{reader_pid: pid} = state) when is_pid(pid), do: state
 
   defp activate(state) do
     {:ok, reader} = Reader.start_link([{:parent, self()} | state.reader_opts])
-    %{state | reader_pid: reader, active: true}
+    %{state | reader_pid: reader}
   end
 
-  defp deactivate(%{active: false} = state), do: state
+  defp deactivate(%{reader_pid: nil} = state),
+    do: %{state | stdin_buffer: "", paste_buffer: nil, flush_at: nil}
 
   defp deactivate(%{reader_pid: pid} = state) when is_pid(pid) do
     GenServer.stop(pid, :normal, :infinity)
@@ -203,11 +203,8 @@ defmodule OctoPi.TUI.Terminal do
       100 -> :ok
     end
 
-    %{state | active: false, reader_pid: nil, stdin_buffer: "", paste_buffer: nil, flush_at: nil}
+    %{state | reader_pid: nil, stdin_buffer: "", paste_buffer: nil, flush_at: nil}
   end
-
-  defp deactivate(state),
-    do: %{state | active: false, stdin_buffer: "", paste_buffer: nil, flush_at: nil}
 
   defp maybe_deactivate(%{subscribers: subs} = state) when map_size(subs) == 0, do: deactivate(state)
   defp maybe_deactivate(state), do: state
@@ -220,7 +217,7 @@ defmodule OctoPi.TUI.Terminal do
 
     try do
       File.write!(path, initial_text)
-      was_active = state.active
+      was_active = is_pid(state.reader_pid)
       state = if was_active, do: deactivate(state), else: state
       result = state.open_editor_fn.(path)
       state = if was_active, do: activate(state), else: state

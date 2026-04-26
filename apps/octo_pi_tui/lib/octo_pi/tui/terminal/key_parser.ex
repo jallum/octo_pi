@@ -30,14 +30,17 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
 
   alias OctoPi.TUI.Key
 
+  @paste_start "\e[200~"
+  @paste_end "\e[201~"
+
   # --- public entry point (multi-head dispatch) ---
 
   @spec parse(binary()) ::
           {:key, Key.t()} | :paste_start | :paste_end | :unknown
 
   # Bracketed paste markers come first (concrete byte match).
-  def parse("\e[200~"), do: :paste_start
-  def parse("\e[201~"), do: :paste_end
+  def parse(@paste_start), do: :paste_start
+  def parse(@paste_end), do: :paste_end
 
   # Named special keys — single-byte C0 controls.
   def parse("\r"), do: {:key, %Key{key: :enter}}
@@ -312,8 +315,11 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
       [mod_s, cp_s] ->
         with {:ok, mod} <- parse_int(mod_s),
              {:ok, cp} <- parse_int(cp_s) do
-          key = mok_key(cp)
-          {:key, %Key{key: key, modifiers: bits_to_modifiers(max(mod - 1, 0))}}
+          # mok_key/1 lowercases A-Z so binding "shift+a" matches uniformly.
+          # Shifted symbols (1→! etc.) are unrecoverable on the wire here:
+          # modifyOtherKeys reports the unshifted keysym only, with no
+          # alternate-keys field. Insertion of "!" requires kitty flag 4.
+          {:key, %Key{key: mok_key(cp), modifiers: bits_to_modifiers(max(mod - 1, 0))}}
         else
           _ -> :unknown
         end
@@ -337,16 +343,16 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
   defp parse_kitty_csi_u(body) do
     trimmed = binary_part(body, 0, byte_size(body) - 1)
 
-    with {:ok, raw_cp, base_cp, mod_and_event} <- split_code(trimmed),
+    with {:ok, raw_cp, shifted_cp, base_cp, mod_and_event} <- split_code(trimmed),
          {:ok, mod_bits, event} <- split_mod_event(mod_and_event) do
       modifiers = bits_to_modifiers(mod_bits)
-      build_kitty_key(raw_cp, base_cp, modifiers, event)
+      build_kitty_key(raw_cp, shifted_cp, base_cp, modifiers, event)
     else
       :error -> :unknown
     end
   end
 
-  defp build_kitty_key(raw_cp, base, modifiers, event) do
+  defp build_kitty_key(raw_cp, shifted, base, modifiers, event) do
     case keypad_map(raw_cp) do
       {:char_key, c} ->
         {:key, %Key{key: c, modifiers: modifiers, event_type: event}}
@@ -356,10 +362,33 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
 
       nil ->
         resolved = resolve_key_with_base(raw_cp, base)
-        key = csi_u_named_key(resolved)
-        {:key, %Key{key: key, modifiers: modifiers, event_type: event}}
+        key = csi_u_named_key(resolved) |> normalize_shifted_letter(modifiers)
+
+        {:key,
+         %Key{
+           key: key,
+           modifiers: modifiers,
+           event_type: event,
+           shifted_key: shifted_key_for_insertion(shifted)
+         }}
     end
   end
+
+  # Per kitty's "alternate keys" reporting (flag 4): when shift is the
+  # canonical layout, terminals may still report the keysym in upper-case.
+  # Normalize A-Z → a-z so binding "shift+a" matches uniformly across
+  # protocols (modifyOtherKeys' mok_key/1 already does the same).
+  defp normalize_shifted_letter(cp, modifiers)
+       when is_integer(cp) and cp in ?A..?Z do
+    if :shift in modifiers, do: cp + 32, else: cp
+  end
+
+  defp normalize_shifted_letter(key, _modifiers), do: key
+
+  # Only retain the alternate-keys field when it's a usable printable;
+  # callers insert it as text. nil means "terminal didn't tell us".
+  defp shifted_key_for_insertion(cp) when is_integer(cp) and cp >= 0x20 and cp != 0x7F, do: cp
+  defp shifted_key_for_insertion(_), do: nil
 
   # Kitty keypad functional keys (codepoints 57399–57426).
   defp keypad_map(n) when n in 57_399..57_408, do: {:char_key, n - 57_399 + ?0}
@@ -398,7 +427,7 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
   defp resolve_key_with_base(_cp, base) when base in 0x20..0x7E, do: base
   defp resolve_key_with_base(cp, _base), do: cp
 
-  # Returns {:ok, raw_codepoint, base_codepoint | nil, rest} | :error
+  # Returns {:ok, raw_cp, shifted_cp | nil, base_cp | nil, rest} | :error
   defp split_code(s) do
     case String.split(s, ";", parts: 2) do
       [head] -> parse_code_fields(head, "")
@@ -411,22 +440,27 @@ defmodule OctoPi.TUI.Terminal.KeyParser do
 
     case Integer.parse(hd(parts)) do
       {cp, ""} ->
-        base = parse_base_field(parts)
-        {:ok, cp, base, rest}
+        shifted = parse_optional_int_at(parts, 1)
+        base = parse_optional_int_at(parts, 2)
+        {:ok, cp, shifted, base, rest}
 
       _ ->
         :error
     end
   end
 
-  defp parse_base_field(parts) when length(parts) >= 3 do
-    case Integer.parse(Enum.at(parts, 2)) do
-      {n, ""} -> n
-      _ -> nil
+  defp parse_optional_int_at(parts, idx) when length(parts) > idx do
+    case Enum.at(parts, idx) do
+      "" -> nil
+      nil -> nil
+      s -> parse_int(s) |> elem_or_nil()
     end
   end
 
-  defp parse_base_field(_), do: nil
+  defp parse_optional_int_at(_, _), do: nil
+
+  defp elem_or_nil({:ok, n}), do: n
+  defp elem_or_nil(:error), do: nil
 
   # `rest` is the "<mod>[:<event>]" group (or "") after the ';'.
   defp split_mod_event(""), do: {:ok, 0, :press}
