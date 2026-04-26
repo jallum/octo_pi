@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T13:42:12Z",
+  "description": "Same Registry.lookup-then-iterate pattern in OctoPi.TUI.Events — wherever Terminal broadcasts stdin_chunk and resize events to registered listeners. Apply the same Registry.dispatch/3 idiom for atomicity.\n\nAudit all Registry.lookup calls in octo_pi_tui and replace with Registry.dispatch/3 where the pattern applies.",
+  "id": "opi-gfy.2",
+  "labels": [],
+  "parent": "opi-gfy",
+  "priority": 2,
+  "status": "open",
+  "title": "Registry.dispatch/3 for TUI Events fan-out",
+  "type": "task",
+  "updated_at": "2026-04-26T13:42:12Z"
+}
