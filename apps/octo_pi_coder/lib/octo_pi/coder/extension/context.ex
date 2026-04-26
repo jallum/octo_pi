@@ -4,6 +4,7 @@ defmodule OctoPi.Coder.Extension.Context do
   alias OctoPi.Agent.Message
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Session
+  alias OctoPi.Coder.SessionManager
 
   @type t :: %__MODULE__{
           cwd: String.t(),
@@ -15,7 +16,7 @@ defmodule OctoPi.Coder.Extension.Context do
           ui: OctoPi.Coder.Extension.UIContext.t() | nil,
           get_entries: (-> [Session.Entry.t()]),
           get_messages: (-> [Message.t()]),
-          get_branch: (-> [Message.t()]),
+          get_branch: (-> [Session.Entry.t()]),
           get_leaf_entry_id: (-> String.t() | nil),
           find_model: (atom(), String.t() -> Model.t() | nil),
           get_model_auth: (Model.t() -> {:ok, map()} | {:error, String.t()})
@@ -49,4 +50,27 @@ defmodule OctoPi.Coder.Extension.Context do
 
   @spec new(map()) :: t()
   def new(attrs), do: struct!(__MODULE__, attrs)
+
+  @doc """
+  Wire `get_entries`, `get_branch`, and `get_leaf_entry_id` to a
+  `SessionManager`. Pass either a `%SessionManager{}` (snapshot) or a
+  zero-arity getter that returns the current `%SessionManager{}` (use
+  this when the manager lives behind a process and may change).
+
+  Mirrors pi-mono's pattern of exposing `sessionManager` to extensions
+  for branch / leaf / entries access (`extensions/types.ts:301`).
+  """
+  @spec bind_session_manager(t(), SessionManager.t() | (-> SessionManager.t())) :: t()
+  def bind_session_manager(%__MODULE__{} = ctx, %SessionManager{} = sm) do
+    bind_session_manager(ctx, fn -> sm end)
+  end
+
+  def bind_session_manager(%__MODULE__{} = ctx, get_sm) when is_function(get_sm, 0) do
+    %{
+      ctx
+      | get_entries: fn -> SessionManager.get_entries(get_sm.()) end,
+        get_branch: fn -> SessionManager.get_branch(get_sm.()) end,
+        get_leaf_entry_id: fn -> SessionManager.get_leaf_entry_id(get_sm.()) end
+    }
+  end
 end

@@ -191,6 +191,29 @@ defmodule OctoPi.Coder.SessionManagerTest do
     end
   end
 
+  describe "get_entries/1" do
+    test "empty body session returns []" do
+      tmp = scratch("nobody-entries.jsonl")
+      File.write!(tmp, ~s({"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}\n))
+
+      assert {:ok, sm} = SessionManager.load(tmp)
+      assert SessionManager.get_entries(sm) == []
+    end
+
+    test "returns body entries in file order, header excluded" do
+      tmp = scratch("entries.jsonl")
+
+      File.write!(tmp, """
+      {"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}
+      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"a"}}
+      {"type":"message","id":"m2","parentId":"m1","timestamp":"t","message":{"role":"assistant","content":"b"}}
+      """)
+
+      assert {:ok, sm} = SessionManager.load(tmp)
+      assert SessionManager.get_entries(sm) |> Enum.map(& &1.id) == ~w(m1 m2)
+    end
+  end
+
   describe "find_common_ancestor/3" do
     test "nil old_leaf_id returns nil" do
       sm = build_linear(["a", "b", "c"])

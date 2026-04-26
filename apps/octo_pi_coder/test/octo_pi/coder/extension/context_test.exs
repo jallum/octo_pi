@@ -2,6 +2,7 @@ defmodule OctoPi.Coder.Extension.ContextTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.SessionManager
 
   describe "new/1" do
     test "creates context with defaults" do
@@ -94,5 +95,53 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.idle?
       assert is_reference(ctx.signal)
     end
+  end
+
+  describe "bind_session_manager/2" do
+    setup do
+      tmp =
+        Path.join(
+          System.tmp_dir!(),
+          "ctx-bind-sm-#{System.unique_integer([:positive])}.jsonl"
+        )
+
+      File.write!(tmp, """
+      {"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}
+      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"a"}}
+      {"type":"message","id":"m2","parentId":"m1","timestamp":"t","message":{"role":"assistant","content":"b"}}
+      """)
+
+      on_exit(fn -> File.rm(tmp) end)
+      {:ok, sm} = SessionManager.load(tmp)
+      %{sm: sm}
+    end
+
+    test "wires get_entries / get_branch / get_leaf_entry_id from a snapshot SessionManager", %{sm: sm} do
+      ctx = Context.new(%{cwd: "/tmp"}) |> Context.bind_session_manager(sm)
+
+      assert ctx.get_leaf_entry_id.() == "m2"
+      assert ctx.get_entries.() |> Enum.map(& &1.id) == ~w(m1 m2)
+      assert ctx.get_branch.() |> Enum.map(& &1.id) == ~w(m1 m2)
+    end
+
+    test "accepts a 0-arity getter so the context tracks live SessionManager state", %{sm: sm} do
+      agent = start_supervised!({Agent, fn -> sm end})
+      ctx = Context.new(%{cwd: "/tmp"}) |> Context.bind_session_manager(fn -> Agent.get(agent, & &1) end)
+
+      assert ctx.get_leaf_entry_id.() == "m2"
+
+      {sm2, _id} =
+        SessionManager.add_entry(sm, %OctoPi.Coder.Session.Entry.Message{
+          id: "_",
+          timestamp: "_",
+          message: %{"role" => "user", "content" => "c"}
+        })
+
+      Agent.update(agent, fn _ -> sm2 end)
+
+      assert ctx.get_leaf_entry_id.() == sm2.leaf_id
+      assert ctx.get_entries.() |> Enum.count() == 3
+    end
+
   end
 end

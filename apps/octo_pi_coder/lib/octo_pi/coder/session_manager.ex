@@ -105,6 +105,15 @@ defmodule OctoPi.Coder.SessionManager do
   # ------- traversal -------
 
   @doc """
+  All body entries (header excluded) in file order. Mirrors
+  `getEntries()` (`session-manager.ts:1066-1068`).
+  """
+  @spec get_entries(t()) :: [entry()]
+  def get_entries(%__MODULE__{file_entries: entries}) do
+    Enum.reject(entries, &match?(%Header{}, &1))
+  end
+
+  @doc """
   The id of the current leaf entry, or `nil` for an empty session.
   Mirrors `getLeafId()` (`session-manager.ts:969`). The extension API
   field is named `get_leaf_entry_id`.
