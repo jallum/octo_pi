@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-fin.5.4",
     "opi-fin.5.5",
@@ -16,8 +16,8 @@
   "labels": [],
   "parent": "opi-fin.6",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "6b: Migrate tools extension and update Harness",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:26Z"
+  "updated_at": "2026-04-26T00:25:36Z"
 }
