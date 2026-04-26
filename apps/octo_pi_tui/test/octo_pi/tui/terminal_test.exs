@@ -2,6 +2,7 @@ defmodule OctoPi.TUI.TerminalTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.TUI.Events
+  alias OctoPi.TUI.Key
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.TerminalHelpers
 
@@ -37,22 +38,22 @@ defmodule OctoPi.TUI.TerminalTest do
   end
 
   describe "feed_chunk/2" do
-    test "broadcasts cooked stdin events under {:stdin_event, scope} topic" do
+    test "broadcasts parsed key events under {:key_event, scope} topic" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
       :ok = Terminal.feed_chunk(pid, "abc")
-      assert_receive {:stdin_event, "a"}, 500
-      assert_receive {:stdin_event, "b"}, 500
-      assert_receive {:stdin_event, "c"}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?c}}}, 500
     end
 
     test "forwards multiple chunks in order" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
       :ok = Terminal.feed_chunk(pid, "a")
       :ok = Terminal.feed_chunk(pid, "b")
-      assert_receive {:stdin_event, "a"}, 500
-      assert_receive {:stdin_event, "b"}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
     end
   end
 
@@ -75,13 +76,13 @@ defmodule OctoPi.TUI.TerminalTest do
       t1 = start_terminal(name: nil)
       t2 = start_terminal(name: nil)
 
-      {:ok, _} = Registry.register(Events, {:stdin_event, t1}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, t1}, nil)
 
       Terminal.feed_chunk(t1, "x")
       Terminal.feed_chunk(t2, "y")
 
-      assert_receive {:stdin_event, "x"}, 500
-      refute_receive {:stdin_event, "y"}, 100
+      assert_receive {:key_event, {:key, %Key{key: ?x}}}, 500
+      refute_receive {:key_event, {:key, %Key{key: ?y}}}, 100
     end
   end
 
@@ -189,19 +190,19 @@ defmodule OctoPi.TUI.TerminalTest do
         )
 
       assert_receive {:tty, "\e[?u"}, 500
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
       TerminalHelpers.simulate_stdin(pid, "a")
-      assert_receive {:stdin_event, "a"}, 500
+      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
     end
   end
 
   describe "stdin FSM ownership (opi-445.2)" do
     test "bare ESC is held, then flushed as cooked event after flush_ms" do
       pid = start_terminal(flush_ms: 20)
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
       Terminal.feed_chunk(pid, "\e")
-      refute_receive {:stdin_event, "\e"}, 5
-      assert_receive {:stdin_event, "\e"}, 200
+      refute_receive {:key_event, _}, 5
+      assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
     end
 
     test "flush deadline coexists with probe deadline (multiplexed)" do
@@ -219,14 +220,14 @@ defmodule OctoPi.TUI.TerminalTest do
         )
 
       assert_receive {:tty, "\e[?u"}, 500
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
 
       # During probe, send a bare ESC: flush deadline (20ms) is
       # nearer than probe deadline (100ms). The flush should fire
       # first, then the probe should still fall back.
       TerminalHelpers.simulate_stdin(pid, "\e")
 
-      assert_receive {:stdin_event, "\e"}, 200
+      assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
       assert_receive {:tty, "\e[>4;2m"}, 500
     end
   end
@@ -544,7 +545,7 @@ defmodule OctoPi.TUI.TerminalTest do
       assert_receive {:tty, "\e[?u"}, 500
       assert_receive {:tty, "\e[>4;2m"}, 500
 
-      {:ok, _} = Registry.register(Events, {:stdin_event, pid}, nil)
+      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
 
       stop_task = Task.async(fn -> GenServer.stop(pid, :normal) end)
 
@@ -554,7 +555,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
       Task.await(stop_task, 2000)
 
-      refute_receive {:stdin_event, _}, 100
+      refute_receive {:key_event, _}, 100
     end
   end
 

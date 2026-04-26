@@ -9,9 +9,9 @@ defmodule OctoPi.TUI.Terminal do
       through `OctoPi.TUI.Events`.
     * Spawn a linked reader that calls `:io.get_chars("", N)` in a
       loop and forwards each chunk back as a `{:stdin_chunk, bin}`
-      message; Terminal feeds these into a `StdinFSM` and
-      broadcasts each cooked sequence as `{:stdin_event, seq}` via
-      `Events`.
+      message; Terminal feeds these into a `StdinFSM`, parses each
+      cooked sequence with `KeyParser`, and broadcasts the parsed
+      result as `{:key_event, parsed}` via `Events`.
 
   Tests inject mocks via opts so they don't flip the real tty:
 
@@ -31,9 +31,9 @@ defmodule OctoPi.TUI.Terminal do
 
   `Events` is a Registry keyed on `{topic, scope}` tuples.
   Subscribers register via
-  `Registry.register(Events, {:stdin_event, terminal_pid}, nil)`;
+  `Registry.register(Events, {:key_event, terminal_pid}, nil)`;
   Terminal dispatches via
-  `Registry.dispatch(Events, {:stdin_event, scope}, fn entries -> ... end)`.
+  `Registry.dispatch(Events, {:key_event, scope}, fn entries -> ... end)`.
   The scope defaults to `self()` (the Terminal pid), isolating
   concurrent Interactive sessions from each other's events.
 
@@ -48,6 +48,7 @@ defmodule OctoPi.TUI.Terminal do
   use GenServer
 
   alias OctoPi.TUI.Events
+  alias OctoPi.TUI.Terminal.KeyParser
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.SigwinchHandler
   alias OctoPi.TUI.Terminal.StdinFSM
@@ -364,14 +365,19 @@ defmodule OctoPi.TUI.Terminal do
 
   defp process_chunk(bin, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
-    {events, tail} = StdinFSM.decode(state.stdin_buffer <> bin)
-    Enum.each(events, &emit_stdin_event(state, &1))
+    {sequences, tail} = StdinFSM.decode(state.stdin_buffer <> bin)
+    Enum.each(sequences, &emit_key_event(state, &1))
     arm_or_disarm_flush(%{state | stdin_buffer: tail})
   end
 
-  defp emit_stdin_event(state, seq) do
+  # Raw sequence telemetry → KeyParser → parsed-key telemetry → broadcast.
+  # `KeyParser` returns `:unknown` for sequences we don't recognize; those
+  # are not broadcast (no consumer would know what to do with them).
+  defp emit_key_event(state, seq) do
     :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: seq})
-    broadcast(state, :stdin_event, {:stdin_event, seq})
+    parsed = KeyParser.parse(seq)
+    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed, seq: seq})
+    if parsed != :unknown, do: broadcast(state, :key_event, {:key_event, parsed})
   end
 
   defp tty_write(state, bytes) do
@@ -399,7 +405,7 @@ defmodule OctoPi.TUI.Terminal do
   defp fire_deadline(:flush, %{stdin_buffer: ""} = state), do: state
 
   defp fire_deadline(:flush, %{stdin_buffer: buf} = state) do
-    emit_stdin_event(state, buf)
+    emit_key_event(state, buf)
     %{state | stdin_buffer: ""}
   end
 

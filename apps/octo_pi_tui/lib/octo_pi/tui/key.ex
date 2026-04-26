@@ -53,7 +53,7 @@ defmodule OctoPi.TUI.Key do
 
   Layout-aware matching relies on the key parser having already
   resolved non-Latin codepoints to their Latin base (see
-  `OctoPi.TUI.KeyParser` Kitty CSI-u alternate-key handling), so
+  `OctoPi.TUI.Terminal.KeyParser` Kitty CSI-u alternate-key handling), so
   this function does not need to re-resolve layouts.
   """
   @spec matches?(t(), String.t()) :: boolean()

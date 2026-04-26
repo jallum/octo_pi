@@ -1,9 +1,9 @@
-defmodule OctoPi.TUI.KeyParserTest do
+defmodule OctoPi.TUI.Terminal.KeyParserTest do
   # async: false — "Windows Terminal 0x08" tests mutate WT/SSH env vars.
   use ExUnit.Case, async: false
 
   alias OctoPi.TUI.Key
-  alias OctoPi.TUI.KeyParser
+  alias OctoPi.TUI.Terminal.KeyParser
 
   @wt_env_keys ~w(WT_SESSION SSH_CONNECTION SSH_CLIENT SSH_TTY)
 

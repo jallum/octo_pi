@@ -10,7 +10,7 @@ defmodule OctoPi.TUI do
 
     * `OctoPi.TUI.Terminal` — raw-mode lifecycle, SIGWINCH, and
       stdin escape-sequence assembly (`StdinFSM`)
-    * `OctoPi.TUI.KeyParser` — bytes → `%Key{}`
+    * `OctoPi.TUI.Terminal.KeyParser` — bytes → `%Key{}`
     * `OctoPi.TUI.Renderer` — screen diff + atomic writes
     * `OctoPi.TUI.Interactive` — main loop for `mix pi`
 

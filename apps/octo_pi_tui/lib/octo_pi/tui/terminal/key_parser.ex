@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.KeyParser do
+defmodule OctoPi.TUI.Terminal.KeyParser do
   @moduledoc """
   Pure function: raw byte sequence → `{:key, %Key{}}` | `:paste_start | :paste_end | :unknown`.
 

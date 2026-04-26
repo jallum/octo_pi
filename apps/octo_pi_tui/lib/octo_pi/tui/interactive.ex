@@ -2,8 +2,8 @@ defmodule OctoPi.TUI.Interactive do
   @moduledoc """
   Main loop for `mix pi` interactive mode.
 
-  Composes the Phase 4 pieces end-to-end: `Terminal` owns the tty
-  and assembles cooked stdin sequences, `KeyParser` decodes them,
+  Composes the Phase 4 pieces end-to-end: `Terminal` owns the tty,
+  assembles cooked stdin sequences, and parses them into key events;
   the `Input` component accumulates the prompt, and the `Renderer`
   paints the transcript + input to the screen. Agent events from
   `OctoPi.Agent.Session` drive the transcript updates.
@@ -43,7 +43,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
-  alias OctoPi.TUI.KeyParser
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Renderer
@@ -385,7 +384,7 @@ defmodule OctoPi.TUI.Interactive do
     renderer = child_pid(sup, Renderer)
     footer_data = child_pid(sup, FooterData)
 
-    {:ok, _} = Registry.register(Events, {:stdin_event, terminal}, nil)
+    {:ok, _} = Registry.register(Events, {:key_event, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
@@ -442,10 +441,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:stdin_event, seq}, state) do
-    parsed = KeyParser.parse(seq)
-    :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
-
+  def handle_info({:key_event, parsed}, state) do
     state
     |> Map.put(:notification, nil)
     |> handle_event(parsed)
