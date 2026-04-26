@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T05:41:33Z",
+  "description": "Land PR #5 (opi-uuy: \"Align session architecture with pi-mono\") into the opi-fin branch so all extension framework rework happens in one place.\n\n## Deliverable\n\nMerge origin/opi-uuy into opi-fin. Resolve the single test conflict in apps/octo_pi_tui/test/octo_pi/tui/components/input_test.exs.\n\n## Acceptance Criteria\n\n- [ ] `git log opi-uuy..opi-fin --oneline` returns 0 lines (all opi-uuy commits present in opi-fin)\n- [ ] `mix test` passes on the merged branch (zero failures across all apps)\n- [ ] `mix compile --warnings-as-errors` clean\n- [ ] No remaining merge markers (`grep -rn \"\u003c\u003c\u003c\u003c\u003c\u003c\u003c\\|\u003e\u003e\u003e\u003e\u003e\u003e\u003e\" apps/` returns 0 matches)\n\n## Notes\n\nBranches are nearly orthogonal: 24 files in opi-uuy, 72 in opi-fin, 3 files overlap, 5 of 6 shared files auto-merge. Only conflict is in input_test.exs.",
+  "id": "opi-fin.11",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Merge opi-uuy into opi-fin",
+  "type": "task",
+  "updated_at": "2026-04-26T05:41:33Z"
+}
