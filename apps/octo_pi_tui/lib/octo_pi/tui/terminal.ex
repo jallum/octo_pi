@@ -387,10 +387,7 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   defp arm_or_disarm_flush(%{stdin_buffer: ""} = state), do: disarm_deadline(state, :flush)
-
-  defp arm_or_disarm_flush(state) do
-    arm_deadline(state, :flush, System.monotonic_time(:millisecond) + state.flush_ms)
-  end
+  defp arm_or_disarm_flush(state), do: arm_deadline(state, :flush, System.monotonic_time(:millisecond) + state.flush_ms)
 
   defp fire_deadline(:probe, %{keyboard_mode: :probing} = state) do
     tty_write(state, "\e[>4;2m")
@@ -406,13 +403,8 @@ defmodule OctoPi.TUI.Terminal do
     %{state | stdin_buffer: ""}
   end
 
-  defp arm_deadline(state, kind, abs_ms) do
-    %{state | deadlines: Map.put(state.deadlines, kind, abs_ms)}
-  end
-
-  defp disarm_deadline(state, kind) do
-    %{state | deadlines: Map.delete(state.deadlines, kind)}
-  end
+  defp arm_deadline(state, kind, abs_ms), do: %{state | deadlines: Map.put(state.deadlines, kind, abs_ms)}
+  defp disarm_deadline(state, kind), do: %{state | deadlines: Map.delete(state.deadlines, kind)}
 
   defp next_timeout(%{deadlines: deadlines}) when map_size(deadlines) == 0, do: :infinity
 
