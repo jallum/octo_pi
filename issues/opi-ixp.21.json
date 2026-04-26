@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E2. Compaction.compact/2 — split-turn parallel path",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:08Z"
+  "updated_at": "2026-04-26T23:32:17.733408Z"
 }
