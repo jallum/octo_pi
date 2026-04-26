@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.36"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:02:01Z",
   "description": "**Phase G — Tree session integration. Deps: G5a.**\n\nAdd interaction layer to G5a:\n- Cursor movement (up/down/page).\n- Filter cycling (key to switch between modes).\n- Selection commit (returns selected entry id).\n- Cancellation.\n\nTests: simulated keypress sequences over fixture trees.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "G5b. Tree-selector: keybinds + selection state + filter cycling",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:01Z"
+  "updated_at": "2026-04-26T20:02:16Z"
 }
