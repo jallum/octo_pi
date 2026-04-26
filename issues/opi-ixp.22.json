@@ -7,6 +7,13 @@
     "opi-ixp.25",
     "opi-ixp.43"
   ],
+  "comments": [
+    {
+      "author": "",
+      "text": "B6 (.10) defined bare placeholder structs for the synthetic messages so it could exercise placement logic:\n- `OctoPi.Coder.Session.CompactionSummaryMessage` — `:role`, `:summary`, `:tokens_before`, `:timestamp`\n- `OctoPi.Coder.Session.BranchSummaryMessage` — `:role`, `:summary`, `:from_id`, `:timestamp`\n\nBefore doing E3, **double-check** these match upstream `messages.ts:62-67` and `createCompactionSummaryMessage` / `createBranchSummaryMessage`. If yes: add provider serializers (Anthropic + OpenAI) on top of the existing structs. If the shape needs to change for provider compat, update B6's placement output too — `build_session_context/2` builds these structs and tests assert their `:summary` field.",
+      "timestamp": "2026-04-26T22:21:07.856733Z"
+    }
+  ],
   "created": "2026-04-26T20:01:58Z",
   "description": "**Phase E — Compaction orchestration. Deps: A1.**\n\nPort `createCompactionSummaryMessage` from `tmp/pi-mono/.../core/messages.ts:109-120`.\n\nSignature: `create_compaction_summary_message(summary, tokens_before, timestamp) -> %CompactionSummaryMessage{}`\nShape (messages.ts:62-67): `%{role: \\\"compactionSummary\\\", summary, tokens_before, timestamp}`\n\n**Important**: `\\\"compactionSummary\\\"` is a NEW message role (not user/assistant). The AI provider serializers (Anthropic + OpenAI) must know how to flatten it to wire format — typically as a system/user-prefixed text block. Update both providers in `apps/octo_pi_ai_anthropic` and `apps/octo_pi_ai_openai`.\n\nTests: snapshot of produced message; provider wire-format serialization for both providers.",
   "id": "opi-ixp.22",
@@ -16,5 +23,5 @@
   "status": "open",
   "title": "E3. createCompactionSummaryMessage + provider serialization for 'compactionSummary' role",
   "type": "task",
-  "updated_at": "2026-04-26T21:45:08.148932Z"
+  "updated_at": "2026-04-26T22:21:07.856733Z"
 }
