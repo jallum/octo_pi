@@ -14,8 +14,8 @@ defmodule OctoPi.TUI.Tracer do
     [:octo_pi_tui, :stdin, :sequence],
     [:octo_pi_tui, :key, :event],
     [:octo_pi_tui, :terminal, :reader_exit],
+    [:octo_pi_tui, :terminal, :reader_down],
     [:octo_pi_tui, :terminal, :tty_write],
-    [:octo_pi_tui, :terminal, :stdin_eof],
     [:octo_pi_tui, :terminal, :terminate, :start],
     [:octo_pi_tui, :terminal, :terminate, :stop],
     [:octo_pi_tui, :terminal, :drain, :round],
@@ -68,11 +68,11 @@ defmodule OctoPi.TUI.Tracer do
   defp format([:octo_pi_tui, :terminal, :reader_exit], _, %{reason: r}),
     do: "terminal.reader_exit #{inspect(r)}"
 
+  defp format([:octo_pi_tui, :terminal, :reader_down], _, %{reason: r}),
+    do: "terminal.reader_down #{inspect(r)}"
+
   defp format([:octo_pi_tui, :terminal, :tty_write], %{byte_count: n}, %{bytes: b}),
     do: "terminal.tty_write #{n}B hex=#{hex(b)} #{inspect(b)}"
-
-  defp format([:octo_pi_tui, :terminal, :stdin_eof], _, _),
-    do: "terminal.stdin_eof"
 
   defp format([:octo_pi_tui, :terminal, :terminate, :start], _, meta),
     do: "terminal.terminate.start #{inspect(meta)}"

@@ -47,22 +47,9 @@ static ERL_NIF_TERM restore_iexten(ErlNifEnv *env, int argc, const ERL_NIF_TERM 
     return atom_ok;
 }
 
-/*
- * Discard any bytes received but not yet read from stdin's TTY.
- * Called before flipping back to cooked mode on shutdown so that
- * kitty key-release events (and any other terminal responses queued
- * during teardown) don't leak to the parent shell's readline.
- */
-static ERL_NIF_TERM flush_input(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
-    (void)argc; (void)argv;
-    if (tcflush(STDIN_FILENO, TCIFLUSH) != 0) return make_error(env);
-    return atom_ok;
-}
-
 static ErlNifFunc nif_funcs[] = {
     {"clear_iexten",   0, clear_iexten,   0},
-    {"restore_iexten", 0, restore_iexten, 0},
-    {"flush_input",    0, flush_input,    0}
+    {"restore_iexten", 0, restore_iexten, 0}
 };
 
 ERL_NIF_INIT(Elixir.OctoPi.TUI.TtyNif, nif_funcs, load, NULL, NULL, NULL)

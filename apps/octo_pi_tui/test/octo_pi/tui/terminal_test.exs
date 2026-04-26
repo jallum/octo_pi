@@ -301,6 +301,36 @@ defmodule OctoPi.TUI.TerminalTest do
       GenServer.stop(pid, :shutdown)
       assert_receive {:raw_mode, :exit}, 500
     end
+
+    test "runs terminate when stopped via supervisor shutdown signal (opi-445.5)" do
+      test_pid = self()
+      Process.flag(:trap_exit, true)
+
+      raw_mode = fn action ->
+        send(test_pid, {:raw_mode, action})
+        :ok
+      end
+
+      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
+
+      pid =
+        start_terminal(
+          name: nil,
+          skip_raw_mode: false,
+          raw_mode_fn: raw_mode,
+          tty_fn: tty_fn,
+          probe_timeout_ms: 10
+        )
+
+      assert_receive {:raw_mode, :enter}, 500
+      assert_receive {:tty, "\e[>4;2m"}, 500
+
+      Process.exit(pid, :shutdown)
+
+      # disable_keyboard_protocol must run *before* raw_mode.exit
+      assert_receive {:tty, "\e[>4m"}, 500
+      assert_receive {:raw_mode, :exit}, 500
+    end
   end
 
   describe "open_editor (opi-0g4.14)" do

@@ -33,13 +33,4 @@ defmodule OctoPi.TUI.TtyNif do
   @doc "Restore IEXTEN on stdin."
   @spec restore_iexten() :: :ok | {:error, String.t()}
   def restore_iexten, do: {:error, "NIF not loaded"}
-
-  @doc """
-  Discard bytes received but not yet read from stdin. Called before
-  flipping back to cooked mode so terminal-emitted bytes (notably
-  kitty key-release events queued during shutdown) don't leak to
-  the parent shell.
-  """
-  @spec flush_input() :: :ok | {:error, String.t()}
-  def flush_input, do: {:error, "NIF not loaded"}
 end

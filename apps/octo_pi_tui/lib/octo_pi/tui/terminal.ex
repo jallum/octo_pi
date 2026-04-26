@@ -104,6 +104,7 @@ defmodule OctoPi.TUI.Terminal do
 
   @impl true
   def init(opts) do
+    Process.flag(:trap_exit, true)
     raw_mode_fn = Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1)
     skip_raw_mode = Keyword.get(opts, :skip_raw_mode, false)
     skip_sigwinch = Keyword.get(opts, :skip_sigwinch, false)
@@ -232,10 +233,17 @@ defmodule OctoPi.TUI.Terminal do
     {:noreply, state, next_timeout(state)}
   end
 
-  def handle_info(:stdin_eof, state) do
-    :telemetry.execute([:octo_pi_tui, :terminal, :stdin_eof], %{}, %{})
+  def handle_info({:EXIT, pid, reason}, %{reader_pid: pid} = state) do
+    :telemetry.execute(
+      [:octo_pi_tui, :terminal, :reader_down],
+      %{},
+      %{reason: reason}
+    )
+
     {:stop, :normal, state}
   end
+
+  def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
 
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
@@ -454,11 +462,9 @@ defmodule OctoPi.TUI.Terminal do
     case reader_fn.() do
       :eof ->
         reader_exit(:eof, parent)
-        send(parent, :stdin_eof)
 
       {:error, reason} ->
         reader_exit({:error, reason}, parent)
-        send(parent, :stdin_eof)
 
       data when is_list(data) or is_binary(data) ->
         bin = IO.iodata_to_binary(data)
