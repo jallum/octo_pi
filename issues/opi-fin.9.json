@@ -8,9 +8,15 @@
   "id": "opi-fin.9",
   "labels": [],
   "parent": "opi-fin",
+  "comments": [
+    {
+      "text": "Audit (2026-04-26): bind_core was supposed to be removed in this phase. Verify against current state — interactive.ex may still have start_ui_bridge and friends. opi-fin.15 (UIBridge deletion) and opi-fin.18 (notify_extension_result deletion) clean these up.",
+      "timestamp": "2026-04-26T05:44:22Z"
+    }
+  ],
   "priority": 3,
   "status": "closed",
   "title": "Phase 9: Remove legacy API",
   "type": "task",
-  "updated_at": "2026-04-26T01:14:53Z"
+  "updated_at": "2026-04-26T05:44:22Z"
 }
