@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T01:41:33Z",
+  "description": "Wire ExtensionRunner hooks into the compaction flow, matching pi-mono's\nsession_before_compact and session_compact extension events.\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/extensions/types.ts lines 530-544.\nReference: tmp/pi-mono/packages/coding-agent/src/core/agent-session.ts lines 1650-1700 (manual),\n           1880-1960 (auto).\n\nDepends on: ExtensionRunner ticket, manual compaction ticket.\n\n## session_before_compact hook\n\nEmitted BEFORE any compaction begins (both manual via Session.compact/1 and\nauto-compaction triggered by the Loop).\n\nEvent type: :session_before_compact\nPayload:\n  %{\n    preparation: %{messages_to_summarize: [...], first_kept_entry_id: ..., tokens_before: ...},\n    signal: abort_ref\n  }\n\nAllowed results:\n  :ok                                  — proceed normally\n  {:cancel, reason}                    — abort compaction; emit CompactionEnd{aborted?: true}\n  {:ok, %{compaction: custom_result}}  — extension provides its own CompactionResult map\n                                         (%{summary, first_kept_entry_id, tokens_before});\n                                         skip the Compaction.compact/3 LLM call entirely\n\n## session_compact hook\n\nEmitted AFTER compaction completes and the CompactionEntry has been appended.\n\nEvent type: :session_compact\nPayload:\n  %{\n    compaction_entry: %SessionEntry.CompactionEntry{},\n    from_extension: boolean()   # true when session_before_compact provided a custom result\n  }\n\nReturn value: ignored (notification only).\n\n## Where to wire\n\nIn Session.compact GenServer handler (manual path), BEFORE calling Compaction.compact/3:\n  1. Call Compaction.prepare/2 to get the preparation map.\n  2. Call Session.emit_hook(session, :session_before_compact, %{preparation: ..., signal: ...}).\n  3. If {:cancelled, _}: emit CompactionEnd{aborted?: true}; return.\n  4. If {:modified, %{compaction: custom_result}}: skip LLM call, use custom_result directly\n     with from_hook: true in append_compaction.\n  5. Otherwise: proceed with Compaction.compact/3.\n  After appending CompactionEntry: call emit_hook(:session_compact, %{...}).\n\nApply identical wiring in handle_overflow/6 in loop.ex (auto-compaction path).\n\n## Tests\n\nCreate apps/octo_pi_agent/test/octo_pi/agent/compaction_extensions_test.exs.\nPort from tmp/pi-mono/packages/coding-agent/test/compaction-extensions.test.ts.\nCover:\n  - session_before_compact with {:cancel, reason} prevents compaction and emits\n    CompactionEnd{aborted?: true}\n  - session_before_compact with {:ok, %{compaction: custom}} skips LLM call,\n    uses provided summary, sets from_hook?: true on CompactionEntry\n  - session_compact fires after successful compaction with correct entry\n  - session_compact fires after extension-provided compaction with from_extension: true",
+  "id": "opi-uuy.11",
+  "labels": [],
+  "parent": "opi-uuy",
+  "priority": 2,
+  "status": "open",
+  "title": "Compaction extension hooks",
+  "type": "task",
+  "updated_at": "2026-04-26T01:41:33Z"
+}
