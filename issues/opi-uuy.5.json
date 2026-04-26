@@ -5,6 +5,7 @@
     "opi-uuy.4"
   ],
   "blocks": [
+    "opi-uuy.14",
     "opi-uuy.8"
   ],
   "created": "2026-04-26T01:41:31Z",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "Migrate Loop to build_session_context",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:35Z"
+  "updated_at": "2026-04-26T01:41:37Z"
 }

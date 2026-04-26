@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-uuy.2"
+    "opi-uuy.2",
+    "opi-uuy.5"
   ],
   "blocks": [],
   "created": "2026-04-26T01:41:33Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "Session branching — fork and navigate_tree",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:36Z"
+  "updated_at": "2026-04-26T01:41:37Z"
 }
