@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-445",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Refactor StdinFSM to a pure functional module",
   "type": "task",
-  "updated_at": "2026-04-26T15:10:09.928411Z"
+  "updated_at": "2026-04-26T15:13:39.448083Z"
 }
