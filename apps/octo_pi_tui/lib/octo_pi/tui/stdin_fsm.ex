@@ -1,23 +1,22 @@
 defmodule OctoPi.TUI.StdinFSM do
   @moduledoc """
-  Escape-sequence assembly. Takes raw byte chunks from the stdin
-  reader, pattern-matches them into complete sequences (CSI, OSC,
-  SS3, alt-prefix) + individual printable UTF-8 codepoints, and
-  forwards each complete event to a subscriber as
-  `{:stdin_event, binary}`.
+  Escape-sequence assembly. Takes raw byte chunks, pattern-matches
+  them into complete sequences (CSI, OSC, SS3, DCS, APC, alt-prefix)
+  + individual printable UTF-8 codepoints, and returns a list of
+  cooked sequences plus the next flush deadline.
+
+  The module is a pure struct + pure functions; the caller (Terminal)
+  owns the buffer state, dispatches events, and arms the flush
+  timeout.
 
   A 10ms flush timeout (configurable via `:flush_ms`) handles one
   disambiguation case: a bare `\\e` at end of buffer could be
   either the Escape key or the start of an escape sequence
-  arriving in pieces. We wait, and if nothing follows, flush it.
+  arriving in pieces. After the timeout the caller should call
+  `flush/1` to emit whatever is still buffered.
 
-  `\\e<char>` where char isn't `[`, `]`, or `O` is treated as a
-  complete alt-prefix meta sequence and emitted immediately.
-
-  The timeout is driven by the GenServer's own `{:reply, state,
-  ms}` return tuple — no `Process.send_after/3`, no timer refs.
-  When the buffer is empty, we return `:infinity` so an idle FSM
-  doesn't wake every 10ms for nothing.
+  `\\e<char>` where char isn't `[`, `]`, `O`, `P`, or `_` is treated
+  as a complete alt-prefix meta sequence and emitted immediately.
 
   ## Divergence from upstream: bracketed paste as data events
 
@@ -25,94 +24,118 @@ defmodule OctoPi.TUI.StdinFSM do
   whose payload is the content between `\\e[200~` and `\\e[201~`
   and suppresses `data` events during a paste. StdinFSM does not
   replicate that: paste markers and content are emitted through the
-  same `{:stdin_event, binary}` channel. Consumers that need paste
-  atomicity collect events between the two markers (see the Input
-  component's paste handling). Keeping one channel avoids a second
-  subscription surface and matches existing caller code.
-  """
+  same channel. Consumers that need paste atomicity collect events
+  between the two markers.
 
-  use GenServer
+  ## GenServer wrapper
+
+  A thin GenServer wrapper is retained as a transitional shim for
+  callers that still own the FSM as a child process. It delegates
+  to the pure API and is scheduled for removal once Terminal owns
+  the FSM directly (see opi-445.2 / opi-445.4).
+  """
 
   @default_flush_ms 10
 
-  # --- public API ---
+  defstruct buffer: "", flush_ms: @default_flush_ms
 
-  @spec start_link(keyword()) :: GenServer.on_start()
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
+  @type t :: %__MODULE__{buffer: binary(), flush_ms: pos_integer()}
+  @type process_result :: {t(), [binary()], non_neg_integer() | :infinity}
+
+  use GenServer
+
+  # --- pure API + GenServer wrapper ---
+
+  @doc "Build a new FSM state."
+  @spec new(keyword()) :: t()
+  def new(opts \\ []) do
+    %__MODULE__{flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms)}
   end
 
-  @doc "Feed a chunk of bytes into the FSM."
-  @spec process(GenServer.server(), binary()) :: :ok
-  def process(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:process, bin})
+  @doc """
+  Feed a chunk of bytes into the FSM. Returns `{state, events,
+  next_timeout_ms | :infinity}` for a `%StdinFSM{}` state, or `:ok`
+  for the GenServer wrapper.
+  """
+  @spec process(t(), binary()) :: process_result()
+  def process(%__MODULE__{} = state, bin) when is_binary(bin) do
+    buffer = state.buffer <> bin
+    {events, remainder} = extract(buffer)
+    {%{state | buffer: remainder}, events, flush_timeout(remainder, state.flush_ms)}
+  end
 
-  @doc "Flush any buffered content, emitting it to the subscriber. Returns the flushed sequences."
+  @spec process(GenServer.server(), binary()) :: :ok
+  def process(server, bin) when is_binary(bin), do: GenServer.call(server, {:process, bin})
+
+  @doc """
+  Flush any buffered content as a single sequence. For a struct
+  state returns `{state, events}`; for the GenServer wrapper returns
+  `events`.
+  """
+  @spec flush(t()) :: {t(), [binary()]}
+  def flush(%__MODULE__{buffer: ""} = state), do: {state, []}
+  def flush(%__MODULE__{buffer: buf} = state), do: {%{state | buffer: ""}, [buf]}
+
   @spec flush(GenServer.server()) :: [binary()]
-  def flush(pid), do: GenServer.call(pid, :flush)
+  def flush(server), do: GenServer.call(server, :flush)
 
   @doc "Discard any buffered content without emitting."
+  @spec clear(t()) :: t()
+  def clear(%__MODULE__{} = state), do: %{state | buffer: ""}
+
   @spec clear(GenServer.server()) :: :ok
-  def clear(pid), do: GenServer.call(pid, :clear)
+  def clear(server), do: GenServer.call(server, :clear)
+
+  @spec start_link(keyword()) :: GenServer.on_start()
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc "Return the current buffer contents (for testing)."
   @spec get_buffer(GenServer.server()) :: binary()
-  def get_buffer(pid), do: GenServer.call(pid, :get_buffer)
-
-  # --- GenServer callbacks ---
+  def get_buffer(server), do: GenServer.call(server, :get_buffer)
 
   @impl true
   def init(opts) do
-    state = %{
-      subscriber: Keyword.fetch!(opts, :subscriber),
-      flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms),
-      buffer: ""
-    }
-
-    {:ok, state}
+    fsm = new(flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms))
+    {:ok, %{fsm: fsm, subscriber: Keyword.fetch!(opts, :subscriber)}}
   end
 
   @impl true
-  def handle_call({:process, chunk}, _from, state) do
-    buffer = state.buffer <> chunk
-    {events, remainder} = extract(buffer)
+  def handle_call({:process, bin}, _from, %{fsm: fsm} = state) do
+    {fsm, events, timeout} = process(fsm, bin)
     Enum.each(events, &emit(state.subscriber, &1))
-    {:reply, :ok, %{state | buffer: remainder}, flush_timeout(remainder, state.flush_ms)}
+    {:reply, :ok, %{state | fsm: fsm}, timeout}
   end
 
-  def handle_call(:flush, _from, %{buffer: ""} = state) do
-    {:reply, [], state, :infinity}
+  def handle_call(:flush, _from, %{fsm: fsm} = state) do
+    {fsm, events} = flush(fsm)
+    Enum.each(events, &emit(state.subscriber, &1))
+    {:reply, events, %{state | fsm: fsm}, :infinity}
   end
 
-  def handle_call(:flush, _from, %{buffer: buf} = state) do
-    emit(state.subscriber, buf)
-    {:reply, [buf], %{state | buffer: ""}, :infinity}
+  def handle_call(:clear, _from, %{fsm: fsm} = state) do
+    {:reply, :ok, %{state | fsm: clear(fsm)}, :infinity}
   end
 
-  def handle_call(:clear, _from, state) do
-    {:reply, :ok, %{state | buffer: ""}, :infinity}
-  end
-
-  def handle_call(:get_buffer, _from, state) do
-    {:reply, state.buffer, state, flush_timeout(state.buffer, state.flush_ms)}
+  def handle_call(:get_buffer, _from, %{fsm: fsm} = state) do
+    {:reply, fsm.buffer, state, flush_timeout(fsm.buffer, fsm.flush_ms)}
   end
 
   @impl true
-  def handle_info(:timeout, %{buffer: ""} = state), do: {:noreply, state}
+  def handle_info(:timeout, %{fsm: fsm} = state) do
+    {fsm, events} = flush(fsm)
+    Enum.each(events, &emit(state.subscriber, &1))
+    {:noreply, %{state | fsm: fsm}}
+  end
 
-  def handle_info(:timeout, %{buffer: buf} = state) do
-    emit(state.subscriber, buf)
-    {:noreply, %{state | buffer: ""}}
+  defp emit(subscriber, event) do
+    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: event})
+    send(subscriber, {:stdin_event, event})
   end
 
   # --- helpers ---
 
   defp flush_timeout("", _ms), do: :infinity
   defp flush_timeout(_buffer, ms), do: ms
-
-  defp emit(subscriber, event) do
-    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: event})
-    send(subscriber, {:stdin_event, event})
-  end
 
   # --- sequence extraction (multi-head pattern matching) ---
 
