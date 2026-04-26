@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-ixp.13"
+    "opi-ixp.13",
+    "opi-ixp.22"
   ],
   "blocks": [],
   "comments": [],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "C2a. Wire bash_execution / branch_summary / compaction_summary message-role heads into find_cut_point + estimate_tokens",
   "type": "task",
-  "updated_at": "2026-04-26T21:45:06.863709Z"
+  "updated_at": "2026-04-26T21:45:08.148932Z"
 }

@@ -4,10 +4,11 @@
     "opi-ixp.1"
   ],
   "blocks": [
-    "opi-ixp.25"
+    "opi-ixp.25",
+    "opi-ixp.43"
   ],
   "created": "2026-04-26T20:01:58Z",
-  "description": "**Phase E — Compaction orchestration. Deps: A1.**\n\nPort `createCompactionSummaryMessage` from `tmp/pi-mono/.../core/messages.ts:109-120`.\n\nSignature: `create_compaction_summary_message(summary, tokens_before, timestamp) -\u003e %CompactionSummaryMessage{}`\nShape (messages.ts:62-67): `%{role: \\\"compactionSummary\\\", summary, tokens_before, timestamp}`\n\n**Important**: `\\\"compactionSummary\\\"` is a NEW message role (not user/assistant). The AI provider serializers (Anthropic + OpenAI) must know how to flatten it to wire format — typically as a system/user-prefixed text block. Update both providers in `apps/octo_pi_ai_anthropic` and `apps/octo_pi_ai_openai`.\n\nTests: snapshot of produced message; provider wire-format serialization for both providers.",
+  "description": "**Phase E — Compaction orchestration. Deps: A1.**\n\nPort `createCompactionSummaryMessage` from `tmp/pi-mono/.../core/messages.ts:109-120`.\n\nSignature: `create_compaction_summary_message(summary, tokens_before, timestamp) -> %CompactionSummaryMessage{}`\nShape (messages.ts:62-67): `%{role: \\\"compactionSummary\\\", summary, tokens_before, timestamp}`\n\n**Important**: `\\\"compactionSummary\\\"` is a NEW message role (not user/assistant). The AI provider serializers (Anthropic + OpenAI) must know how to flatten it to wire format — typically as a system/user-prefixed text block. Update both providers in `apps/octo_pi_ai_anthropic` and `apps/octo_pi_ai_openai`.\n\nTests: snapshot of produced message; provider wire-format serialization for both providers.",
   "id": "opi-ixp.22",
   "labels": [],
   "parent": "opi-ixp",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "E3. createCompactionSummaryMessage + provider serialization for 'compactionSummary' role",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:10Z"
+  "updated_at": "2026-04-26T21:45:08.148932Z"
 }
