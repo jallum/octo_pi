@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "D1. Summarization prompts module (constants)",
   "type": "task",
-  "updated_at": "2026-04-26T20:14:18.349375Z"
+  "updated_at": "2026-04-26T20:14:54.689142Z"
 }
