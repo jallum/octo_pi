@@ -462,10 +462,6 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   defp reader_exit(reason, parent) do
-    require Logger
-
-    Logger.warning("Terminal stdin reader exited: #{inspect(reason)}")
-
     :telemetry.execute(
       [:octo_pi_tui, :terminal, :reader_exit],
       %{},
