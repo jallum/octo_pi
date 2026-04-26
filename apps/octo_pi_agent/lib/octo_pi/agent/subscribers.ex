@@ -44,25 +44,25 @@ defmodule OctoPi.Agent.Subscribers do
   """
   @spec dispatch(pid(), term()) :: :ok
   def dispatch(session_pid, event) do
-    listeners = Registry.lookup(@registry, session_pid)
+    Registry.dispatch(@registry, session_pid, fn entries ->
+      {sync, async} =
+        Enum.split_with(entries, fn {_pid, {_listener, mode}} -> mode == :sync end)
 
-    {sync, async} =
-      Enum.split_with(listeners, fn {_pid, {_listener, mode}} -> mode == :sync end)
+      Enum.each(sync, fn {_pid, {listener, _mode}} ->
+        try do
+          GenServer.call(listener, {:octo_pi_agent_event, event}, 5_000)
+        catch
+          :exit, reason ->
+            Logger.warning(
+              "[OctoPi.Agent.Subscribers] sync listener #{inspect(listener)} " <>
+                "exited during dispatch: #{inspect(reason)}"
+            )
+        end
+      end)
 
-    Enum.each(sync, fn {_pid, {listener, _mode}} ->
-      try do
-        GenServer.call(listener, {:octo_pi_agent_event, event}, 5_000)
-      catch
-        :exit, reason ->
-          Logger.warning(
-            "[OctoPi.Agent.Subscribers] sync listener #{inspect(listener)} " <>
-              "exited during dispatch: #{inspect(reason)}"
-          )
-      end
-    end)
-
-    Enum.each(async, fn {_pid, {listener, _mode}} ->
-      send(listener, {:octo_pi_agent_event, event})
+      Enum.each(async, fn {_pid, {listener, _mode}} ->
+        send(listener, {:octo_pi_agent_event, event})
+      end)
     end)
 
     :ok
