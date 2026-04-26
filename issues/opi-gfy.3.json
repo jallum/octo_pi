@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-gfy.4"
+  ],
   "created": "2026-04-26T13:42:23Z",
   "description": "The load-bearing refactor. interactive.ex is already architected for this: handle_event/2 is a pure state machine and VirtualTerminal drives it without a TTY. The recursive receive loop is the only non-OTP part.\n\nChanges:\n- Add use GenServer; implement init/1, handle_info/2, terminate/2\n- handle_loop_msg/5 clauses become handle_info/2 (mechanical rename; fsm/renderer/terminal move from args to state)\n- Loader timeout: loop/4 'after @loader_interval_ms' becomes {:noreply, state, @loader_interval_ms} + handle_info(:timeout, state)\n- EXIT handling: handle_info({:EXIT, pid, reason}, state) instead of trap_exit + pattern match in receive loop\n- do_run/1 becomes init/1 + GenServer.start_link; run/1 stays as the public entry, calls GenServer.start_link then blocks (or just calls and supervises)\n\nThis ticket unblocks opi-gfy.4 (UIContext) and opi-gfy.5 (TUI supervision).",
   "id": "opi-gfy.3",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Interactive → GenServer",
   "type": "task",
-  "updated_at": "2026-04-26T13:42:23Z"
+  "updated_at": "2026-04-26T13:42:44Z"
 }
