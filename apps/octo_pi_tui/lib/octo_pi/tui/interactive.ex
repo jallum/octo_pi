@@ -44,10 +44,12 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Overlay
+  alias OctoPi.TUI.Paste
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Terminal.RawMode
+  alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.Tracer
   alias OctoPi.TUI.WrapAnsi
@@ -325,16 +327,24 @@ defmodule OctoPi.TUI.Interactive do
       Terminal GenServer. Pass `nil` to leave it unregistered
       (useful when multiple Interactive runs share a VM, e.g.
       tests).
+    * `:name` — name under which to register *this* Interactive
+      GenServer. Tests use it to address Interactive directly
+      (e.g. `send(name, {:hid_event, %Key{...}})`). Default
+      unregistered.
   """
   @spec run(keyword()) :: :ok
   def run(opts) do
-    {:ok, pid} = GenServer.start_link(__MODULE__, opts)
+    {:ok, pid} = GenServer.start_link(__MODULE__, opts, gen_opts(opts))
     ref = Process.monitor(pid)
 
     receive do
       {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
     end
   end
+
+  defp gen_opts(opts), do: gen_opts_for_name(Keyword.get(opts, :name))
+  defp gen_opts_for_name(nil), do: []
+  defp gen_opts_for_name(name), do: [name: name]
 
   # --- GenServer callbacks ---
 
@@ -443,25 +453,18 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:key_event, parsed}, state) do
-    state
-    |> Map.put(:notification, nil)
-    |> handle_event(parsed)
-    |> advance()
-  end
-
-  def handle_info({:paste, _content} = msg, state) do
-    state
-    |> Map.put(:notification, nil)
-    |> handle_event(msg)
-    |> advance()
-  end
-
-  def handle_info({:resize, w, h} = resize_msg, state) do
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
     Renderer.resize(state.renderer, w, h)
 
     state
-    |> handle_event(resize_msg)
+    |> handle_event(event)
+    |> advance()
+  end
+
+  def handle_info({:hid_event, event}, state) do
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(event)
     |> advance()
   end
 
@@ -906,20 +909,21 @@ defmodule OctoPi.TUI.Interactive do
   @doc """
   Apply an event to a state and return the updated state.
   Events:
-    * `{:key, %Key{}}` — keyboard input (all keys including printable chars).
+    * `%Key{}` — keyboard input (all keys including printable chars).
+    * `%Paste{}` — paste event from a human input device.
+    * `%Resize{}` — terminal resize.
     * `{:octo_pi_agent_event, event}` — from the Agent subscription.
-    * `{:resize, w, h}` — from Terminal's SIGWINCH broadcast.
   """
   @spec handle_event(t(), term()) :: t()
 
-  def handle_event(state, {:key, %Key{event_type: :release}}), do: state
+  def handle_event(state, %Key{event_type: :release}), do: state
 
-  def handle_event(%{custom_widget: {_, component}} = state, {:key, _} = event) when not is_nil(component) do
-    component.handle_input.(event)
+  def handle_event(%{custom_widget: {_, component}} = state, %Key{} = key) when not is_nil(component) do
+    component.handle_input.(key)
     state
   end
 
-  def handle_event(%{model_selector: ms} = state, {:key, %Key{} = key}) when not is_nil(ms) do
+  def handle_event(%{model_selector: ms} = state, %Key{} = key) when not is_nil(ms) do
     case ModelSelector.handle_key(ms, key) do
       {_new_ms, [:cancel]} ->
         %{state | model_selector: nil}
@@ -939,11 +943,11 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  def handle_event(%{dequeue_overlay: ov} = state, {:key, %Key{} = key}) when not is_nil(ov) do
+  def handle_event(%{dequeue_overlay: ov} = state, %Key{} = key) when not is_nil(ov) do
     handle_dequeue_key(state, ov, key)
   end
 
-  def handle_event(state, {:key, %Key{} = key}) do
+  def handle_event(state, %Key{} = key) do
     kb = get_keybindings(state)
 
     case find_app_action(kb, key) do
@@ -952,7 +956,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  def handle_event(%{input: input} = state, {:paste, content}) when is_binary(content),
+  def handle_event(%{input: input} = state, %Paste{content: content}) when is_binary(content),
     do: %{state | input: Components.Input.paste(input, content)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
@@ -980,7 +984,7 @@ defmodule OctoPi.TUI.Interactive do
     }
   end
 
-  def handle_event(state, {:resize, w, h}),
+  def handle_event(state, %Resize{width: w, height: h}),
     do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
 
   def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
