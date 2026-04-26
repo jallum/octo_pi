@@ -4,7 +4,9 @@
     "opi-ixp.35",
     "opi-ixp.38"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.41"
+  ],
   "created": "2026-04-26T20:02:02Z",
   "description": "**Phase G — Tree session integration. Deps: G3, G5c.**\n\nAdd `/tree` to `OctoPi.Coder.Extensions.Commands`. Opens the tree-selector UI (G5c), captures user selection + summary choice, triggers `Session.navigate_tree/2` (G2), which leads to `BranchSummaryEntry` append (G3).\n\nTests: command parser + integration smoke through the full tree-nav flow.",
   "id": "opi-ixp.39",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "G4. /tree slash command",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:16Z"
+  "updated_at": "2026-04-26T20:02:17Z"
 }
