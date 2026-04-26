@@ -100,7 +100,7 @@ defmodule OctoPi.TUI.TerminalTest do
       pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
       :ok = Terminal.open(pid)
       assert_receive {:tty, "\e[?u"}, 500
-      TerminalHelpers.simulate_stdin(pid, "\e[?1u")
+      send(Terminal.info(pid).reader_pid, {:tty_chunk, "\e[?1u"})
       assert_receive {:tty, "\e[>7u"}, 500
     end
 
@@ -127,7 +127,7 @@ defmodule OctoPi.TUI.TerminalTest do
       tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
       pid = start_terminal(name: nil, skip_raw_mode: false, raw_mode_fn: fn _ -> :ok end, tty_fn: tty_fn)
       :ok = Terminal.open(pid)
-      TerminalHelpers.simulate_stdin(pid, "\e[?1u")
+      send(Terminal.info(pid).reader_pid, {:tty_chunk, "\e[?1u"})
       assert_receive {:tty, "\e[>7u"}, 500
       GenServer.stop(pid, :normal)
       assert_receive {:tty, "\e[<0u"}, 500
