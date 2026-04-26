@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-uuy.4"
   ],
@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Extension behaviour and ExtensionRunner",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:36Z"
+  "updated_at": "2026-04-26T03:37:21Z"
 }
