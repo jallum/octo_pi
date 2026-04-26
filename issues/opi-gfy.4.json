@@ -7,13 +7,13 @@
     "opi-gfy.6"
   ],
   "created": "2026-04-26T13:42:40Z",
-  "description": "Depends on opi-gfy.3 (Interactive as GenServer).\n\nbuild_ui_context/1 (interactive.ex:130-211) manually reimplements GenServer.call for synchronous UI requests:\n\n  ref = make_ref()\n  send(interactive_pid, {:ui_request, self(), ref, msg})\n  receive do\n    {:ui_reply, ^ref, value} -\u003e value\n  after 5_000 -\u003e raise ...\n  end\n\nWith Interactive as a GenServer this becomes:\n  GenServer.call(interactive_pid, {:ui_request, msg}, 5_000)\n\nAnd handle_call({:ui_request, msg}, from, state) either:\n  - replies immediately for fire-and-forget ops\n  - stores from in state.dialog and calls GenServer.reply(from, value) when the user acts (for select/confirm/input/editor)\n\nEliminates: make_ref/0, the manual ref tuple in dialog state, send({:ui_reply, ref, value}) in handle_ui_request, and the separate :ui_fire path (becomes cast).",
+  "description": "Depends on opi-gfy.3 (Interactive as GenServer).\n\nbuild_ui_context/1 (interactive.ex:130-211) manually reimplements GenServer.call for synchronous UI requests:\n\n  ref = make_ref()\n  send(interactive_pid, {:ui_request, self(), ref, msg})\n  receive do\n    {:ui_reply, ^ref, value} -> value\n  after 5_000 -> raise ...\n  end\n\nWith Interactive as a GenServer this becomes:\n  GenServer.call(interactive_pid, {:ui_request, msg}, 5_000)\n\nAnd handle_call({:ui_request, msg}, from, state) either:\n  - replies immediately for fire-and-forget ops\n  - stores from in state.dialog and calls GenServer.reply(from, value) when the user acts (for select/confirm/input/editor)\n\nEliminates: make_ref/0, the manual ref tuple in dialog state, send({:ui_reply, ref, value}) in handle_ui_request, and the separate :ui_fire path (becomes cast).",
   "id": "opi-gfy.4",
   "labels": [],
   "parent": "opi-gfy",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "UIContext: replace manual ref/send/receive with GenServer.call",
   "type": "task",
-  "updated_at": "2026-04-26T13:51:10Z"
+  "updated_at": "2026-04-26T14:53:20.775997Z"
 }
