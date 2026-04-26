@@ -6,6 +6,13 @@
   "blocks": [
     "opi-ixp.26"
   ],
+  "comments": [
+    {
+      "author": "",
+      "text": "Deferred: upstream `agent-session-stats.test.ts` exercises SessionManager surface (`appendCompaction`, branch entries, post-compaction null-tokens) that doesn't exist yet. Added blocker on opi-ixp.10 (B6 build_session_context) so this lands once SessionManager is far enough along to faithfully port the upstream test. Resetting to open.",
+      "timestamp": "2026-04-26T22:02:03.541736Z"
+    }
+  ],
   "created": "2026-04-26T20:01:54Z",
   "description": "**Phase A — Foundation. Deps: none (parallel with A1/A2).**\n\nNo per-session token accumulation exists today. AIEvent.Done flows through `apps/octo_pi_agent/lib/octo_pi/agent/loop.ex:100-115, 203-211` carrying usage implicitly but nothing consumes it.\n\n- Add running total to `OctoPi.Agent.Session` state.\n- Update from `OctoPi.Agent.Loop` on each completion via `OctoPi.AI.Usage` (input/output/cache_read/cache_write/total_tokens — see apps/octo_pi_ai/lib/octo_pi/ai/usage.ex:12-26).\n- Wire `api.get_context_usage/0` (currently stub returning nil — apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex:38) to return the accumulator.\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/agent-session-stats.test.ts`.",
   "id": "opi-ixp.3",
@@ -15,5 +22,5 @@
   "status": "in_progress",
   "title": "A3. Session-level token accumulator",
   "type": "task",
-  "updated_at": "2026-04-26T22:02:00.778684Z"
+  "updated_at": "2026-04-26T22:02:03.541736Z"
 }
