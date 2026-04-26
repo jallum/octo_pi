@@ -537,8 +537,16 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def terminate(_reason, state) do
-    shutdown(state)
-    safe_raw_mode_exit(state.raw_mode_fn, state.skip_raw_mode)
+    # Cleanup of the supervised children (Terminal, Renderer,
+    # FooterData) is handled by OTP: when this process exits, the
+    # link to the child Supervisor signals it, which shuts its
+    # children down — Terminal traps exits and runs its own
+    # terminate/2 (raw mode restore, kitty disable, drain).
+    #
+    # Catastrophe path: if Terminal was already killed before we got
+    # here (e.g. brutally :kill'd), no one will restore the TTY for
+    # us. Detect that and run raw_mode.exit ourselves as a backstop.
+    if terminal_dead?(state.terminal), do: safe_raw_mode_exit(state)
 
     if fd = Process.get(:debug_render_log) do
       File.close(fd)
@@ -551,6 +559,19 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     :ok
+  end
+
+  defp terminal_dead?(nil), do: false
+  defp terminal_dead?(pid) when is_pid(pid), do: not Process.alive?(pid)
+
+  defp safe_raw_mode_exit(%{skip_raw_mode: true}), do: :ok
+
+  defp safe_raw_mode_exit(%{raw_mode_fn: fun}) do
+    fun.(:exit)
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
   end
 
   # --- private helpers ---
@@ -584,16 +605,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
-
-  defp safe_raw_mode_exit(_fun, true), do: :ok
-
-  defp safe_raw_mode_exit(fun, false) do
-    fun.(:exit)
-  rescue
-    _ -> :ok
-  catch
-    _, _ -> :ok
-  end
 
   defp start_agent_session(opts) do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
@@ -766,12 +777,6 @@ defmodule OctoPi.TUI.Interactive do
     if bytes != "", do: Terminal.write(state.terminal, bytes)
     state
   end
-
-  defp shutdown(%{sup: sup}) when is_pid(sup) do
-    if Process.alive?(sup), do: Supervisor.stop(sup, :normal)
-  end
-
-  defp shutdown(_), do: :ok
 
   defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
 
