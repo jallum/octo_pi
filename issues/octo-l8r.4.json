@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Cross-provider message normalization",
   "type": "task",
-  "updated_at": "2026-04-24T09:27:11Z"
+  "updated_at": "2026-04-26T13:46:16.779427Z"
 }
