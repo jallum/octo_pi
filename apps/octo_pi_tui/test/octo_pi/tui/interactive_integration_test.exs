@@ -14,7 +14,7 @@ defmodule OctoPi.TUI.InteractiveIntegrationTest do
 
   alias OctoPi.AI.Model
   alias OctoPi.TUI.Interactive
-  alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.TerminalHelpers
 
   @tag :integration
   @tag timeout: 60_000
@@ -61,16 +61,16 @@ defmodule OctoPi.TUI.InteractiveIntegrationTest do
 
     assert_receive {:tui_output, _initial}, 5_000
 
-    Terminal.feed_chunk(
+    TerminalHelpers.simulate_stdin(
       terminal_name,
       "Reply with exactly the single word 'pong' and nothing else."
     )
 
-    Terminal.feed_chunk(terminal_name, "\r")
+    TerminalHelpers.simulate_stdin(terminal_name, "\r")
 
     receive_until_containing("pong", 30_000)
 
-    Terminal.feed_chunk(terminal_name, <<0x03>>)
+    TerminalHelpers.simulate_stdin(terminal_name, <<0x03>>)
     assert :ok = Task.await(runner, 5_000)
 
     all = buffer |> Agent.get(& &1) |> Enum.reverse() |> IO.iodata_to_binary()

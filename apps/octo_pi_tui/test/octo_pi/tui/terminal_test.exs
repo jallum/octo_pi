@@ -36,11 +36,11 @@ defmodule OctoPi.TUI.TerminalTest do
     end
   end
 
-  describe "feed_chunk/2" do
+  describe "stdin chunk processing" do
     test "broadcasts parsed key events under {:key_event, scope} topic" do
       pid = start_terminal()
       :ok = Terminal.open(pid)
-      :ok = Terminal.feed_chunk(pid, "abc")
+      :ok = TerminalHelpers.simulate_stdin(pid, "abc")
       assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
       assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
       assert_receive {:key_event, {:key, %Key{key: ?c}}}, 500
@@ -49,8 +49,8 @@ defmodule OctoPi.TUI.TerminalTest do
     test "forwards multiple chunks in order" do
       pid = start_terminal()
       :ok = Terminal.open(pid)
-      :ok = Terminal.feed_chunk(pid, "a")
-      :ok = Terminal.feed_chunk(pid, "b")
+      :ok = TerminalHelpers.simulate_stdin(pid, "a")
+      :ok = TerminalHelpers.simulate_stdin(pid, "b")
       assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
       assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
     end
@@ -77,8 +77,8 @@ defmodule OctoPi.TUI.TerminalTest do
 
       :ok = Terminal.open(t1)
 
-      Terminal.feed_chunk(t1, "x")
-      Terminal.feed_chunk(t2, "y")
+      TerminalHelpers.simulate_stdin(t1, "x")
+      TerminalHelpers.simulate_stdin(t2, "y")
 
       assert_receive {:key_event, {:key, %Key{key: ?x}}}, 500
       refute_receive {:key_event, {:key, %Key{key: ?y}}}, 100
@@ -184,7 +184,7 @@ defmodule OctoPi.TUI.TerminalTest do
     test "bare ESC is held, then flushed as cooked event after flush_ms" do
       pid = start_terminal(flush_ms: 20)
       :ok = Terminal.open(pid)
-      Terminal.feed_chunk(pid, "\e")
+      TerminalHelpers.simulate_stdin(pid, "\e")
       refute_receive {:key_event, _}, 5
       assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
     end

@@ -18,6 +18,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.TerminalHelpers
   alias OctoPi.TUI.Theme
 
   describe "handle_event — keyboard input" do
@@ -907,7 +908,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.AI.Model
     alias OctoPi.Coder.Extension.API
     alias OctoPi.Coder.Extension.Loader
-    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -954,7 +954,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end)
 
       assert_receive {:session_start, true}, 2_000
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
     end
 
     test "session_start context includes cwd" do
@@ -986,7 +986,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end)
 
       assert_receive {:cwd, "/test/workdir"}, 2_000
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
     end
 
     test "extensions field defaults to empty list" do
@@ -1018,7 +1018,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         end)
 
       assert_receive :rendered, 2_000
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
       Task.await(runner, 2_000)
     end
   end
@@ -1118,7 +1118,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.AI.Model
     alias OctoPi.Coder.Extension.API
     alias OctoPi.Coder.Extension.Loader, as: ExtLoader
-    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -1172,7 +1171,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         end)
 
       assert_receive :session_started, 2_000
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
       Task.await(runner, 2_000)
     end
 
@@ -1198,7 +1197,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent
     alias OctoPi.AI.Model
-    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -1277,15 +1275,15 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert_receive {:tui_output, _initial}, 2_000
 
       # Feed the prompt + Enter.
-      :ok = TUITerminal.feed_chunk(terminal_name, "hi")
-      :ok = TUITerminal.feed_chunk(terminal_name, "\r")
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, "hi")
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, "\r")
 
       # Drain tui_output messages until one contains "pong" (the
       # agent's streamed response). receive_until is defined below.
       receive_until_containing("pong", 2_000)
 
       # Ctrl+D exits (empty editor after response clears input).
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
       assert_receive {:run_done, :ok}, 2_000
 
       Task.await(runner, 1_000)
@@ -1311,7 +1309,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias OctoPi.Agent.TestSupport.FakeTransport
     alias OctoPi.AI.Event, as: AIEvent
     alias OctoPi.AI.Model
-    alias Terminal, as: TUITerminal
 
     setup do
       on_exit(&FakeTransport.clear/0)
@@ -1366,7 +1363,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert_receive {:raw_mode, :enter}, 1_000
       assert_receive :frame_rendered, 1_000
 
-      :ok = TUITerminal.feed_chunk(terminal_name, <<0x04>>)
+      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
       assert :ok = Task.await(runner, 2_000)
 
       assert_receive {:raw_mode, :exit}, 1_000

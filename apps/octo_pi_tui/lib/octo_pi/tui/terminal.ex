@@ -22,8 +22,8 @@ defmodule OctoPi.TUI.Terminal do
     * `:skip_sigwinch` — don't register the SIGWINCH gen_event
       handler.
     * `:auto_start_reader` (default `true`) — when `false`, skips
-      the stdin reader spawn. Tests feed chunks with
-      `feed_chunk/2` instead.
+      the stdin reader spawn. Tests inject chunks via
+      `OctoPi.TUI.TerminalHelpers.simulate_stdin/2` instead.
     * `:dimensions` — `{width, height}` override for tests.
 
   Terminal dimensions are queried via `:io.columns/0` and
@@ -80,10 +80,6 @@ defmodule OctoPi.TUI.Terminal do
   @doc false
   @spec info(GenServer.server()) :: map()
   def info(pid), do: GenServer.call(pid, :info)
-
-  @doc false
-  @spec feed_chunk(GenServer.server(), binary()) :: :ok
-  def feed_chunk(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:feed_chunk, bin})
 
   @doc "Suspend: exit raw mode, send SIGTSTP, re-enter raw mode on resume."
   @spec suspend(GenServer.server()) :: :ok
@@ -186,11 +182,6 @@ defmodule OctoPi.TUI.Terminal do
   def handle_call({:open_editor, initial_text}, _from, state) do
     result = do_open_editor(initial_text, state)
     {:reply, result, state, next_timeout(state)}
-  end
-
-  def handle_call({:feed_chunk, bin}, _from, state) do
-    state = process_chunk(bin, state)
-    {:reply, :ok, state, next_timeout(state)}
   end
 
   def handle_call({:write, bytes}, _from, state) do
@@ -494,8 +485,12 @@ defmodule OctoPi.TUI.Terminal do
 
   defp remove_subscriber(%{subscribers: subs} = state, pid) do
     case Map.pop(subs, pid) do
-      {nil, _} -> state
-      {ref, rest} -> Process.demonitor(ref, [:flush]) && %{state | subscribers: rest}
+      {nil, _} ->
+        state
+
+      {ref, rest} ->
+        Process.demonitor(ref, [:flush])
+        %{state | subscribers: rest}
     end
   end
 
