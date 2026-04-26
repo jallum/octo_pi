@@ -8,9 +8,15 @@
   "id": "opi-fin.7",
   "labels": [],
   "parent": "opi-fin",
+  "comments": [
+    {
+      "text": "Audit (2026-04-26): UI behaviour landed but UIBridge was per-invocation and orphan-leaked (each session_start, command, and agent event spun up a new linked GenServer with no shutdown). Caused TUI exits when extensions were present. Replaced by direct Interactive UI implementation in opi-fin.15.",
+      "timestamp": "2026-04-26T05:44:22Z"
+    }
+  ],
   "priority": 2,
   "status": "closed",
   "title": "Phase 7: UI behaviour replaces UIContext fn-fields",
   "type": "task",
-  "updated_at": "2026-04-26T00:58:17Z"
+  "updated_at": "2026-04-26T05:44:22Z"
 }
