@@ -1,22 +1,14 @@
 defmodule OctoPi.TUI.StdinFSM do
   @moduledoc """
-  Escape-sequence assembly. Takes raw byte chunks, pattern-matches
-  them into complete sequences (CSI, OSC, SS3, DCS, APC, alt-prefix)
-  + individual printable UTF-8 codepoints, and returns the cooked
-  sequences for the caller to distribute.
+  Stateless escape-sequence decoder. Pattern-matches a binary into a
+  list of complete cooked sequences (CSI, OSC, SS3, DCS, APC,
+  alt-prefix) plus individual UTF-8 codepoints, and returns whatever
+  unresolved tail is left over for the caller to feed back in.
 
-  Pure struct + pure functions: no processes, no timers, no
-  knowledge of the surrounding runtime. The caller owns the buffer
-  state, dispatches events, and decides when (if ever) to call
-  `flush/1` on a buffer that's stuck on an ambiguous prefix.
-
-  ## Disambiguation
-
-  A bare `\\e` at end of buffer could be either the Escape key or
-  the start of an escape sequence arriving in pieces. `process/2`
-  leaves it in the buffer; `pending?/1` reports that more bytes
-  are needed; the caller decides how long to wait before calling
-  `flush/1` to emit it as-is.
+  The caller (Terminal) owns the buffer and decides what to do with
+  the tail — typically: prepend it to the next chunk, and after some
+  idle period emit the tail as-is to disambiguate a bare `\\e` from
+  the start of a longer sequence.
 
   `\\e<char>` where char isn't `[`, `]`, `O`, `P`, or `_` is treated
   as a complete alt-prefix meta sequence and emitted immediately.
@@ -25,47 +17,20 @@ defmodule OctoPi.TUI.StdinFSM do
 
   Upstream pi-mono's StdinBuffer exposes a separate `paste` event
   whose payload is the content between `\\e[200~` and `\\e[201~`
-  and suppresses `data` events during a paste. StdinFSM does not
-  replicate that: paste markers and content are emitted through the
+  and suppresses `data` events during a paste. This module does not
+  replicate that: paste markers and content come back through the
   same channel. Consumers that need paste atomicity collect events
   between the two markers.
   """
 
-  defstruct buffer: ""
-
-  @type t :: %__MODULE__{buffer: binary()}
-
-  @doc "Build a new FSM state."
-  @spec new() :: t()
-  def new, do: %__MODULE__{}
-
   @doc """
-  Feed a chunk of bytes into the FSM. Returns `{state, events}`
-  where `events` is the list of cooked sequences ready to emit.
-  Any unresolved tail is held in `state.buffer` for the next call.
+  Decode `bin` into `{events, tail}`. `events` is the list of
+  complete cooked sequences (in order); `tail` is whatever
+  unresolved bytes remain — typically a partial escape sequence
+  awaiting more data.
   """
-  @spec process(t(), binary()) :: {t(), [binary()]}
-  def process(%__MODULE__{buffer: prev} = state, bin) when is_binary(bin) do
-    {events, remainder} = extract(prev <> bin)
-    {%{state | buffer: remainder}, events}
-  end
-
-  @doc """
-  Flush the buffer as a single sequence. Returns `{state, events}`
-  where `events` is `[]` for an empty buffer or `[buffer]` otherwise.
-  """
-  @spec flush(t()) :: {t(), [binary()]}
-  def flush(%__MODULE__{buffer: ""} = state), do: {state, []}
-  def flush(%__MODULE__{buffer: buf} = state), do: {%{state | buffer: ""}, [buf]}
-
-  @doc "True when the FSM is sitting on an ambiguous partial prefix."
-  @spec pending?(t()) :: boolean()
-  def pending?(%__MODULE__{buffer: ""}), do: false
-  def pending?(%__MODULE__{}), do: true
-
-  @doc "Discard any buffered content without emitting."
-  @spec clear(t()) :: t()
-  def clear(%__MODULE__{} = state), do: %{state | buffer: ""}
+  @spec decode(binary()) :: {[binary()], binary()}
+  def decode(bin) when is_binary(bin), do: extract(bin)
 
   # --- sequence extraction (multi-head pattern matching) ---
 
@@ -99,7 +64,7 @@ defmodule OctoPi.TUI.StdinFSM do
     {[<<"\e", b>> | more], tail}
   end
 
-  # Bare \e at end of buffer — wait for more bytes (or a flush).
+  # Bare \e at end of buffer — wait for more bytes.
   defp extract(<<"\e">>), do: {[], "\e"}
 
   # UTF-8 codepoint.

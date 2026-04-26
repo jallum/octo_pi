@@ -141,7 +141,7 @@ defmodule OctoPi.TUI.Terminal do
       send_sigtstp_fn: send_sigtstp_fn,
       open_editor_fn: open_editor_fn,
       keyboard_mode: :none,
-      fsm: StdinFSM.new(),
+      stdin_buffer: "",
       flush_ms: flush_ms,
       deadlines: %{}
     }
@@ -343,9 +343,9 @@ defmodule OctoPi.TUI.Terminal do
 
   defp process_chunk(bin, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
-    {fsm, events} = StdinFSM.process(state.fsm, bin)
+    {events, tail} = StdinFSM.decode(state.stdin_buffer <> bin)
     Enum.each(events, &emit_stdin_event(state, &1))
-    arm_or_disarm_flush(%{state | fsm: fsm})
+    arm_or_disarm_flush(%{state | stdin_buffer: tail})
   end
 
   defp emit_stdin_event(state, seq) do
@@ -353,11 +353,10 @@ defmodule OctoPi.TUI.Terminal do
     broadcast(state, :stdin_event, {:stdin_event, seq})
   end
 
+  defp arm_or_disarm_flush(%{stdin_buffer: ""} = state), do: disarm_deadline(state, :flush)
+
   defp arm_or_disarm_flush(state) do
-    case StdinFSM.pending?(state.fsm) do
-      false -> disarm_deadline(state, :flush)
-      true -> arm_deadline(state, :flush, System.monotonic_time(:millisecond) + state.flush_ms)
-    end
+    arm_deadline(state, :flush, System.monotonic_time(:millisecond) + state.flush_ms)
   end
 
   defp fire_deadline(:probe, %{keyboard_mode: :probing} = state) do
@@ -367,10 +366,11 @@ defmodule OctoPi.TUI.Terminal do
 
   defp fire_deadline(:probe, state), do: state
 
-  defp fire_deadline(:flush, state) do
-    {fsm, events} = StdinFSM.flush(state.fsm)
-    Enum.each(events, &emit_stdin_event(state, &1))
-    %{state | fsm: fsm}
+  defp fire_deadline(:flush, %{stdin_buffer: ""} = state), do: state
+
+  defp fire_deadline(:flush, %{stdin_buffer: buf} = state) do
+    emit_stdin_event(state, buf)
+    %{state | stdin_buffer: ""}
   end
 
   defp arm_deadline(state, kind, abs_ms) do
