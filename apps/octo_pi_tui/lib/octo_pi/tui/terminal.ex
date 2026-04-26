@@ -156,8 +156,8 @@ defmodule OctoPi.TUI.Terminal do
       # updated group leader and `:io.get_chars/2` reads from the
       # live TTY rather than the noshell null device.
       reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-      tty_fn.("\e[?2004h")
-      tty_fn.("\e[?u")
+      tty_write(base_state, "\e[?2004h")
+      tty_write(base_state, "\e[?u")
 
       state =
         base_state
@@ -232,12 +232,21 @@ defmodule OctoPi.TUI.Terminal do
     {:noreply, state, next_timeout(state)}
   end
 
-  def handle_info(:stdin_eof, state), do: {:stop, :normal, state}
+  def handle_info(:stdin_eof, state) do
+    :telemetry.execute([:octo_pi_tui, :terminal, :stdin_eof], %{}, %{})
+    {:stop, :normal, state}
+  end
 
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
   @impl true
-  def terminate(_reason, state) do
+  def terminate(reason, state) do
+    :telemetry.execute(
+      [:octo_pi_tui, :terminal, :terminate, :start],
+      %{},
+      %{reason: reason, keyboard_mode: state.keyboard_mode, reader_pid: state.reader_pid}
+    )
+
     if not state.skip_sigwinch do
       :gen_event.delete_handler(:erl_signal_server, SigwinchHandler, [])
     end
@@ -245,11 +254,12 @@ defmodule OctoPi.TUI.Terminal do
     if not state.skip_raw_mode do
       disable_keyboard_protocol(state)
       deadline = System.monotonic_time(:millisecond) + state.drain_timeout_ms
-      drain_input(deadline, state.drain_idle_ms)
-      state.tty_fn.("\e[?2004l")
+      drain_input(deadline, state.drain_idle_ms, 0)
+      tty_write(state, "\e[?2004l")
       state.raw_mode_fn.(:exit)
     end
 
+    :telemetry.execute([:octo_pi_tui, :terminal, :terminate, :stop], %{}, %{})
     :ok
   end
 
@@ -295,16 +305,36 @@ defmodule OctoPi.TUI.Terminal do
     :ok
   end
 
-  defp drain_input(deadline_ms, idle_ms) do
+  defp drain_input(deadline_ms, idle_ms, round) do
     remaining = deadline_ms - System.monotonic_time(:millisecond)
 
     if remaining <= 0 do
+      :telemetry.execute(
+        [:octo_pi_tui, :terminal, :drain, :round],
+        %{remaining_ms: remaining, round: round},
+        %{outcome: :deadline}
+      )
+
       :ok
     else
       receive do
-        {:stdin_chunk, _} -> drain_input(deadline_ms, idle_ms)
+        {:stdin_chunk, bin} ->
+          :telemetry.execute(
+            [:octo_pi_tui, :terminal, :drain, :round],
+            %{remaining_ms: remaining, round: round, byte_count: byte_size(bin)},
+            %{outcome: :consumed_chunk, bytes: bin}
+          )
+
+          drain_input(deadline_ms, idle_ms, round + 1)
       after
-        min(remaining, idle_ms) -> :ok
+        min(remaining, idle_ms) ->
+          :telemetry.execute(
+            [:octo_pi_tui, :terminal, :drain, :round],
+            %{remaining_ms: remaining, round: round},
+            %{outcome: :idled}
+          )
+
+          :ok
       end
     end
   end
@@ -312,14 +342,8 @@ defmodule OctoPi.TUI.Terminal do
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
 
-  defp disable_keyboard_protocol(%{keyboard_mode: :kitty} = state) do
-    state.tty_fn.("\e[<0u")
-  end
-
-  defp disable_keyboard_protocol(%{keyboard_mode: :modify_other_keys} = state) do
-    state.tty_fn.("\e[>4m")
-  end
-
+  defp disable_keyboard_protocol(%{keyboard_mode: :kitty} = state), do: tty_write(state, "\e[<0u")
+  defp disable_keyboard_protocol(%{keyboard_mode: :modify_other_keys} = state), do: tty_write(state, "\e[>4m")
   defp disable_keyboard_protocol(_state), do: :ok
 
   # Kitty query response: \e[?<flags>u — starts with \e[? and ends with u.
@@ -331,7 +355,7 @@ defmodule OctoPi.TUI.Terminal do
   defp extract_kitty_flags(_), do: :not_kitty
 
   defp handle_probing_stdin({:kitty, _flags}, _bin, state) do
-    state.tty_fn.("\e[>7u")
+    tty_write(state, "\e[>7u")
     state = state |> Map.put(:keyboard_mode, :kitty) |> disarm_deadline(:probe)
     {:noreply, state, next_timeout(state)}
   end
@@ -353,6 +377,18 @@ defmodule OctoPi.TUI.Terminal do
     broadcast(state, :stdin_event, {:stdin_event, seq})
   end
 
+  defp tty_write(state, bytes) do
+    bin = IO.iodata_to_binary(bytes)
+
+    :telemetry.execute(
+      [:octo_pi_tui, :terminal, :tty_write],
+      %{byte_count: byte_size(bin)},
+      %{bytes: bin}
+    )
+
+    state.tty_fn.(bin)
+  end
+
   defp arm_or_disarm_flush(%{stdin_buffer: ""} = state), do: disarm_deadline(state, :flush)
 
   defp arm_or_disarm_flush(state) do
@@ -360,7 +396,7 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   defp fire_deadline(:probe, %{keyboard_mode: :probing} = state) do
-    state.tty_fn.("\e[>4;2m")
+    tty_write(state, "\e[>4;2m")
     %{state | keyboard_mode: :modify_other_keys}
   end
 
@@ -425,7 +461,15 @@ defmodule OctoPi.TUI.Terminal do
         send(parent, :stdin_eof)
 
       data when is_list(data) or is_binary(data) ->
-        send(parent, {:stdin_chunk, IO.iodata_to_binary(data)})
+        bin = IO.iodata_to_binary(data)
+
+        :telemetry.execute(
+          [:octo_pi_tui, :reader, :read],
+          %{byte_count: byte_size(bin)},
+          %{bytes: bin}
+        )
+
+        send(parent, {:stdin_chunk, bin})
         reader_loop(parent, reader_fn)
     end
   end

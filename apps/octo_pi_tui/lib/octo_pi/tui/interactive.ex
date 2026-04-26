@@ -359,6 +359,15 @@ defmodule OctoPi.TUI.Interactive do
       EventLogger.attach(path)
     end
 
+    case Keyword.get(opts, :trace) do
+      nil ->
+        :ok
+
+      trace_path ->
+        fd = OctoPi.TUI.Tracer.attach(trace_path)
+        Process.put(:tracer_fd, fd)
+    end
+
     extensions = load_extensions(opts, cwd)
     session = start_agent_session(opts)
 
@@ -534,6 +543,11 @@ defmodule OctoPi.TUI.Interactive do
     if fd = Process.get(:debug_render_log) do
       File.close(fd)
       Process.delete(:debug_render_log)
+    end
+
+    if fd = Process.get(:tracer_fd) do
+      OctoPi.TUI.Tracer.detach(fd)
+      Process.delete(:tracer_fd)
     end
 
     :ok

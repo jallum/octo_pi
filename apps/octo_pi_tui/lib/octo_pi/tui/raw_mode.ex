@@ -25,12 +25,20 @@ defmodule OctoPi.TUI.RawMode do
   @spec enter() :: :ok | {:error, term()}
   @dialyzer {:no_match, enter: 0}
   def enter do
+    :telemetry.execute([:octo_pi_tui, :raw_mode, :enter, :start], %{}, %{})
     result = :shell.start_interactive({:noshell, :raw})
+    iexten = TtyNif.clear_iexten()
 
-    case TtyNif.clear_iexten() do
+    case iexten do
       {:error, msg} -> Logger.warning("RawMode: clear_iexten failed: #{msg}")
       _ -> :ok
     end
+
+    :telemetry.execute(
+      [:octo_pi_tui, :raw_mode, :enter, :stop],
+      %{},
+      %{shell_result: result, clear_iexten: iexten}
+    )
 
     result
   end
@@ -47,16 +55,44 @@ defmodule OctoPi.TUI.RawMode do
   @spec exit() :: :ok | {:error, term()}
   @dialyzer {:no_match, exit: 0}
   def exit do
-    case TtyNif.restore_iexten() do
+    :telemetry.execute([:octo_pi_tui, :raw_mode, :exit, :start], %{}, %{})
+
+    restore = TtyNif.restore_iexten()
+
+    case restore do
       {:error, msg} -> Logger.warning("RawMode: restore_iexten failed: #{msg}")
       _ -> :ok
     end
 
-    case TtyNif.flush_input() do
+    :telemetry.execute(
+      [:octo_pi_tui, :raw_mode, :exit, :phase],
+      %{},
+      %{phase: :restore_iexten, result: restore}
+    )
+
+    flushed = TtyNif.flush_input()
+
+    case flushed do
       {:error, msg} -> Logger.warning("RawMode: flush_input failed: #{msg}")
       _ -> :ok
     end
 
-    :shell.start_interactive({:noshell, :cooked})
+    :telemetry.execute(
+      [:octo_pi_tui, :raw_mode, :exit, :phase],
+      %{},
+      %{phase: :flush_input, result: flushed}
+    )
+
+    shell_result = :shell.start_interactive({:noshell, :cooked})
+
+    :telemetry.execute(
+      [:octo_pi_tui, :raw_mode, :exit, :phase],
+      %{},
+      %{phase: :shell_cooked, result: shell_result}
+    )
+
+    :telemetry.execute([:octo_pi_tui, :raw_mode, :exit, :stop], %{}, %{})
+
+    shell_result
   end
 end
