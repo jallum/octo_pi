@@ -97,6 +97,7 @@ defmodule OctoPi.TUI.Interactive do
           extensions: [Extension.t()]
         }
 
+  # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
             sup: nil,
             renderer: nil,
