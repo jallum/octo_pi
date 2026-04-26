@@ -91,7 +91,7 @@ defmodule OctoPi.TUI.Interactive do
           expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
-          custom_widget: {reference(), pid(), map()} | nil,
+          custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()]
         }
@@ -134,90 +134,53 @@ defmodule OctoPi.TUI.Interactive do
             extensions: []
 
   @doc """
-  Build a `UIContext` whose functions send messages to `interactive_pid`.
+  Build a `UIContext` whose functions call into `interactive_pid`.
 
   Extension code calls these functions from its own process; the
-  Interactive GenServer handles the messages and replies.
+  Interactive GenServer handles them via `handle_call/3` and
+  `handle_cast/2`.
   """
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
-    req = fn msg ->
-      ref = make_ref()
-      send(interactive_pid, {:ui_request, self(), ref, msg})
-
-      receive do
-        {:ui_reply, ^ref, value} -> value
-      after
-        5_000 -> raise RuntimeError, "UIContext request timed out: #{inspect(msg)}"
-      end
-    end
-
-    fire = fn msg ->
-      send(interactive_pid, {:ui_fire, msg})
-      :ok
-    end
+    call = fn msg -> GenServer.call(interactive_pid, {:ui_request, msg}, 5_000) end
+    cast = fn msg -> GenServer.cast(interactive_pid, {:ui_fire, msg}) end
 
     UIContext.bind(UIContext.new(), %{
-      get_editor_text: fn -> req.(:get_editor_text) end,
-      get_theme: fn -> req.(:get_theme) end,
-      get_all_themes: fn -> req.(:get_all_themes) end,
-      apply_fg: fn color, text -> req.({:apply_fg, color, text}) end,
-      apply_bg: fn color, text -> req.({:apply_bg, color, text}) end,
-      get_tools_expanded: fn -> req.(:get_tools_expanded) end,
-      set_editor_text: fn text -> fire.({:set_editor_text, text}) end,
-      paste_to_editor: fn text -> fire.({:paste_to_editor, text}) end,
-      set_theme: fn name -> fire.({:set_theme, name}) end,
-      set_tools_expanded: fn val -> fire.({:set_tools_expanded, val}) end,
-      notify: fn text -> fire.({:notify, text}) end,
-      set_status: fn id, text -> fire.({:set_status, id, text}) end,
-      set_working_message: fn msg -> fire.({:set_working_message, msg}) end,
-      set_working_indicator: fn val -> fire.({:set_working_indicator, val}) end,
-      set_hidden_thinking_label: fn label -> fire.({:set_hidden_thinking_label, label}) end,
-      set_widget: fn w -> fire.({:set_widget, w}) end,
-      set_footer: fn f -> fire.({:set_footer, f}) end,
-      set_header: fn h -> fire.({:set_header, h}) end,
-      set_title: fn t -> fire.({:set_title, t}) end,
-      set_editor_component: fn c -> fire.({:set_editor_component, c}) end,
-      add_autocomplete_provider: fn p -> fire.({:add_autocomplete_provider, p}) end,
+      get_editor_text: fn -> call.(:get_editor_text) end,
+      get_theme: fn -> call.(:get_theme) end,
+      get_all_themes: fn -> call.(:get_all_themes) end,
+      apply_fg: fn color, text -> call.({:apply_fg, color, text}) end,
+      apply_bg: fn color, text -> call.({:apply_bg, color, text}) end,
+      get_tools_expanded: fn -> call.(:get_tools_expanded) end,
+      set_editor_text: fn text -> cast.({:set_editor_text, text}) end,
+      paste_to_editor: fn text -> cast.({:paste_to_editor, text}) end,
+      set_theme: fn name -> cast.({:set_theme, name}) end,
+      set_tools_expanded: fn val -> cast.({:set_tools_expanded, val}) end,
+      notify: fn text -> cast.({:notify, text}) end,
+      set_status: fn id, text -> cast.({:set_status, id, text}) end,
+      set_working_message: fn msg -> cast.({:set_working_message, msg}) end,
+      set_working_indicator: fn val -> cast.({:set_working_indicator, val}) end,
+      set_hidden_thinking_label: fn label -> cast.({:set_hidden_thinking_label, label}) end,
+      set_widget: fn w -> cast.({:set_widget, w}) end,
+      set_footer: fn f -> cast.({:set_footer, f}) end,
+      set_header: fn h -> cast.({:set_header, h}) end,
+      set_title: fn t -> cast.({:set_title, t}) end,
+      set_editor_component: fn c -> cast.({:set_editor_component, c}) end,
+      add_autocomplete_provider: fn p -> cast.({:add_autocomplete_provider, p}) end,
       select: fn opts, kw ->
-        ref = make_ref()
-        send(interactive_pid, {:ui_request, self(), ref, {:select, ref, opts, kw}})
-
-        receive do
-          {:ui_reply, ^ref, val} -> val
-        end
+        GenServer.call(interactive_pid, {:ui_request, {:select, opts, kw}}, :infinity)
       end,
       confirm: fn prompt, kw ->
-        ref = make_ref()
-        send(interactive_pid, {:ui_request, self(), ref, {:confirm, ref, prompt, kw}})
-
-        receive do
-          {:ui_reply, ^ref, val} -> val
-        end
+        GenServer.call(interactive_pid, {:ui_request, {:confirm, prompt, kw}}, :infinity)
       end,
       input: fn prompt, kw ->
-        ref = make_ref()
-        send(interactive_pid, {:ui_request, self(), ref, {:input, ref, prompt, kw}})
-
-        receive do
-          {:ui_reply, ^ref, val} -> val
-        end
+        GenServer.call(interactive_pid, {:ui_request, {:input, prompt, kw}}, :infinity)
       end,
       editor: fn content, kw ->
-        ref = make_ref()
-        send(interactive_pid, {:ui_request, self(), ref, {:editor, ref, content, kw}})
-
-        receive do
-          {:ui_reply, ^ref, val} -> val
-        end
+        GenServer.call(interactive_pid, {:ui_request, {:editor, content, kw}}, :infinity)
       end,
       custom: fn term, kw ->
-        ref = make_ref()
-        send(interactive_pid, {:ui_request, self(), ref, {:custom, ref, term, kw}})
-
-        receive do
-          {:ui_reply, ^ref, val} -> val
-        end
+        GenServer.call(interactive_pid, {:ui_request, {:custom, term, kw}}, :infinity)
       end
     })
   end
@@ -329,20 +292,20 @@ defmodule OctoPi.TUI.Interactive do
     {%{state | input: input}, :ok}
   end
 
-  def handle_ui_request(state, {:select, ref, options, opts}) do
-    {%{state | dialog: {:select, ref, options, opts}}, :pending}
+  def handle_ui_request(state, {:select, options, opts}) do
+    {%{state | dialog: {:select, nil, options, opts}}, :pending}
   end
 
-  def handle_ui_request(state, {:confirm, ref, prompt, opts}) do
-    {%{state | dialog: {:confirm, ref, prompt, opts}}, :pending}
+  def handle_ui_request(state, {:confirm, prompt, opts}) do
+    {%{state | dialog: {:confirm, nil, prompt, opts}}, :pending}
   end
 
-  def handle_ui_request(state, {:input, ref, prompt, opts}) do
-    {%{state | dialog: {:input, ref, prompt, opts}}, :pending}
+  def handle_ui_request(state, {:input, prompt, opts}) do
+    {%{state | dialog: {:input, nil, prompt, opts}}, :pending}
   end
 
-  def handle_ui_request(state, {:editor, ref, content, opts}) do
-    {%{state | dialog: {:editor, ref, content, opts}}, :pending}
+  def handle_ui_request(state, {:editor, content, opts}) do
+    {%{state | dialog: {:editor, nil, content, opts}}, :pending}
   end
 
   def handle_ui_request(state, {:register_extension_tool, spec}) do
@@ -350,7 +313,7 @@ defmodule OctoPi.TUI.Interactive do
     {state, :ok}
   end
 
-  def handle_ui_request(state, {:custom, _ref, _factory, _opts}) do
+  def handle_ui_request(state, {:custom, _factory, _opts}) do
     {state, :pending}
   end
 
@@ -537,33 +500,13 @@ defmodule OctoPi.TUI.Interactive do
     advance(%{state | notification: text})
   end
 
-  def handle_info({:ui_request, from, ref, {:custom, ref, factory, _opts}}, state) do
-    interactive_pid = self()
-    tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
-    theme = build_custom_theme(state)
-    done = fn result -> send(interactive_pid, {:custom_done, ref, from, result}) end
-    component = factory.(tui, theme, done)
-    advance(%{state | custom_widget: {ref, from, component}})
-  end
-
-  def handle_info({:custom_done, ref, from, result}, %{custom_widget: {ref, from, _}} = state) do
-    send(from, {:ui_reply, ref, result})
+  def handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do
+    GenServer.reply(from, result)
     advance(%{state | custom_widget: nil})
   end
 
   def handle_info(:force_render, state) do
     advance(state)
-  end
-
-  def handle_info({:ui_request, from, ref, ui_msg}, state) do
-    {new_state, reply} = handle_ui_request(state, ui_msg)
-    if reply != :pending, do: send(from, {:ui_reply, ref, reply})
-    advance(new_state)
-  end
-
-  def handle_info({:ui_fire, ui_msg}, state) do
-    {new_state, _reply} = handle_ui_request(state, ui_msg)
-    advance(new_state)
   end
 
   def handle_info({:bash_done, _id, _output, _exit_code} = msg, state) do
@@ -595,6 +538,38 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
+  def handle_call({:ui_request, {:custom, factory, _kw}}, from, state) do
+    interactive_pid = self()
+    tui = %{request_render: fn -> send(interactive_pid, :force_render) end}
+    theme = build_custom_theme(state)
+    done = fn result -> send(interactive_pid, {:custom_done, from, result}) end
+    component = factory.(tui, theme, done)
+    new_state = render_frame(%{state | custom_widget: {from, component}})
+    {:noreply, new_state, loader_timeout(new_state)}
+  end
+
+  def handle_call({:ui_request, msg}, from, state) do
+    {new_state, reply} = handle_ui_request(state, msg)
+
+    case reply do
+      :pending ->
+        new_state = put_dialog_from(new_state, from)
+        new_state = render_frame(new_state)
+        {:noreply, new_state, loader_timeout(new_state)}
+
+      val ->
+        new_state = render_frame(new_state)
+        {:reply, val, new_state, loader_timeout(new_state)}
+    end
+  end
+
+  @impl GenServer
+  def handle_cast({:ui_fire, ui_msg}, state) do
+    {new_state, _reply} = handle_ui_request(state, ui_msg)
+    advance(new_state)
+  end
+
+  @impl GenServer
   def terminate(_reason, state) do
     shutdown(state)
     safe_raw_mode_exit(state.raw_mode_fn, state.skip_raw_mode)
@@ -613,6 +588,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
   defp loader_timeout(_), do: :infinity
+
+  defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from),
+    do: %{state | dialog: {type, from, a, b}}
+
+  defp put_dialog_from(state, _from), do: state
 
   defp advance(%{exit: true} = state), do: {:stop, :normal, state}
 
@@ -935,7 +915,7 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:key, %Key{event_type: :release}}), do: state
 
-  def handle_event(%{custom_widget: {_, _, component}} = state, {:key, _} = event) when not is_nil(component) do
+  def handle_event(%{custom_widget: {_, component}} = state, {:key, _} = event) when not is_nil(component) do
     component.handle_input.(event)
     state
   end
@@ -1453,7 +1433,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, _, component}, width: width, height: height}, _input_lines) do
+  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
     if len < height, do: List.duplicate("", height - len) ++ lines, else: lines

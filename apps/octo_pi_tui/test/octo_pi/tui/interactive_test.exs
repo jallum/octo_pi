@@ -2069,36 +2069,28 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_ui_request — blocking dialogs" do
     test "select stores pending dialog" do
       options = [%{label: "A", value: :a}, %{label: "B", value: :b}]
-      ref = make_ref()
-      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:select, ref, options, []})
-      assert s.dialog == {:select, ref, options, []}
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:select, options, []})
+      assert s.dialog == {:select, nil, options, []}
     end
 
     test "confirm stores pending dialog" do
-      ref = make_ref()
-      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:confirm, ref, "Sure?", []})
-      assert s.dialog == {:confirm, ref, "Sure?", []}
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:confirm, "Sure?", []})
+      assert s.dialog == {:confirm, nil, "Sure?", []}
     end
 
     test "input stores pending dialog" do
-      ref = make_ref()
-      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:input, ref, "Name:", []})
-      assert s.dialog == {:input, ref, "Name:", []}
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:input, "Name:", []})
+      assert s.dialog == {:input, nil, "Name:", []}
     end
 
     test "editor stores pending dialog" do
-      ref = make_ref()
-
-      {s, :pending} =
-        Interactive.handle_ui_request(%Interactive{}, {:editor, ref, "initial", []})
-
-      assert s.dialog == {:editor, ref, "initial", []}
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:editor, "initial", []})
+      assert s.dialog == {:editor, nil, "initial", []}
     end
 
     test "custom is handled at loop level — handle_ui_request returns pending with no state change" do
-      ref = make_ref()
       factory = fn _tui, _theme, _done -> %{render: fn _ -> [] end, handle_input: fn _ -> :ok end} end
-      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:custom, ref, factory, []})
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:custom, factory, []})
       assert s.custom_widget == nil
       assert s.dialog == nil
     end
@@ -2109,7 +2101,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "render/2 — custom widget" do
     test "renders component output instead of normal UI when custom_widget is set" do
       component = %{render: fn _w -> ["widget line 1", "widget line 2"] end, handle_input: fn _ -> :ok end}
-      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 80, height: 5}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 80, height: 5}
       lines = Interactive.render(state, ["input line"])
       assert "widget line 1" in lines
       assert "widget line 2" in lines
@@ -2118,7 +2110,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "custom widget output is padded to height when shorter" do
       component = %{render: fn _w -> ["only line"] end, handle_input: fn _ -> :ok end}
-      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 80, height: 5}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 80, height: 5}
       lines = Interactive.render(state, [])
       assert length(lines) == 5
       assert "only line" in lines
@@ -2135,7 +2127,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         handle_input: fn _ -> :ok end
       }
 
-      state = %Interactive{custom_widget: {make_ref(), self(), component}, width: 120, height: 5}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 120, height: 5}
       Interactive.render(state, [])
       assert [120] = Agent.get(widths, & &1)
     end
@@ -2153,7 +2145,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         end
       }
 
-      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
       Interactive.handle_event(state, {:key, %Key{key: :enter}})
       assert [{:key, %Key{key: :enter}}] = Agent.get(received, & &1)
     end
@@ -2169,14 +2161,14 @@ defmodule OctoPi.TUI.InteractiveTest do
         end
       }
 
-      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
       Interactive.handle_event(state, {:key, %Key{key: ?x}})
       assert [{:key, %Key{key: ?x}}] = Agent.get(received, & &1)
     end
 
     test "state is unchanged after routing key to custom widget" do
       component = %{render: fn _ -> [] end, handle_input: fn _ -> :ok end}
-      state = %Interactive{custom_widget: {make_ref(), self(), component}}
+      state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
       new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
       assert new_state == state
     end
