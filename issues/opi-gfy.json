@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T13:42:03Z",
+  "description": "Make the Elixir implementation more idiomatic OTP without deviating from pi-mono's design.\n\nFive concrete changes identified in architecture review (see octo_pi.md):\n\n1. Registry.dispatch/3 in Subscribers — atomic lookup+dispatch instead of lookup-then-iterate\n2. Registry.dispatch/3 for TUI Events — same fix in the TUI fan-out path\n3. Interactive → GenServer — the load-bearing refactor; replaces the recursive receive loop with handle_info/2, unlocks deferred replies via GenServer.reply/2\n4. UIContext ref dance → GenServer.call — eliminate the manual make_ref/send/receive pattern in build_ui_context; follows from (3)\n5. Supervise TUI children under one_for_all Supervisor — eliminate trap_exit + manual EXIT handling; shutdown/4 becomes Supervisor.stop/1; follows from (3)\n\nDependency graph:\n```mermaid\ngraph LR\n    A[1. Subscribers dispatch] --\u003e E[done]\n    B[2. TUI Events dispatch] --\u003e E\n    C[3. Interactive GenServer] --\u003e D[4. UIContext refactor]\n    C --\u003e F[5. TUI child Supervisor]\n    D --\u003e E\n    F --\u003e E\n```\n\nWhat to leave alone: Dispatcher pure function, Task.Supervisor.async_stream for tools, Loop as Task, AbortRef via ETS, Subscribers sync/async split.",
+  "id": "opi-gfy",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "OTP idioms: Registry.dispatch, Interactive GenServer, TUI supervision",
+  "type": "epic",
+  "updated_at": "2026-04-26T13:42:03Z"
+}
