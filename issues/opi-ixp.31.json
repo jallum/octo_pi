@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:02:00Z",
+  "description": "**Phase F — Branch summarization. Deps: F1, C3.**\n\nPort `prepareBranchEntries` from `tmp/pi-mono/.../compaction/branch-summarization.ts:185-237`.\n\n**Two-pass design** (this is the key difference from auto-compaction):\n1. Scan ALL entries for `branch_summary` and `compaction` types where `from_hook? != true`; pull `details.{read_files, modified_files}` into `file_ops` (cumulative file tracking even if old context exceeds budget).\n2. Walk newest→oldest adding messages until `token_budget`; also extract `file_ops` from assistant messages. Summary entries get special treatment: include even if over budget when `total_tokens \u003c 0.9 × token_budget`.\n\nReturns `%BranchPreparation{messages, file_ops, total_tokens}`.\n\nTests: cumulative-file-ops case across nested summaries; budget-overflow case.",
+  "id": "opi-ixp.31",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "F2. prepare_branch_entries/2 (two-pass)",
+  "type": "task",
+  "updated_at": "2026-04-26T20:02:00Z"
+}
