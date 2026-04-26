@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.RawMode do
+defmodule OctoPi.TUI.Terminal.RawMode do
   @moduledoc """
   Enter / exit OTP 28's first-class `-noshell` raw submode.
 
@@ -17,7 +17,7 @@ defmodule OctoPi.TUI.RawMode do
   restored even when the TUI crashes.
   """
 
-  alias OctoPi.TUI.TtyNif
+  alias OctoPi.TUI.Terminal.TtyNif
 
   require Logger
 

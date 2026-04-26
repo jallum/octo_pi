@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.SigwinchHandler do
+defmodule OctoPi.TUI.Terminal.SigwinchHandler do
   @moduledoc false
   @behaviour :gen_event
 

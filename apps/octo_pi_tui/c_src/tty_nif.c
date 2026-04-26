@@ -52,4 +52,4 @@ static ErlNifFunc nif_funcs[] = {
     {"restore_iexten", 0, restore_iexten, 0}
 };
 
-ERL_NIF_INIT(Elixir.OctoPi.TUI.TtyNif, nif_funcs, load, NULL, NULL, NULL)
+ERL_NIF_INIT(Elixir.OctoPi.TUI.Terminal.TtyNif, nif_funcs, load, NULL, NULL, NULL)

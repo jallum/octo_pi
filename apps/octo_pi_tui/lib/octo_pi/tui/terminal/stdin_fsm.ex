@@ -1,4 +1,4 @@
-defmodule OctoPi.TUI.StdinFSM do
+defmodule OctoPi.TUI.Terminal.StdinFSM do
   @moduledoc """
   Stateless escape-sequence decoder. Pattern-matches a binary into a
   list of complete cooked sequences (CSI, OSC, SS3, DCS, APC,

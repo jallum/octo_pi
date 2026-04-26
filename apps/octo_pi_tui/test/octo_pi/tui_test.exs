@@ -1,7 +1,7 @@
 defmodule OctoPi.TUITest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.TUI.RawMode
+  alias OctoPi.TUI.Terminal.RawMode
 
   describe "application boot" do
     test "Events registry is started" do

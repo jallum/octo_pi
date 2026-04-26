@@ -1,7 +1,7 @@
-defmodule OctoPi.TUI.StdinFSMTest do
+defmodule OctoPi.TUI.Terminal.StdinFSMTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.TUI.StdinFSM
+  alias OctoPi.TUI.Terminal.StdinFSM
 
   describe "printable chars" do
     test "single ASCII" do

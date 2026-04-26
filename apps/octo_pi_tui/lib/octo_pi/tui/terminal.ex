@@ -48,9 +48,9 @@ defmodule OctoPi.TUI.Terminal do
   use GenServer
 
   alias OctoPi.TUI.Events
-  alias OctoPi.TUI.RawMode
-  alias OctoPi.TUI.SigwinchHandler
-  alias OctoPi.TUI.StdinFSM
+  alias OctoPi.TUI.Terminal.RawMode
+  alias OctoPi.TUI.Terminal.SigwinchHandler
+  alias OctoPi.TUI.Terminal.StdinFSM
 
   # --- public API ---
 

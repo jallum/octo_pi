@@ -45,7 +45,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.KeyParser
   alias OctoPi.TUI.Overlay
-  alias OctoPi.TUI.RawMode
+  alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
