@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "B5. SessionManager.fork/3",
   "type": "task",
-  "updated_at": "2026-04-26T22:13:51.160357Z"
+  "updated_at": "2026-04-26T22:15:20.651273Z"
 }
