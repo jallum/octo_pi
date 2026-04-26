@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-gfy",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Registry.dispatch/3 for TUI Events fan-out",
   "type": "task",
-  "updated_at": "2026-04-26T14:45:02.666565Z"
+  "updated_at": "2026-04-26T14:45:11.558650Z"
 }
