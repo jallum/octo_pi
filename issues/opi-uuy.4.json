@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-uuy.2"
+  ],
   "blocks": [],
   "created": "2026-04-26T01:41:31Z",
   "description": "Replace MessageLog with SessionManager as the history store in Session.State,\nand add new fields needed for compaction and extensions.\n\n## Changes to apps/octo_pi_agent/lib/octo_pi/agent/session/state.ex\n\nRemove:\n  alias OctoPi.Agent.MessageLog\n  messages: MessageLog.t() field (and its default %MessageLog{})\n\nAdd:\n  alias OctoPi.Agent.SessionManager\n  session_manager: SessionManager.t()    default SessionManager.new()\n  is_compacting?: boolean()              default false\n  overflow_recovery_attempted?: boolean() default false\n  compaction_abort_ref: AbortRef.t() | nil default nil\n  base_system_prompt: String.t() | nil   default nil\n    (extensions can override the per-turn system prompt while preserving the base;\n     nil means use system_prompt directly)\n  tool_registry: %{String.t() =\u003e Tool.t()} default %{}\n    (extensions and callers register tools here; active tool list in :tools is\n     a filtered view of this registry)\n  extension_runner: pid() | nil          default nil\n\n## Changes to apps/octo_pi_agent/lib/octo_pi/agent/session.ex\n\nSearch for all references to state.messages (or the :messages key) and update:\n\nAPPEND a message:\n  MessageLog.push(messages, msg) -\u003e SessionManager.append_message(state.session_manager, msg)\n  then: %{state | session_manager: updated_sm}\n\nAPPEND many messages:\n  MessageLog.append_many(messages, list) -\u003e sequential SessionManager.append_message calls\n  (or add a SessionManager.append_messages/2 batch helper)\n\nREAD all messages for telemetry/history:\n  MessageLog.to_list(messages) -\u003e SessionManager.get_branch(state.session_manager)\n  then extract .message from each MessageEntry\n\nCOUNT messages:\n  MessageLog.count(messages) -\u003e length(SessionManager.get_branch(state.session_manager))\n\nThe :run_complete cast from the Loop currently carries {messages :: MessageLog.t(), reason}.\nUpdate the cast shape to {:run_complete, session_manager :: SessionManager.t(), reason}\nand update the handle_cast clause in session.ex accordingly.\n(The Loop itself will be updated in the sibling \"Migrate Loop\" ticket; for now this\nticket just updates the handler to accept the new shape.)\n\nNOTE: This ticket intentionally does NOT update loop.ex. The codebase will not\nfully compile until both this ticket and the \"Migrate Loop\" ticket land. Merge\nthem together or land them in the same PR.\n\n## Tests\n\nRun mix test apps/octo_pi_agent/ after both this and the Loop migration ticket.\nExisting session tests should continue passing.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Migrate Session.State from MessageLog to SessionManager",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:31Z"
+  "updated_at": "2026-04-26T01:41:34Z"
 }
