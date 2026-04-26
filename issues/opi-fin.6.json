@@ -8,9 +8,15 @@
   "id": "opi-fin.6",
   "labels": [],
   "parent": "opi-fin",
+  "comments": [
+    {
+      "text": "Audit (2026-04-26): Host behaviour was defined and 4 extensions migrated to call Host.send_message(ctx.host, ...), but ctx.host was nil at runtime — every Context.new site in interactive.ex (lines 538, 552, 1149) sets ui: but never host:. Calls to GenServer.cast(nil, ...) raised ArgumentError silently caught by safe_call. Runtime wiring landed in opi-fin.14 (Session implements Host directly; no separate Host process).",
+      "timestamp": "2026-04-26T05:44:21Z"
+    }
+  ],
   "priority": 1,
   "status": "closed",
   "title": "Phase 6: Host GenServer replaces API action fn-fields",
   "type": "task",
-  "updated_at": "2026-04-26T00:33:18Z"
+  "updated_at": "2026-04-26T05:44:21Z"
 }
