@@ -43,6 +43,23 @@ defmodule OctoPi.Coder.Session.Entry do
   def decode(%{"type" => "session_info"} = m), do: SessionInfo.decode(m)
   def decode(%{"type" => _} = m), do: Passthrough.decode(m)
 
+  @doc """
+  Ordered key/value pairs for an entry, suitable for byte-stable
+  JSONL emission via `SessionStore.append/2`. Mirrors per-entry
+  `pairs/1` functions; centralized here for typed dispatch.
+  """
+  @spec pairs(t()) :: [{String.t(), term()}]
+  def pairs(%Message{} = e), do: Message.pairs(e)
+  def pairs(%Compaction{} = e), do: Compaction.pairs(e)
+  def pairs(%BranchSummary{} = e), do: BranchSummary.pairs(e)
+  def pairs(%ThinkingLevelChange{} = e), do: ThinkingLevelChange.pairs(e)
+  def pairs(%ModelChange{} = e), do: ModelChange.pairs(e)
+  def pairs(%Label{} = e), do: Label.pairs(e)
+  def pairs(%Custom{} = e), do: Custom.pairs(e)
+  def pairs(%CustomMessage{} = e), do: CustomMessage.pairs(e)
+  def pairs(%SessionInfo{} = e), do: SessionInfo.pairs(e)
+  def pairs(%Passthrough{raw: raw}), do: Enum.map(raw, fn {k, v} -> {to_string(k), v} end)
+
   @spec encode(t()) :: String.t()
   def encode(%Message{} = e), do: Message.encode(e)
   def encode(%Compaction{} = e), do: Compaction.encode(e)
