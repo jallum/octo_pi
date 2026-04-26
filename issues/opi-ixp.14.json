@@ -4,7 +4,8 @@
     "opi-ixp.1"
   ],
   "blocks": [
-    "opi-ixp.16"
+    "opi-ixp.16",
+    "opi-ixp.31"
   ],
   "created": "2026-04-26T20:01:56Z",
   "description": "**Phase C — Pure compaction core. Deps: A1.**\n\nPort from `tmp/pi-mono/.../compaction/utils.ts`:\n- `createFileOps` — `{read: Set, written: Set, edited: Set}`\n- `extractFileOpsFromMessage` (lines 29-56) — scans assistant tool calls named `read` / `write` / `edit`, pulls `path` arg.\n- `computeFileLists` (lines 62-67) — `modified = edited ∪ written`; `read_only = read \\ modified`. Sorted alphabetically.\n- `formatFileOperations` (lines 72-82) — `\u003cread-files\u003e` / `\u003cmodified-files\u003e` XML blocks.\n\nTests: extraction over fixture messages; XML formatting parity.",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "C3. File-op extraction utilities",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:06Z"
+  "updated_at": "2026-04-26T20:02:13Z"
 }
