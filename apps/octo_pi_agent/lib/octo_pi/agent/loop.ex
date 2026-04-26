@@ -33,6 +33,7 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Compaction
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.ExtensionRunner
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.Subscribers
@@ -80,13 +81,17 @@ defmodule OctoPi.Agent.Loop do
     )
 
     dispatch(session, %Event.AgentStart{})
+    emit_extension_hook(state.extension_runner, :agent_start, %{})
+    sm = apply_before_agent_start_hook(state)
 
-    {sm, reason} = loop(session, state, state.session_manager, abort_ref, 1)
+    {sm, reason} = loop(session, state, sm, abort_ref, 1)
 
     dispatch(session, %Event.AgentEnd{
       reason: reason,
       messages: SessionManager.build_session_context(sm).messages
     })
+
+    emit_extension_hook(state.extension_runner, :agent_end, %{reason: reason})
 
     # Session owns the paired [:session, :stop] telemetry emission so
     # both the clean-exit (run_complete cast) and abnormal-exit
@@ -114,8 +119,10 @@ defmodule OctoPi.Agent.Loop do
       )
 
       dispatch(session, %Event.TurnStart{turn: turn})
+      emit_extension_hook(state.extension_runner, :turn_start, %{turn: turn})
       assistant = stream_turn(session, state, sm)
       dispatch(session, %Event.TurnEnd{turn: turn})
+      emit_extension_hook(state.extension_runner, :turn_end, %{turn: turn})
 
       :telemetry.execute(
         [:octo_pi_agent, :turn, :stop],
@@ -280,15 +287,24 @@ defmodule OctoPi.Agent.Loop do
   # Done or Error, synthesize an error assistant rather than folding
   # `nil` into the transcript.
   defp stream_turn(session, state, sm) do
+    session_ctx = SessionManager.build_session_context(sm)
+    runner = state.extension_runner
+
+    messages =
+      case emit_extension_hook(runner, :context, %{messages: session_ctx.messages}) do
+        {:modified, %{messages: m}} -> m
+        _ -> session_ctx.messages
+      end
+
     context = %AIContext{
       system_prompt: state.system_prompt,
-      messages: SessionManager.build_session_context(sm).messages,
+      messages: messages,
       tools: Enum.map(state.tools, &agent_tool_to_ai_tool/1)
     }
 
     stream = state.transport.stream(state.model, context, %StreamOptions{})
 
-    case Enum.reduce(stream, nil, &handle_ai_event(session, &1, &2)) do
+    case Enum.reduce(stream, nil, &handle_ai_event(session, runner, &1, &2)) do
       %{stop_reason: reason} = assistant when not is_nil(reason) -> assistant
       _partial_or_nil -> truncated_stream_assistant(state)
     end
@@ -306,37 +322,40 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp handle_ai_event(session, %AIEvent.Start{partial: p}, _acc) do
+  defp handle_ai_event(session, runner, %AIEvent.Start{partial: p}, _acc) do
     dispatch(session, %Event.MessageStart{partial: p})
+    emit_extension_hook(runner, :message_start, %{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.TextDelta{partial: p}, _acc) do
+  defp handle_ai_event(session, _runner, %AIEvent.TextDelta{partial: p}, _acc) do
     dispatch(session, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.ThinkingDelta{partial: p}, _acc) do
+  defp handle_ai_event(session, _runner, %AIEvent.ThinkingDelta{partial: p}, _acc) do
     dispatch(session, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.ToolCallDelta{partial: p}, _acc) do
+  defp handle_ai_event(session, _runner, %AIEvent.ToolCallDelta{partial: p}, _acc) do
     dispatch(session, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.Done{message: msg}, _acc) do
+  defp handle_ai_event(session, runner, %AIEvent.Done{message: msg}, _acc) do
     dispatch(session, %Event.MessageEnd{message: msg})
+    emit_extension_hook(runner, :message_end, %{message: msg})
     msg
   end
 
-  defp handle_ai_event(session, %AIEvent.Error{message: msg}, _acc) do
+  defp handle_ai_event(session, runner, %AIEvent.Error{message: msg}, _acc) do
     dispatch(session, %Event.MessageEnd{message: msg})
+    emit_extension_hook(runner, :message_end, %{message: msg})
     msg
   end
 
-  defp handle_ai_event(_session, _other, acc), do: acc
+  defp handle_ai_event(_session, _runner, _other, acc), do: acc
 
   # Dispatch tool calls from the assistant turn. Runs in parallel
   # via `Task.Supervisor.async_stream` (linked) under the
@@ -411,22 +430,36 @@ defmodule OctoPi.Agent.Loop do
     end
   end
 
-  # Run the before-hook (may block), execute the tool on `:allow`,
-  # then run the after-hook (may patch). All exceptions from hooks
-  # or the handler are caught and folded into an error result so the
-  # loop keeps running.
+  # Run the extension :tool_call hook (may cancel or modify args), then
+  # the before_tool_call function hook, execute, then the :tool_result hook
+  # and the after_tool_call function hook. All exceptions are folded into
+  # error results so the loop keeps running.
   defp dispatch_with_hooks(session, state, tool, call, abort_ref) do
-    case run_before_hook(state.before_tool_call, call) do
-      {:block, reason} ->
-        error_result("blocked by before_tool_call: #{reason}")
+    runner = state.extension_runner
+    payload = %{tool_call_id: call.id, tool_name: call.name, args: call.arguments}
 
-      :allow ->
-        result = run_tool_handler(session, tool, call, abort_ref)
-        run_after_hook(state.after_tool_call, call, result)
+    case emit_extension_hook(runner, :tool_call, payload) do
+      {:cancelled, reason} ->
+        error_result("blocked by extension: #{inspect(reason)}")
+
+      hook_result ->
+        call = apply_tool_call_args_mod(call, hook_result)
+
+        case run_before_hook(state.before_tool_call, call) do
+          {:block, reason} ->
+            error_result("blocked by before_tool_call: #{reason}")
+
+          :allow ->
+            result = run_tool_handler(session, runner, tool, call, abort_ref)
+            run_after_hook(state.after_tool_call, call, result)
+        end
     end
   end
 
-  defp run_tool_handler(session, tool, call, abort_ref) do
+  defp apply_tool_call_args_mod(call, {:modified, %{args: args}}), do: %{call | arguments: args}
+  defp apply_tool_call_args_mod(call, _hook_result), do: call
+
+  defp run_tool_handler(session, runner, tool, call, abort_ref) do
     on_update = fn partial ->
       dispatch(session, %Event.ToolExecutionUpdate{
         tool_call_id: call.id,
@@ -436,13 +469,19 @@ defmodule OctoPi.Agent.Loop do
 
     params = prepare_params(tool, call.arguments)
 
-    try do
-      case tool.handler.execute(call.id, params, abort_ref, on_update) do
-        {:ok, %Tool.Result{} = r} -> r
-        {:error, reason} -> error_result("handler returned {:error, #{inspect(reason)}}")
+    result =
+      try do
+        case tool.handler.execute(call.id, params, abort_ref, on_update) do
+          {:ok, %Tool.Result{} = r} -> r
+          {:error, reason} -> error_result("handler returned {:error, #{inspect(reason)}}")
+        end
+      rescue
+        e -> error_result(Exception.message(e))
       end
-    rescue
-      e -> error_result(Exception.message(e))
+
+    case emit_extension_hook(runner, :tool_result, %{tool_call_id: call.id, tool_name: call.name, result: result}) do
+      {:modified, %{result: modified}} -> modified
+      _ -> result
     end
   end
 
@@ -523,4 +562,16 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp dispatch(session, event), do: Subscribers.dispatch(session, event)
+
+  defp emit_extension_hook(nil, _type, _payload), do: :ok
+  defp emit_extension_hook(runner, type, payload), do: ExtensionRunner.emit(runner, type, payload)
+
+  defp apply_before_agent_start_hook(%{extension_runner: nil, session_manager: sm}), do: sm
+
+  defp apply_before_agent_start_hook(%{extension_runner: runner, session_manager: sm}) do
+    case ExtensionRunner.emit(runner, :before_agent_start, %{session_manager: sm}) do
+      {:modified, %{prepend_message: msg}} -> SessionManager.append_message(sm, msg)
+      _ -> sm
+    end
+  end
 end

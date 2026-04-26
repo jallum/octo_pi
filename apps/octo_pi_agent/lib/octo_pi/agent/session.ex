@@ -142,9 +142,15 @@ defmodule OctoPi.Agent.Session do
     if store.session.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      sm = SessionManager.append_messages(store.session.session_manager, msgs)
-      session = %{store.session | session_manager: sm}
-      {:reply, :ok, start_run(%{store | session: session})}
+      case apply_input_hook(msgs, store.session.extension_runner) do
+        {:cancel, _reason} ->
+          {:reply, :ok, store}
+
+        {:ok, processed} ->
+          sm = SessionManager.append_messages(store.session.session_manager, processed)
+          session = %{store.session | session_manager: sm}
+          {:reply, :ok, start_run(%{store | session: session})}
+      end
     end
   end
 
@@ -367,8 +373,7 @@ defmodule OctoPi.Agent.Session do
 
   defp on_compaction_done(
          store,
-         {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before},
-          from_extension}
+         {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}, from_extension}
        ) do
     sm =
       SessionManager.append_compaction(store.session.session_manager, summary, first_kept_id, tokens_before,
@@ -577,6 +582,22 @@ defmodule OctoPi.Agent.Session do
   end
 
   defp emit_session_compact_hook(_sm, _from_extension, nil), do: :ok
+
+  defp apply_input_hook(msgs, nil), do: {:ok, msgs}
+
+  defp apply_input_hook(msgs, runner) do
+    Enum.reduce_while(msgs, {:ok, []}, fn
+      %User{content: text} = msg, {:ok, acc} when is_binary(text) ->
+        case ExtensionRunner.emit(runner, :input, %{text: text, images: []}) do
+          {:cancelled, reason} -> {:halt, {:cancel, reason}}
+          {:modified, %{text: new_text}} -> {:cont, {:ok, acc ++ [%{msg | content: new_text}]}}
+          _ -> {:cont, {:ok, acc ++ [msg]}}
+        end
+
+      msg, {:ok, acc} ->
+        {:cont, {:ok, acc ++ [msg]}}
+    end)
+  end
 
   defp maybe_start_extension_runner(_session_pid, []), do: nil
 
