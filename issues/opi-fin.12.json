@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-fin.11"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-fin",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Move Extension framework: agent app to coder app",
   "type": "task",
-  "updated_at": "2026-04-26T05:44:01Z"
+  "updated_at": "2026-04-26T05:58:24Z"
 }
