@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-fin",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Move Extension framework: agent app to coder app",
   "type": "task",
-  "updated_at": "2026-04-26T05:58:24Z"
+  "updated_at": "2026-04-26T13:44:39.061084Z"
 }
