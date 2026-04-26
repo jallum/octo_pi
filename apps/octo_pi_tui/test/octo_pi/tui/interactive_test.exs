@@ -23,7 +23,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — keyboard input" do
     test "printable char is inserted into the Input" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s = Interactive.handle_event(s, {:char, "h"})
+      s = Interactive.handle_event(s, {:key, %Key{key: ?h}})
       assert s.input.value == "h"
       assert s.input.cursor == 1
     end
@@ -223,9 +223,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "paste markers buffer chars and insert atomically" do
       s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
       s = Interactive.handle_event(s, :paste_start)
-      s = Interactive.handle_event(s, {:char, "b"})
-      s = Interactive.handle_event(s, {:char, "o"})
-      s = Interactive.handle_event(s, {:char, "o"})
+      s = Interactive.handle_event(s, {:key, %Key{key: ?b}})
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o}})
+      s = Interactive.handle_event(s, {:key, %Key{key: ?o}})
       s = Interactive.handle_event(s, :paste_end)
       assert s.input.value == "helloboo world"
       assert s.paste_buffer == nil
@@ -1482,7 +1482,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
-      s2 = Interactive.handle_event(s, {:char, "?"})
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
       assert s2.banner.expanded
     end
 
@@ -1491,7 +1491,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       banner = WelcomeBanner.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, banner: banner, theme: theme}
 
-      s2 = Interactive.handle_event(s, {:char, "?"})
+      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
       assert s2.input.value == "hello?"
       refute s2.banner.expanded
     end
@@ -2027,15 +2027,15 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "typing / activates autocomplete in the input" do
-      s = Interactive.handle_event(state_with_autocomplete(), {:char, "/"})
+      s = Interactive.handle_event(state_with_autocomplete(), {:key, %Key{key: ?/}})
       assert s.input.autocomplete_active
     end
 
     test "typing / then h narrows autocomplete to /help" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:char, "/"})
-        |> Interactive.handle_event({:char, "h"})
+        |> Interactive.handle_event({:key, %Key{key: ?/}})
+        |> Interactive.handle_event({:key, %Key{key: ?h}})
 
       assert s.input.autocomplete_active
       assert Enum.all?(s.input.autocomplete_suggestions, &String.starts_with?(&1.value, "/h"))
@@ -2044,8 +2044,8 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Enter with autocomplete active dispatches slash command and clears input" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:char, "/"})
-        |> Interactive.handle_event({:char, "h"})
+        |> Interactive.handle_event({:key, %Key{key: ?/}})
+        |> Interactive.handle_event({:key, %Key{key: ?h}})
         |> Interactive.handle_event({:key, %Key{key: :enter}})
 
       refute s.input.autocomplete_active
@@ -2056,8 +2056,8 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Tab with autocomplete active fills in suggestion without submitting" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:char, "/"})
-        |> Interactive.handle_event({:char, "h"})
+        |> Interactive.handle_event({:key, %Key{key: ?/}})
+        |> Interactive.handle_event({:key, %Key{key: ?h}})
         |> Interactive.handle_event({:key, %Key{key: :tab}})
 
       refute s.input.autocomplete_active
@@ -2170,8 +2170,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       state = %Interactive{custom_widget: {make_ref(), self(), component}}
-      Interactive.handle_event(state, {:char, "x"})
-      assert [{:char, "x"}] = Agent.get(received, & &1)
+      Interactive.handle_event(state, {:key, %Key{key: ?x}})
+      assert [{:key, %Key{key: ?x}}] = Agent.get(received, & &1)
     end
 
     test "state is unchanged after routing key to custom widget" do

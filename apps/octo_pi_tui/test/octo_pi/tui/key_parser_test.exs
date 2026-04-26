@@ -25,13 +25,13 @@ defmodule OctoPi.TUI.KeyParserTest do
   end
 
   describe "printable chars" do
-    test "ASCII letter", do: assert({:char, "a"} = KeyParser.parse("a"))
-    test "ASCII digit", do: assert({:char, "5"} = KeyParser.parse("5"))
-    test "ASCII symbol", do: assert({:char, "!"} = KeyParser.parse("!"))
-    test "space", do: assert({:char, " "} = KeyParser.parse(" "))
+    test "ASCII letter", do: assert({:key, %Key{key: ?a}} = KeyParser.parse("a"))
+    test "ASCII digit", do: assert({:key, %Key{key: ?5}} = KeyParser.parse("5"))
+    test "ASCII symbol", do: assert({:key, %Key{key: ?!}} = KeyParser.parse("!"))
+    test "space", do: assert({:key, %Key{key: ?\s}} = KeyParser.parse(" "))
 
-    test "non-ASCII Unicode (accented)", do: assert({:char, "é"} = KeyParser.parse("é"))
-    test "non-ASCII Unicode (CJK)", do: assert({:char, "日"} = KeyParser.parse("日"))
+    test "non-ASCII Unicode (accented)", do: assert({:key, %Key{key: 0xE9}} = KeyParser.parse("é"))
+    test "non-ASCII Unicode (CJK)", do: assert({:key, %Key{key: 0x65E5}} = KeyParser.parse("日"))
   end
 
   describe "named special keys" do
@@ -493,27 +493,27 @@ defmodule OctoPi.TUI.KeyParserTest do
 
   describe "Kitty CSI-u — keypad functional keys" do
     test "keypad 0 (57399)" do
-      assert {:char, "0"} = KeyParser.parse("\e[57399u")
+      assert {:key, %Key{key: ?0}} = KeyParser.parse("\e[57399u")
     end
 
     test "keypad 1 (57400)" do
-      assert {:char, "1"} = KeyParser.parse("\e[57400u")
+      assert {:key, %Key{key: ?1}} = KeyParser.parse("\e[57400u")
     end
 
     test "keypad . (57409)" do
-      assert {:char, "."} = KeyParser.parse("\e[57409u")
+      assert {:key, %Key{key: ?.}} = KeyParser.parse("\e[57409u")
     end
 
     test "keypad / (57410)" do
-      assert {:char, "/"} = KeyParser.parse("\e[57410u")
+      assert {:key, %Key{key: ?/}} = KeyParser.parse("\e[57410u")
     end
 
     test "keypad + (57413)" do
-      assert {:char, "+"} = KeyParser.parse("\e[57413u")
+      assert {:key, %Key{key: ?+}} = KeyParser.parse("\e[57413u")
     end
 
     test "keypad , (57416)" do
-      assert {:char, ","} = KeyParser.parse("\e[57416u")
+      assert {:key, %Key{key: ?,}} = KeyParser.parse("\e[57416u")
     end
 
     test "keypad left (57417)" do

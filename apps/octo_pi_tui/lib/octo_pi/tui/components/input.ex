@@ -170,7 +170,7 @@ defmodule OctoPi.TUI.Components.Input do
   @spec set_value(t(), String.t()) :: t()
   def set_value(%__MODULE__{cursor: c} = s, value), do: %{s | value: value, cursor: min(c, String.length(value))}
 
-  @doc "Insert a char at the cursor (from KeyParser {:char, _} events)."
+  @doc "Insert a char at the cursor."
   @spec insert(t(), String.t()) :: t()
   def insert(%__MODULE__{value: v, cursor: c} = s, char) do
     s = if whitespace?(char) or s.last_action != :type_word, do: push_undo(s), else: s

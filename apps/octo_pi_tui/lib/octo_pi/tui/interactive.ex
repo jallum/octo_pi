@@ -919,7 +919,7 @@ defmodule OctoPi.TUI.Interactive do
   @doc """
   Apply an event to a state and return the updated state.
   Events:
-    * `{:key, %Key{}}` or `{:char, binary}` — keyboard input.
+    * `{:key, %Key{}}` — keyboard input (all keys including printable chars).
     * `{:octo_pi_agent_event, event}` — from the Agent subscription.
     * `{:resize, w, h}` — from Terminal's SIGWINCH broadcast.
   """
@@ -928,11 +928,6 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, {:key, %Key{event_type: :release}}), do: state
 
   def handle_event(%{custom_widget: {_, _, component}} = state, {:key, _} = event) when not is_nil(component) do
-    component.handle_input.(event)
-    state
-  end
-
-  def handle_event(%{custom_widget: {_, _, component}} = state, {:char, _} = event) when not is_nil(component) do
     component.handle_input.(event)
     state
   end
@@ -972,18 +967,13 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, :paste_start), do: %{state | paste_buffer: ""}
 
-  def handle_event(%{paste_buffer: buf} = state, {:char, c}) when is_binary(buf), do: %{state | paste_buffer: buf <> c}
+  def handle_event(%{paste_buffer: buf} = state, {:key, %Key{key: cp}}) when is_binary(buf) and is_integer(cp),
+    do: %{state | paste_buffer: buf <> <<cp::utf8>>}
 
   def handle_event(%{paste_buffer: buf, input: input} = state, :paste_end) when is_binary(buf),
     do: %{state | input: Components.Input.paste(input, buf), paste_buffer: nil}
 
   def handle_event(state, :paste_end), do: %{state | paste_buffer: nil}
-
-  def handle_event(%{input: %{value: ""}, banner: %_{} = banner} = state, {:char, "?"}) do
-    %{state | banner: Components.WelcomeBanner.handle_key(banner, %Key{key: ??})}
-  end
-
-  def handle_event(%{input: input} = state, {:char, c}), do: %{state | input: Components.Input.insert(input, c)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
     fire_extension_event(state.extensions, :agent_start, state)
@@ -1164,6 +1154,12 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
+
+  defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
+    do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
+
+  defp handle_event_key(%{input: input} = state, %Key{key: cp}) when is_integer(cp),
+    do: %{state | input: Components.Input.insert(input, <<cp::utf8>>)}
 
   defp handle_event_key(%{input: input} = state, %Key{} = key) do
     kb = get_keybindings(state)

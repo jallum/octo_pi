@@ -1,7 +1,6 @@
 defmodule OctoPi.TUI.KeyParser do
   @moduledoc """
-  Pure function: raw byte sequence → `{:key, %Key{}}` | `{:char,
-  binary}` | `:paste_start | :paste_end | :unknown`.
+  Pure function: raw byte sequence → `{:key, %Key{}}` | `:paste_start | :paste_end | :unknown`.
 
   Takes a *complete* escape sequence (one the stdin FSM has
   already decided is terminated) plus plain printable input, and
@@ -10,7 +9,7 @@ defmodule OctoPi.TUI.KeyParser do
 
   Supported:
 
-    * Printable ASCII + Unicode → `{:char, binary}`
+    * Printable ASCII + Unicode → `{:key, %Key{key: codepoint}}`
     * C0 controls: `\\r` / `\\n` (enter), `\\t` (tab), `\\e`
       (escape), `\\x7f` / `\\b` (backspace), `\\x01..\\x1a` as
       Ctrl+letter, `\\x00` as Ctrl+Space, `\\x1c..\\x1f` as
@@ -34,7 +33,7 @@ defmodule OctoPi.TUI.KeyParser do
   # --- public entry point (multi-head dispatch) ---
 
   @spec parse(binary()) ::
-          {:key, Key.t()} | {:char, binary()} | :paste_start | :paste_end | :unknown
+          {:key, Key.t()} | :paste_start | :paste_end | :unknown
 
   # Bracketed paste markers come first (concrete byte match).
   def parse("\e[200~"), do: :paste_start
@@ -84,10 +83,10 @@ defmodule OctoPi.TUI.KeyParser do
   def parse(<<"\e", b::8>>), do: alt_prefix(b)
 
   # Printable ASCII.
-  def parse(<<b::8>> = c) when b >= 32 and b < 127, do: {:char, c}
+  def parse(<<b::8>>) when b >= 32 and b < 127, do: {:key, %Key{key: b}}
 
-  # Printable Unicode (anything that looks like a grapheme).
-  def parse(<<_::utf8, _::binary>> = bin), do: {:char, bin}
+  # Printable Unicode (non-ASCII codepoint).
+  def parse(<<cp::utf8, _::binary>>) when cp >= 128, do: {:key, %Key{key: cp}}
 
   def parse(_), do: :unknown
 
@@ -349,9 +348,6 @@ defmodule OctoPi.TUI.KeyParser do
 
   defp build_kitty_key(raw_cp, base, modifiers, event) do
     case keypad_map(raw_cp) do
-      {:char_key, c} when modifiers == [] and event == :press ->
-        {:char, <<c::utf8>>}
-
       {:char_key, c} ->
         {:key, %Key{key: c, modifiers: modifiers, event_type: event}}
 
