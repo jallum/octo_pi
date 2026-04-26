@@ -31,6 +31,7 @@ defmodule OctoPi.Agent.Loop do
   """
 
   alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Compaction
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.SessionManager
@@ -38,8 +39,17 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Event, as: AIEvent
+  alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.ToolCall
+
+  @overflow_error_patterns [
+    "context window",
+    "too long",
+    "maximum context",
+    "prompt is too long",
+    "reduce the length"
+  ]
 
   # Upper bound on concurrent tool tasks for a single batch. A
   # pathological model reply with dozens of parallel calls would
@@ -105,7 +115,6 @@ defmodule OctoPi.Agent.Loop do
 
       dispatch(session, %Event.TurnStart{turn: turn})
       assistant = stream_turn(session, state, sm)
-      updated = SessionManager.append_message(sm, assistant)
       dispatch(session, %Event.TurnEnd{turn: turn})
 
       :telemetry.execute(
@@ -114,7 +123,17 @@ defmodule OctoPi.Agent.Loop do
         %{turn: turn, stop_reason: assistant.stop_reason}
       )
 
-      continue_or_stop(session, state, updated, assistant, abort_ref, turn)
+      # Check overflow BEFORE appending the assistant to the transcript.
+      # If overflow and recovery not yet attempted, compact and retry.
+      # If overflow but already attempted, fall through and append normally.
+      case check_overflow(assistant, state.model) do
+        {:overflow, kind} when not state.overflow_recovery_attempted? ->
+          handle_overflow(session, state, sm, kind, abort_ref, turn)
+
+        _ ->
+          updated = SessionManager.append_message(sm, assistant)
+          continue_or_stop(session, state, updated, assistant, abort_ref, turn)
+      end
     end
   end
 
@@ -128,17 +147,124 @@ defmodule OctoPi.Agent.Loop do
     loop(session, state, SessionManager.append_messages(updated, tool_results), ref, turn + 1)
   end
 
-  # Terminal stop — drain the follow-up queue. If anything was
-  # queued, fold it in and keep looping; otherwise exit with the
-  # stop reason.
-  defp continue_or_stop(session, state, updated, %{stop_reason: reason}, abort_ref, turn) do
+  # Terminal stop — check threshold compaction, drain the follow-up queue.
+  defp continue_or_stop(session, state, updated, %{stop_reason: reason} = assistant, abort_ref, turn) do
+    sm = maybe_compact_threshold(session, state, updated, assistant)
+
     case Session.drain_follow_up(session) do
       [] ->
-        {updated, reason}
+        {sm, reason}
 
       followups ->
-        loop(session, state, SessionManager.append_messages(updated, followups), abort_ref, turn + 1)
+        loop(session, state, SessionManager.append_messages(sm, followups), abort_ref, turn + 1)
     end
+  end
+
+  # ── Overflow and compaction helpers ─────────────────────────────────────────
+
+  # Check if the assistant response indicates a context overflow.
+  defp check_overflow(%{stop_reason: :error, error_message: msg}, _model) when is_binary(msg) do
+    lower = String.downcase(msg)
+
+    if Enum.any?(@overflow_error_patterns, &String.contains?(lower, &1)) do
+      {:overflow, :error_message}
+    else
+      :ok
+    end
+  end
+
+  defp check_overflow(%{usage: usage}, %{context_window: cw}) when is_integer(cw) and cw > 0 do
+    if usage && usage.input >= cw, do: {:overflow, :silent}, else: :ok
+  end
+
+  defp check_overflow(_assistant, _model), do: :ok
+
+  # Handle a detected overflow: compact and retry, or fall through if already tried.
+  defp handle_overflow(session, state, sm, _kind, abort_ref, turn) do
+    state = %{state | overflow_recovery_attempted?: true}
+    GenServer.call(session, :set_overflow_recovery_attempted)
+
+    dispatch(session, %Event.CompactionStart{reason: :overflow})
+
+    # Use keep_recent_tokens: 0 to force a cut regardless of session size.
+    # Overflow is proof the context is full, so we must compact even if the
+    # estimated byte count is below the normal threshold.
+    case Compaction.compact(sm, state.transport, state.model, keep_recent_tokens: 0) do
+      {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}} ->
+        sm = SessionManager.append_compaction(sm, summary, first_kept_id, tokens_before)
+        GenServer.cast(session, {:update_session_manager, sm})
+        result = %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}
+        dispatch(session, %Event.CompactionEnd{reason: :overflow, aborted?: false, will_retry?: true, result: result})
+        loop(session, state, sm, abort_ref, turn)
+
+      {:error, reason} ->
+        msg = "compaction failed: #{inspect(reason)}"
+
+        dispatch(session, %Event.CompactionEnd{
+          reason: :overflow,
+          aborted?: true,
+          will_retry?: false,
+          error_message: msg
+        })
+
+        error_assistant = error_assistant(state, msg)
+        {SessionManager.append_message(sm, error_assistant), :error}
+    end
+  end
+
+  # Run threshold-based proactive compaction if the session is approaching the
+  # context limit (>85% of context_window). Does NOT retry — just compacts and
+  # continues. Returns the (possibly updated) SessionManager.
+  defp maybe_compact_threshold(session, state, sm, assistant) do
+    cw = state.model.context_window
+    input = assistant.usage && assistant.usage.input
+
+    if is_integer(cw) and cw > 0 and is_integer(input) and input > cw * 0.85 and
+         not state.overflow_recovery_attempted? do
+      dispatch(session, %Event.CompactionStart{reason: :threshold})
+
+      case Compaction.compact(sm, state.transport, state.model) do
+        {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}} ->
+          sm = SessionManager.append_compaction(sm, summary, first_kept_id, tokens_before)
+          GenServer.cast(session, {:update_session_manager, sm})
+          result = %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}
+
+          dispatch(session, %Event.CompactionEnd{
+            reason: :threshold,
+            aborted?: false,
+            will_retry?: false,
+            result: result
+          })
+
+          sm
+
+        {:error, reason} ->
+          msg = "threshold compaction failed: #{inspect(reason)}"
+
+          dispatch(session, %Event.CompactionEnd{
+            reason: :threshold,
+            aborted?: true,
+            will_retry?: false,
+            error_message: msg
+          })
+
+          sm
+      end
+    else
+      sm
+    end
+  end
+
+  defp error_assistant(state, message) do
+    %Assistant{
+      api: state.model.api,
+      provider: state.model.provider,
+      model: state.model.id,
+      timestamp: :os.system_time(:millisecond),
+      content: [],
+      stop_reason: :error,
+      error_message: message
+    }
   end
 
   # Turn 1's messages are the initial transcript — no steering to
@@ -169,7 +295,7 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp truncated_stream_assistant(state) do
-    %OctoPi.AI.Message.Assistant{
+    %Assistant{
       api: state.model.api,
       provider: state.model.provider,
       model: state.model.id,

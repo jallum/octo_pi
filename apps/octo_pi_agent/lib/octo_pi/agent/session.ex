@@ -214,7 +214,15 @@ defmodule OctoPi.Agent.Session do
     end
   end
 
+  def handle_call(:set_overflow_recovery_attempted, _from, store) do
+    {:reply, :ok, put_in(store.session.overflow_recovery_attempted?, true)}
+  end
+
   @impl true
+  def handle_cast({:update_session_manager, sm}, store) do
+    {:noreply, put_in(store.session.session_manager, sm)}
+  end
+
   def handle_cast({:run_complete, session_manager, reason}, store) do
     emit_session_stop(store.session, reason, length(session_manager.entries))
 

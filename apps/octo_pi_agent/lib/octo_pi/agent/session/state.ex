@@ -66,7 +66,8 @@ defmodule OctoPi.Agent.Session.State do
           compaction_abort_ref: AbortRef.t() | nil,
           base_system_prompt: String.t() | nil,
           tool_registry: %{String.t() => Tool.t()},
-          extension_runner: pid() | nil
+          extension_runner: pid() | nil,
+          compaction_queue: [[term()]]
         }
 
   defstruct [
@@ -92,6 +93,7 @@ defmodule OctoPi.Agent.Session.State do
     pending_tool_calls: MapSet.new(),
     steering_queue: %PendingMessageQueue{items: :queue.new()},
     follow_up_queue: %PendingMessageQueue{items: :queue.new()},
-    tool_registry: %{}
+    tool_registry: %{},
+    compaction_queue: []
   ]
 end
