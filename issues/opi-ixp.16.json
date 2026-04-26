@@ -6,7 +6,9 @@
     "opi-ixp.13",
     "opi-ixp.14"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.20"
+  ],
   "created": "2026-04-26T20:01:56Z",
   "description": "**Phase C — Pure compaction core. Deps: C1, C2, C3, B6.**\n\nPort `prepareCompaction` from `tmp/pi-mono/.../compaction/compaction.ts:614-689`.\n\nSequence:\n1. Guard against re-compacting last entry (compaction.ts:618-619).\n2. Scan back for previous `CompactionEntry` — extract `previous_summary` and `boundary_start = first_kept_entry_id`.\n3. Recompute `tokens_before` from rebuilt context via B6's `build_session_context/2` (NOT from trigger-time value).\n4. Call `find_cut_point` (C2).\n5. Slice `messages_to_summarize` and (if split) `turn_prefix_messages`.\n6. Accumulate `file_ops` from messages + previous entry's `details` (skip if `from_hook?: true` — pi-mono compaction.ts:41-69).\n\nReturns `%CompactionPreparation{first_kept_entry_id, messages_to_summarize, turn_prefix_messages, is_split_turn?, tokens_before, previous_summary, file_ops, settings}`.\n\nTests: port the prep cases from `agent-session-compaction.test.ts`.",
   "id": "opi-ixp.16",
@@ -16,5 +18,5 @@
   "status": "open",
   "title": "C5. Compaction.prepare/2 → %CompactionPreparation{}",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:07Z"
+  "updated_at": "2026-04-26T20:02:08Z"
 }
