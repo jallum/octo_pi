@@ -4,14 +4,15 @@
   "blocks": [
     "opi-uuy.2"
   ],
+  "closed_at": "2026-04-26T02:49:57Z",
   "created": "2026-04-26T01:41:31Z",
   "description": "The SessionManager stores all session history as typed SessionEntry structs instead\nof raw messages. Each entry has a base set of fields plus type-specific fields.\n\n## Base fields (all entry types)\n\n  id         — 8-character lowercase hex, unique within the session\n  parent_id  — id of predecessor entry; nil for the root entry\n  timestamp  — DateTime.utc_now() serialized as ISO 8601 string\n\n## Entry types to define\n\nPort from tmp/pi-mono/packages/coding-agent/src/core/session-manager.ts lines 44-147.\n\n1. MessageEntry         — wraps a User | Assistant | ToolResult message\n   extra fields: message :: OctoPi.Agent.Message.t()\n\n2. CompactionEntry      — stores a context-compaction summary\n   extra fields: summary :: String.t(), first_kept_entry_id :: String.t(),\n                 tokens_before :: non_neg_integer(), details :: term(),\n                 from_hook? :: boolean()\n   NOTE: first_kept_entry_id points to the oldest MessageEntry still inside\n   the LLM context window after compaction.\n\n3. BranchSummaryEntry   — created when navigating the session tree\n   extra fields: from_id :: String.t(), summary :: String.t(),\n                 details :: term(), from_hook? :: boolean()\n\n4. CustomEntry          — extension state storage; NOT sent to the LLM\n   extra fields: custom_type :: String.t(), data :: term()\n\n5. CustomMessageEntry   — extension-injected messages that DO go to the LLM\n   extra fields: custom_type :: String.t(),\n                 content :: String.t() | [content_block()],\n                 display :: boolean(), details :: term()\n   NOTE: display: false = hidden from TUI; display: true = rendered in UI\n\n6. ModelChangeEntry     — records model switches mid-session\n   extra fields: provider :: atom(), model_id :: String.t()\n\n7. LabelEntry           — user-defined bookmarks\n   extra fields: entry_id :: String.t(), label :: String.t() | nil\n   NOTE: label: nil removes the label from the referenced entry\n\n8. SessionInfoEntry     — session-level metadata\n   extra fields: display_name :: String.t()\n\n## generate_id/1\n\nImplement SessionEntry.generate_id/1 :: (MapSet.t(String.t())) -\u003e String.t()\n\n  :crypto.strong_rand_bytes(4) |\u003e Base.encode16(case: :lower)\n\nRetry until the generated id is not in the existing-ids set.\n\n## File layout\n\nCreate apps/octo_pi_agent/lib/octo_pi/agent/session_entry.ex.\nUse nested defmodule pattern matching event.ex (each type is a submodule, e.g.\nSessionEntry.MessageEntry, SessionEntry.CompactionEntry, etc.).\nDefine OctoPi.Agent.SessionEntry.t() as the union type.\n\n## Tests\n\nCreate apps/octo_pi_agent/test/octo_pi/agent/session_entry_test.exs.\n  - generate_id/1 produces 8-char lowercase hex strings\n  - generate_id/1 avoids IDs already in the set\n  - each struct has id, parent_id, timestamp fields\n  - each struct has its type-specific fields",
   "id": "opi-uuy.1",
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Define SessionEntry types",
   "type": "task",
-  "updated_at": "2026-04-26T02:47:18Z"
+  "updated_at": "2026-04-26T02:49:57Z"
 }
