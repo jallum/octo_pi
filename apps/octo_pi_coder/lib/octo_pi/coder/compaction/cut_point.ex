@@ -20,11 +20,14 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   travel with the kept window. A pre-existing `compaction` entry
   is treated as a hard left-edge.
 
-  Note: bash_execution / branchSummary / compactionSummary
-  message-role heads are deferred to opi-ixp.43; they don't exist
-  as `OctoPi.AI.Message` variants yet.
+  Per-message token estimates are delegated to
+  `OctoPi.Coder.Compaction.Tokens.estimate_tokens/1` (which accepts
+  both typed structs and raw `entry.message` maps). Adding
+  bashExecution / branchSummary / compactionSummary message-role
+  heads to that estimator is opi-ixp.43.
   """
 
+  alias OctoPi.Coder.Compaction.Tokens
   alias OctoPi.Coder.Session.Entry
 
   defmodule Result do
@@ -177,64 +180,6 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   defp cut_point?(%Entry.CustomMessage{}), do: true
   defp cut_point?(_), do: false
 
-  # ---- per-entry token estimate -----------------------------------------
-
-  # Estimates from the raw `entry.message` map (decoded JSON), to
-  # match upstream's `estimateTokens(entry.message)` call site.
-  # Keeping this local — it duplicates the typed
-  # `Tokens.estimate_tokens/1` shape — until opi-ixp.43 unifies the
-  # two paths and adds bashExecution / branchSummary /
-  # compactionSummary roles.
-
-  defp estimate_message_tokens(%Entry.Message{message: %{"role" => role} = m}) do
-    ceil_div4(message_chars(role, m))
-  end
-
+  defp estimate_message_tokens(%Entry.Message{message: m}), do: Tokens.estimate_tokens(m)
   defp estimate_message_tokens(_), do: 0
-
-  defp message_chars("user", %{"content" => content}), do: text_chars(content)
-
-  defp message_chars("assistant", %{"content" => blocks}) when is_list(blocks),
-    do: Enum.reduce(blocks, 0, &(&2 + assistant_block_chars(&1)))
-
-  defp message_chars("toolResult", %{"content" => content}), do: tool_result_chars(content)
-  defp message_chars(_, _), do: 0
-
-  defp text_chars(s) when is_binary(s), do: byte_size(s)
-
-  defp text_chars(blocks) when is_list(blocks) do
-    Enum.reduce(blocks, 0, fn
-      %{"type" => "text", "text" => t}, acc when is_binary(t) -> acc + byte_size(t)
-      _, acc -> acc
-    end)
-  end
-
-  defp text_chars(_), do: 0
-
-  defp assistant_block_chars(%{"type" => "text", "text" => t}) when is_binary(t), do: byte_size(t)
-
-  defp assistant_block_chars(%{"type" => "thinking", "thinking" => t}) when is_binary(t),
-    do: byte_size(t)
-
-  defp assistant_block_chars(%{"type" => "toolCall", "name" => name, "arguments" => args}) do
-    byte_size(name) + byte_size(Jason.encode!(args || %{}))
-  end
-
-  defp assistant_block_chars(_), do: 0
-
-  defp tool_result_chars(s) when is_binary(s), do: byte_size(s)
-
-  defp tool_result_chars(blocks) when is_list(blocks) do
-    Enum.reduce(blocks, 0, fn
-      %{"type" => "text", "text" => t}, acc when is_binary(t) -> acc + byte_size(t)
-      # Mirrors upstream's 4800-char (≈1200-token) per-image estimate.
-      %{"type" => "image"}, acc -> acc + 4800
-      _, acc -> acc
-    end)
-  end
-
-  defp tool_result_chars(_), do: 0
-
-  defp ceil_div4(0), do: 0
-  defp ceil_div4(n) when is_integer(n) and n > 0, do: div(n + 3, 4)
 end

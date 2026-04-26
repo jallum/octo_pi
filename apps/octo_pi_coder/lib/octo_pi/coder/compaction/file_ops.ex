@@ -33,9 +33,14 @@ defmodule OctoPi.Coder.Compaction.FileOps do
   string `path` argument by tool name. Non-assistant messages and
   malformed blocks are ignored.
   """
-  @spec extract(struct(), t()) :: t()
+  @spec extract(struct() | map(), t()) :: t()
   def extract(%Assistant{content: blocks}, %__MODULE__{} = ops) when is_list(blocks),
     do: Enum.reduce(blocks, ops, &classify/2)
+
+  # Raw decoded-JSON assistant maps (as held by `Session.Entry.Message`).
+  def extract(%{"role" => "assistant", "content" => blocks}, %__MODULE__{} = ops)
+      when is_list(blocks),
+      do: Enum.reduce(blocks, ops, &classify/2)
 
   def extract(_other, %__MODULE__{} = ops), do: ops
 
@@ -48,6 +53,18 @@ defmodule OctoPi.Coder.Compaction.FileOps do
        do: %{ops | written: MapSet.put(ops.written, path)}
 
   defp classify(%ToolCall{name: "edit", arguments: %{"path" => path}}, ops)
+       when is_binary(path),
+       do: %{ops | edited: MapSet.put(ops.edited, path)}
+
+  defp classify(%{"type" => "toolCall", "name" => "read", "arguments" => %{"path" => path}}, ops)
+       when is_binary(path),
+       do: %{ops | read: MapSet.put(ops.read, path)}
+
+  defp classify(%{"type" => "toolCall", "name" => "write", "arguments" => %{"path" => path}}, ops)
+       when is_binary(path),
+       do: %{ops | written: MapSet.put(ops.written, path)}
+
+  defp classify(%{"type" => "toolCall", "name" => "edit", "arguments" => %{"path" => path}}, ops)
        when is_binary(path),
        do: %{ops | edited: MapSet.put(ops.edited, path)}
 

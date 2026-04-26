@@ -47,7 +47,7 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   `branch_summary`, and `compaction_summary` message kinds as those
   structs land (tracked under opi-ixp.43).
   """
-  @spec estimate_tokens(struct()) :: non_neg_integer()
+  @spec estimate_tokens(struct() | map()) :: non_neg_integer()
   def estimate_tokens(%User{content: content}), do: ceil_div4(user_chars(content))
 
   def estimate_tokens(%Assistant{content: blocks}),
@@ -55,6 +55,18 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   def estimate_tokens(%ToolResult{content: content}),
     do: ceil_div4(tool_result_chars(content))
+
+  # Raw decoded-JSON message maps (as held by `Session.Entry.Message`).
+  # Mirrors the typed heads above but reads from string-keyed maps so
+  # callers don't need a wire→struct converter just to estimate.
+  def estimate_tokens(%{"role" => "user", "content" => content}),
+    do: ceil_div4(map_user_chars(content))
+
+  def estimate_tokens(%{"role" => "assistant", "content" => blocks}) when is_list(blocks),
+    do: ceil_div4(Enum.reduce(blocks, 0, &(&2 + map_assistant_block_chars(&1))))
+
+  def estimate_tokens(%{"role" => "toolResult", "content" => content}),
+    do: ceil_div4(map_tool_result_chars(content))
 
   def estimate_tokens(_other), do: 0
 
@@ -98,6 +110,43 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   defp ceil_div4(0), do: 0
   defp ceil_div4(n) when is_integer(n) and n > 0, do: div(n + 3, 4)
+
+  # ---- raw-map char counters --------------------------------------------
+
+  defp map_user_chars(s) when is_binary(s), do: byte_size(s)
+
+  defp map_user_chars(blocks) when is_list(blocks) do
+    Enum.reduce(blocks, 0, fn
+      %{"type" => "text", "text" => t}, acc when is_binary(t) -> acc + byte_size(t)
+      _, acc -> acc
+    end)
+  end
+
+  defp map_user_chars(_), do: 0
+
+  defp map_assistant_block_chars(%{"type" => "text", "text" => t}) when is_binary(t),
+    do: byte_size(t)
+
+  defp map_assistant_block_chars(%{"type" => "thinking", "thinking" => t}) when is_binary(t),
+    do: byte_size(t)
+
+  defp map_assistant_block_chars(%{"type" => "toolCall", "name" => name, "arguments" => args}) do
+    byte_size(name) + byte_size(Jason.encode!(args || %{}))
+  end
+
+  defp map_assistant_block_chars(_), do: 0
+
+  defp map_tool_result_chars(s) when is_binary(s), do: byte_size(s)
+
+  defp map_tool_result_chars(blocks) when is_list(blocks) do
+    Enum.reduce(blocks, 0, fn
+      %{"type" => "text", "text" => t}, acc when is_binary(t) -> acc + byte_size(t)
+      %{"type" => "image"}, acc -> acc + 4800
+      _, acc -> acc
+    end)
+  end
+
+  defp map_tool_result_chars(_), do: 0
 
   # ---- estimate_context_tokens -------------------------------------------
 
@@ -154,7 +203,35 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   # Aborted/error assistant messages don't carry valid usage data.
   defp assistant_usage(%Assistant{stop_reason: r}) when r in [:aborted, :error], do: nil
   defp assistant_usage(%Assistant{usage: %Usage{} = u}), do: u
+
+  # Raw decoded-JSON assistant maps. `stopReason` is wire-format
+  # camelCase; `usage` is a string-keyed sub-map carrying integer
+  # token counts. Mirrors the typed-struct heads above so a
+  # `build_session_context` output (raw maps) flows through
+  # estimate_context_tokens unchanged.
+  defp assistant_usage(%{"role" => "assistant", "stopReason" => r})
+       when r in ["aborted", "error"],
+       do: nil
+
+  defp assistant_usage(%{"role" => "assistant", "usage" => %{} = u}), do: usage_from_map(u)
   defp assistant_usage(_), do: nil
+
+  defp usage_from_map(u) do
+    %Usage{
+      input: get_int(u, "input"),
+      output: get_int(u, "output"),
+      cache_read: get_int(u, "cacheRead"),
+      cache_write: get_int(u, "cacheWrite"),
+      total_tokens: get_int(u, "totalTokens")
+    }
+  end
+
+  defp get_int(map, key) do
+    case Map.get(map, key) do
+      n when is_integer(n) -> n
+      _ -> 0
+    end
+  end
 
   # ---- should_compact? ----------------------------------------------------
 

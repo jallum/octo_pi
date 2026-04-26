@@ -218,6 +218,18 @@ defmodule OctoPi.Coder.SessionManager do
 
   defp do_build_context(by_id, leaf) do
     path = walk_to_root(by_id, leaf, [])
+    build_context_from_path(path)
+  end
+
+  @doc """
+  Build the LLM context map from an already-walked root→leaf path
+  list. Same shape as `build_session_context/2`, but consumed by
+  the compaction layer (which receives `pathEntries` directly).
+  """
+  @spec build_context_from_path([Entry.t()]) ::
+          %{messages: [term()], thinking_level: String.t(),
+            model: %{provider: String.t(), model_id: String.t()} | nil}
+  def build_context_from_path(path) when is_list(path) do
     {thinking_level, model, latest_compaction} = scan_settings(path)
     messages = build_messages(path, latest_compaction)
     %{messages: messages, thinking_level: thinking_level, model: model}
@@ -262,13 +274,21 @@ defmodule OctoPi.Coder.SessionManager do
     Enum.drop_while(entries, fn e -> entry_id(e) != target_id end)
   end
 
-  defp entry_to_messages(%Entry.Message{message: msg}), do: [msg]
+  @doc """
+  Convert one path entry into the zero-or-one synthetic LLM
+  message it contributes to context. Mirrors upstream's
+  `getMessageFromEntry` (compaction.ts:79-93). Public so the
+  compaction layer can reuse it on entry slices.
+  """
+  @spec entry_to_messages(Entry.t()) :: [map() | struct()]
+  def entry_to_messages(%Entry.Message{message: msg}), do: [msg]
 
-  defp entry_to_messages(%Entry.BranchSummary{summary: s, from_id: f, timestamp: ts}) when is_binary(s) and s != "" do
+  def entry_to_messages(%Entry.BranchSummary{summary: s, from_id: f, timestamp: ts})
+      when is_binary(s) and s != "" do
     [BranchSummaryMessage.new(s, f, ts)]
   end
 
-  defp entry_to_messages(%Entry.CustomMessage{} = e) do
+  def entry_to_messages(%Entry.CustomMessage{} = e) do
     [
       %{
         role: "custom",
@@ -281,7 +301,7 @@ defmodule OctoPi.Coder.SessionManager do
     ]
   end
 
-  defp entry_to_messages(_other), do: []
+  def entry_to_messages(_other), do: []
 
   @doc """
   Append an entry to the session: assign id (collision-checked),
