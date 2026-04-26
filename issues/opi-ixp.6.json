@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "B2. SessionManager.get_branch/1 + get_leaf_entry_id/1",
   "type": "task",
-  "updated_at": "2026-04-26T22:09:11.542354Z"
+  "updated_at": "2026-04-26T22:10:58.506554Z"
 }
