@@ -381,7 +381,7 @@ defmodule OctoPi.TUI.Interactive do
     renderer = child_pid(sup, Renderer)
     footer_data = child_pid(sup, FooterData)
 
-    :ok = Terminal.subscribe(terminal)
+    :ok = Terminal.open(terminal)
     OctoPi.Agent.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())

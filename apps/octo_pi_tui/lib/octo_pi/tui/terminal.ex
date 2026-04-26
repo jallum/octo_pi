@@ -29,13 +29,21 @@ defmodule OctoPi.TUI.Terminal do
   Terminal dimensions are queried via `:io.columns/0` and
   `:io.rows/0` — no NIF required.
 
-  Each Terminal owns its own subscriber list. Use
-  `Terminal.subscribe(terminal_pid)` to register the calling process
-  to receive `{:key_event, parsed}`, `{:paste, content}`, and
-  `{:resize, w, h}` messages. Subscribers are monitored and cleaned
-  up automatically on process exit. Multiple Terminal/Interactive
-  pairs are isolated by construction — no global registry, no
-  scope tagging.
+  Lifecycle is owner-driven via `open/2` and `close/2`:
+
+    * `start_link/1` returns an *idle* Terminal — no raw mode, no
+      reader, no SIGWINCH handler. The process exists; the TTY does
+      not yet belong to it.
+    * The first `open(pid)` *activates* the Terminal: enters raw
+      mode, registers SIGWINCH, spawns the reader, arms the kitty
+      probe. Each open monitors its caller.
+    * The last `close(pid)` (or the last holder's `:DOWN`) tears the
+      Terminal down: `terminate/2` runs the cleanup (kitty disable,
+      drain, raw-mode exit) and the process stops.
+
+  Holders receive `{:key_event, parsed}`, `{:paste, content}`, and
+  `{:resize, w, h}` messages directly. Multiple Terminal/Interactive
+  pairs are isolated by construction — no global registry.
 
   Terminal owns the `%StdinFSM{}` directly: incoming reader chunks
   are fed through the FSM and narrowcast as cooked sequences. Raw
@@ -90,88 +98,84 @@ defmodule OctoPi.TUI.Terminal do
   def open_editor(pid, initial_text), do: GenServer.call(pid, {:open_editor, initial_text}, :infinity)
 
   @doc """
-  Subscribe `subscriber` to this Terminal's events. The subscriber
-  receives `{:key_event, parsed}`, `{:paste, content}`, and
-  `{:resize, w, h}` messages. Returns `:ok`. The subscriber is
-  monitored and removed automatically on exit.
+  Open a handle on this Terminal. The first open activates the
+  Terminal (raw mode, SIGWINCH, reader, kitty probe). The holder is
+  monitored; an unexpected exit acts as an implicit `close/2`.
   """
-  @spec subscribe(GenServer.server(), pid()) :: :ok
-  def subscribe(pid, subscriber \\ self()), do: GenServer.call(pid, {:subscribe, subscriber})
+  @spec open(GenServer.server(), pid()) :: :ok
+  def open(pid, holder \\ self()), do: GenServer.call(pid, {:open, holder})
 
-  @doc "Unsubscribe `subscriber` from this Terminal's events."
-  @spec unsubscribe(GenServer.server(), pid()) :: :ok
-  def unsubscribe(pid, subscriber \\ self()), do: GenServer.call(pid, {:unsubscribe, subscriber})
+  @doc """
+  Close `holder`'s handle. When the last handle is released, the
+  Terminal tears itself down.
+  """
+  @spec close(GenServer.server(), pid()) :: :ok
+  def close(pid, holder \\ self()), do: GenServer.call(pid, {:close, holder})
 
   # --- GenServer callbacks ---
 
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
-    raw_mode_fn = Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1)
-    skip_raw_mode = Keyword.get(opts, :skip_raw_mode, false)
-    skip_sigwinch = Keyword.get(opts, :skip_sigwinch, false)
-    auto_start_reader = Keyword.get(opts, :auto_start_reader, true)
     {w, h} = Keyword.get(opts, :dimensions, {80, 24})
-    probe_timeout_ms = Keyword.get(opts, :probe_timeout_ms, 150)
-    flush_ms = Keyword.get(opts, :flush_ms, 10)
-    drain_idle_ms = Keyword.get(opts, :drain_idle_ms, 50)
-    drain_timeout_ms = Keyword.get(opts, :drain_timeout_ms, 1000)
-    send_sigtstp_fn = Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0)
-    open_editor_fn = Keyword.get(opts, :open_editor_fn, &default_open_editor/1)
 
-    write_fn = Keyword.get(opts, :write_fn, &IO.write/1)
-    tty_fn = Keyword.get(opts, :tty_fn, &IO.write/1)
-
-    if not skip_sigwinch do
-      :gen_event.add_handler(:erl_signal_server, SigwinchHandler, self())
-    end
-
-    reader_fn = Keyword.get(opts, :reader_fn, &default_reader/0)
-
-    base_state = %{
+    state = %{
       width: w,
       height: h,
-      raw_mode_fn: raw_mode_fn,
-      skip_raw_mode: skip_raw_mode,
-      skip_sigwinch: skip_sigwinch,
-      tty_fn: tty_fn,
+      raw_mode_fn: Keyword.get(opts, :raw_mode_fn, &default_raw_mode/1),
+      skip_raw_mode: Keyword.get(opts, :skip_raw_mode, false),
+      skip_sigwinch: Keyword.get(opts, :skip_sigwinch, false),
+      auto_start_reader: Keyword.get(opts, :auto_start_reader, true),
+      reader_fn: Keyword.get(opts, :reader_fn, &default_reader/0),
+      tty_fn: Keyword.get(opts, :tty_fn, &IO.write/1),
+      write_fn: Keyword.get(opts, :write_fn, &IO.write/1),
+      send_sigtstp_fn: Keyword.get(opts, :send_sigtstp_fn, &default_send_sigtstp/0),
+      open_editor_fn: Keyword.get(opts, :open_editor_fn, &default_open_editor/1),
+      probe_timeout_ms: Keyword.get(opts, :probe_timeout_ms, 150),
+      drain_idle_ms: Keyword.get(opts, :drain_idle_ms, 50),
+      drain_timeout_ms: Keyword.get(opts, :drain_timeout_ms, 1000),
+      flush_ms: Keyword.get(opts, :flush_ms, 10),
       reader_pid: nil,
-      write_fn: write_fn,
       subscribers: %{},
-      probe_timeout_ms: probe_timeout_ms,
-      drain_idle_ms: drain_idle_ms,
-      drain_timeout_ms: drain_timeout_ms,
-      send_sigtstp_fn: send_sigtstp_fn,
-      open_editor_fn: open_editor_fn,
+      ever_opened: false,
       keyboard_mode: :none,
       stdin_buffer: "",
       paste_buffer: nil,
-      flush_ms: flush_ms,
       deadlines: %{}
     }
 
-    state =
-      if skip_raw_mode do
-        reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-        %{base_state | reader_pid: reader_pid}
-      else
-        raw_mode_fn.(:enter)
-
-        # Spawn the reader after entering raw mode so it inherits the
-        # updated group leader and `:io.get_chars/2` reads from the
-        # live TTY rather than the noshell null device.
-        reader_pid = if auto_start_reader, do: spawn_reader(reader_fn)
-        tty_write(base_state, "\e[?2004h")
-        tty_write(base_state, "\e[?u")
-
-        base_state
-        |> Map.put(:reader_pid, reader_pid)
-        |> Map.put(:keyboard_mode, :probing)
-        |> arm_deadline(:probe, System.monotonic_time(:millisecond) + probe_timeout_ms)
-      end
-
     {:ok, state, next_timeout(state)}
   end
+
+  # Idempotent. Called from the first open/2.
+  defp activate(%{ever_opened: true} = state), do: state
+
+  defp activate(%{skip_raw_mode: true} = state) do
+    reader_pid = if state.auto_start_reader, do: spawn_reader(state.reader_fn)
+    register_sigwinch(state)
+    %{state | reader_pid: reader_pid, ever_opened: true}
+  end
+
+  defp activate(state) do
+    state.raw_mode_fn.(:enter)
+
+    # Spawn the reader after entering raw mode so it inherits the
+    # updated group leader and `:io.get_chars/2` reads from the
+    # live TTY rather than the noshell null device.
+    reader_pid = if state.auto_start_reader, do: spawn_reader(state.reader_fn)
+    register_sigwinch(state)
+    tty_write(state, "\e[?2004h")
+    tty_write(state, "\e[?u")
+
+    state
+    |> Map.put(:reader_pid, reader_pid)
+    |> Map.put(:keyboard_mode, :probing)
+    |> Map.put(:ever_opened, true)
+    |> arm_deadline(:probe, System.monotonic_time(:millisecond) + state.probe_timeout_ms)
+  end
+
+  defp register_sigwinch(%{skip_sigwinch: true}), do: :ok
+  defp register_sigwinch(_), do: :gen_event.add_handler(:erl_signal_server, SigwinchHandler, self())
 
   @impl true
   def handle_call(:info, _from, state), do: {:reply, state, state, next_timeout(state)}
@@ -206,12 +210,13 @@ defmodule OctoPi.TUI.Terminal do
     {:reply, :ok, %{state | width: w, height: h}, next_timeout(state)}
   end
 
-  def handle_call({:subscribe, pid}, _from, state) do
-    {:reply, :ok, add_subscriber(state, pid), next_timeout(state)}
+  def handle_call({:open, pid}, _from, state) do
+    state = state |> activate() |> add_subscriber(pid)
+    {:reply, :ok, state, next_timeout(state)}
   end
 
-  def handle_call({:unsubscribe, pid}, _from, state) do
-    {:reply, :ok, remove_subscriber(state, pid), next_timeout(state)}
+  def handle_call({:close, pid}, _from, state) do
+    state |> remove_subscriber(pid) |> maybe_stop_reply()
   end
 
   @impl true
@@ -255,11 +260,13 @@ defmodule OctoPi.TUI.Terminal do
   def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state),
-    do: {:noreply, remove_subscriber_by_ref(state, ref), next_timeout(state)}
+    do: state |> remove_subscriber_by_ref(ref) |> maybe_stop_noreply()
 
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
   @impl true
+  def terminate(_reason, %{ever_opened: false}), do: :ok
+
   def terminate(reason, state) do
     :telemetry.execute(
       [:octo_pi_tui, :terminal, :terminate, :start],
@@ -466,6 +473,19 @@ defmodule OctoPi.TUI.Terminal do
       if ms <= now, do: {[kind | due], keep}, else: {due, Map.put(keep, kind, ms)}
     end)
   end
+
+  # Once the Terminal has been opened at least once, an empty
+  # subscriber map means nobody is holding it any more — stop.
+  # Before the first open, an empty map is the idle waiting state.
+  defp maybe_stop_reply(%{ever_opened: true, subscribers: subs} = state) when map_size(subs) == 0,
+    do: {:stop, :normal, :ok, state}
+
+  defp maybe_stop_reply(state), do: {:reply, :ok, state, next_timeout(state)}
+
+  defp maybe_stop_noreply(%{ever_opened: true, subscribers: subs} = state) when map_size(subs) == 0,
+    do: {:stop, :normal, state}
+
+  defp maybe_stop_noreply(state), do: {:noreply, state, next_timeout(state)}
 
   defp narrowcast(%{subscribers: subs}, msg) do
     for {pid, _ref} <- subs, do: send(pid, msg)
