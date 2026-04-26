@@ -4,6 +4,7 @@
     "opi-uuy.2"
   ],
   "blocks": [
+    "opi-uuy.10",
     "opi-uuy.5",
     "opi-uuy.6"
   ],
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "Migrate Session.State from MessageLog to SessionManager",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:34Z"
+  "updated_at": "2026-04-26T01:41:36Z"
 }
