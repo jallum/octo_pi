@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.17"
+  ],
   "blocks": [],
   "created": "2026-04-26T05:43:54Z",
   "description": "With the new framework wired and extensions migrated, delete the now-unused legacy code: opi-fin's old per-event-callback Behaviour, the Macro, the dormant Manager, the 8-pattern Dispatcher, emit_from_table, the handlers_table Context field, and the agent_supervisor/state_agent fields on API.\n\n## Deliverable\n\nSingle Extension framework remains: OctoPi.Coder.Extension (PR #5's behaviour with on_event/3) + OctoPi.Coder.Extension.Runner + OctoPi.Coder.Extension.Loader + Host + UI + Stubs. Everything else gone.\n\n## Steps\n\nSTEP 1 — Delete files:\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/macro.ex (replaced by direct @behaviour)\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/manager.ex (dead code; Session is the focal point)\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/dispatcher.ex (Runner subsumes dispatch)\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/behaviour.ex (replaced by the moved-from-agent OctoPi.Coder.Extension)\n\nSTEP 2 — Trim apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex:\n  - Remove agent_supervisor field (api.ex:13, :25)\n  - Remove state_agent field (api.ex:14, :26)\n  - Remove related fns/spec changes\n  - If API itself becomes vestigial, decide: keep as a minimal builder, or delete and have Loader return an Extension struct directly.\n\nSTEP 3 — Trim apps/octo_pi_coder/lib/octo_pi/coder/extension/context.ex:\n  - Remove handlers_table field (context.ex:16, :32)\n  - Audit other dead fields (host_pid: pid()| nil that's now superseded — confirm or remove)\n\nSTEP 4 — Delete tests for removed modules:\n  - apps/octo_pi_coder/test/octo_pi/coder/extension/manager_test.exs\n  - apps/octo_pi_coder/test/octo_pi/coder/extension/dispatcher_test.exs\n  - apps/octo_pi_coder/test/octo_pi/coder/extension/ets_tables_test.exs\n  - Any tests for the deleted Behaviour + Macro\n\n## Acceptance Criteria\n\n- [ ] These files do NOT exist:\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/macro.ex\n  - apps/octo_pi_coder/lib/octo_pi/coder/extension/manager.ex\n- [ ] If apps/octo_pi_coder/lib/octo_pi/coder/extension/behaviour.ex exists, it's the moved one (with on_event/3), not the old per-event one. (verify content)\n- [ ] If apps/octo_pi_coder/lib/octo_pi/coder/extension/dispatcher.ex exists, it's a thin internal dispatcher used by Runner (not the 8-pattern public API). Otherwise deleted.\n- [ ] Context struct has no handlers_table field\n- [ ] API struct has no agent_supervisor or state_agent fields\n- [ ] `grep -rn \"emit_from_table\\|handlers_table\\|agent_supervisor\\|state_agent\" apps/ --include=\"*.ex\" --include=\"*.exs\"` returns 0 matches\n- [ ] No deleted-module references in tests (tests for deleted modules are themselves deleted)\n- [ ] `mix test` passes\n- [ ] `mix compile --warnings-as-errors` clean\n- [ ] `mix credo --strict` clean\n\n## Dependencies\n\nBlocked by: opi-fin.17",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Delete legacy extension framework",
   "type": "task",
-  "updated_at": "2026-04-26T05:43:54Z"
+  "updated_at": "2026-04-26T05:44:02Z"
 }
