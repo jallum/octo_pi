@@ -7,14 +7,15 @@
   "blocks": [
     "opi-uuy.11"
   ],
+  "closed_at": "2026-04-26T03:37:13Z",
   "created": "2026-04-26T01:41:32Z",
   "description": "Add a public Session.compact/1 (and Session.compact/2 with opts) API for\nuser- or extension-triggered manual compaction.\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/agent-session.ts lines 1605-1733.\n\nDepends on: Compaction module, overflow/auto-compaction ticket (for the shared\nevent emission pattern and is_compacting? flag).\n\n## Public API to add in apps/octo_pi_agent/lib/octo_pi/agent/session.ex\n\n  @doc \"\"\"\n  Manually trigger context compaction. Returns :ok immediately; compaction runs\n  asynchronously. Emits CompactionStart then CompactionEnd when done.\n  Options:\n    keep_recent_tokens: integer (default 8000)\n    model: OctoPi.AI.Model.t() (override model for summarization, default session model)\n  \"\"\"\n  def compact(pid, opts \\\\ [])\n\n## GenServer handle_call(:compact, ...)\n\n  1. If state.is_streaming?, return {:reply, {:error, :streaming}, state} — cannot\n     compact mid-turn.\n  2. If state.is_compacting?, return {:reply, {:error, :already_compacting}, state}.\n  3. Set is_compacting?: true in state.\n  4. Emit CompactionStart{reason: :manual} via Subscribers.dispatch.\n  5. Start a Task under OctoPi.Agent.LoopSupervisor to run:\n       Compaction.compact(state.session_manager, state.transport,\n                          opts[:model] || state.model,\n                          keep_recent_tokens: opts[:keep_recent_tokens] || 8000)\n  6. Store the Task ref in state.compaction_abort_ref.\n  7. Return {:reply, :ok, updated_state}.\n\n## Task completion\n\nIn handle_info({ref, result}, state) for completed compaction task:\n  On {:ok, compaction_result}:\n    - SessionManager.append_compaction -\u003e updated sm\n    - Set is_compacting?: false, clear compaction_abort_ref\n    - Emit CompactionEnd{reason: :manual, result: compaction_result}\n    - Drain compaction_queue (re-process any prompt calls that arrived during compaction)\n    - Return {:noreply, %{state | session_manager: updated_sm, ...}}\n  On {:error, reason} or Task exit:\n    - Set is_compacting?: false, clear compaction_abort_ref\n    - Emit CompactionEnd{reason: :manual, aborted?: true, error_message: inspect(reason)}\n    - Drain compaction_queue\n    - Return {:noreply, updated_state}\n\n## Abort during manual compaction\n\nIn the existing abort/1 handler, if state.compaction_abort_ref is set:\n  AbortRef.abort(state.compaction_abort_ref) to signal the Task.\n  Also Task.shutdown the task process.\n\n## Tests\n\nCreate apps/octo_pi_agent/test/octo_pi/agent/session_compaction_test.exs.\nPort from tmp/pi-mono/packages/coding-agent/test/agent-session-compaction.test.ts.\nCover:\n  - compact/1 returns {:error, :streaming} when a run is in progress\n  - CompactionStart{reason: :manual} fires before the LLM call\n  - CompactionEnd{reason: :manual} fires after\n  - CompactionEntry is present in session_manager.entries after completion\n  - build_session_context uses the compaction summary on the next prompt\n  - abort/1 during compaction emits CompactionEnd{aborted?: true}",
   "id": "opi-uuy.9",
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Manual compaction API in Session",
   "type": "task",
-  "updated_at": "2026-04-26T03:27:51Z"
+  "updated_at": "2026-04-26T03:37:13Z"
 }
