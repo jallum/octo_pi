@@ -19,8 +19,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "open",
   "title": "A3. Session-level token accumulator",
   "type": "task",
-  "updated_at": "2026-04-26T22:02:03.541736Z"
+  "updated_at": "2026-04-26T22:02:04.768345Z"
 }
