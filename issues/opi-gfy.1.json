@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T13:42:12Z",
+  "description": "subscribers.ex:47 calls Registry.lookup then manually splits and iterates. Replace with Registry.dispatch/3 which holds no lock between lookup and iteration — correct under concurrent unregistration.\n\nBefore:\n  listeners = Registry.lookup(@registry, session_pid)\n  {sync, async} = Enum.split_with(listeners, ...)\n  Enum.each(sync, ...)\n  Enum.each(async, ...)\n\nAfter:\n  Registry.dispatch(@registry, session_pid, fn entries -\u003e\n    {sync, async} = Enum.split_with(entries, fn {_pid, {_l, mode}} -\u003e mode == :sync end)\n    Enum.each(sync, ...)\n    Enum.each(async, ...)\n  end)",
+  "id": "opi-gfy.1",
+  "labels": [],
+  "parent": "opi-gfy",
+  "priority": 2,
+  "status": "open",
+  "title": "Registry.dispatch/3 in Subscribers.dispatch",
+  "type": "task",
+  "updated_at": "2026-04-26T13:42:12Z"
+}
