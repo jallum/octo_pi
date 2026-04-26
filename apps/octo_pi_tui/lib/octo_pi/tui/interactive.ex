@@ -2,9 +2,9 @@ defmodule OctoPi.TUI.Interactive do
   @moduledoc """
   Main loop for `mix pi` interactive mode.
 
-  Composes the Phase 4 pieces end-to-end: `Terminal` owns the tty,
-  `StdinFSM` assembles sequences, `KeyParser` decodes them, the
-  `Input` component accumulates the prompt, and the `Renderer`
+  Composes the Phase 4 pieces end-to-end: `Terminal` owns the tty
+  and assembles cooked stdin sequences, `KeyParser` decodes them,
+  the `Input` component accumulates the prompt, and the `Renderer`
   paints the transcript + input to the screen. Agent events from
   `OctoPi.Agent.Session` drive the transcript updates.
 
@@ -48,7 +48,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.RawMode
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
-  alias OctoPi.TUI.StdinFSM
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.WrapAnsi
@@ -62,7 +61,6 @@ defmodule OctoPi.TUI.Interactive do
   @type t :: %__MODULE__{
           session: pid() | nil,
           sup: pid() | nil,
-          fsm: pid() | nil,
           renderer: pid() | nil,
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
@@ -101,7 +99,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defstruct session: nil,
             sup: nil,
-            fsm: nil,
             renderer: nil,
             terminal: nil,
             raw_mode_fn: nil,
@@ -369,7 +366,6 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: StdinFSM, start: {StdinFSM, :start_link, [[subscriber: self()]]}},
       %{id: Renderer, start: {Renderer, :start_link, [[width: w, height: h, csi_2026?: true]]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
@@ -377,11 +373,9 @@ defmodule OctoPi.TUI.Interactive do
     {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
 
     terminal = child_pid(sup, Terminal)
-    fsm = child_pid(sup, StdinFSM)
     renderer = child_pid(sup, Renderer)
     footer_data = child_pid(sup, FooterData)
 
-    {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:stdin_event, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
@@ -402,7 +396,6 @@ defmodule OctoPi.TUI.Interactive do
     state = %__MODULE__{
       session: session,
       sup: sup,
-      fsm: fsm,
       renderer: renderer,
       terminal: terminal,
       raw_mode_fn: raw_mode_fn,
@@ -440,11 +433,6 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:stdin_chunk, bin}, state) do
-    :ok = StdinFSM.process(state.fsm, bin)
-    {:noreply, state, loader_timeout(state)}
-  end
-
   def handle_info({:stdin_event, seq}, state) do
     parsed = KeyParser.parse(seq)
     :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed})
