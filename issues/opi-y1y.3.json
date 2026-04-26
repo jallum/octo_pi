@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-y1y",
   "priority": 3,
-  "status": "open",
+  "status": "closed",
   "title": "Full OAuth login flow + refresh + storage + mix task",
   "type": "task",
-  "updated_at": "2026-04-23T19:02:45Z"
+  "updated_at": "2026-04-26T13:46:22.146097Z"
 }
