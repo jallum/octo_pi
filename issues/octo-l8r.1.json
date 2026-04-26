@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "OpenAI Responses provider (octo_pi_ai_openai_responses)",
   "type": "task",
-  "updated_at": "2026-04-24T09:26:33Z"
+  "updated_at": "2026-04-26T13:46:12.232501Z"
 }
