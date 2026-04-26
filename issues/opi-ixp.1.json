@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:01:53Z",
+  "description": "**Phase A — Foundation. Deps: none.**\n\nDefine entry structs mirroring `tmp/pi-mono/packages/coding-agent/src/core/session-manager.ts` byte-for-byte:\n- `Header`, `MessageEntry`, `CompactionEntry`, `BranchSummaryEntry`, `ThinkingLevelChangeEntry`, `ModelChangeEntry`, `LabelEntry`, `CustomEntry`\n- Passthrough struct for unknown `type` values (forward-compat).\n\nField shapes (camelCase preserved on the wire):\n- `CompactionEntry`: `type \"compaction\" | id | parentId | timestamp | summary | firstKeptEntryId | tokensBefore | fromHook? | details?`\n- `BranchSummaryEntry`: `type \"branch_summary\" | id | parentId | timestamp | summary | fromId | fromHook? | details?`\n\nTests: encode/decode round-trip via Jason; field naming preserves camelCase.",
+  "id": "opi-ixp.1",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "A1. SessionEntry typed union (types only)",
+  "type": "task",
+  "updated_at": "2026-04-26T20:01:53Z"
+}
