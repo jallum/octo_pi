@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [
     "opi-ixp.18",
-    "opi-ixp.25"
+    "opi-ixp.25",
+    "opi-ixp.27"
   ],
   "blocks": [],
   "created": "2026-04-26T20:01:59Z",
@@ -14,5 +15,5 @@
   "status": "open",
   "title": "E7. Wire CustomCompaction extension to real implementation",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:11Z"
+  "updated_at": "2026-04-26T20:02:12Z"
 }
