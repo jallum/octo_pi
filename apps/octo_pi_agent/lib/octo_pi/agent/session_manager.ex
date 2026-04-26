@@ -13,6 +13,7 @@ defmodule OctoPi.Agent.SessionManager do
 
   alias OctoPi.Agent.Message
   alias OctoPi.Agent.SessionEntry
+  alias OctoPi.Agent.SessionEntry.BranchSummaryEntry
   alias OctoPi.Agent.SessionEntry.CompactionEntry
   alias OctoPi.Agent.SessionEntry.CustomEntry
   alias OctoPi.Agent.SessionEntry.CustomMessageEntry
@@ -171,6 +172,25 @@ defmodule OctoPi.Agent.SessionManager do
     append_entry(sm, entry)
   end
 
+  @doc """
+  Append a BranchSummaryEntry for a tree navigation.
+
+  `summary` is the LLM-generated summary of the abandoned branch.
+  `from_id` is the leaf_id before navigation (the entry being abandoned).
+  """
+  @spec append_branch_summary(t(), String.t(), String.t()) :: t()
+  def append_branch_summary(%__MODULE__{} = sm, summary, from_id) do
+    entry = %BranchSummaryEntry{
+      id: next_id(sm),
+      parent_id: sm.leaf_id,
+      timestamp: timestamp(),
+      from_id: from_id,
+      summary: summary
+    }
+
+    append_entry(sm, entry)
+  end
+
   @doc "Append multiple messages in order. Equivalent to folding `append_message/2`."
   @spec append_messages(t(), [Message.t()]) :: t()
   def append_messages(%__MODULE__{} = sm, messages) when is_list(messages) do
@@ -321,6 +341,10 @@ defmodule OctoPi.Agent.SessionManager do
       end
 
     [%User{content: text, timestamp: :os.system_time(:millisecond)}]
+  end
+
+  defp entry_to_messages(%BranchSummaryEntry{summary: summary}) do
+    [%User{content: "[Branch summary: #{summary}]", timestamp: :os.system_time(:millisecond)}]
   end
 
   defp entry_to_messages(_other), do: []

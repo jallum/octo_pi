@@ -3,6 +3,7 @@ defmodule OctoPi.Agent.ExtensionRegistrationTest do
 
   alias OctoPi.Agent.Extension
   alias OctoPi.Agent.ExtensionRunner
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.TestSupport.EchoTool
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Content.Text
@@ -191,7 +192,7 @@ defmodule OctoPi.Agent.ExtensionRegistrationTest do
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
       state = OctoPi.Agent.state(session)
-      ctx = OctoPi.Agent.SessionManager.build_session_context(state.session_manager)
+      ctx = SessionManager.build_session_context(state.session_manager)
       assert ctx.messages != []
     end
   end

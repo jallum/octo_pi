@@ -105,6 +105,12 @@ defmodule OctoPi.Agent.Session do
   def get_commands(pid), do: GenServer.call(pid, :get_commands)
 
   @doc false
+  def fork(pid, entry_id), do: GenServer.call(pid, {:fork, entry_id})
+
+  @doc false
+  def navigate_tree(pid, target_id, opts \\ []), do: GenServer.call(pid, {:navigate_tree, target_id, opts})
+
+  @doc false
   def abort(pid), do: GenServer.call(pid, :abort)
 
   @doc false
@@ -292,6 +298,16 @@ defmodule OctoPi.Agent.Session do
       end
 
     {:reply, commands, store}
+  end
+
+  def handle_call({:fork, entry_id}, _from, store) do
+    sm = store.session.session_manager
+    do_fork(sm, entry_id, store)
+  end
+
+  def handle_call({:navigate_tree, target_id, opts}, _from, store) do
+    sm = store.session.session_manager
+    do_navigate_tree(sm, target_id, opts, store)
   end
 
   def handle_call({:compact, opts}, _from, store) do
@@ -702,6 +718,41 @@ defmodule OctoPi.Agent.Session do
     Enum.each(cmd_entries, fn [name, handler] -> ExtensionRunner.register_command(runner, name, handler) end)
 
     %{state | tool_registry: new_registry}
+  end
+
+  defp do_fork(%{by_id: by_id} = sm, entry_id, store) when is_map_key(by_id, entry_id) do
+    old_leaf_id = sm.leaf_id
+    sm = SessionManager.append_custom_entry(sm, "fork", %{from_leaf_id: old_leaf_id, to_entry_id: entry_id})
+    sm = %{sm | leaf_id: entry_id}
+    {:reply, :ok, put_in(store.session.session_manager, sm)}
+  end
+
+  defp do_fork(_sm, _entry_id, store) do
+    {:reply, {:error, :not_found}, store}
+  end
+
+  defp do_navigate_tree(%{by_id: by_id} = sm, target_id, opts, store) when is_map_key(by_id, target_id) do
+    new_sm = navigate_with_summary(sm, target_id, Keyword.get(opts, :summarize, false), store.session)
+    {:reply, :ok, put_in(store.session.session_manager, new_sm)}
+  end
+
+  defp do_navigate_tree(_sm, _target_id, _opts, store) do
+    {:reply, {:error, :not_found}, store}
+  end
+
+  defp navigate_with_summary(sm, target_id, false, _session), do: %{sm | leaf_id: target_id}
+
+  defp navigate_with_summary(sm, target_id, true, session) do
+    branch = SessionManager.get_branch(sm)
+    current_leaf_id = sm.leaf_id
+    idx = Enum.find_index(branch, &(&1.id == target_id))
+    abandoned = if idx, do: Enum.drop(branch, idx + 1), else: []
+    sm = %{sm | leaf_id: target_id}
+
+    case Compaction.summarize_branch(abandoned, session.transport, session.model) do
+      {:ok, summary} -> SessionManager.append_branch_summary(sm, summary, current_leaf_id)
+      {:error, _} -> sm
+    end
   end
 
   defp maybe_start_extension_runner(_session_pid, []), do: nil

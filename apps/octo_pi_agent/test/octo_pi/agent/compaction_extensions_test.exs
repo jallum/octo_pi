@@ -1,8 +1,6 @@
 defmodule OctoPi.Agent.CompactionExtensionsTest do
   use ExUnit.Case, async: false
 
-  @moduletag capture_log: true
-
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Extension
   alias OctoPi.Agent.SessionEntry.CompactionEntry
@@ -15,11 +13,14 @@ defmodule OctoPi.Agent.CompactionExtensionsTest do
   alias OctoPi.AI.Model
   alias OctoPi.AI.Usage
 
+  @moduletag capture_log: true
+
   # ── Extension modules for testing ────────────────────────────────────────────
 
   defmodule CancelCompactionExtension do
     @moduledoc false
     @behaviour Extension
+
     @impl true
     def on_event(:session_before_compact, _payload, _ctx), do: {:cancel, :test_cancel}
     def on_event(_type, _payload, _ctx), do: :ok
@@ -28,6 +29,7 @@ defmodule OctoPi.Agent.CompactionExtensionsTest do
   defmodule CustomCompactionExtension do
     @moduledoc false
     @behaviour Extension
+
     @impl true
     def on_event(:session_before_compact, _payload, _ctx) do
       {:ok,
@@ -114,8 +116,7 @@ defmodule OctoPi.Agent.CompactionExtensionsTest do
 
       :ok = OctoPi.Agent.compact(session, keep_recent_tokens: 0)
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{reason: :manual, aborted?: true, will_retry?: false}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{reason: :manual, aborted?: true, will_retry?: false}},
                      2_000
     end
 
@@ -206,7 +207,7 @@ defmodule OctoPi.Agent.CompactionExtensionsTest do
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{aborted?: false}}, 2_000
 
       payload = :persistent_term.get(AfterCompactExtension.key())
-      assert payload != nil
+      assert payload
       assert %CompactionEntry{} = payload.compaction_entry
       assert payload.from_extension == false
     end
@@ -220,7 +221,7 @@ defmodule OctoPi.Agent.CompactionExtensionsTest do
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{aborted?: false}}, 2_000
 
       payload = :persistent_term.get(AfterCompactExtension.key())
-      assert payload != nil
+      assert payload
       assert payload.from_extension == true
     end
   end

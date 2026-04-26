@@ -99,6 +99,23 @@ defmodule OctoPi.Agent do
   @spec get_commands(session()) :: %{String.t() => (String.t() -> :ok)}
   def get_commands(pid), do: Session.get_commands(pid)
 
+  @doc "Fork the session to an earlier entry. Returns {:error, :not_found} if entry_id is unknown."
+  @spec fork(session(), String.t()) :: :ok | {:error, :not_found}
+  def fork(pid, entry_id), do: Session.fork(pid, entry_id)
+
+  @doc """
+  Navigate the session tree to an earlier entry.
+
+  Options:
+    - `summarize: true` — LLM-summarize the abandoned branch and append a
+      `BranchSummaryEntry` before moving the leaf pointer.
+    - `custom_instructions` — additional instructions for the LLM summarizer.
+
+  Returns `{:error, :not_found}` if `target_id` is unknown.
+  """
+  @spec navigate_tree(session(), String.t(), keyword()) :: :ok | {:error, :not_found}
+  def navigate_tree(pid, target_id, opts \\ []), do: Session.navigate_tree(pid, target_id, opts)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)

@@ -17,6 +17,7 @@ defmodule OctoPi.Agent.Compaction do
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.ToolResult
   alias OctoPi.AI.Message.User
+  alias OctoPi.AI.Model
   alias OctoPi.AI.StreamOptions
 
   @default_keep_recent_tokens 8_000
@@ -26,6 +27,8 @@ defmodule OctoPi.Agent.Compaction do
   but complete summary of everything that was discussed, decided, and
   done. The summary will replace the earlier messages.
   """
+
+  @navigation_system_prompt "Summarize the following conversation branch that is being abandoned."
 
   # ── Public API ───────────────────────────────────────────────────────────────
 
@@ -96,7 +99,7 @@ defmodule OctoPi.Agent.Compaction do
   Returns `{:ok, %{summary: String.t(), first_kept_entry_id: String.t(),
   tokens_before: integer()}}` or `{:error, reason}`.
   """
-  @spec compact(SessionManager.t(), module(), OctoPi.AI.Model.t(), keyword()) ::
+  @spec compact(SessionManager.t(), module(), Model.t(), keyword()) ::
           {:ok, %{summary: String.t(), first_kept_entry_id: String.t(), tokens_before: integer()}}
           | {:error, term()}
   def compact(%SessionManager{} = sm, transport, model, opts \\ []) do
@@ -128,15 +131,11 @@ defmodule OctoPi.Agent.Compaction do
 
   Returns `{:ok, result}` or `{:error, reason}`.
   """
-  @spec compact_prepared(map(), module(), OctoPi.AI.Model.t()) ::
+  @spec compact_prepared(map(), module(), Model.t()) ::
           {:ok, %{summary: String.t(), first_kept_entry_id: String.t(), tokens_before: integer()}}
           | {:error, term()}
   def compact_prepared(
-        %{
-          messages_to_summarize: to_summarize,
-          first_kept_entry_id: first_kept_id,
-          tokens_before: tokens_before
-        },
+        %{messages_to_summarize: to_summarize, first_kept_entry_id: first_kept_id, tokens_before: tokens_before},
         transport,
         model
       ) do
@@ -152,6 +151,17 @@ defmodule OctoPi.Agent.Compaction do
       {:error, _} = err ->
         err
     end
+  end
+
+  @doc """
+  Summarize a list of entries using the navigation system prompt.
+
+  Used by `Session.navigate_tree/3` when `summarize: true` is requested.
+  Returns `{:ok, summary_text}` or `{:error, reason}`.
+  """
+  @spec summarize_branch([term()], module(), Model.t()) :: {:ok, String.t()} | {:error, term()}
+  def summarize_branch(entries, transport, model) do
+    summarize_with(entries, transport, model, @navigation_system_prompt)
   end
 
   # ── Private helpers ──────────────────────────────────────────────────────────
@@ -195,6 +205,10 @@ defmodule OctoPi.Agent.Compaction do
   defp estimate_entry_tokens(_), do: 0
 
   defp summarize(entries, transport, model) do
+    summarize_with(entries, transport, model, @summarization_system_prompt)
+  end
+
+  defp summarize_with(entries, transport, model, system_prompt) do
     conversation_text = serialize_entries(entries)
 
     prompt = """
@@ -214,7 +228,7 @@ defmodule OctoPi.Agent.Compaction do
     ]
 
     context = %AIContext{
-      system_prompt: String.trim(@summarization_system_prompt),
+      system_prompt: String.trim(system_prompt),
       messages: messages
     }
 
