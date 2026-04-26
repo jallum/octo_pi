@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-ixp.10"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.25"
+  ],
   "created": "2026-04-26T20:01:58Z",
   "description": "**Phase E — Compaction orchestration. Deps: B6.**\n\nPer upstream pattern: compaction NEVER mutates the message log; the kept-window is computed at prompt-assembly time via `build_session_context`.\n\nToday, `OctoPi.Agent.Loop` dumps `MessageLog.to_list/1` to the LLM. After this ticket, `Loop` instead asks `Session` for the post-compaction message list. `Session` delegates to `SessionManager.build_session_context/2` (B6) which respects the most recent `CompactionEntry`'s `firstKeptEntryId` and injects the synthetic summary message.\n\nThis preserves `MessageLog` as append-only (current API: push/append_many/to_list/count) — no new mutation methods needed.\n\nTests: integration test confirming Loop receives the rebuilt list after a compaction is appended.",
   "id": "opi-ixp.24",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "E5a. Loop reads from Session.build_session_context/0 (upstream pattern)",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:09Z"
+  "updated_at": "2026-04-26T20:02:10Z"
 }
