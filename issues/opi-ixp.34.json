@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.6"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:02:01Z",
   "description": "**Phase G — Tree session integration. Deps: B2, B3, F4.**\n\nCompute `%TreePreparation{target_id, old_leaf_id, common_ancestor_id, entries_to_summarize, user_wants_summary}`.\n\n**`user_wants_summary` is THREE-VALUED** (verified at `tmp/pi-mono/.../interactive-mode.ts:4129`): the prompt is `\\\"Summarize?\\\"` with options `[\\\"Summarize\\\", \\\"Summarize with custom prompt\\\", \\\"No summary\\\"]`. So the field is `:no | :yes | {:yes, custom_instructions}`.\n\nEmit `:session_before_tree` event (cancel-on-result; defined at event.ex:27). Extensions may:\n- `{:cancel, reason}` → abort navigation.\n- Supply `%BranchSummaryResult{}` → only honored when `user_wants_summary != :no`.\n\nIf no extension override and `user_wants_summary != :no`, call `generate_branch_summary/2` (F4); when `{:yes, custom_instructions}`, thread the instructions through.\n\nTests: cancel path; extension-override path; LLM path; no-summary path.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "G2. Session.navigate_tree/2 + TreePreparation + :session_before_tree dispatch",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:01Z"
+  "updated_at": "2026-04-26T20:02:14Z"
 }
