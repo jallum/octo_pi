@@ -6,7 +6,8 @@
     "opi-ixp.20",
     "opi-ixp.22",
     "opi-ixp.23",
-    "opi-ixp.25"
+    "opi-ixp.25",
+    "opi-ixp.4"
   ],
   "blocks": [],
   "comments": [],
@@ -19,5 +20,5 @@
   "status": "open",
   "title": "D3b. Live thinking-model compaction end-to-end test",
   "type": "task",
-  "updated_at": "2026-04-26T23:12:07.792818Z"
+  "updated_at": "2026-04-26T23:12:12.284880Z"
 }
