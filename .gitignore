@@ -1,4 +1,7 @@
 tmp/
+# Also catches a top-level `tmp` symlink (gitignore's `tmp/` only
+# matches directories, not symlinks pointing to one).
+/tmp
 /_build/
 /deps/
 /doc/
