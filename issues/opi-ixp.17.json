@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:01:57Z",
+  "description": "**Phase D — Summarization LLM call. Deps: none (parallel with B/C).**\n\nLift verbatim from upstream into a constants module:\n- `SUMMARIZATION_SYSTEM_PROMPT` — `tmp/pi-mono/.../compaction/utils.ts:168-170`\n- `SUMMARIZATION_PROMPT` — `tmp/pi-mono/.../compaction/compaction.ts:454-485`\n- `UPDATE_SUMMARIZATION_PROMPT` — `compaction.ts:487-524`\n- `TURN_PREFIX_SUMMARIZATION_PROMPT` — `compaction.ts:695-708`\n\n(`BRANCH_SUMMARY_PROMPT` lives in `branch-summarization.ts:248-275` and is added to this module by F4 — kept here as the single home for all summarization prompts.)",
+  "id": "opi-ixp.17",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "D1. Summarization prompts module (constants)",
+  "type": "task",
+  "updated_at": "2026-04-26T20:01:57Z"
+}
