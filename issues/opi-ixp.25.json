@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:01:58Z",
+  "description": "**Phase E — Compaction orchestration. Deps: E4, E3, B4, E5a.**\n\nAfter `Compaction.compact/2` returns (or extension supplies a `%CompactionResult{}`):\n- Append `CompactionEntry` via `SessionManager.add_entry/3` (B4) — which appends to in-memory DAG AND on-disk JSONL. Append-only — no history rewrite.\n- Subsequent prompt assembly via `build_session_context` (B6/E5a) automatically picks up the new boundary and injects the synthetic message from E3.\n- Emit `:session_compact` (fire-and-forget) with the appended entry and `from_extension?` flag.\n\nTests: port `agent-session-auto-compaction-queue.test.ts`.",
+  "id": "opi-ixp.25",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "E5b. CompactionEntry append + :session_compact emit",
+  "type": "task",
+  "updated_at": "2026-04-26T20:01:58Z"
+}
