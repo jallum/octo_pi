@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-26T21:44:59.315873Z",
+  "description": "**Phase C — follow-on for C2. Deps: structs landing for the three missing message roles.**\n\nUpstream `findValidCutPoints` (`tmp/pi-mono/.../compaction/compaction.ts:299-337`) treats the following message roles as valid cut points:\n- `bashExecution`\n- `branchSummary`\n- `compactionSummary`\n\nPlus `user` and `assistant` (already covered by C2).\n\nC2 ships against the message structs that exist at port time (`User`, `Assistant`, `ToolResult`). This ticket adds the cut-point heads (and matching `estimate_tokens` heads in `Compaction.Tokens`) for the three message structs once they land.\n\n**Scope (when each struct ships, add):**\n\n1. `BashExecutionMessage` struct (no current ticket — file a new one if needed)\n   - `Tokens.estimate_tokens(%BashExecutionMessage{command: c, output: o})` → `ceil_div4(byte_size(c) + byte_size(o))` (mirrors `compaction.ts:278-281`)\n   - `find_cut_point` predicate treats it like a `User` message (turn-start + cut point), per upstream comment `compaction.ts:297` \"BashExecutionMessage is treated like a user message\"\n   - `findTurnStartIndex` recognises it as a turn boundary\n\n2. `BranchSummaryMessage` struct (E3-adjacent; not currently scoped)\n   - `Tokens.estimate_tokens(%BranchSummaryMessage{summary: s})` → `ceil_div4(byte_size(s))` (mirrors `compaction.ts:282-286`)\n   - `find_cut_point` predicate: cut point ✓ (not a turn boundary)\n\n3. `CompactionSummaryMessage` struct (E3 — opi-ixp.22 / opi-ixp.25)\n   - `Tokens.estimate_tokens(%CompactionSummaryMessage{summary: s})` → `ceil_div4(byte_size(s))`\n   - `find_cut_point` predicate: cut point ✓\n\n**Tests:** add a test per struct asserting cut-point eligibility, and a token-estimate parity test against upstream's chars/4 path.\n\n**Hard dep on:** opi-ixp.22 (E3 / compactionSummary).\n\nThe bashExecution and branchSummary message-role structs aren't in any open ticket today; this ticket also captures that gap. When those structs are filed, add deps here.",
+  "id": "opi-ixp.43",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "C2a. Wire bash_execution / branch_summary / compaction_summary message-role heads into find_cut_point + estimate_tokens",
+  "type": "task",
+  "updated_at": "2026-04-26T21:44:59.315873Z"
+}
