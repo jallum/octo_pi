@@ -34,9 +34,36 @@ defmodule OctoPi.Coder.ModelsTest do
              } = Models.find(:ollama, "qwen3.5:latest")
     end
 
-    test "returns nil for unknown providers" do
-      assert Models.find(:google, "gemini-2.5-flash") == nil
-      assert Models.find(:openai, "gpt-4") == nil
+    test "resolves an OpenAI model via OpenAI-completions API" do
+      assert %Model{
+               provider: :openai,
+               api: :openai_completions,
+               base_url: "https://api.openai.com/v1"
+             } = Models.find(:openai, "gpt-4o")
+    end
+
+    test "OpenAI o-series and gpt-5 ids set reasoning: true" do
+      assert %Model{reasoning: true} = Models.find(:openai, "o3-mini")
+      assert %Model{reasoning: true} = Models.find(:openai, "gpt-5-mini")
+      assert %Model{reasoning: false} = Models.find(:openai, "gpt-4o")
+    end
+
+    test "resolves a Google Gemini model — nominal until an octo_pi_ai_google ships" do
+      m = Models.find(:google, "gemini-2.5-flash")
+      assert m.provider == :google
+      assert m.api == :google_generative_ai
+      assert m.base_url =~ "googleapis.com"
+      assert m.reasoning == true
+      assert :image in m.input
+    end
+
+    test "Gemini 2.5 Pro overrides bump max_tokens" do
+      assert %Model{max_tokens: 65_536, reasoning: true} =
+               Models.find(:google, "gemini-2.5-pro")
+    end
+
+    test "returns nil for unmodelled providers" do
+      assert Models.find(:azure, "anything") == nil
     end
 
     test "returns nil for non-binary ids" do
@@ -49,7 +76,19 @@ defmodule OctoPi.Coder.ModelsTest do
       assert %Model{provider: :anthropic} = Models.resolve("claude-haiku-4-5")
     end
 
-    test "non-claude ids fall through to Ollama" do
+    test "gemini-* routes to Google" do
+      assert %Model{provider: :google} = Models.resolve("gemini-2.5-flash")
+    end
+
+    test "gpt-* routes to OpenAI" do
+      assert %Model{provider: :openai} = Models.resolve("gpt-4o")
+    end
+
+    test "o-series ids route to OpenAI" do
+      assert %Model{provider: :openai} = Models.resolve("o3-mini")
+    end
+
+    test "non-claude / non-gemini / non-gpt ids fall through to Ollama" do
       assert %Model{provider: :ollama} = Models.resolve("qwen3.5:latest")
     end
   end
@@ -60,9 +99,14 @@ defmodule OctoPi.Coder.ModelsTest do
       assert %Model{provider: :anthropic} = ctx.find_model.(:anthropic, "claude-haiku-4-5")
     end
 
-    test "returns nil for unknown providers (no longer a hard nil_model stub)" do
+    test "resolves Google via the registry now that CustomCompaction depends on it" do
       ctx = Context.new(%{cwd: "/tmp"})
-      assert ctx.find_model.(:google, "gemini-2.5-flash") == nil
+      assert %Model{provider: :google} = ctx.find_model.(:google, "gemini-2.5-flash")
+    end
+
+    test "still returns nil for unmodelled providers (no longer a hard nil stub)" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.find_model.(:azure, "anything") == nil
     end
   end
 end
