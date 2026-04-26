@@ -220,15 +220,10 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2.input.value == ""
     end
 
-    test "paste markers buffer chars and insert atomically" do
+    test "paste event inserts content atomically into the input field" do
       s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
-      s = Interactive.handle_event(s, :paste_start)
-      s = Interactive.handle_event(s, {:key, %Key{key: ?b}})
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o}})
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o}})
-      s = Interactive.handle_event(s, :paste_end)
+      s = Interactive.handle_event(s, {:paste, "boo"})
       assert s.input.value == "helloboo world"
-      assert s.paste_buffer == nil
     end
   end
 

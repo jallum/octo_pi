@@ -80,7 +80,6 @@ defmodule OctoPi.TUI.Interactive do
           models: [Model.t()],
           model_selector: ModelSelector.t() | nil,
           dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
-          paste_buffer: String.t() | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
@@ -121,7 +120,6 @@ defmodule OctoPi.TUI.Interactive do
             models: [],
             model_selector: nil,
             dequeue_overlay: nil,
-            paste_buffer: nil,
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
@@ -385,6 +383,7 @@ defmodule OctoPi.TUI.Interactive do
     footer_data = child_pid(sup, FooterData)
 
     {:ok, _} = Registry.register(Events, {:key_event, terminal}, nil)
+    {:ok, _} = Registry.register(Events, {:paste, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
     OctoPi.Agent.subscribe(session, self(), :async)
 
@@ -445,6 +444,13 @@ defmodule OctoPi.TUI.Interactive do
     state
     |> Map.put(:notification, nil)
     |> handle_event(parsed)
+    |> advance()
+  end
+
+  def handle_info({:paste, _content} = msg, state) do
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(msg)
     |> advance()
   end
 
@@ -927,15 +933,8 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  def handle_event(state, :paste_start), do: %{state | paste_buffer: ""}
-
-  def handle_event(%{paste_buffer: buf} = state, {:key, %Key{key: cp}}) when is_binary(buf) and is_integer(cp),
-    do: %{state | paste_buffer: buf <> <<cp::utf8>>}
-
-  def handle_event(%{paste_buffer: buf, input: input} = state, :paste_end) when is_binary(buf),
-    do: %{state | input: Components.Input.paste(input, buf), paste_buffer: nil}
-
-  def handle_event(state, :paste_end), do: %{state | paste_buffer: nil}
+  def handle_event(%{input: input} = state, {:paste, content}) when is_binary(content),
+    do: %{state | input: Components.Input.paste(input, content)}
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentStart{}}) do
     fire_extension_event(state.extensions, :agent_start, state)

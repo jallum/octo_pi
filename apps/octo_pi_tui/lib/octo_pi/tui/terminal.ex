@@ -133,6 +133,7 @@ defmodule OctoPi.TUI.Terminal do
       open_editor_fn: open_editor_fn,
       keyboard_mode: :none,
       stdin_buffer: "",
+      paste_buffer: nil,
       flush_ms: flush_ms,
       deadlines: %{}
     }
@@ -364,19 +365,38 @@ defmodule OctoPi.TUI.Terminal do
   defp process_chunk(bin, state) do
     :telemetry.execute([:octo_pi_tui, :stdin, :chunk], %{byte_count: byte_size(bin)}, %{bytes: bin})
     {sequences, tail} = StdinFSM.decode(state.stdin_buffer <> bin)
-    Enum.each(sequences, &emit_key_event(state, &1))
+    state = Enum.reduce(sequences, state, &dispatch_seq(&2, &1))
     arm_or_disarm_flush(%{state | stdin_buffer: tail})
   end
 
-  # Raw sequence telemetry → KeyParser → parsed-key telemetry → broadcast.
+  # Outside paste mode → parse + telemetry + broadcast as a key event.
   # `KeyParser` returns `:unknown` for sequences we don't recognize; those
-  # are not broadcast (no consumer would know what to do with them).
-  defp emit_key_event(state, seq) do
+  # are dropped (no consumer would know what to do with them). A spurious
+  # paste-end marker outside paste mode is also dropped.
+  defp dispatch_seq(%{paste_buffer: nil} = state, "\e[200~") do
+    :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: "\e[200~"})
+    %{state | paste_buffer: ""}
+  end
+
+  defp dispatch_seq(%{paste_buffer: nil} = state, "\e[201~"), do: state
+
+  defp dispatch_seq(%{paste_buffer: nil} = state, seq) do
     :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: seq})
     parsed = KeyParser.parse(seq)
     :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed, seq: seq})
     if parsed != :unknown, do: broadcast(state, :key_event, {:key_event, parsed})
+    state
   end
+
+  # Inside paste mode → end marker emits accumulated content as one
+  # `:paste` broadcast; everything else accumulates raw bytes.
+  defp dispatch_seq(%{paste_buffer: buf} = state, "\e[201~") do
+    :telemetry.execute([:octo_pi_tui, :paste], %{byte_count: byte_size(buf)}, %{content: buf})
+    broadcast(state, :paste, {:paste, buf})
+    %{state | paste_buffer: nil}
+  end
+
+  defp dispatch_seq(%{paste_buffer: buf} = state, seq), do: %{state | paste_buffer: buf <> seq}
 
   defp tty_write(state, bytes) do
     bin = IO.iodata_to_binary(bytes)
@@ -403,7 +423,7 @@ defmodule OctoPi.TUI.Terminal do
   defp fire_deadline(:flush, %{stdin_buffer: ""} = state), do: state
 
   defp fire_deadline(:flush, %{stdin_buffer: buf} = state) do
-    emit_key_event(state, buf)
+    state = dispatch_seq(state, buf)
     %{state | stdin_buffer: ""}
   end
 
@@ -440,12 +460,18 @@ defmodule OctoPi.TUI.Terminal do
 
   defp spawn_reader(reader_fn) do
     parent = self()
-    spawn_link(fn -> reader_loop(parent, reader_fn) end)
+
+    spawn_link(fn ->
+      reader_fn
+      |> reader_loop(parent)
+      |> reader_exit(parent)
+    end)
   end
 
-  defp reader_loop(parent, reader_fn) do
+  defp reader_loop(reader_fn, parent) do
     case reader_fn.() do
       :eof ->
+        :eof
         reader_exit(:eof, parent)
 
       {:error, reason} ->
@@ -461,7 +487,7 @@ defmodule OctoPi.TUI.Terminal do
         )
 
         send(parent, {:stdin_chunk, bin})
-        reader_loop(parent, reader_fn)
+        reader_loop(reader_fn, parent)
     end
   end
 
