@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-uuy.4"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-uuy.8"
+  ],
   "created": "2026-04-26T01:41:32Z",
   "description": "Add two new events to OctoPi.Agent.Event for the compaction lifecycle.\nThese are emitted by the manual compaction API and the auto-compaction path in the Loop.\n\nReference: tmp/pi-mono/packages/coding-agent/src/core/agent-session.ts lines 121-129.\n\n## Add to apps/octo_pi_agent/lib/octo_pi/agent/event.ex\n\ndefmodule CompactionStart do\n  @moduledoc \"Emitted when context compaction begins.\"\n  @enforce_keys [:reason]\n  @type reason :: :manual | :threshold | :overflow\n  @type t :: %__MODULE__{reason: reason()}\n  defstruct [:reason]\nend\n\ndefmodule CompactionEnd do\n  @moduledoc \"Emitted when compaction finishes, is cancelled, or fails.\"\n  @enforce_keys [:reason, :aborted?, :will_retry?]\n  @type reason :: :manual | :threshold | :overflow\n  @type t :: %__MODULE__{\n    reason: reason(),\n    result: map() | nil,\n    aborted?: boolean(),\n    will_retry?: boolean(),\n    error_message: String.t() | nil\n  }\n  defstruct [:reason, :result, :error_message, aborted?: false, will_retry?: false]\nend\n\nresult is %{summary: String.t(), first_kept_entry_id: String.t(), tokens_before: integer()}\nwhen compaction succeeded, nil when aborted or failed.\n\nwill_retry?: true means overflow triggered compaction and the agent will\nautomatically retry the failed turn after compaction completes.\n\n## Also update the @type t :: union in event.ex\n\nAdd Event.CompactionStart.t() | Event.CompactionEnd.t() to the union.\n\n## Tests\n\nAdd to the event test file (create one if it doesn't exist).\nVerify struct shapes; verify the union type includes the new variants.",
   "id": "opi-uuy.6",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Add CompactionStart and CompactionEnd events",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:34Z"
+  "updated_at": "2026-04-26T01:41:35Z"
 }
