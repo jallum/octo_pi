@@ -35,12 +35,25 @@ defmodule OctoPi.TUI.RawMode do
     result
   end
 
-  @doc "Restore the terminal to cooked mode."
+  @doc """
+  Restore the terminal to cooked mode.
+
+  Discards any pending stdin bytes via `tcflush(TCIFLUSH)` *before*
+  flipping the kernel back to cooked. Without this, terminal-emitted
+  bytes that landed in the kernel TTY buffer during shutdown — most
+  visibly kitty key-release events for whatever key triggered the
+  exit — would be read by the parent shell's readline.
+  """
   @spec exit() :: :ok | {:error, term()}
   @dialyzer {:no_match, exit: 0}
   def exit do
     case TtyNif.restore_iexten() do
       {:error, msg} -> Logger.warning("RawMode: restore_iexten failed: #{msg}")
+      _ -> :ok
+    end
+
+    case TtyNif.flush_input() do
+      {:error, msg} -> Logger.warning("RawMode: flush_input failed: #{msg}")
       _ -> :ok
     end
 
