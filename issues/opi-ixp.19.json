@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.18"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:57Z",
   "description": "**Phase D — Summarization LLM call. Deps: D2.**\n\nAdd the reasoning conditional from `tmp/pi-mono/.../compaction/compaction.ts:569-572`:\n- Condition: `model.reasoning \u0026\u0026 thinking_level \u0026\u0026 thinking_level !== \\\"off\\\"`\n- When true: thread `reasoning: thinking_level` into `completionOptions`.\n- When false: omit `reasoning` field entirely.\n\nThread `thinking_level` param through callers.\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/compaction-thinking-model.test.ts`.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "D3. Reasoning/thinking-level support in generate_summary",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:57Z"
+  "updated_at": "2026-04-26T20:02:07Z"
 }

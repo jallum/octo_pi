@@ -4,7 +4,9 @@
     "opi-ixp.15",
     "opi-ixp.17"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.19"
+  ],
   "created": "2026-04-26T20:01:57Z",
   "description": "**Phase D — Summarization LLM call. Deps: D1, C4.**\n\nPort `generateSummary` from `tmp/pi-mono/.../compaction/compaction.ts:530-590`, **without** the reasoning conditional (D3 layers that on).\n\n- Wrap messages in `\u003cconversation\u003e...\u003c/conversation\u003e`.\n- If `previous_summary` present: wrap in `\u003cprevious-summary\u003e...\u003c/previous-summary\u003e` and switch from `SUMMARIZATION_PROMPT` to `UPDATE_SUMMARIZATION_PROMPT`.\n- `max_tokens = 0.8 × reserve_tokens` (`0.5 ×` for turn-prefix variant).\n- Reuse `OctoPi.AI.Providers.Anthropic.Producer` pipeline.\n- Default model = current session model; **make settings-overridable**.\n\nTests: stub the producer; assert prompt construction and previous-summary threading. Port `compaction-summary-reasoning.test.ts`.",
   "id": "opi-ixp.18",
