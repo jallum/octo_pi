@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-26T15:49:01.048065Z",
+  "description": "## Symptom\n\nAfter quitting the TUI (Ctrl+D), kitty keyboard protocol bytes appear as literal text on the shell command line — e.g. `0;5:3u7u5u0u7;1:3u5;1:3u0;1:3u…`.\n\n## Root cause\n\n`Terminal.terminate/2` calls `drain_input/2`, which waits for `{:stdin_chunk, _}` messages in the **Erlang process mailbox**. However, by the time `terminate` runs, the reader process has already exited — it received EOF (from the user's Ctrl+D), called `send(parent, :stdin_eof)`, and returned. No further `{:stdin_chunk, _}` messages will ever arrive. `drain_input` therefore times out after `drain_idle_ms` (50 ms) without consuming anything.\n\nMeanwhile the TTY buffer still holds terminal responses to the sequences sent by `disable_keyboard_protocol/1` (`\\e[<0u]` for kitty mode, `\\e[>4m` for modify-other-keys). When `raw_mode_fn.(:exit)` restores cooked mode, the shell's readline reads those buffered bytes as user input.\n\n## Fix direction\n\nThe drain must reach the actual TTY, not just the process mailbox. Options in rough preference order:\n\n1. **Keep the reader alive through the drain window.** Change the reader so that on EOF it does not exit immediately; instead it sends `:stdin_eof` and keeps reading until the Terminal tells it to stop. `terminate` can then perform the drain and kill the reader afterward.\n2. **Re-spawn a short-lived TTY drainer in `terminate`.** After `disable_keyboard_protocol`, spawn a temporary process that calls `:io.get_chars(\"\", 256)` in a tight loop (forwarding chunks to the Terminal mailbox as normal) until `drain_input` declares silence.\n3. **NIF-level drain.** Add a `TtyNif` function that reads directly from the TTY fd for a bounded window — no Erlang scheduler involvement.\n\nOption 1 is the least invasive: the reader's exit behaviour changes slightly, but Terminal's public API and the drain logic itself are unchanged.\n\n## Acceptance\n\n- After Ctrl+D (and after escape-key interrupt), the shell prompt is clean — no stray bytes.\n- Existing Terminal tests continue to pass; no new `Process.sleep` in tests.\n",
+  "id": "opi-445.5",
+  "labels": [],
+  "parent": "opi-445",
+  "priority": 2,
+  "status": "open",
+  "title": "Drain TTY on shutdown to prevent escape-sequence leak to shell",
+  "type": "bug",
+  "updated_at": "2026-04-26T15:49:01.048065Z"
+}
