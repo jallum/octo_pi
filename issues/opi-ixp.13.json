@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.12"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:56Z",
   "description": "**Phase C — Pure compaction core. Deps: C1, A1.**\n\nPort from `tmp/pi-mono/.../compaction/compaction.ts`:\n- `findTurnStartIndex` (lines 344-359)\n- `findCutPoint` (lines 386-448)\n\nReturns `%CutPointResult{first_kept_entry_index, turn_start_index, is_split_turn?}`.\n\nAlgorithm: walk **backwards** from end accumulating tokens until `\u003e= keep_recent_tokens`; forward-scan to nearest valid cut point. Valid cuts: user / assistant / bash_execution / custom / branch_summary / compaction. **NEVER** at tool result.\n\nTests: turn-boundary cut, mid-turn split, single huge turn, cut against existing compaction boundary.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "C2. find_cut_point/3 + find_turn_start_index + split-turn detection",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:56Z"
+  "updated_at": "2026-04-26T20:02:05Z"
 }
