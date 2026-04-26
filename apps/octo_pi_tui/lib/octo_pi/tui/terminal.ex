@@ -179,7 +179,10 @@ defmodule OctoPi.TUI.Terminal do
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
   @impl true
-  def terminate(_reason, state), do: deactivate(state) && :ok
+  def terminate(_reason, state) do
+    deactivate(state)
+    :ok
+  end
 
   # --- activation lifecycle ---
 
