@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-ixp.15",
     "opi-ixp.31"
   ],
   "blocks": [],
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "F4. BRANCH_SUMMARY_PROMPT + generate_branch_summary/2",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:13Z"
+  "updated_at": "2026-04-26T20:02:14Z"
 }
