@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:01:55Z",
+  "description": "**Phase B — SessionManager. Deps: B2.**\n\nReplace empty/nil-returning stubs in `apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex` with real implementations against `SessionManager`:\n- `get_branch/0` — currently `\u0026__MODULE__.empty_entries/0` (api.ex:30)\n- `get_leaf_entry_id/0` — currently `\u0026__MODULE__.nil_entry_id/0` (api.ex:31)\n- `get_entries/0` — exists on `Context` (context.ex:15) but **NOT** on API yet — add it.\n\nTests: extension-side tests asserting non-empty results in a populated session.",
+  "id": "opi-ixp.11",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "B7. Wire extension API: get_branch/0, get_leaf_entry_id/0, get_entries/0",
+  "type": "task",
+  "updated_at": "2026-04-26T20:01:55Z"
+}
