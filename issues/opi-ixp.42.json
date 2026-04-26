@@ -2,7 +2,9 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.13"
+  ],
   "comments": [],
   "created": "2026-04-26T21:44:45.842294Z",
   "description": "**Phase M — Pre-C2 cleanup. Deps: A1 (Session.Entry.Custom exists).**\n\n`OctoPi.Agent.Message.Custom` is the functional equivalent of upstream `CustomEntry` (`tmp/pi-mono/.../session-manager.ts:98-102`) — `kind`/`customType` + opaque payload, invisible to LLM, used by extensions for state persistence — but lives at the wrong layer (message stream vs. entry stream).\n\nThe A1 fixup added `OctoPi.Coder.Session.Entry.Custom` which IS the right home. `Agent.Message.Custom` is a duplicate.\n\nSmell that motivates this: `apps/octo_pi_coder/lib/octo_pi/coder/extensions/tools.ex` is split-brained today:\n- L95 writes via `api.append_entry.(%{type: \"tools-config\", data: %{...}})` → routes to `Session.Entry.Passthrough` (no real reader)\n- L110 reads via `ctx.get_branch.()` looking for `%Agent.Message.Custom{kind: :tools_config, ...}` → only hit because tests synthesize Custom messages directly\n\n**Scope:**\n\n1. Rewrite `extensions/tools.ex`:\n   - Write: `api.append_entry.(%Session.Entry.Custom{custom_type: \"tools_config\", data: %{enabled_tools: [...]}})`\n   - Read: scan `ctx.get_entries.()` (most-recent-first or last-write-wins) for `%Session.Entry.Custom{custom_type: \"tools_config\"}`\n   - Update `tools_test.exs` fixtures to use `Session.Entry.Custom` accordingly.\n\n2. Fix `Extension.Context.get_entries` typespec — currently declared `(-> [Message.t()])`; should be `(-> [Session.Entry.t()])`.\n\n3. Remove `OctoPi.Agent.Message.Custom`:\n   - Delete `apps/octo_pi_agent/lib/octo_pi/agent/message/custom.ex`\n   - Drop the `Custom.t()` member from `OctoPi.Agent.Message.t()` union (`apps/octo_pi_agent/lib/octo_pi/agent/message.ex`)\n   - Drop the `defp normalize(%Custom{} = m), do: m` head in `apps/octo_pi_agent/lib/octo_pi/agent/session.ex:355` and its alias\n\n4. Cleanup in `Compaction.Tokens`:\n   - Remove `def estimate_tokens(%Custom{}), do: 0` head and its alias\n   - Drop the docstring paragraph about the Custom semantic divergence — there's no divergence anymore\n\n5. Tests: full test suite passes; no remaining references to `Agent.Message.Custom` in lib/ or test/.\n\n**Why first (before C2):** with `Custom` removed from the message union, C2's cut-point predicate has one fewer head to consider and one fewer divergence-comment to write. After migration, a `Session.Entry.Message`'s `message` field is exactly `User | Assistant | ToolResult`.",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "M1. Drop Agent.Message.Custom; route tools-config through Session.Entry.Custom",
   "type": "task",
-  "updated_at": "2026-04-26T21:44:45.842294Z"
+  "updated_at": "2026-04-26T21:45:05.722665Z"
 }

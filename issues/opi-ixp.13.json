@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [
     "opi-ixp.1",
-    "opi-ixp.12"
+    "opi-ixp.12",
+    "opi-ixp.42"
   ],
   "blocks": [
     "opi-ixp.16"
@@ -16,5 +17,5 @@
   "status": "in_progress",
   "title": "C2. find_cut_point/3 + find_turn_start_index + split-turn detection",
   "type": "task",
-  "updated_at": "2026-04-26T21:20:46.420575Z"
+  "updated_at": "2026-04-26T21:45:05.722665Z"
 }
