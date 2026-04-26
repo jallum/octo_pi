@@ -29,7 +29,7 @@ defmodule OctoPi.Coder.Extension.Context do
             get_entries: &__MODULE__.empty_entries/0,
             get_branch: &__MODULE__.empty_entries/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0,
-            find_model: &__MODULE__.nil_model/2,
+            find_model: &OctoPi.Coder.Models.find/2,
             get_model_auth: &__MODULE__.no_auth/1
 
   @doc false
@@ -39,10 +39,6 @@ defmodule OctoPi.Coder.Extension.Context do
   @doc false
   @spec nil_entry_id() :: nil
   def nil_entry_id, do: nil
-
-  @doc false
-  @spec nil_model(atom(), String.t()) :: nil
-  def nil_model(_provider, _id), do: nil
 
   @doc false
   @spec no_auth(term()) :: {:error, String.t()}

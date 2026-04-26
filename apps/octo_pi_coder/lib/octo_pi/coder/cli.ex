@@ -7,7 +7,7 @@ defmodule OctoPi.Coder.CLI do
     selected mode. Returns an integer exit code.
   """
 
-  alias OctoPi.AI.Model
+  alias OctoPi.Coder.Models
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
@@ -36,7 +36,7 @@ defmodule OctoPi.Coder.CLI do
   @type opts :: %{
           mode: :print | :rpc | :interactive,
           prompt: String.t() | nil,
-          model: Model.t(),
+          model: OctoPi.AI.Model.t(),
           cwd: String.t()
         }
 
@@ -234,39 +234,7 @@ defmodule OctoPi.Coder.CLI do
       IO.puts(Jason.encode!(fallback))
   end
 
-  defp resolve_model(id) do
-    case provider_from_model_id(id) do
-      :ollama ->
-        %Model{
-          id: id,
-          name: id,
-          api: :openai_completions,
-          provider: :ollama,
-          base_url: "http://localhost:1234/v1",
-          context_window: 262_144,
-          max_tokens: 4_096
-        }
-
-      :anthropic ->
-        %Model{
-          id: id,
-          name: id,
-          api: :anthropic_messages,
-          provider: :anthropic,
-          base_url: "https://api.anthropic.com/v1",
-          context_window: 200_000,
-          max_tokens: 8000
-        }
-    end
-  end
-
-  defp provider_from_model_id(id) do
-    if String.starts_with?(id, "claude") do
-      :anthropic
-    else
-      :ollama
-    end
-  end
+  defp resolve_model(id), do: Models.resolve(id)
 
   defp usage_text do
     """
