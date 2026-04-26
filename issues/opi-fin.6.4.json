@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-fin.5.3",
     "opi-fin.6.2",
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-fin.6",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "6b: Migrate dynamic_tools and permission_gate to ctx.host",
   "type": "task",
-  "updated_at": "2026-04-25T21:14:25Z"
+  "updated_at": "2026-04-26T00:23:04Z"
 }
