@@ -4,10 +4,13 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
   `tmp/pi-mono/.../session-manager.ts:67-76`.
 
   Optional `from_hook` and `details` are omitted from the wire when nil
-  (matching JSON.stringify omitting `undefined`).
+  (matching JSON.stringify omitting `undefined`). Unknown wire keys are
+  captured into `extras` for lossless round-trips.
   """
 
   alias OctoPi.Coder.Session.JSON
+
+  @known_keys ~w(type id parentId timestamp summary firstKeptEntryId tokensBefore fromHook details)
 
   @enforce_keys [:id, :timestamp, :summary, :first_kept_entry_id, :tokens_before]
   defstruct [
@@ -18,7 +21,8 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
     :first_kept_entry_id,
     :tokens_before,
     :from_hook,
-    :details
+    :details,
+    extras: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -29,7 +33,8 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
           first_kept_entry_id: String.t(),
           tokens_before: non_neg_integer(),
           from_hook: boolean() | nil,
-          details: term() | nil
+          details: term() | nil,
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -45,6 +50,7 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
     ]
     |> JSON.maybe_put("fromHook", e.from_hook)
     |> JSON.maybe_put("details", e.details)
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -60,7 +66,8 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
       first_kept_entry_id: m["firstKeptEntryId"],
       tokens_before: m["tokensBefore"],
       from_hook: m["fromHook"],
-      details: m["details"]
+      details: m["details"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

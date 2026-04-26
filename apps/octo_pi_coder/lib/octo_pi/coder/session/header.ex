@@ -4,21 +4,28 @@ defmodule OctoPi.Coder.Session.Header do
 
   Mirrors `SessionHeader` in
   `tmp/pi-mono/packages/coding-agent/src/core/session-manager.ts:30-37`.
-  Encoded key order matches upstream byte-for-byte: type, version, id,
-  timestamp, cwd, parentSession.
+
+  Known-key emit order matches upstream byte-for-byte: type, version,
+  id, timestamp, cwd, parentSession. Unknown keys (e.g. v1 sessions
+  carry `provider`/`modelId`/`thinkingLevel`/`branchedFrom`) are
+  captured into `extras` so a decode → encode → decode cycle is
+  lossless. Extras are emitted alphabetically after the known keys.
   """
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type version id timestamp cwd parentSession)
+
   @enforce_keys [:id, :timestamp, :cwd]
-  defstruct [:id, :version, :timestamp, :cwd, :parent_session]
+  defstruct [:id, :version, :timestamp, :cwd, :parent_session, extras: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
           version: integer() | nil,
           timestamp: String.t(),
           cwd: String.t(),
-          parent_session: String.t() | nil
+          parent_session: String.t() | nil,
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -31,6 +38,7 @@ defmodule OctoPi.Coder.Session.Header do
       {"cwd", h.cwd},
       {"parentSession", h.parent_session}
     ]
+    |> JSON.append_extras(h.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -43,7 +51,8 @@ defmodule OctoPi.Coder.Session.Header do
       id: m["id"],
       timestamp: m["timestamp"],
       cwd: m["cwd"],
-      parent_session: m["parentSession"]
+      parent_session: m["parentSession"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

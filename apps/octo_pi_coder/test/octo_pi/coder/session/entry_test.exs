@@ -8,10 +8,12 @@ defmodule OctoPi.Coder.Session.EntryTest do
     BranchSummary,
     Compaction,
     Custom,
+    CustomMessage,
     Label,
     Message,
     ModelChange,
     Passthrough,
+    SessionInfo,
     ThinkingLevelChange
   }
 
@@ -232,6 +234,64 @@ defmodule OctoPi.Coder.Session.EntryTest do
     end
   end
 
+  describe "CustomMessageEntry" do
+    test "round-trip with all fields" do
+      e = %CustomMessage{
+        id: "x",
+        parent_id: "p",
+        timestamp: "t",
+        custom_type: "ext",
+        content: "hello",
+        details: %{"k" => "v"},
+        display: true
+      }
+
+      {json, decoded} = roundtrip(e)
+      assert json =~ ~s("type":"custom_message")
+      assert json =~ ~s("customType":"ext")
+      assert json =~ ~s("display":true)
+      assert decoded == e
+    end
+
+    test "omits details when nil; display false survives" do
+      e = %CustomMessage{
+        id: "x",
+        parent_id: nil,
+        timestamp: "t",
+        custom_type: "ext",
+        content: [],
+        display: false
+      }
+
+      {json, decoded} = roundtrip(e)
+      refute json =~ "\"details\""
+      assert json =~ ~s("display":false)
+      assert decoded == e
+    end
+  end
+
+  describe "SessionInfoEntry" do
+    test "round-trip with name" do
+      e = %SessionInfo{
+        id: "i",
+        parent_id: nil,
+        timestamp: "t",
+        name: "my session"
+      }
+
+      {json, decoded} = roundtrip(e)
+      assert json =~ ~s("type":"session_info")
+      assert json =~ ~s("name":"my session")
+      assert decoded == e
+    end
+
+    test "omits name when nil" do
+      e = %SessionInfo{id: "i", parent_id: nil, timestamp: "t", name: nil}
+      {json, _} = roundtrip(e)
+      refute json =~ "\"name\""
+    end
+  end
+
   describe "Entry.decode dispatch" do
     test "dispatches by type field to correct struct" do
       msg = %{
@@ -243,6 +303,74 @@ defmodule OctoPi.Coder.Session.EntryTest do
       }
 
       assert %Message{} = Entry.decode(msg)
+    end
+  end
+
+  describe "extras (lossless round-trip)" do
+    test "Header captures unknown v1 keys into extras" do
+      raw = %{
+        "type" => "session",
+        "id" => "i",
+        "timestamp" => "t",
+        "cwd" => "/c",
+        "provider" => "anthropic",
+        "modelId" => "claude-sonnet-4-5",
+        "thinkingLevel" => "off",
+        "branchedFrom" => "/some/path"
+      }
+
+      h = Header.decode(raw)
+      assert h.extras == %{
+               "provider" => "anthropic",
+               "modelId" => "claude-sonnet-4-5",
+               "thinkingLevel" => "off",
+               "branchedFrom" => "/some/path"
+             }
+
+      # Decode → encode → decode is lossless.
+      assert raw |> Header.decode() |> Header.encode() |> Jason.decode!() |> Header.decode() == h
+
+      # All source keys survive a round trip.
+      reencoded = h |> Header.encode() |> Jason.decode!()
+      Enum.each(raw, fn {k, v} -> assert reencoded[k] == v end)
+    end
+
+    test "extras keys are emitted in alphabetical order after known keys" do
+      h = %Header{
+        version: 3,
+        id: "i",
+        timestamp: "t",
+        cwd: "/c",
+        parent_session: nil,
+        extras: %{"zeta" => 1, "alpha" => 2, "mu" => 3}
+      }
+
+      json = Header.encode(h)
+      # alpha comes before mu comes before zeta, all after parentSession
+      idx = &(json |> :binary.match("\"#{&1}\":") |> elem(0))
+      assert idx.("parentSession") < idx.("alpha")
+      assert idx.("alpha") < idx.("mu")
+      assert idx.("mu") < idx.("zeta")
+    end
+
+    test "Compaction captures unknown keys into extras" do
+      raw = %{
+        "type" => "compaction",
+        "id" => "c1",
+        "parentId" => nil,
+        "timestamp" => "t",
+        "summary" => "s",
+        "firstKeptEntryId" => "k",
+        "tokensBefore" => 0,
+        "futureField" => "value"
+      }
+
+      c = Entry.decode(raw)
+      assert c.extras == %{"futureField" => "value"}
+
+      reencoded = c |> Entry.encode() |> Jason.decode!()
+      assert reencoded["futureField"] == "value"
+      assert Entry.decode(reencoded) == c
     end
   end
 end

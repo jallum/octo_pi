@@ -6,14 +6,17 @@ defmodule OctoPi.Coder.Session.Entry.ThinkingLevelChange do
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type id parentId timestamp thinkingLevel)
+
   @enforce_keys [:id, :timestamp, :thinking_level]
-  defstruct [:id, :parent_id, :timestamp, :thinking_level]
+  defstruct [:id, :parent_id, :timestamp, :thinking_level, extras: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
           parent_id: String.t() | nil,
           timestamp: String.t(),
-          thinking_level: String.t()
+          thinking_level: String.t(),
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -25,6 +28,7 @@ defmodule OctoPi.Coder.Session.Entry.ThinkingLevelChange do
       {"timestamp", e.timestamp},
       {"thinkingLevel", e.thinking_level}
     ]
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -36,7 +40,8 @@ defmodule OctoPi.Coder.Session.Entry.ThinkingLevelChange do
       id: m["id"],
       parent_id: m["parentId"],
       timestamp: m["timestamp"],
-      thinking_level: m["thinkingLevel"]
+      thinking_level: m["thinkingLevel"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

@@ -52,6 +52,19 @@ defmodule OctoPi.Coder.Session.ReadEntriesTest do
       assert reparsed == [header | rest]
     end
 
+    test "v1 fixture: every source field on the raw header survives a round-trip" do
+      path = Path.join(@fixture_root, "before-compaction.jsonl")
+      raw_first_line = path |> File.stream!() |> Enum.at(0) |> String.trim()
+      raw_header = Jason.decode!(raw_first_line)
+
+      [header | _] = path |> SessionStore.read_entries() |> Enum.to_list()
+      reencoded = header |> Header.encode() |> Jason.decode!()
+
+      Enum.each(raw_header, fn {k, v} ->
+        assert reencoded[k] == v, "lost field #{k} during round-trip"
+      end)
+    end
+
     test "skips malformed JSON lines silently", %{} do
       tmp = Path.join(System.tmp_dir!(), "bad-#{System.unique_integer([:positive])}.jsonl")
 

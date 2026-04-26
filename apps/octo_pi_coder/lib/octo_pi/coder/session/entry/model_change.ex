@@ -6,15 +6,18 @@ defmodule OctoPi.Coder.Session.Entry.ModelChange do
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type id parentId timestamp provider modelId)
+
   @enforce_keys [:id, :timestamp, :provider, :model_id]
-  defstruct [:id, :parent_id, :timestamp, :provider, :model_id]
+  defstruct [:id, :parent_id, :timestamp, :provider, :model_id, extras: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
           parent_id: String.t() | nil,
           timestamp: String.t(),
           provider: String.t(),
-          model_id: String.t()
+          model_id: String.t(),
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -27,6 +30,7 @@ defmodule OctoPi.Coder.Session.Entry.ModelChange do
       {"provider", e.provider},
       {"modelId", e.model_id}
     ]
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -39,7 +43,8 @@ defmodule OctoPi.Coder.Session.Entry.ModelChange do
       parent_id: m["parentId"],
       timestamp: m["timestamp"],
       provider: m["provider"],
-      model_id: m["modelId"]
+      model_id: m["modelId"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

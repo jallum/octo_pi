@@ -6,8 +6,19 @@ defmodule OctoPi.Coder.Session.Entry.BranchSummary do
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type id parentId timestamp fromId summary fromHook details)
+
   @enforce_keys [:id, :timestamp, :from_id, :summary]
-  defstruct [:id, :parent_id, :timestamp, :from_id, :summary, :from_hook, :details]
+  defstruct [
+    :id,
+    :parent_id,
+    :timestamp,
+    :from_id,
+    :summary,
+    :from_hook,
+    :details,
+    extras: %{}
+  ]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -16,7 +27,8 @@ defmodule OctoPi.Coder.Session.Entry.BranchSummary do
           from_id: String.t(),
           summary: String.t(),
           from_hook: boolean() | nil,
-          details: term() | nil
+          details: term() | nil,
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -31,6 +43,7 @@ defmodule OctoPi.Coder.Session.Entry.BranchSummary do
     ]
     |> JSON.maybe_put("fromHook", e.from_hook)
     |> JSON.maybe_put("details", e.details)
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -45,7 +58,8 @@ defmodule OctoPi.Coder.Session.Entry.BranchSummary do
       from_id: m["fromId"],
       summary: m["summary"],
       from_hook: m["fromHook"],
-      details: m["details"]
+      details: m["details"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

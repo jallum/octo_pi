@@ -5,19 +5,23 @@ defmodule OctoPi.Coder.Session.Entry.Message do
 
   The `message` payload is held opaquely as a decoded JSON map for
   forward-compat; typed conversion to `OctoPi.Agent.Message.t()` happens
-  at consumer boundaries.
+  at consumer boundaries. Unknown wire keys are preserved in `extras`
+  so round-trips stay lossless.
   """
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type id parentId timestamp message)
+
   @enforce_keys [:id, :timestamp, :message]
-  defstruct [:id, :parent_id, :timestamp, :message]
+  defstruct [:id, :parent_id, :timestamp, :message, extras: %{}]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
           timestamp: String.t(),
-          message: map()
+          message: map(),
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -29,6 +33,7 @@ defmodule OctoPi.Coder.Session.Entry.Message do
       {"timestamp", e.timestamp},
       {"message", e.message}
     ]
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -40,7 +45,8 @@ defmodule OctoPi.Coder.Session.Entry.Message do
       id: m["id"],
       parent_id: m["parentId"],
       timestamp: m["timestamp"],
-      message: m["message"]
+      message: m["message"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

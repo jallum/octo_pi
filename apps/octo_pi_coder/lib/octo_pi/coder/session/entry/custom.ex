@@ -7,15 +7,18 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
 
   alias OctoPi.Coder.Session.JSON
 
+  @known_keys ~w(type id parentId timestamp customType data)
+
   @enforce_keys [:id, :timestamp, :custom_type]
-  defstruct [:id, :parent_id, :timestamp, :custom_type, :data]
+  defstruct [:id, :parent_id, :timestamp, :custom_type, :data, extras: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
           parent_id: String.t() | nil,
           timestamp: String.t(),
           custom_type: String.t(),
-          data: term() | nil
+          data: term() | nil,
+          extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
@@ -28,6 +31,7 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
       {"customType", e.custom_type}
     ]
     |> JSON.maybe_put("data", e.data)
+    |> JSON.append_extras(e.extras)
   end
 
   @spec encode(t()) :: String.t()
@@ -40,7 +44,8 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
       parent_id: m["parentId"],
       timestamp: m["timestamp"],
       custom_type: m["customType"],
-      data: m["data"]
+      data: m["data"],
+      extras: JSON.extras(m, @known_keys)
     }
   end
 end

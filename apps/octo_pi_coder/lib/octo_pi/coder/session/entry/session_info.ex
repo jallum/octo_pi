@@ -1,36 +1,34 @@
-defmodule OctoPi.Coder.Session.Entry.Label do
+defmodule OctoPi.Coder.Session.Entry.SessionInfo do
   @moduledoc """
-  Label entry — user-defined bookmark on another entry. A nil `label`
-  acts as a deletion marker. Mirrors `LabelEntry` in
-  `tmp/pi-mono/.../session-manager.ts:104-109`.
+  Session metadata entry — currently just an optional user-defined
+  display name. Mirrors `SessionInfoEntry` in
+  `tmp/pi-mono/.../session-manager.ts:112-115`.
   """
 
   alias OctoPi.Coder.Session.JSON
 
-  @known_keys ~w(type id parentId timestamp targetId label)
+  @known_keys ~w(type id parentId timestamp name)
 
-  @enforce_keys [:id, :timestamp, :target_id]
-  defstruct [:id, :parent_id, :timestamp, :target_id, :label, extras: %{}]
+  @enforce_keys [:id, :timestamp]
+  defstruct [:id, :parent_id, :timestamp, :name, extras: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
           parent_id: String.t() | nil,
           timestamp: String.t(),
-          target_id: String.t(),
-          label: String.t() | nil,
+          name: String.t() | nil,
           extras: %{optional(String.t()) => term()}
         }
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
     [
-      {"type", "label"},
+      {"type", "session_info"},
       {"id", e.id},
       {"parentId", e.parent_id},
-      {"timestamp", e.timestamp},
-      {"targetId", e.target_id},
-      {"label", e.label}
+      {"timestamp", e.timestamp}
     ]
+    |> JSON.maybe_put("name", e.name)
     |> JSON.append_extras(e.extras)
   end
 
@@ -38,13 +36,12 @@ defmodule OctoPi.Coder.Session.Entry.Label do
   def encode(%__MODULE__{} = e), do: e |> pairs() |> JSON.object()
 
   @spec decode(map()) :: t()
-  def decode(%{"type" => "label"} = m) do
+  def decode(%{"type" => "session_info"} = m) do
     %__MODULE__{
       id: m["id"],
       parent_id: m["parentId"],
       timestamp: m["timestamp"],
-      target_id: m["targetId"],
-      label: m["label"],
+      name: m["name"],
       extras: JSON.extras(m, @known_keys)
     }
   end

@@ -147,18 +147,14 @@ defmodule OctoPi.Coder.SessionStore do
     IO.write(io, encode_line(header))
   end
 
-  # Keyword-list-shaped input (string or atom key, value) emits as
-  # a JSON object with keys in list order — byte-compat with
-  # upstream. Map-shaped input goes through Jason's normal encoder
-  # which is hash-ordered; callers that care about key order should
-  # pass an ordered list of pairs.
+  # Keyword-list-shaped input (string or atom key, value) emits as a
+  # JSON object with keys in list order via `Jason.OrderedObject` —
+  # byte-compat with upstream. Map-shaped input goes through Jason's
+  # normal encoder which is hash-ordered; callers that care about key
+  # order should pass an ordered list of pairs.
   defp encode_line(entry) when is_list(entry) do
-    inner =
-      Enum.map_join(entry, ",", fn {k, v} ->
-        Jason.encode!(to_string(k)) <> ":" <> Jason.encode!(v)
-      end)
-
-    "{" <> inner <> "}\n"
+    normalized = Enum.map(entry, fn {k, v} -> {to_string(k), v} end)
+    Jason.encode!(Jason.OrderedObject.new(normalized)) <> "\n"
   end
 
   defp encode_line(entry) when is_map(entry), do: Jason.encode!(entry) <> "\n"
