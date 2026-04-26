@@ -10,7 +10,6 @@ defmodule OctoPi.Coder.Tools.Ls do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools.PathGuard
 
   @default_limit 500
 
@@ -42,11 +41,10 @@ defmodule OctoPi.Coder.Tools.Ls do
 
   @impl true
   def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
-    cwd = Map.fetch!(args, "_cwd")
+    _cwd = Map.fetch!(args, "_cwd")
     limit = Map.get(args, "limit", @default_limit)
 
-    with {:ok, path} <- PathGuard.resolve_or_error(path, cwd),
-         {:ok, %File.Stat{type: :directory}} <- File.stat(path),
+    with {:ok, %File.Stat{type: :directory}} <- File.stat(path),
          {:ok, entries} <- File.ls(path) do
       entries = Enum.take(entries, limit)
       text = render(path, entries)
@@ -57,9 +55,6 @@ defmodule OctoPi.Coder.Tools.Ls do
          details: %{path: path, count: length(entries)}
        }}
     else
-      {:error, %Result{} = guard_result} ->
-        {:ok, guard_result}
-
       {:ok, %File.Stat{type: type}} ->
         {:ok,
          %Result{

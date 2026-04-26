@@ -11,7 +11,6 @@ defmodule OctoPi.Coder.Tools.Grep do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools.PathGuard
 
   @default_limit 100
   @max_context_lines 10
@@ -86,14 +85,9 @@ defmodule OctoPi.Coder.Tools.Grep do
   end
 
   defp do_search(requested_path, cwd, pattern, ignore_case?, literal?, glob, context, limit) do
-    case PathGuard.resolve_or_error(requested_path, cwd) do
-      {:error, %Result{} = r} ->
-        {:ok, r}
-
-      {:ok, path} ->
-        matches = search(pattern, path, ignore_case?, literal?, glob, context, limit)
-        finalize(matches)
-    end
+    path = Path.expand(requested_path, cwd)
+    matches = search(pattern, path, ignore_case?, literal?, glob, context, limit)
+    finalize(matches)
   end
 
   defp search(pattern, path, ignore_case?, literal?, glob, context, limit) do

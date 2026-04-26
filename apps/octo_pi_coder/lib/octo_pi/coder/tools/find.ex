@@ -11,7 +11,6 @@ defmodule OctoPi.Coder.Tools.Find do
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
-  alias OctoPi.Coder.Tools.PathGuard
 
   @default_limit 1000
 
@@ -61,20 +60,16 @@ defmodule OctoPi.Coder.Tools.Find do
     end
   end
 
-  defp do_find(requested_base, cwd, pattern, limit) do
-    case PathGuard.resolve_or_error(requested_base, cwd) do
-      {:error, %Result{} = r} ->
-        {:ok, r}
+  defp do_find(requested_base, _cwd, pattern, limit) do
+    base = Path.expand(requested_base)
 
-      {:ok, base} ->
-        matches =
-          base
-          |> Path.join(pattern)
-          |> Path.wildcard(match_dot: true)
-          |> Enum.take(limit)
+    matches =
+      base
+      |> Path.join(pattern)
+      |> Path.wildcard(match_dot: true)
+      |> Enum.take(limit)
 
-        finalize(matches)
-    end
+    finalize(matches)
   end
 
   defp finalize([]) do

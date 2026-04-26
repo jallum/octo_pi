@@ -11,7 +11,6 @@ defmodule OctoPi.Coder.Tools.Write do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
   alias OctoPi.Coder.FileMutex
-  alias OctoPi.Coder.Tools.PathGuard
 
   @doc "Build a `%Tool{}` rooted at `cwd` — paths are resolved against it and escapes rejected."
   @spec tool(String.t()) :: Tool.t()
@@ -39,10 +38,8 @@ defmodule OctoPi.Coder.Tools.Write do
   def execute(_id, %{"path" => path, "content" => content} = args, _abort_ref, _on_update) do
     cwd = Map.fetch!(args, "_cwd")
 
-    case PathGuard.resolve_or_error(path, cwd) do
-      {:error, %Result{} = r} -> {:ok, r}
-      {:ok, abs_path} -> FileMutex.with_lock(abs_path, fn -> do_write(abs_path, content) end)
-    end
+    abs_path = Path.expand(path, cwd)
+    FileMutex.with_lock(abs_path, fn -> do_write(abs_path, content) end)
   end
 
   defp do_write(abs_path, content) do
