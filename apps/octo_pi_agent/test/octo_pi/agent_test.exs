@@ -4,9 +4,9 @@ defmodule OctoPi.AgentTest do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Message
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.TestSupport.EchoTool
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Transport
@@ -66,7 +66,7 @@ defmodule OctoPi.AgentTest do
       }
 
       assert state.tools == []
-      assert MessageLog.to_list(state.messages) == []
+      assert %SessionManager{entries: []} = state.session_manager
       refute state.is_streaming?
       assert state.pending_tool_calls == MapSet.new()
       assert %PendingMessageQueue{count: 0, mode: :one_at_a_time} = state.steering_queue
@@ -195,7 +195,7 @@ defmodule OctoPi.AgentTest do
       state = OctoPi.Agent.state(session)
       assert state.model.id == "claude-haiku-4-5"
       refute state.is_streaming?
-      assert MessageLog.to_list(state.messages) == []
+      assert %SessionManager{entries: []} = state.session_manager
     end
 
     test "subscribe/3 returns an unsubscribe fn", %{session: session} do

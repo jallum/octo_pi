@@ -143,6 +143,12 @@ defmodule OctoPi.Agent.SessionManager do
     append_entry(sm, entry)
   end
 
+  @doc "Append multiple messages in order. Equivalent to folding `append_message/2`."
+  @spec append_messages(t(), [Message.t()]) :: t()
+  def append_messages(%__MODULE__{} = sm, messages) when is_list(messages) do
+    Enum.reduce(messages, sm, &append_message(&2, &1))
+  end
+
   @doc """
   Append a pre-built entry directly (used for branching, loading, etc.).
   Sets parent_id and id if provided by the caller; does NOT override them.

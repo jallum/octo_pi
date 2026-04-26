@@ -29,7 +29,7 @@ defmodule OctoPi.Coder.Extension.AgentSessionExtensionTest do
 
   use ExUnit.Case, async: false
 
-  alias OctoPi.Agent.MessageLog
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.ToolResult, as: AIToolResult
   alias OctoPi.Coder.Extension
@@ -378,7 +378,11 @@ defmodule OctoPi.Coder.Extension.AgentSessionExtensionTest do
 
   defp find_tool_result(%Harness{session: session}) do
     state = OctoPi.Agent.state(session)
-    state.messages |> MessageLog.to_list() |> Enum.find(&match?(%AIToolResult{}, &1))
+
+    state.session_manager
+    |> SessionManager.build_session_context()
+    |> Map.fetch!(:messages)
+    |> Enum.find(&match?(%AIToolResult{}, &1))
   end
 
   defp rewrite_user_message(%{role: :user} = m), do: %{m | content: "rewritten"}

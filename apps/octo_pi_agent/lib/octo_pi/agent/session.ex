@@ -29,9 +29,9 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message.Custom
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Transport
   alias OctoPi.AI.Message.Assistant
@@ -93,6 +93,11 @@ defmodule OctoPi.Agent.Session do
 
   @impl true
   def init(opts) do
+    initial_messages = Keyword.get(opts, :messages, [])
+
+    session_manager =
+      Enum.reduce(initial_messages, SessionManager.new(), &SessionManager.append_message(&2, &1))
+
     state =
       %Session.State{
         model: Keyword.fetch!(opts, :model),
@@ -102,7 +107,7 @@ defmodule OctoPi.Agent.Session do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
-        messages: MessageLog.new(Keyword.get(opts, :messages, []))
+        session_manager: session_manager
       }
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
       |> maybe_override_queue(:follow_up_queue, opts[:follow_up_queue_bound])
@@ -122,7 +127,8 @@ defmodule OctoPi.Agent.Session do
     if store.session.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      session = %{store.session | messages: MessageLog.append_many(store.session.messages, msgs)}
+      sm = SessionManager.append_messages(store.session.session_manager, msgs)
+      session = %{store.session | session_manager: sm}
       {:reply, :ok, start_run(%{store | session: session})}
     end
   end
@@ -209,12 +215,12 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_cast({:run_complete, messages, reason}, store) do
-    emit_session_stop(store.session, reason, MessageLog.count(messages))
+  def handle_cast({:run_complete, session_manager, reason}, store) do
+    emit_session_stop(store.session, reason, length(session_manager.entries))
 
     session = %{
       store.session
-      | messages: messages,
+      | session_manager: session_manager,
         abort_ref: maybe_forget_ref(store.session.abort_ref),
         loop_task: nil,
         run_started_at_mono: nil
@@ -285,18 +291,19 @@ defmodule OctoPi.Agent.Session do
   end
 
   defp on_loop_down(store, _reason) do
-    messages = MessageLog.push(store.session.messages, aborted_assistant())
+    sm = SessionManager.append_message(store.session.session_manager, aborted_assistant())
+    ctx = SessionManager.build_session_context(sm)
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: :aborted,
-      messages: MessageLog.to_list(messages)
+      messages: ctx.messages
     })
 
-    emit_session_stop(store.session, :aborted, MessageLog.count(messages))
+    emit_session_stop(store.session, :aborted, length(sm.entries))
 
     session = %{
       store.session
-      | messages: messages,
+      | session_manager: sm,
         error_message: "aborted by caller",
         abort_ref: maybe_forget_ref(store.session.abort_ref),
         loop_task: nil,
@@ -320,13 +327,13 @@ defmodule OctoPi.Agent.Session do
     }
   end
 
-  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _turn_count), do: :ok
+  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _entry_count), do: :ok
 
-  defp emit_session_stop(%Session.State{} = state, reason, turn_count) do
+  defp emit_session_stop(%Session.State{} = state, reason, entry_count) do
     :telemetry.execute(
       [:octo_pi_agent, :session, :stop],
       %{duration: System.monotonic_time() - state.run_started_at_mono},
-      %{reason: reason, turn_count: turn_count}
+      %{reason: reason, turn_count: entry_count}
     )
   end
 

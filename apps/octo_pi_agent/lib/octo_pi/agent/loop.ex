@@ -4,8 +4,8 @@ defmodule OctoPi.Agent.Loop do
   Session on `prompt`/`continue`. Drives turns until a terminal
   stop reason, emitting agent events via
   `OctoPi.Agent.Subscribers.dispatch/2` and building up a new
-  message list as it goes; on completion it casts
-  `{:run_complete, messages, reason}` back to the Session.
+  SessionManager as it goes; on completion it casts
+  `{:run_complete, session_manager, reason}` back to the Session.
 
   Control flow per iteration:
 
@@ -32,8 +32,8 @@ defmodule OctoPi.Agent.Loop do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.Session
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Context, as: AIContext
@@ -71,17 +71,17 @@ defmodule OctoPi.Agent.Loop do
 
     dispatch(session, %Event.AgentStart{})
 
-    {messages, reason} = loop(session, state, state.messages, abort_ref, 1)
+    {sm, reason} = loop(session, state, state.session_manager, abort_ref, 1)
 
     dispatch(session, %Event.AgentEnd{
       reason: reason,
-      messages: MessageLog.to_list(messages)
+      messages: SessionManager.build_session_context(sm).messages
     })
 
     # Session owns the paired [:session, :stop] telemetry emission so
     # both the clean-exit (run_complete cast) and abnormal-exit
     # (:DOWN) paths flow through the same code.
-    GenServer.cast(session, {:run_complete, messages, reason})
+    GenServer.cast(session, {:run_complete, sm, reason})
 
     :ok
   end
@@ -90,11 +90,11 @@ defmodule OctoPi.Agent.Loop do
   # At the top of each iteration we drain the session's steering
   # queue and fold any drained messages into the transcript before
   # the next LLM call.
-  defp loop(session, state, messages, abort_ref, turn) do
+  defp loop(session, state, sm, abort_ref, turn) do
     if AbortRef.aborted?(abort_ref) do
-      {aborted_messages(messages), :aborted}
+      {aborted_sm(sm), :aborted}
     else
-      messages = drain_steering_after_first_turn(session, messages, turn)
+      sm = drain_steering_after_first_turn(session, sm, turn)
       start_mono = System.monotonic_time()
 
       :telemetry.execute(
@@ -104,8 +104,8 @@ defmodule OctoPi.Agent.Loop do
       )
 
       dispatch(session, %Event.TurnStart{turn: turn})
-      assistant = stream_turn(session, state, messages)
-      updated = MessageLog.push(messages, assistant)
+      assistant = stream_turn(session, state, sm)
+      updated = SessionManager.append_message(sm, assistant)
       dispatch(session, %Event.TurnEnd{turn: turn})
 
       :telemetry.execute(
@@ -125,7 +125,7 @@ defmodule OctoPi.Agent.Loop do
 
   defp continue_or_stop(session, state, updated, %{stop_reason: :tool_use} = assistant, ref, turn) do
     tool_results = execute_tool_calls(session, state, assistant.content, ref)
-    loop(session, state, MessageLog.append_many(updated, tool_results), ref, turn + 1)
+    loop(session, state, SessionManager.append_messages(updated, tool_results), ref, turn + 1)
   end
 
   # Terminal stop — drain the follow-up queue. If anything was
@@ -137,26 +137,26 @@ defmodule OctoPi.Agent.Loop do
         {updated, reason}
 
       followups ->
-        loop(session, state, MessageLog.append_many(updated, followups), abort_ref, turn + 1)
+        loop(session, state, SessionManager.append_messages(updated, followups), abort_ref, turn + 1)
     end
   end
 
   # Turn 1's messages are the initial transcript — no steering to
   # drain yet. Skipping the round-trip avoids a no-op GenServer.call.
-  defp drain_steering_after_first_turn(_session, messages, 1), do: messages
+  defp drain_steering_after_first_turn(_session, sm, 1), do: sm
 
-  defp drain_steering_after_first_turn(session, messages, _turn),
-    do: MessageLog.append_many(messages, Session.drain_steering(session))
+  defp drain_steering_after_first_turn(session, sm, _turn),
+    do: SessionManager.append_messages(sm, Session.drain_steering(session))
 
   # Stream one turn through the configured Transport; collect
   # MessageStart/Update/End events and return the finalized
   # assistant message. If the stream terminates without emitting
   # Done or Error, synthesize an error assistant rather than folding
   # `nil` into the transcript.
-  defp stream_turn(session, state, messages) do
+  defp stream_turn(session, state, sm) do
     context = %AIContext{
       system_prompt: state.system_prompt,
-      messages: MessageLog.to_list(messages),
+      messages: SessionManager.build_session_context(sm).messages,
       tools: Enum.map(state.tools, &agent_tool_to_ai_tool/1)
     }
 
@@ -386,7 +386,7 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp aborted_messages(messages), do: MessageLog.push(messages, Session.aborted_assistant())
+  defp aborted_sm(sm), do: SessionManager.append_message(sm, Session.aborted_assistant())
 
   defp agent_tool_to_ai_tool(%Tool{} = t) do
     %OctoPi.AI.Tool{

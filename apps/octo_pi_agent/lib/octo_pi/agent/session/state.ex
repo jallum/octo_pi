@@ -1,35 +1,34 @@
 defmodule OctoPi.Agent.Session.State do
   @moduledoc """
-  Per-session state held by the Session GenServer. Ported from
-  pi-agent-core's `Agent` class state (see `docs/port-map/agent.md`
-  §1). This ticket (`octo-z1d.1`) only pins the struct shape — the
-  Session GenServer that manipulates it lands in `octo-z1d.2`, and
-  the loop / queues / cancellation layers fill in behaviour in later
-  children.
+  Per-session state held by the Session GenServer.
 
   Fields:
-    * `:system_prompt` — prefixed to every LLM call
-    * `:model` — the active provider model
-    * `:thinking_level` — reasoning-effort knob
-    * `:tools` — per-session list; can be mutated at runtime
-    * `:messages` — ordered transcript, stored as a `MessageLog.t()`
-      (oldest-first semantics; convert to a plain list with
-      `MessageLog.to_list/1`)
-    * `:is_streaming?` — true while a run is in flight
+    * `:system_prompt`     — prefixed to every LLM call
+    * `:model`             — the active provider model
+    * `:thinking_level`    — reasoning-effort knob
+    * `:tools`             — per-session list of active tools; can be mutated at runtime
+    * `:session_manager`   — ordered transcript and session history as a `SessionManager.t()`
+    * `:is_streaming?`     — true while a run is in flight
     * `:streaming_message` — partial assistant message during stream
     * `:pending_tool_calls` — ids of tools currently executing
-    * `:error_message` — last failure reason from a run
+    * `:error_message`     — last failure reason from a run
     * `:steering_queue` / `:follow_up_queue` — `PendingMessageQueue.t()`
-    * `:loop_task` — `Task.t()` of the running loop, or nil
-    * `:abort_ref` — `AbortRef.t()` for the current run, or nil
+    * `:loop_task`         — pid of the running loop, or nil
+    * `:abort_ref`         — `AbortRef.t()` for the current run, or nil
     * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
-    * `:transport` — `OctoPi.Agent.Transport` impl module
+    * `:transport`         — `OctoPi.Agent.Transport` impl module
+    * `:is_compacting?`    — true while a compaction is in progress
+    * `:overflow_recovery_attempted?` — prevents infinite compaction retry loops
+    * `:compaction_abort_ref` — abort ref for an in-progress manual compaction
+    * `:base_system_prompt` — preserved base prompt; extensions can override per-turn system_prompt
+    * `:tool_registry`     — all registered tools by name; :tools is a filtered view of this
+    * `:extension_runner`  — pid of the ExtensionRunner for this session, or nil
   """
 
   alias OctoPi.Agent.AbortRef
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
+  alias OctoPi.Agent.SessionManager
   alias OctoPi.Agent.Tool
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
@@ -49,7 +48,7 @@ defmodule OctoPi.Agent.Session.State do
           model: Model.t(),
           thinking_level: thinking_level(),
           tools: [Tool.t()],
-          messages: MessageLog.t(),
+          session_manager: SessionManager.t(),
           is_streaming?: boolean(),
           streaming_message: Assistant.t() | nil,
           pending_tool_calls: MapSet.t(),
@@ -61,7 +60,13 @@ defmodule OctoPi.Agent.Session.State do
           run_started_at_mono: integer() | nil,
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
-          transport: module()
+          transport: module(),
+          is_compacting?: boolean(),
+          overflow_recovery_attempted?: boolean(),
+          compaction_abort_ref: AbortRef.t() | nil,
+          base_system_prompt: String.t() | nil,
+          tool_registry: %{String.t() => Tool.t()},
+          extension_runner: pid() | nil
         }
 
   defstruct [
@@ -75,12 +80,18 @@ defmodule OctoPi.Agent.Session.State do
     :before_tool_call,
     :after_tool_call,
     :transport,
+    :base_system_prompt,
+    :compaction_abort_ref,
+    :extension_runner,
     thinking_level: :off,
     tools: [],
-    messages: %MessageLog{},
+    session_manager: %SessionManager{},
     is_streaming?: false,
+    is_compacting?: false,
+    overflow_recovery_attempted?: false,
     pending_tool_calls: MapSet.new(),
     steering_queue: %PendingMessageQueue{items: :queue.new()},
-    follow_up_queue: %PendingMessageQueue{items: :queue.new()}
+    follow_up_queue: %PendingMessageQueue{items: :queue.new()},
+    tool_registry: %{}
   ]
 end
