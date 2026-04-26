@@ -5,7 +5,8 @@
   ],
   "blocks": [
     "opi-ixp.10",
-    "opi-ixp.11"
+    "opi-ixp.11",
+    "opi-ixp.30"
   ],
   "created": "2026-04-26T20:01:54Z",
   "description": "**Phase B — SessionManager. Deps: B1.**\n\n- `get_branch/1` — linear path root→leaf for a given leaf id.\n- `get_leaf_entry_id/1` — most recent message entry id (note: pi-mono and our existing API stub use `get_leaf_entry_id`, NOT `get_leaf_entry`).\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/session-manager/tree-traversal.test.ts`.",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "B2. SessionManager.get_branch/1 + get_leaf_entry_id/1",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:04Z"
+  "updated_at": "2026-04-26T20:02:12Z"
 }
