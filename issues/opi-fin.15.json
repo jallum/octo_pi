@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T05:42:41Z",
+  "description": "Remove OctoPi.TUI.UIBridge as a process. Interactive's existing receive loop already handles {:ui_fire, ...} and {:ui_request, _, _, _} (interactive.ex:651-660). The OctoPi.Coder.Extension.UI module's production functions just send/receive directly to Interactive's pid. ctx.ui = interactive_pid (or nil for headless).\n\nThis closes the runtime gap that opi-fin.7 left open and eliminates the per-invocation UIBridge orphan-leak bug.\n\n## Deliverable\n\nUIBridge as a separate process is gone. UI module's functions take a pid and use send/2 + receive directly. Headless mode supported via nil pid (no-op).\n\n## Steps\n\nSTEP 1 — Update OctoPi.Coder.Extension.UI module function bodies:\n  - notify(pid, msg) when is_pid(pid) → send(pid, {:ui_fire, {:notify, msg}}); :ok\n  - notify(nil, _msg) → :ok\n  - select(pid, options, kw) when is_pid(pid) → ref = make_ref(); send(pid, {:ui_request, self(), ref, {:select, ref, options, kw}}); receive do {:ui_reply, ^ref, val} -\u003e val end\n  - select(nil, _, _) → :cancelled\n  - Same shape for confirm/input/editor/get_editor_text/etc.\n\nSTEP 2 — Add Runner.bind_ui(runner_pid, ui_pid) call from Interactive on startup; Runner stores it and uses it when constructing ctx.\n\nSTEP 3 — Delete apps/octo_pi_tui/lib/octo_pi/tui/ui_bridge.ex.\n\nSTEP 4 — Remove all start_ui_bridge / UIBridge references from interactive.ex (lines 50, 126-135, 535, 538, 541, 552, 1149).\n\n## Acceptance Criteria\n\n- [ ] File apps/octo_pi_tui/lib/octo_pi/tui/ui_bridge.ex does NOT exist\n- [ ] `grep -rn \"UIBridge\\|start_ui_bridge\" apps/ --include=\"*.ex\" --include=\"*.exs\"` returns 0 matches\n- [ ] OctoPi.Coder.Extension.UI module's functions handle nil pid (verify via test)\n- [ ] Test: extension on_event/3 calls UI.notify(ctx.ui, \"msg\") with ctx.ui = interactive_pid → state.notification updates and re-render fires\n- [ ] Test: extension calls UI.select(ctx.ui, [\"a\",\"b\"], []) → pending dialog set in Interactive; when {:ui_reply, ref, val} arrives, the call returns val\n- [ ] Test: extension calls UI.notify(nil, \"msg\") → returns :ok with no side effect (headless mode)\n- [ ] When `mix pi` runs with a migrated ping.ex (using UI.notify), \"pong!\" appears in the notification slot\n\n## Dependencies\n\nBlocked by: opi-fin.13",
+  "id": "opi-fin.15",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Interactive implements UI directly; delete UIBridge module",
+  "type": "task",
+  "updated_at": "2026-04-26T05:42:41Z"
+}
