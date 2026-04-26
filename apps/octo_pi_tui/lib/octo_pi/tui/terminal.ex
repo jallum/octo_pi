@@ -29,17 +29,19 @@ defmodule OctoPi.TUI.Terminal do
   Terminal dimensions are queried via `:io.columns/0` and
   `:io.rows/0` — no NIF required.
 
-  Lifecycle is owner-driven via `open/2` and `close/2`:
+  Subscriber lifecycle drives activate/deactivate independently from
+  the GenServer's own lifecycle:
 
     * `start_link/1` returns an *idle* Terminal — no raw mode, no
-      reader, no SIGWINCH handler. The process exists; the TTY does
-      not yet belong to it.
-    * The first `open(pid)` *activates* the Terminal: enters raw
-      mode, registers SIGWINCH, spawns the reader, arms the kitty
-      probe. Each open monitors its caller.
-    * The last `close(pid)` (or the last holder's `:DOWN`) tears the
-      Terminal down: `terminate/2` runs the cleanup (kitty disable,
-      drain, raw-mode exit) and the process stops.
+      reader, no SIGWINCH handler.
+    * The first `open(pid)` *activates*: enters raw mode, registers
+      SIGWINCH, spawns the reader, arms the kitty probe. Each open
+      monitors its caller.
+    * The last `close(pid)` (or the last holder's `:DOWN`) *deactivates*:
+      runs cleanup (kitty disable, drain, raw-mode exit) and returns
+      the Terminal to the idle state. The process stays alive and is
+      ready to be re-opened.
+    * `terminate/2` deactivates if currently active.
 
   Holders receive `{:key_event, parsed}`, `{:paste, content}`, and
   `{:resize, w, h}` messages directly. Multiple Terminal/Interactive
@@ -129,7 +131,7 @@ defmodule OctoPi.TUI.Terminal do
       flush_ms: Keyword.get(opts, :flush_ms, 10),
       reader_pid: nil,
       subscribers: %{},
-      ever_opened: false,
+      active: false,
       keyboard_mode: :none,
       stdin_buffer: "",
       paste_buffer: nil,
@@ -139,13 +141,16 @@ defmodule OctoPi.TUI.Terminal do
     {:ok, state, next_timeout(state)}
   end
 
-  # Idempotent. Called from the first open/2.
-  defp activate(%{ever_opened: true} = state), do: state
+  # Both activate/1 and deactivate/1 are idempotent over the active
+  # flag, so calling them while already in the target state is a
+  # no-op. open and close drive these via subscriber refcount.
+
+  defp activate(%{active: true} = state), do: state
 
   defp activate(%{skip_raw_mode: true} = state) do
     reader_pid = if state.auto_start_reader, do: spawn_reader(state.reader_fn)
     register_sigwinch(state)
-    %{state | reader_pid: reader_pid, ever_opened: true}
+    %{state | reader_pid: reader_pid, active: true}
   end
 
   defp activate(state) do
@@ -162,8 +167,48 @@ defmodule OctoPi.TUI.Terminal do
     state
     |> Map.put(:reader_pid, reader_pid)
     |> Map.put(:keyboard_mode, :probing)
-    |> Map.put(:ever_opened, true)
+    |> Map.put(:active, true)
     |> arm_deadline(:probe, System.monotonic_time(:millisecond) + state.probe_timeout_ms)
+  end
+
+  defp deactivate(%{active: false} = state), do: state
+
+  defp deactivate(state) do
+    if not state.skip_sigwinch do
+      :gen_event.delete_handler(:erl_signal_server, SigwinchHandler, [])
+    end
+
+    if not state.skip_raw_mode do
+      disable_keyboard_protocol(state)
+      deadline = System.monotonic_time(:millisecond) + state.drain_timeout_ms
+      drain_input(deadline, state.drain_idle_ms, 0)
+      tty_write(state, "\e[?2004l")
+      state.raw_mode_fn.(:exit)
+    end
+
+    kill_and_drain_reader(state.reader_pid)
+
+    %{
+      state
+      | active: false,
+        reader_pid: nil,
+        keyboard_mode: :none,
+        deadlines: %{},
+        stdin_buffer: "",
+        paste_buffer: nil
+    }
+  end
+
+  defp kill_and_drain_reader(nil), do: :ok
+
+  defp kill_and_drain_reader(pid) do
+    Process.exit(pid, :kill)
+
+    receive do
+      {:EXIT, ^pid, _} -> :ok
+    after
+      100 -> :ok
+    end
   end
 
   defp register_sigwinch(%{skip_sigwinch: true}), do: :ok
@@ -200,7 +245,8 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_call(:close, {caller, _tag}, state) do
-    state |> remove_subscriber(caller) |> maybe_stop_reply()
+    state = state |> remove_subscriber(caller) |> maybe_deactivate()
+    {:reply, :ok, state, next_timeout(state)}
   end
 
   @impl true
@@ -243,14 +289,14 @@ defmodule OctoPi.TUI.Terminal do
 
   def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, state),
-    do: state |> remove_subscriber_by_ref(ref) |> maybe_stop_noreply()
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
+    state = state |> remove_subscriber_by_ref(ref) |> maybe_deactivate()
+    {:noreply, state, next_timeout(state)}
+  end
 
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
   @impl true
-  def terminate(_reason, %{ever_opened: false}), do: :ok
-
   def terminate(reason, state) do
     :telemetry.execute(
       [:octo_pi_tui, :terminal, :terminate, :start],
@@ -258,17 +304,7 @@ defmodule OctoPi.TUI.Terminal do
       %{reason: reason, keyboard_mode: state.keyboard_mode, reader_pid: state.reader_pid}
     )
 
-    if not state.skip_sigwinch do
-      :gen_event.delete_handler(:erl_signal_server, SigwinchHandler, [])
-    end
-
-    if not state.skip_raw_mode do
-      disable_keyboard_protocol(state)
-      deadline = System.monotonic_time(:millisecond) + state.drain_timeout_ms
-      drain_input(deadline, state.drain_idle_ms, 0)
-      tty_write(state, "\e[?2004l")
-      state.raw_mode_fn.(:exit)
-    end
+    deactivate(state)
 
     :telemetry.execute([:octo_pi_tui, :terminal, :terminate, :stop], %{}, %{})
     :ok
@@ -458,18 +494,11 @@ defmodule OctoPi.TUI.Terminal do
     end)
   end
 
-  # Once the Terminal has been opened at least once, an empty
-  # subscriber map means nobody is holding it any more — stop.
-  # Before the first open, an empty map is the idle waiting state.
-  defp maybe_stop_reply(%{ever_opened: true, subscribers: subs} = state) when map_size(subs) == 0,
-    do: {:stop, :normal, :ok, state}
-
-  defp maybe_stop_reply(state), do: {:reply, :ok, state, next_timeout(state)}
-
-  defp maybe_stop_noreply(%{ever_opened: true, subscribers: subs} = state) when map_size(subs) == 0,
-    do: {:stop, :normal, state}
-
-  defp maybe_stop_noreply(state), do: {:noreply, state, next_timeout(state)}
+  # Subscriber refcount drives activate/deactivate. The GenServer
+  # itself stays alive across the cycle: a closed Terminal is just
+  # an idle one waiting for the next open.
+  defp maybe_deactivate(%{subscribers: subs} = state) when map_size(subs) == 0, do: deactivate(state)
+  defp maybe_deactivate(state), do: state
 
   defp narrowcast(%{subscribers: subs}, msg) do
     for {pid, _ref} <- subs, do: send(pid, msg)
