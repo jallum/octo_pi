@@ -29,16 +29,16 @@ defmodule OctoPi.TUI.Terminal do
   Terminal dimensions are queried via `:io.columns/0` and
   `:io.rows/0` — no NIF required.
 
-  `Events` is a Registry keyed on `{topic, scope}` tuples.
-  Subscribers register via
-  `Registry.register(Events, {:key_event, terminal_pid}, nil)`;
-  Terminal dispatches via
-  `Registry.dispatch(Events, {:key_event, scope}, fn entries -> ... end)`.
-  The scope defaults to `self()` (the Terminal pid), isolating
-  concurrent Interactive sessions from each other's events.
+  Each Terminal owns its own subscriber list. Use
+  `Terminal.subscribe(terminal_pid)` to register the calling process
+  to receive `{:key_event, parsed}`, `{:paste, content}`, and
+  `{:resize, w, h}` messages. Subscribers are monitored and cleaned
+  up automatically on process exit. Multiple Terminal/Interactive
+  pairs are isolated by construction — no global registry, no
+  scope tagging.
 
   Terminal owns the `%StdinFSM{}` directly: incoming reader chunks
-  are fed through the FSM and broadcast as cooked sequences. Raw
+  are fed through the FSM and narrowcast as cooked sequences. Raw
   chunks never leave the Terminal. Two GenServer-timeout deadlines
   coexist — the Kitty probe and the FSM flush — multiplexed via a
   `:deadlines` map keyed by kind; the next `:timeout` fires at the
@@ -47,7 +47,6 @@ defmodule OctoPi.TUI.Terminal do
 
   use GenServer
 
-  alias OctoPi.TUI.Events
   alias OctoPi.TUI.Terminal.KeyParser
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.SigwinchHandler
@@ -90,6 +89,19 @@ defmodule OctoPi.TUI.Terminal do
   @spec open_editor(GenServer.server(), String.t()) :: {:ok, String.t()} | {:error, atom()}
   def open_editor(pid, initial_text), do: GenServer.call(pid, {:open_editor, initial_text}, :infinity)
 
+  @doc """
+  Subscribe `subscriber` to this Terminal's events. The subscriber
+  receives `{:key_event, parsed}`, `{:paste, content}`, and
+  `{:resize, w, h}` messages. Returns `:ok`. The subscriber is
+  monitored and removed automatically on exit.
+  """
+  @spec subscribe(GenServer.server(), pid()) :: :ok
+  def subscribe(pid, subscriber \\ self()), do: GenServer.call(pid, {:subscribe, subscriber})
+
+  @doc "Unsubscribe `subscriber` from this Terminal's events."
+  @spec unsubscribe(GenServer.server(), pid()) :: :ok
+  def unsubscribe(pid, subscriber \\ self()), do: GenServer.call(pid, {:unsubscribe, subscriber})
+
   # --- GenServer callbacks ---
 
   @impl true
@@ -125,7 +137,7 @@ defmodule OctoPi.TUI.Terminal do
       tty_fn: tty_fn,
       reader_pid: nil,
       write_fn: write_fn,
-      scope: self(),
+      subscribers: %{},
       probe_timeout_ms: probe_timeout_ms,
       drain_idle_ms: drain_idle_ms,
       drain_timeout_ms: drain_timeout_ms,
@@ -190,8 +202,16 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_call({:resize, w, h}, _from, state) do
-    broadcast(state, :resize, {:resize, w, h})
+    narrowcast(state, {:resize, w, h})
     {:reply, :ok, %{state | width: w, height: h}, next_timeout(state)}
+  end
+
+  def handle_call({:subscribe, pid}, _from, state) do
+    {:reply, :ok, add_subscriber(state, pid), next_timeout(state)}
+  end
+
+  def handle_call({:unsubscribe, pid}, _from, state) do
+    {:reply, :ok, remove_subscriber(state, pid), next_timeout(state)}
   end
 
   @impl true
@@ -206,7 +226,7 @@ defmodule OctoPi.TUI.Terminal do
   def handle_info({:signal, :sigwinch}, state) do
     case window_size() do
       {:ok, {w, h}} when w != state.width or h != state.height ->
-        broadcast(state, :resize, {:resize, w, h})
+        narrowcast(state, {:resize, w, h})
         {:noreply, %{state | width: w, height: h}, next_timeout(state)}
 
       _ ->
@@ -233,6 +253,9 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_info({:EXIT, _from, reason}, state), do: {:stop, reason, state}
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state),
+    do: {:noreply, remove_subscriber_by_ref(state, ref), next_timeout(state)}
 
   def handle_info(_, state), do: {:noreply, state, next_timeout(state)}
 
@@ -384,7 +407,7 @@ defmodule OctoPi.TUI.Terminal do
     :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: seq})
     parsed = KeyParser.parse(seq)
     :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed, seq: seq})
-    if parsed != :unknown, do: broadcast(state, :key_event, {:key_event, parsed})
+    if parsed != :unknown, do: narrowcast(state, {:key_event, parsed})
     state
   end
 
@@ -392,7 +415,7 @@ defmodule OctoPi.TUI.Terminal do
   # `:paste` broadcast; everything else accumulates raw bytes.
   defp dispatch_seq(%{paste_buffer: buf} = state, "\e[201~") do
     :telemetry.execute([:octo_pi_tui, :paste], %{byte_count: byte_size(buf)}, %{content: buf})
-    broadcast(state, :paste, {:paste, buf})
+    narrowcast(state, {:paste, buf})
     %{state | paste_buffer: nil}
   end
 
@@ -444,10 +467,30 @@ defmodule OctoPi.TUI.Terminal do
     end)
   end
 
-  defp broadcast(state, topic, msg) do
-    Registry.dispatch(Events, {topic, state.scope}, fn subscribers ->
-      for {pid, _} <- subscribers, do: send(pid, msg)
-    end)
+  defp narrowcast(%{subscribers: subs}, msg) do
+    for {pid, _ref} <- subs, do: send(pid, msg)
+    :ok
+  end
+
+  defp add_subscriber(%{subscribers: subs} = state, pid) do
+    case Map.fetch(subs, pid) do
+      {:ok, _ref} -> state
+      :error -> %{state | subscribers: Map.put(subs, pid, Process.monitor(pid))}
+    end
+  end
+
+  defp remove_subscriber(%{subscribers: subs} = state, pid) do
+    case Map.pop(subs, pid) do
+      {nil, _} -> state
+      {ref, rest} -> Process.demonitor(ref, [:flush]) && %{state | subscribers: rest}
+    end
+  end
+
+  defp remove_subscriber_by_ref(%{subscribers: subs} = state, ref) do
+    case Enum.find(subs, fn {_pid, r} -> r == ref end) do
+      nil -> state
+      {pid, _} -> %{state | subscribers: Map.delete(subs, pid)}
+    end
   end
 
   defp window_size do

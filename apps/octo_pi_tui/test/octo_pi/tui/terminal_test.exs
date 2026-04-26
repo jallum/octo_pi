@@ -1,7 +1,6 @@
 defmodule OctoPi.TUI.TerminalTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.TUI.Events
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.TerminalHelpers
@@ -40,7 +39,7 @@ defmodule OctoPi.TUI.TerminalTest do
   describe "feed_chunk/2" do
     test "broadcasts parsed key events under {:key_event, scope} topic" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
       :ok = Terminal.feed_chunk(pid, "abc")
       assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
       assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
@@ -49,7 +48,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
     test "forwards multiple chunks in order" do
       pid = start_terminal()
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
       :ok = Terminal.feed_chunk(pid, "a")
       :ok = Terminal.feed_chunk(pid, "b")
       assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
@@ -60,7 +59,7 @@ defmodule OctoPi.TUI.TerminalTest do
   describe "SIGWINCH handling" do
     test "simulated sigwinch broadcasts a resize event with new dimensions" do
       pid = start_terminal(dimensions: {80, 24})
-      {:ok, _} = Registry.register(Events, {:resize, pid}, nil)
+      :ok = Terminal.subscribe(pid)
 
       # Drive the resize with an explicit dims override — in
       # production we'd read :io.columns/0, but tests inject.
@@ -76,7 +75,7 @@ defmodule OctoPi.TUI.TerminalTest do
       t1 = start_terminal(name: nil)
       t2 = start_terminal(name: nil)
 
-      {:ok, _} = Registry.register(Events, {:key_event, t1}, nil)
+      :ok = Terminal.subscribe(t1)
 
       Terminal.feed_chunk(t1, "x")
       Terminal.feed_chunk(t2, "y")
@@ -190,7 +189,7 @@ defmodule OctoPi.TUI.TerminalTest do
         )
 
       assert_receive {:tty, "\e[?u"}, 500
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
       TerminalHelpers.simulate_stdin(pid, "a")
       assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
     end
@@ -199,7 +198,7 @@ defmodule OctoPi.TUI.TerminalTest do
   describe "stdin FSM ownership (opi-445.2)" do
     test "bare ESC is held, then flushed as cooked event after flush_ms" do
       pid = start_terminal(flush_ms: 20)
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
       Terminal.feed_chunk(pid, "\e")
       refute_receive {:key_event, _}, 5
       assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
@@ -220,7 +219,7 @@ defmodule OctoPi.TUI.TerminalTest do
         )
 
       assert_receive {:tty, "\e[?u"}, 500
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
 
       # During probe, send a bare ESC: flush deadline (20ms) is
       # nearer than probe deadline (100ms). The flush should fire
@@ -545,7 +544,7 @@ defmodule OctoPi.TUI.TerminalTest do
       assert_receive {:tty, "\e[?u"}, 500
       assert_receive {:tty, "\e[>4;2m"}, 500
 
-      {:ok, _} = Registry.register(Events, {:key_event, pid}, nil)
+      :ok = Terminal.subscribe(pid)
 
       stop_task = Task.async(fn -> GenServer.stop(pid, :normal) end)
 

@@ -39,7 +39,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.EventLogger
-  alias OctoPi.TUI.Events
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
@@ -382,9 +381,7 @@ defmodule OctoPi.TUI.Interactive do
     renderer = child_pid(sup, Renderer)
     footer_data = child_pid(sup, FooterData)
 
-    {:ok, _} = Registry.register(Events, {:key_event, terminal}, nil)
-    {:ok, _} = Registry.register(Events, {:paste, terminal}, nil)
-    {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
+    :ok = Terminal.subscribe(terminal)
     OctoPi.Agent.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())

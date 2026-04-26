@@ -4,10 +4,6 @@ defmodule OctoPi.TUITest do
   alias OctoPi.TUI.Terminal.RawMode
 
   describe "application boot" do
-    test "Events registry is started" do
-      assert Process.whereis(OctoPi.TUI.Events)
-    end
-
     test "supervisor is registered" do
       assert Process.whereis(OctoPi.TUI.Supervisor)
     end
