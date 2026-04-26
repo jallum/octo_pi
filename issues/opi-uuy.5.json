@@ -4,7 +4,9 @@
     "opi-uuy.2",
     "opi-uuy.4"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-uuy.8"
+  ],
   "created": "2026-04-26T01:41:31Z",
   "description": "Update loop.ex to use SessionManager instead of MessageLog, and call\nSessionManager.build_session_context/1 to produce the message list for each LLM call.\n\nThis ticket is the companion to \"Migrate Session.State from MessageLog to SessionManager\"\nand must land at the same time (the codebase does not compile with only one).\n\n## Key change in stream_turn/3 (loop.ex ~line 156)\n\nBefore:\n  context = %AIContext{\n    system_prompt: state.system_prompt,\n    messages: MessageLog.to_list(messages),\n    tools: Enum.map(state.tools, \u0026agent_tool_to_ai_tool/1)\n  }\n\nAfter:\n  session_ctx = SessionManager.build_session_context(state.session_manager)\n  context = %AIContext{\n    system_prompt: state.system_prompt,\n    messages: session_ctx.messages,\n    tools: Enum.map(state.tools, \u0026agent_tool_to_ai_tool/1)\n  }\n\nNOTE: state.session_manager is the SessionManager being threaded through the\nloop recursion (see below) — not state from the Session GenServer.\n\n## Loop state threading\n\nCurrently loop/6 and its helpers thread a local `messages :: MessageLog.t()` through\nrecursion. Replace with `session_manager :: SessionManager.t()`.\n\nEvery place that was:\n  MessageLog.push(messages, assistant)         -\u003e  SessionManager.append_message(sm, assistant)\n  MessageLog.append_many(updated, tool_results) -\u003e sequential append_message calls\n  MessageLog.append_many(messages, drained)    -\u003e sequential append_message calls\n\n## Run completion cast\n\nChange from:\n  GenServer.cast(session, {:run_complete, messages, reason})\nTo:\n  GenServer.cast(session, {:run_complete, session_manager, reason})\n\nAgentEnd event currently carries messages: MessageLog.to_list(messages).\nChange to: SessionManager.get_branch(session_manager) |\u003e Enum.map(\u0026 \u00261.message)\nbut filter to only MessageEntry nodes first.\n\n## Remove MessageLog alias\n\nRemove `alias OctoPi.Agent.MessageLog` from loop.ex once migration is complete.\n\n## Tests\n\nRun mix test apps/octo_pi_agent/ — all existing tests must pass.\nIf any test directly inspects the messages list from AgentEnd or run_complete,\nupdate assertions to match the new SessionEntry-based structure.",
   "id": "opi-uuy.5",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "Migrate Loop to build_session_context",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:34Z"
+  "updated_at": "2026-04-26T01:41:35Z"
 }
