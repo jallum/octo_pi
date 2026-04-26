@@ -8,9 +8,15 @@
   "id": "opi-fin.3",
   "labels": [],
   "parent": "opi-fin",
+  "comments": [
+    {
+      "text": "Audit (2026-04-26): the ETS dispatch table was implemented but never wired into mix pi's runtime — Interactive uses Loader-loaded plain Extension structs and Dispatcher.emit, never emit_from_table. Reverted in spirit by opi-fin.19; the consolidated framework uses plain maps inside the Runner, not ETS.",
+      "timestamp": "2026-04-26T05:44:21Z"
+    }
+  ],
   "priority": 2,
   "status": "closed",
   "title": "Phase 3: ETS dispatch table",
   "type": "task",
-  "updated_at": "2026-04-26T00:15:25Z"
+  "updated_at": "2026-04-26T05:44:21Z"
 }
