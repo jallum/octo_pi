@@ -2,17 +2,21 @@ defmodule OctoPi.TUI.StdinFSM do
   @moduledoc """
   Escape-sequence assembly. Takes raw byte chunks, pattern-matches
   them into complete sequences (CSI, OSC, SS3, DCS, APC, alt-prefix)
-  + individual printable UTF-8 codepoints, and returns a list of
-  cooked sequences plus the next flush deadline.
+  + individual printable UTF-8 codepoints, and returns the cooked
+  sequences for the caller to distribute.
 
-  Pure struct + pure functions; the caller (Terminal) owns the
-  buffer state, dispatches events, and arms the flush timeout.
+  Pure struct + pure functions: no processes, no timers, no
+  knowledge of the surrounding runtime. The caller owns the buffer
+  state, dispatches events, and decides when (if ever) to call
+  `flush/1` on a buffer that's stuck on an ambiguous prefix.
 
-  A 10 ms flush timeout (configurable via `:flush_ms`) handles one
-  disambiguation case: a bare `\\e` at end of buffer could be
-  either the Escape key or the start of an escape sequence
-  arriving in pieces. After the timeout the caller should call
-  `flush/1` to emit whatever is still buffered.
+  ## Disambiguation
+
+  A bare `\\e` at end of buffer could be either the Escape key or
+  the start of an escape sequence arriving in pieces. `process/2`
+  leaves it in the buffer; `pending?/1` reports that more bytes
+  are needed; the caller decides how long to wait before calling
+  `flush/1` to emit it as-is.
 
   `\\e<char>` where char isn't `[`, `]`, `O`, `P`, or `_` is treated
   as a complete alt-prefix meta sequence and emitted immediately.
@@ -27,49 +31,41 @@ defmodule OctoPi.TUI.StdinFSM do
   between the two markers.
   """
 
-  @default_flush_ms 10
+  defstruct buffer: ""
 
-  defstruct buffer: "", flush_ms: @default_flush_ms
-
-  @type t :: %__MODULE__{buffer: binary(), flush_ms: pos_integer()}
-  @type process_result :: {t(), [binary()], non_neg_integer() | :infinity}
+  @type t :: %__MODULE__{buffer: binary()}
 
   @doc "Build a new FSM state."
-  @spec new(keyword()) :: t()
-  def new(opts \\ []) do
-    %__MODULE__{flush_ms: Keyword.get(opts, :flush_ms, @default_flush_ms)}
-  end
+  @spec new() :: t()
+  def new, do: %__MODULE__{}
 
   @doc """
-  Feed a chunk of bytes into the FSM. Returns `{state, events,
-  next_timeout_ms | :infinity}`. The caller is responsible for
-  emitting `events` and arming a flush deadline at the returned
-  timeout.
+  Feed a chunk of bytes into the FSM. Returns `{state, events}`
+  where `events` is the list of cooked sequences ready to emit.
+  Any unresolved tail is held in `state.buffer` for the next call.
   """
-  @spec process(t(), binary()) :: process_result()
-  def process(%__MODULE__{} = state, bin) when is_binary(bin) do
-    buffer = state.buffer <> bin
-    {events, remainder} = extract(buffer)
-    {%{state | buffer: remainder}, events, flush_timeout(remainder, state.flush_ms)}
+  @spec process(t(), binary()) :: {t(), [binary()]}
+  def process(%__MODULE__{buffer: prev} = state, bin) when is_binary(bin) do
+    {events, remainder} = extract(prev <> bin)
+    {%{state | buffer: remainder}, events}
   end
 
   @doc """
-  Flush any buffered content as a single sequence. Returns
-  `{state, events}` where `events` is `[]` when the buffer is empty
-  or `[buffer]` otherwise.
+  Flush the buffer as a single sequence. Returns `{state, events}`
+  where `events` is `[]` for an empty buffer or `[buffer]` otherwise.
   """
   @spec flush(t()) :: {t(), [binary()]}
   def flush(%__MODULE__{buffer: ""} = state), do: {state, []}
   def flush(%__MODULE__{buffer: buf} = state), do: {%{state | buffer: ""}, [buf]}
 
+  @doc "True when the FSM is sitting on an ambiguous partial prefix."
+  @spec pending?(t()) :: boolean()
+  def pending?(%__MODULE__{buffer: ""}), do: false
+  def pending?(%__MODULE__{}), do: true
+
   @doc "Discard any buffered content without emitting."
   @spec clear(t()) :: t()
   def clear(%__MODULE__{} = state), do: %{state | buffer: ""}
-
-  # --- helpers ---
-
-  defp flush_timeout("", _ms), do: :infinity
-  defp flush_timeout(_buffer, ms), do: ms
 
   # --- sequence extraction (multi-head pattern matching) ---
 
@@ -103,7 +99,7 @@ defmodule OctoPi.TUI.StdinFSM do
     {[<<"\e", b>> | more], tail}
   end
 
-  # Bare \e at end of buffer — wait for the flush timeout.
+  # Bare \e at end of buffer — wait for more bytes (or a flush).
   defp extract(<<"\e">>), do: {[], "\e"}
 
   # UTF-8 codepoint.
