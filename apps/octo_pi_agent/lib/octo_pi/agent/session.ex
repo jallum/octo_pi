@@ -28,6 +28,7 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Compaction
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.ExtensionRunner
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.LoopSupervisor
   alias OctoPi.Agent.Message.Custom
@@ -86,6 +87,12 @@ defmodule OctoPi.Agent.Session do
   def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts})
 
   @doc false
+  def register_extension(pid, module), do: GenServer.call(pid, {:register_extension, module})
+
+  @doc false
+  def emit_hook(pid, event_type, payload), do: GenServer.call(pid, {:emit_hook, event_type, payload})
+
+  @doc false
   def abort(pid), do: GenServer.call(pid, :abort)
 
   @doc false
@@ -103,6 +110,8 @@ defmodule OctoPi.Agent.Session do
     session_manager =
       Enum.reduce(initial_messages, SessionManager.new(), &SessionManager.append_message(&2, &1))
 
+    extension_runner = maybe_start_extension_runner(self(), Keyword.get(opts, :extensions, []))
+
     state =
       %Session.State{
         model: Keyword.fetch!(opts, :model),
@@ -112,7 +121,8 @@ defmodule OctoPi.Agent.Session do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
-        session_manager: session_manager
+        session_manager: session_manager,
+        extension_runner: extension_runner
       }
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
       |> maybe_override_queue(:follow_up_queue, opts[:follow_up_queue_bound])
@@ -222,6 +232,25 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call(:set_overflow_recovery_attempted, _from, store) do
     {:reply, :ok, put_in(store.session.overflow_recovery_attempted?, true)}
+  end
+
+  def handle_call({:register_extension, module}, _from, store) do
+    if store.session.extension_runner do
+      ExtensionRunner.register(store.session.extension_runner, module)
+    end
+
+    {:reply, :ok, store}
+  end
+
+  def handle_call({:emit_hook, event_type, payload}, _from, store) do
+    result =
+      if store.session.extension_runner do
+        ExtensionRunner.emit(store.session.extension_runner, event_type, payload)
+      else
+        :ok
+      end
+
+    {:reply, result, store}
   end
 
   def handle_call({:compact, opts}, _from, store) do
@@ -481,4 +510,12 @@ defmodule OctoPi.Agent.Session do
   defp normalize(%User{} = m), do: m
   defp normalize(%Custom{} = m), do: m
   defp normalize(%{__struct__: _} = m), do: m
+
+  defp maybe_start_extension_runner(_session_pid, []), do: nil
+
+  defp maybe_start_extension_runner(session_pid, modules) do
+    {:ok, pid} = ExtensionRunner.start_link(session_pid: session_pid)
+    Enum.each(modules, &ExtensionRunner.register(pid, &1))
+    pid
+  end
 end

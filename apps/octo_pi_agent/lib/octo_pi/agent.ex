@@ -75,6 +75,14 @@ defmodule OctoPi.Agent do
   @spec compact(session(), keyword()) :: :ok | {:error, :streaming | :already_compacting}
   def compact(pid, opts \\ []), do: Session.compact(pid, opts)
 
+  @doc "Register an extension module with the session's ExtensionRunner."
+  @spec register_extension(session(), module()) :: :ok
+  def register_extension(pid, module), do: Session.register_extension(pid, module)
+
+  @doc "Emit a hook event through the session's ExtensionRunner. Returns :ok if no runner is configured."
+  @spec emit_hook(session(), atom(), map()) :: :ok | {:cancelled, term()} | {:modified, map()}
+  def emit_hook(pid, event_type, payload), do: Session.emit_hook(pid, event_type, payload)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
