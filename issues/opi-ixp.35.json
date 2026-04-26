@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.34"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:02:01Z",
   "description": "**Phase G — Tree session integration. Deps: G2, B4.**\n\nPersist `BranchSummaryEntry` with `from_id: old_leaf_id` and `from_hook?` flagged appropriately. Append at the new leaf position via `SessionManager.add_entry/3` (B4).\n\nEmit `:session_tree` (fire-and-forget; defined at event.ex:8) after entry is appended.\n\nTests: port full `agent-session-tree-navigation.test.ts`.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "G3. BranchSummaryEntry append at new leaf",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:01Z"
+  "updated_at": "2026-04-26T20:02:15Z"
 }
