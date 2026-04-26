@@ -59,6 +59,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @type t :: %__MODULE__{
           session: pid() | nil,
+          sup: pid() | nil,
           fsm: pid() | nil,
           renderer: pid() | nil,
           terminal: pid() | nil,
@@ -97,6 +98,7 @@ defmodule OctoPi.TUI.Interactive do
         }
 
   defstruct session: nil,
+            sup: nil,
             fsm: nil,
             renderer: nil,
             terminal: nil,
@@ -405,10 +407,22 @@ defmodule OctoPi.TUI.Interactive do
 
     extensions = load_extensions(opts, cwd)
     session = start_agent_session(opts)
-    {:ok, terminal} = start_terminal(opts, write_fn)
-    {:ok, fsm} = StdinFSM.start_link(subscriber: self())
-    {:ok, renderer} = Renderer.start_link(width: w, height: h, csi_2026?: true)
-    {:ok, footer_data} = FooterData.start_link(cwd: cwd)
+
+    terminal_opts = build_terminal_opts(opts, write_fn)
+
+    children = [
+      %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
+      %{id: StdinFSM, start: {StdinFSM, :start_link, [[subscriber: self()]]}},
+      %{id: Renderer, start: {Renderer, :start_link, [[width: w, height: h, csi_2026?: true]]}},
+      %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
+    ]
+
+    {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
+
+    terminal = child_pid(sup, Terminal)
+    fsm = child_pid(sup, StdinFSM)
+    renderer = child_pid(sup, Renderer)
+    footer_data = child_pid(sup, FooterData)
 
     {:ok, _} = Registry.register(Events, {:stdin_chunk, terminal}, nil)
     {:ok, _} = Registry.register(Events, {:resize, terminal}, nil)
@@ -429,6 +443,7 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %__MODULE__{
       session: session,
+      sup: sup,
       fsm: fsm,
       renderer: renderer,
       terminal: terminal,
@@ -521,11 +536,7 @@ defmodule OctoPi.TUI.Interactive do
     |> advance()
   end
 
-  def handle_info(
-        {:EXIT, pid, _reason},
-        %__MODULE__{session: s, fsm: f, renderer: r, terminal: t, footer_data: fd} = state
-      )
-      when pid == s or pid == f or pid == r or pid == t or pid == fd do
+  def handle_info({:EXIT, pid, _reason}, %{sup: sup} = state) when pid == sup do
     {:stop, :normal, state}
   end
 
@@ -728,22 +739,26 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  defp start_terminal(opts, write_fn) do
-    terminal_opts =
-      opts
-      |> Keyword.take([
-        :skip_raw_mode,
-        :skip_sigwinch,
-        :auto_start_reader,
-        :dimensions,
-        :raw_mode_fn,
-        :tty_fn,
-        :open_editor_fn
-      ])
-      |> Keyword.put(:name, Keyword.get(opts, :terminal_name, Terminal))
-      |> Keyword.put(:write_fn, write_fn)
+  defp build_terminal_opts(opts, write_fn) do
+    opts
+    |> Keyword.take([
+      :skip_raw_mode,
+      :skip_sigwinch,
+      :auto_start_reader,
+      :dimensions,
+      :raw_mode_fn,
+      :tty_fn,
+      :open_editor_fn
+    ])
+    |> Keyword.put(:name, Keyword.get(opts, :terminal_name, Terminal))
+    |> Keyword.put(:write_fn, write_fn)
+  end
 
-    Terminal.start_link(terminal_opts)
+  defp child_pid(sup, id) do
+    {^id, pid, _, _} =
+      Enum.find(Supervisor.which_children(sup), fn {child_id, _, _, _} -> child_id == id end)
+
+    pid
   end
 
   defp maybe_suspend(%{suspend_pending: true} = state) do
@@ -792,13 +807,11 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  defp shutdown(state) do
-    pids = Enum.reject([state.footer_data, state.renderer, state.fsm, state.terminal], &is_nil/1)
-
-    Enum.each(pids, fn pid ->
-      if Process.alive?(pid), do: GenServer.stop(pid, :normal)
-    end)
+  defp shutdown(%{sup: sup}) when is_pid(sup) do
+    if Process.alive?(sup), do: Supervisor.stop(sup, :normal)
   end
+
+  defp shutdown(_), do: :ok
 
   defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
 
