@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.10"
+  ],
   "blocks": [
     "opi-ixp.26"
   ],
@@ -13,5 +15,5 @@
   "status": "in_progress",
   "title": "A3. Session-level token accumulator",
   "type": "task",
-  "updated_at": "2026-04-26T21:58:02.689187Z"
+  "updated_at": "2026-04-26T22:02:00.778684Z"
 }
