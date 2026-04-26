@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-uuy.5",
     "opi-uuy.6",
@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-uuy",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Overflow detection and auto-compaction in Loop",
   "type": "task",
-  "updated_at": "2026-04-26T01:41:35Z"
+  "updated_at": "2026-04-26T03:14:17Z"
 }
