@@ -5,7 +5,8 @@
     "opi-ixp.18"
   ],
   "blocks": [
-    "opi-ixp.21"
+    "opi-ixp.21",
+    "opi-ixp.23"
   ],
   "created": "2026-04-26T20:01:57Z",
   "description": "**Phase E — Compaction orchestration. Deps: C5, D2.**\n\nPort the non-split-turn branch of `compact` from `tmp/pi-mono/.../compaction/compaction.ts:717-797`.\n\n- Single `generate_summary` call.\n- Compute final file lists via C3's `computeFileLists`.\n- Append `\u003cread-files\u003e` / `\u003cmodified-files\u003e` blocks to summary.\n- Returns `%CompactionResult{summary, first_kept_entry_id, tokens_before, details: %{read_files, modified_files}}`.\n\nTests: port the single-pass cases from `compaction.test.ts`.",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "E1. Compaction.compact/2 — single-pass path",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:08Z"
+  "updated_at": "2026-04-26T20:02:09Z"
 }

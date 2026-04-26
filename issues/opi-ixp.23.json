@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.20"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:58Z",
   "description": "**Phase E — Compaction orchestration. Deps: E1, B6.**\n\nImplement the `api.compact/1` body (currently stubbed at `apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex:27`).\n\nSequence:\n1. Build `%CompactionPreparation{}` via `Compaction.prepare/2` (C5).\n2. Emit `:session_before_compact` event (cancel-on-result pattern). Honor:\n   - `{:cancel, reason}` → abort, no entry written.\n   - Extension-supplied `%CompactionResult{}` → skip LLM call; entry will be written in E5b with `from_hook?: true`.\n3. Otherwise call `Compaction.compact/2` (E1/E2).\n\nTests: port `compaction-extensions.test.ts` and `compaction-extensions-example.test.ts`. Verify existing `apps/octo_pi_coder/test/octo_pi/coder/extension/compaction_extensions_test.exs` still passes.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "E4. Session.compact/2 + :session_before_compact dispatch",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:58Z"
+  "updated_at": "2026-04-26T20:02:09Z"
 }
