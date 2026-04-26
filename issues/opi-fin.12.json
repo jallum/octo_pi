@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T05:41:44Z",
+  "description": "Relocate PR #5's extension framework from octo_pi_agent to octo_pi_coder, matching upstream pi-mono's package layout. Upstream puts ExtensionRunner and friends in packages/coding-agent/src/core/extensions/, not in packages/agent/.\n\n## Steps\n\nSTEP 1 — Move modules:\n- apps/octo_pi_agent/lib/octo_pi/agent/extension.ex → apps/octo_pi_coder/lib/octo_pi/coder/extension/extension.ex (rename module to OctoPi.Coder.Extension)\n- apps/octo_pi_agent/lib/octo_pi/agent/extension_runner.ex → apps/octo_pi_coder/lib/octo_pi/coder/extension/runner.ex (rename module to OctoPi.Coder.Extension.Runner)\n\nSTEP 2 — Move tests to corresponding locations:\n- apps/octo_pi_agent/test/octo_pi/agent/extension*.exs → apps/octo_pi_coder/test/octo_pi/coder/extension/\n\nSTEP 3 — Update all references across the umbrella (Session in agent app, all aliases, all imports).\n\n## Acceptance Criteria\n\n- [ ] File apps/octo_pi_agent/lib/octo_pi/agent/extension.ex does NOT exist\n- [ ] File apps/octo_pi_agent/lib/octo_pi/agent/extension_runner.ex does NOT exist\n- [ ] File apps/octo_pi_coder/lib/octo_pi/coder/extension/extension.ex EXISTS, defines module OctoPi.Coder.Extension\n- [ ] File apps/octo_pi_coder/lib/octo_pi/coder/extension/runner.ex EXISTS, defines module OctoPi.Coder.Extension.Runner\n- [ ] `grep -rn \"OctoPi\\.Agent\\.Extension\\b\" apps/ --include=\"*.ex\" --include=\"*.exs\"` returns 0 matches\n- [ ] `grep -rn \"OctoPi\\.Agent\\.ExtensionRunner\" apps/ --include=\"*.ex\" --include=\"*.exs\"` returns 0 matches\n- [ ] `mix test` passes\n- [ ] `mix compile --warnings-as-errors` clean\n\n## Dependencies\n\nBlocked by: opi-fin.11",
+  "id": "opi-fin.12",
+  "labels": [],
+  "parent": "opi-fin",
+  "priority": 1,
+  "status": "open",
+  "title": "Move Extension framework: agent app to coder app",
+  "type": "task",
+  "updated_at": "2026-04-26T05:41:44Z"
+}
