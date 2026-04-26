@@ -85,10 +85,6 @@ defmodule OctoPi.TUI.Terminal do
   @spec feed_chunk(GenServer.server(), binary()) :: :ok
   def feed_chunk(pid, bin) when is_binary(bin), do: GenServer.call(pid, {:feed_chunk, bin})
 
-  @doc "Returns true if the Kitty keyboard protocol is currently active."
-  @spec kitty_protocol_active?(GenServer.server()) :: boolean()
-  def kitty_protocol_active?(pid), do: GenServer.call(pid, :kitty_protocol_active?)
-
   @doc "Suspend: exit raw mode, send SIGTSTP, re-enter raw mode on resume."
   @spec suspend(GenServer.server()) :: :ok
   def suspend(pid), do: GenServer.call(pid, :suspend, :infinity)
@@ -179,9 +175,6 @@ defmodule OctoPi.TUI.Terminal do
 
   @impl true
   def handle_call(:info, _from, state), do: {:reply, state, state, next_timeout(state)}
-
-  def handle_call(:kitty_protocol_active?, _from, state),
-    do: {:reply, state.keyboard_mode == :kitty, state, next_timeout(state)}
 
   def handle_call(:suspend, _from, state) do
     state.raw_mode_fn.(:exit)

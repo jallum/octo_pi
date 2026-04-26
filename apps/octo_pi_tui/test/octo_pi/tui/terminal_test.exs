@@ -101,9 +101,7 @@ defmodule OctoPi.TUI.TerminalTest do
       :ok = Terminal.open(pid)
       assert_receive {:tty, "\e[?u"}, 500
       TerminalHelpers.simulate_stdin(pid, "\e[?1u")
-      Terminal.info(pid)
       assert_receive {:tty, "\e[>7u"}, 500
-      assert Terminal.kitty_protocol_active?(pid)
     end
 
     test "falls back to modifyOtherKeys when no response within timeout" do
@@ -122,24 +120,6 @@ defmodule OctoPi.TUI.TerminalTest do
       :ok = Terminal.open(pid)
       assert_receive {:tty, "\e[?u"}, 500
       assert_receive {:tty, "\e[>4;2m"}, 500
-    end
-
-    test "kitty_protocol_active? returns false with modifyOtherKeys fallback" do
-      test_pid = self()
-      tty_fn = fn bytes -> send(test_pid, {:tty, bytes}) end
-
-      pid =
-        start_terminal(
-          name: nil,
-          skip_raw_mode: false,
-          raw_mode_fn: fn _ -> :ok end,
-          tty_fn: tty_fn,
-          probe_timeout_ms: 10
-        )
-
-      :ok = Terminal.open(pid)
-      assert_receive {:tty, "\e[>4;2m"}, 500
-      refute Terminal.kitty_protocol_active?(pid)
     end
 
     test "disables Kitty on terminate" do
