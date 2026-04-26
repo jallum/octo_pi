@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-ixp.5"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.25"
+  ],
   "created": "2026-04-26T20:01:55Z",
   "description": "**Phase B — SessionManager. Deps: B1.**\n\nAppend entry to in-memory DAG and persist via `SessionStore.append/2`. Update leaf pointer.\n\nTests: append correctness; persistence round-trip.",
   "id": "opi-ixp.8",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "B4. SessionManager.add_entry/3",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:04Z"
+  "updated_at": "2026-04-26T20:02:10Z"
 }
