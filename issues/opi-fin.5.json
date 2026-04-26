@@ -8,9 +8,15 @@
   "id": "opi-fin.5",
   "labels": [],
   "parent": "opi-fin",
+  "comments": [
+    {
+      "text": "Audit (2026-04-26): mount/0 callback shape is correct, but the per-extension Agent implementation is unnecessary given dispatch is sequential through the Runner. State threading through the Runner's state map is the simpler model. opi-fin.17 migrates extensions and opi-fin.19 removes agent_supervisor/state_agent.",
+      "timestamp": "2026-04-26T05:44:21Z"
+    }
+  ],
   "priority": 2,
   "status": "closed",
   "title": "Phase 5: Migrate stateful extensions to mount/0",
   "type": "task",
-  "updated_at": "2026-04-26T00:07:55Z"
+  "updated_at": "2026-04-26T05:44:21Z"
 }
