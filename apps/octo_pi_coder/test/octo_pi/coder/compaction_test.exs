@@ -200,4 +200,118 @@ defmodule OctoPi.Coder.CompactionTest do
                Compaction.compact(prep(), model(), producer: producer)
     end
   end
+
+  describe "compact/2 — split-turn parallel path" do
+    # Producer that responds based on the prompt body so we can tell which
+    # call (history vs. turn-prefix) is which. Detection: the turn-prefix
+    # variant ends with `Prompts.turn_prefix()`; default ends with
+    # `Prompts.summarize()` / `Prompts.update()`.
+    defp dual_producer do
+      test = self()
+
+      fn m, ctx, opts ->
+        [%User{content: [%Text{text: text}]}] = ctx.messages
+        kind = if String.ends_with?(text, OctoPi.Coder.Compaction.Prompts.turn_prefix()),
+          do: :turn_prefix,
+          else: :history
+
+        send(test, {:producer_call, kind, m, ctx, opts})
+
+        body =
+          case kind do
+            :turn_prefix -> "TURN-PREFIX-BODY"
+            :history -> "HISTORY-BODY"
+          end
+
+        done_with(body)
+      end
+    end
+
+    defp split_prep(overrides \\ []) do
+      [
+        split_turn?: true,
+        turn_prefix_messages: [%User{content: "later", timestamp: 0}]
+      ]
+      |> Keyword.merge(overrides)
+      |> prep()
+    end
+
+    test "merges history and turn-prefix summaries with the upstream separator" do
+      assert {:ok, %Result{summary: summary}} =
+               Compaction.compact(split_prep(), model(), producer: dual_producer())
+
+      assert_received {:producer_call, :history, _, _, _}
+      assert_received {:producer_call, :turn_prefix, _, _, _}
+
+      assert summary ==
+               "HISTORY-BODY\n\n---\n\n**Turn Context (split turn):**\n\nTURN-PREFIX-BODY"
+    end
+
+    test "empty messages_to_summarize yields the 'No prior history.' literal" do
+      p = split_prep(messages_to_summarize: [])
+
+      assert {:ok, %Result{summary: summary}} =
+               Compaction.compact(p, model(), producer: dual_producer())
+
+      refute_received {:producer_call, :history, _, _, _}
+      assert_received {:producer_call, :turn_prefix, _, _, _}
+
+      assert summary ==
+               "No prior history.\n\n---\n\n**Turn Context (split turn):**\n\nTURN-PREFIX-BODY"
+    end
+
+    test "turn-prefix call uses the 0.5 × reserve budget; history uses 0.8 ×" do
+      assert {:ok, _} =
+               Compaction.compact(split_prep(), model(),
+                 producer: dual_producer()
+               )
+
+      assert_received {:producer_call, :history, _, _, %{max_tokens: 800}}
+      assert_received {:producer_call, :turn_prefix, _, _, %{max_tokens: 500}}
+    end
+
+    test "appends file-op blocks to the merged summary" do
+      file_ops = %FileOps{read: MapSet.new(["a.ex"])}
+      p = split_prep(file_ops: file_ops)
+
+      assert {:ok, %Result{summary: summary, details: details}} =
+               Compaction.compact(p, model(), producer: dual_producer())
+
+      assert String.ends_with?(summary, "<read-files>\na.ex\n</read-files>")
+      assert details == %{"readFiles" => ["a.ex"], "modifiedFiles" => []}
+    end
+
+    test "custom_instructions and previous_summary flow only into the history call" do
+      p = split_prep(previous_summary: "PRIOR")
+
+      assert {:ok, _} =
+               Compaction.compact(p, model(),
+                 producer: dual_producer(),
+                 custom_instructions: "watch X"
+               )
+
+      assert_received {:producer_call, :history, _, hctx, _}
+      [%User{content: [%Text{text: htext}]}] = hctx.messages
+      assert htext =~ "<previous-summary>\nPRIOR"
+      assert htext =~ "Additional focus: watch X"
+
+      assert_received {:producer_call, :turn_prefix, _, tctx, _}
+      [%User{content: [%Text{text: ttext}]}] = tctx.messages
+      refute ttext =~ "previous-summary"
+      refute ttext =~ "Additional focus"
+    end
+
+    test "either-side error surfaces as {:error, message}" do
+      producer = fn _, ctx, _ ->
+        [%User{content: [%Text{text: text}]}] = ctx.messages
+
+        if String.ends_with?(text, OctoPi.Coder.Compaction.Prompts.turn_prefix()),
+          do: error_event("turn-prefix boom"),
+          else: done_with("HISTORY-BODY")
+      end
+
+      assert {:error, "turn-prefix boom"} =
+               Compaction.compact(split_prep(), model(), producer: producer)
+    end
+  end
 end
