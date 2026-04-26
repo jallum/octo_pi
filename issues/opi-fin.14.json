@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-fin.13"
+  ],
   "blocks": [],
   "created": "2026-04-26T05:42:21Z",
   "description": "Make Session itself the production implementation of OctoPi.Coder.Extension.Host. No separate Host GenServer — Session handles Host messages directly via handle_cast/handle_call. Set ctx.host = session_pid in every Context.new site.\n\nThis closes the runtime gap that opi-fin.6 left open: the Host behaviour was defined and extensions were migrated to call Host.send_message(ctx.host, ...), but ctx.host was nil at runtime so every such call silently failed (caught by safe_call's rescue).\n\n## Deliverable\n\nFor every callback declared in OctoPi.Coder.Extension.Host (apps/octo_pi_coder/lib/octo_pi/coder/extension/host.ex), Session has the corresponding handle_cast (for fire-and-forget) or handle_call (for getters) clause. Runner sets ctx.host to the session_pid it was given at start_link.\n\n## Steps\n\nSTEP 1 — Audit every @callback in apps/octo_pi_coder/lib/octo_pi/coder/extension/host.ex. List: send_message, send_user_message, append_entry, set_model, set_thinking_level, compact, set_active_tools, set_session_name, set_label, register_tool, abort, exec, get_model, get_thinking_level, get_system_prompt, get_active_tools, get_all_tools, get_session_name, get_commands, get_context_usage.\n\nSTEP 2 — In Session, add handle_cast clauses for casts (send_message, send_user_message, register_tool, abort, etc.) and handle_call clauses for getters (get_model, get_all_tools, etc.). Most map to existing Session API (Session.prompt, Session.add_tool); wire them up.\n\nSTEP 3 — Update Runner's ctx construction so ctx.host is set to state.session_pid.\n\n## Acceptance Criteria\n\n- [ ] Every @callback in host.ex has a matching handle_cast or handle_call in apps/octo_pi_agent/lib/octo_pi/agent/session.ex (verify by counting callbacks vs handlers)\n- [ ] Test: extension with on_event/3 that calls Host.send_message(ctx.host, \"hi\") → Session receives the message and triggers an :input event (verifiable via session subscription)\n- [ ] Test: extension that calls Host.register_tool(ctx.host, %{name: \"x\", ...}) → tool appears via Host.get_all_tools(ctx.host) and is in Session's active tools\n- [ ] When `mix pi` runs with an extension that calls Host.send_message from on_event/3, no GenServer.cast(nil, ...) ArgumentError appears in telemetry handler_error events\n- [ ] In Runner: `ctx.host = state.session_pid` is set wherever ctx is constructed (verifiable via grep)\n- [ ] mix test passes\n\n## Dependencies\n\nBlocked by: opi-fin.13",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Session implements Host callbacks; set ctx.host",
   "type": "task",
-  "updated_at": "2026-04-26T05:42:21Z"
+  "updated_at": "2026-04-26T05:44:01Z"
 }
