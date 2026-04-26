@@ -3,13 +3,13 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-24T09:27:15Z",
-  "description": "Integration tests that exercise provider handoff: start a session on one provider, switch mid-conversation to another, verify message continuity and tool-call round-tripping. Covers Anthropic \u003c-\u003e OpenAI Completions, Anthropic \u003c-\u003e OpenAI Responses, Anthropic \u003c-\u003e Google, and Anthropic \u003c-\u003e Bedrock. Tests should run against live APIs (gated behind env vars like the existing live tests).",
+  "description": "Integration tests that exercise provider handoff: start a session on one provider, switch mid-conversation to another, verify message continuity and tool-call round-tripping. Covers Anthropic <-> OpenAI Completions, Anthropic <-> OpenAI Responses, Anthropic <-> Google, and Anthropic <-> Bedrock. Tests should run against live APIs (gated behind env vars like the existing live tests).",
   "id": "octo-l8r.5",
   "labels": [],
   "parent": "octo-l8r",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Cross-provider handoff integration tests",
   "type": "task",
-  "updated_at": "2026-04-24T09:27:15Z"
+  "updated_at": "2026-04-26T13:46:18.302855Z"
 }
