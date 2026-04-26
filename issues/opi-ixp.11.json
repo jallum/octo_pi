@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "B7. Wire extension API: get_branch/0, get_leaf_entry_id/0, get_entries/0",
   "type": "task",
-  "updated_at": "2026-04-26T22:48:57.396026Z"
+  "updated_at": "2026-04-26T22:54:12.459552Z"
 }
