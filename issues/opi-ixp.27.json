@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-26T20:01:59Z",
+  "description": "**Phase E — Compaction orchestration. Deps: none structural.**\n\n`opi-rcg.4` declared `Context.find_model/2` field but bound it to a stub returning nil (`apps/octo_pi_coder/lib/octo_pi/coder/extension/context.ex:32, 45`). Wire it to the real provider/model registry so `CustomCompaction` (E7) can resolve its alternate model.\n\nTests: extension can resolve a real model from a (provider, model_id) pair.",
+  "id": "opi-ixp.27",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "E7a. Wire Context.find_model to real model registry",
+  "type": "task",
+  "updated_at": "2026-04-26T20:01:59Z"
+}
