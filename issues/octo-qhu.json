@@ -1,19 +1,17 @@
 {
-  "annotations": [],
   "assignee": "",
   "blocked_by": [
     "octo-3gv"
   ],
   "blocks": [],
-  "comments": [],
+  "closed_at": "2026-04-26T13:41:52Z",
   "created": "2026-04-23T16:43:25.410555Z",
   "description": "Port pi-mom as a separate app consuming octo_pi_coder. First non-CLI consumer of the stack — good production validation.\n\nScope (children to be created when we approach this phase):\n- Slack socket client (choose between `slax`, `slack_elixir`, or hand-rolled over WebSockex).\n- Per-channel ChannelQueue GenServer (serialize work per channel; stop commands bypass the queue).\n- Agent-per-thread wiring (each Slack thread = one agent session).\n- Streaming reply adapter (batch, working indicator, 35K char truncation like upstream).\n- Backfill logic on startup.\n- Sandbox config (Docker vs host OS).\n\nDefinition of done: a running `mix mom` connects to a Slack workspace and processes messages through octo_pi_coder.\n\nRef: RESEARCH.md §3.5, §6 Phase 7.",
   "id": "octo-qhu",
   "labels": [],
-  "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Phase 7: octo_pi_mom — Slack bot app",
   "type": "epic",
-  "updated_at": "2026-04-23T16:43:56.376260Z"
+  "updated_at": "2026-04-26T13:41:52Z"
 }
