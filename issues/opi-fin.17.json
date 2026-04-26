@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-fin",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Migrate coder-side extensions to on_event/3 shape",
   "type": "task",
-  "updated_at": "2026-04-26T05:44:02Z"
+  "updated_at": "2026-04-26T13:45:32.603962Z"
 }
