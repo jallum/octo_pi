@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "C2. find_cut_point/3 + find_turn_start_index + split-turn detection",
   "type": "task",
-  "updated_at": "2026-04-26T21:45:09.219499Z"
+  "updated_at": "2026-04-26T21:55:43.933270Z"
 }
