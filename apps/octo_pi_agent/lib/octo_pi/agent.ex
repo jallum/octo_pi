@@ -64,6 +64,17 @@ defmodule OctoPi.Agent do
   @spec abort(session()) :: :ok
   def abort(pid), do: Session.abort(pid)
 
+  @doc """
+  Manually trigger context compaction. Returns `:ok` immediately; compaction
+  runs asynchronously. Emits `CompactionStart` then `CompactionEnd` when done.
+
+  Options:
+    - `:keep_recent_tokens` — token budget to keep (default 8000)
+    - `:model` — override model for summarization (default session model)
+  """
+  @spec compact(session(), keyword()) :: :ok | {:error, :streaming | :already_compacting}
+  def compact(pid, opts \\ []), do: Session.compact(pid, opts)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)

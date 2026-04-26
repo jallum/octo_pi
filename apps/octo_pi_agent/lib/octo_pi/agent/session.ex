@@ -26,8 +26,10 @@ defmodule OctoPi.Agent.Session do
   use GenServer
 
   alias OctoPi.Agent.AbortRef
+  alias OctoPi.Agent.Compaction
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
+  alias OctoPi.Agent.LoopSupervisor
   alias OctoPi.Agent.Message.Custom
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
@@ -79,6 +81,9 @@ defmodule OctoPi.Agent.Session do
 
   @doc false
   def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
+
+  @doc false
+  def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts})
 
   @doc false
   def abort(pid), do: GenServer.call(pid, :abort)
@@ -201,6 +206,7 @@ defmodule OctoPi.Agent.Session do
       end
     end
 
+    store = abort_compaction_if_active(store)
     {:reply, :ok, store}
   end
 
@@ -216,6 +222,32 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call(:set_overflow_recovery_attempted, _from, store) do
     {:reply, :ok, put_in(store.session.overflow_recovery_attempted?, true)}
+  end
+
+  def handle_call({:compact, opts}, _from, store) do
+    cond do
+      store.session.is_streaming? ->
+        {:reply, {:error, :streaming}, store}
+
+      store.session.is_compacting? ->
+        {:reply, {:error, :already_compacting}, store}
+
+      true ->
+        session = %{store.session | is_compacting?: true}
+        Subscribers.dispatch(self(), %Event.CompactionStart{reason: :manual})
+        model = Keyword.get(opts, :model, session.model)
+        keep = Keyword.get(opts, :keep_recent_tokens, 8_000)
+        sm = session.session_manager
+        transport = session.transport
+
+        task =
+          Task.Supervisor.async_nolink(LoopSupervisor, fn ->
+            Compaction.compact(sm, transport, model, keep_recent_tokens: keep)
+          end)
+
+        session = %{session | compaction_task: task}
+        {:reply, :ok, %{store | session: session}}
+    end
   end
 
   @impl true
@@ -238,16 +270,35 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_info({:DOWN, _mref, :process, pid, reason}, store) do
-    if pid == store.session.loop_task do
-      # Loop died. If the reason is :normal, the loop completed
-      # cleanly and its `run_complete` cast will have already landed
-      # (or will shortly) — nothing to synthesize. Otherwise (brutal
-      # kill from abort, crash, etc.) synthesize an aborted assistant
-      # message + AgentEnd so subscribers see a terminal event.
-      {:noreply, on_loop_down(store, reason)}
+  def handle_info({ref, result}, store) when is_reference(ref) do
+    task = store.session.compaction_task
+
+    if task && task.ref == ref do
+      # Demonitor before handling to suppress the subsequent :DOWN.
+      Process.demonitor(ref, [:flush])
+      {:noreply, on_compaction_done(store, result)}
     else
       {:noreply, store}
+    end
+  end
+
+  def handle_info({:DOWN, mref, :process, pid, reason}, store) do
+    cond do
+      pid == store.session.loop_task ->
+        # Loop died. If the reason is :normal, the loop completed
+        # cleanly and its `run_complete` cast will have already landed
+        # (or will shortly) — nothing to synthesize. Otherwise (brutal
+        # kill from abort, crash, etc.) synthesize an aborted assistant
+        # message + AgentEnd so subscribers see a terminal event.
+        {:noreply, on_loop_down(store, reason)}
+
+      store.session.compaction_task && store.session.compaction_task.ref == mref && reason != :normal ->
+        # Compaction task crashed or was killed (not via abort/1, which
+        # handles cleanup inline). Treat as an aborted compaction.
+        {:noreply, on_compaction_done(store, {:error, reason})}
+
+      true ->
+        {:noreply, store}
     end
   end
 
@@ -269,7 +320,7 @@ defmodule OctoPi.Agent.Session do
 
     {:ok, pid} =
       Task.Supervisor.start_child(
-        OctoPi.Agent.LoopSupervisor,
+        LoopSupervisor,
         fn ->
           Loop.run(%{
             session: session_pid,
@@ -282,6 +333,67 @@ defmodule OctoPi.Agent.Session do
 
     Process.monitor(pid)
     %{store | session: %{session_snapshot | loop_task: pid}}
+  end
+
+  defp on_compaction_done(
+         store,
+         {:ok, %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}}
+       ) do
+    sm = SessionManager.append_compaction(store.session.session_manager, summary, first_kept_id, tokens_before)
+    result = %{summary: summary, first_kept_entry_id: first_kept_id, tokens_before: tokens_before}
+
+    Subscribers.dispatch(self(), %Event.CompactionEnd{
+      reason: :manual,
+      aborted?: false,
+      will_retry?: false,
+      result: result
+    })
+
+    session = %{store.session | session_manager: sm, is_compacting?: false, compaction_task: nil}
+    %{store | session: session}
+  end
+
+  defp on_compaction_done(store, {:error, reason}) do
+    msg = "compaction failed: #{inspect(reason)}"
+
+    Subscribers.dispatch(self(), %Event.CompactionEnd{
+      reason: :manual,
+      aborted?: true,
+      will_retry?: false,
+      error_message: msg
+    })
+
+    session = %{store.session | is_compacting?: false, compaction_task: nil}
+    %{store | session: session}
+  end
+
+  defp abort_compaction_if_active(store) do
+    task = store.session.compaction_task
+
+    if task && store.session.is_compacting? do
+      Process.exit(task.pid, :kill)
+      Process.demonitor(task.ref, [:flush])
+
+      task_ref = task.ref
+
+      receive do
+        {^task_ref, _} -> :ok
+      after
+        0 -> :ok
+      end
+
+      Subscribers.dispatch(self(), %Event.CompactionEnd{
+        reason: :manual,
+        aborted?: true,
+        will_retry?: false,
+        error_message: "aborted by caller"
+      })
+
+      session = %{store.session | is_compacting?: false, compaction_task: nil}
+      %{store | session: session}
+    else
+      store
+    end
   end
 
   defp on_loop_down(store, :normal) do

@@ -20,7 +20,7 @@ defmodule OctoPi.Agent.Session.State do
     * `:transport`         — `OctoPi.Agent.Transport` impl module
     * `:is_compacting?`    — true while a compaction is in progress
     * `:overflow_recovery_attempted?` — prevents infinite compaction retry loops
-    * `:compaction_abort_ref` — abort ref for an in-progress manual compaction
+    * `:compaction_task` — running compaction task, or nil when idle
     * `:base_system_prompt` — preserved base prompt; extensions can override per-turn system_prompt
     * `:tool_registry`     — all registered tools by name; :tools is a filtered view of this
     * `:extension_runner`  — pid of the ExtensionRunner for this session, or nil
@@ -63,7 +63,7 @@ defmodule OctoPi.Agent.Session.State do
           transport: module(),
           is_compacting?: boolean(),
           overflow_recovery_attempted?: boolean(),
-          compaction_abort_ref: AbortRef.t() | nil,
+          compaction_task: Task.t() | nil,
           base_system_prompt: String.t() | nil,
           tool_registry: %{String.t() => Tool.t()},
           extension_runner: pid() | nil,
@@ -82,7 +82,7 @@ defmodule OctoPi.Agent.Session.State do
     :after_tool_call,
     :transport,
     :base_system_prompt,
-    :compaction_abort_ref,
+    :compaction_task,
     :extension_runner,
     thinking_level: :off,
     tools: [],
