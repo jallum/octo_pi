@@ -539,15 +539,19 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def terminate(_reason, state) do
-    # Cleanup of the supervised children (Terminal, Renderer,
-    # FooterData) is handled by OTP: when this process exits, the
-    # link to the child Supervisor signals it, which shuts its
-    # children down — Terminal traps exits and runs its own
-    # terminate/2 (raw mode restore, kitty disable, drain).
-    #
-    # Catastrophe path: if Terminal was already killed before we got
-    # here (e.g. brutally :kill'd), no one will restore the TTY for
-    # us. Detect that and run raw_mode.exit ourselves as a backstop.
+    # Synchronously shut the supervisor down so Terminal.terminate/2
+    # (and through it Reader.terminate/2) runs before we return —
+    # otherwise the BEAM proceeds to halt while the kitty/MOK disable
+    # sequences and raw-mode exit are still queued, and the user's
+    # shell inherits a TTY in kitty mode.
+    if state.sup && Process.alive?(state.sup) do
+      Supervisor.stop(state.sup, :normal, :infinity)
+    end
+
+    # Catastrophe path: if Terminal was already killed brutally (e.g.
+    # :kill'd outside the normal stop chain), Reader's terminate never
+    # ran, so kick raw-mode exit ourselves as a backstop. Bracketed
+    # paste / kitty bytes are unrecoverable in that case.
     if terminal_dead?(state.terminal), do: safe_raw_mode_exit(state)
 
     if fd = Process.get(:debug_render_log) do
