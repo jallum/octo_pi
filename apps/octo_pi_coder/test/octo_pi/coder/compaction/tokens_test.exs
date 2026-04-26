@@ -63,6 +63,19 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
       assert Tokens.estimate_tokens(%User{content: "", timestamp: 0}) == 0
       assert Tokens.estimate_tokens(%User{content: [], timestamp: 0}) == 0
     end
+
+    test "uses UTF-8 byte length, not grapheme count, to stay conservative" do
+      # "héllo" is 5 graphemes but 6 bytes (é = 2 bytes in UTF-8).
+      m = %User{content: "héllo", timestamp: 0}
+      # 6 bytes → ceil(6/4) = 2; grapheme count would yield 5/4 → 2 (same here),
+      # so use a longer string where the difference is observable.
+      m2 = %User{content: "héllo héllo héllo", timestamp: 0}
+      # 17 graphemes; UTF-8 bytes: 5*3 + 2*1(spaces) + 2*3(é runs)... easier: byte_size
+      assert Tokens.estimate_tokens(m) == div(byte_size("héllo") + 3, 4)
+      assert Tokens.estimate_tokens(m2) == div(byte_size("héllo héllo héllo") + 3, 4)
+      # Sanity: byte count exceeds grapheme count.
+      assert byte_size("héllo héllo héllo") > String.length("héllo héllo héllo")
+    end
   end
 
   describe "estimate_tokens/1 — assistant messages" do

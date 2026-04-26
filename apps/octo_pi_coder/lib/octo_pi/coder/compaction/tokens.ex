@@ -64,31 +64,36 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   def estimate_tokens(_other), do: 0
 
+  # All char counts use `byte_size/1` (UTF-8 byte length). For ASCII the
+  # value matches JS `string.length`; for multibyte text it overestimates
+  # relative to JS, which keeps us inside the heuristic's conservative
+  # ceiling and never under-budgets a compaction decision.
+
   defp user_chars(content) when is_binary(content), do: byte_size(content)
 
   defp user_chars(content) when is_list(content) do
     Enum.reduce(content, 0, fn
-      %Text{text: t}, acc when is_binary(t) -> acc + String.length(t)
+      %Text{text: t}, acc when is_binary(t) -> acc + byte_size(t)
       _, acc -> acc
     end)
   end
 
   defp user_chars(_), do: 0
 
-  defp assistant_block_chars(%Text{text: t}) when is_binary(t), do: String.length(t)
-  defp assistant_block_chars(%Thinking{thinking: t}) when is_binary(t), do: String.length(t)
+  defp assistant_block_chars(%Text{text: t}) when is_binary(t), do: byte_size(t)
+  defp assistant_block_chars(%Thinking{thinking: t}) when is_binary(t), do: byte_size(t)
 
   defp assistant_block_chars(%ToolCall{name: name, arguments: args}) do
-    String.length(name) + byte_size(Jason.encode!(args || %{}))
+    byte_size(name) + byte_size(Jason.encode!(args || %{}))
   end
 
   defp assistant_block_chars(_), do: 0
 
-  defp tool_result_chars(content) when is_binary(content), do: String.length(content)
+  defp tool_result_chars(content) when is_binary(content), do: byte_size(content)
 
   defp tool_result_chars(content) when is_list(content) do
     Enum.reduce(content, 0, fn
-      %Text{text: t}, acc when is_binary(t) -> acc + String.length(t)
+      %Text{text: t}, acc when is_binary(t) -> acc + byte_size(t)
       # Upstream estimates each image at 4800 chars (≈1200 tokens).
       %Image{}, acc -> acc + 4800
       _, acc -> acc
@@ -96,12 +101,6 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   end
 
   defp tool_result_chars(_), do: 0
-
-  # NOTE: upstream uses `string.length` (UTF-16 code units in JS); we use
-  # `String.length/1` (Unicode graphemes) for text and `byte_size/1` for
-  # raw strings. For ASCII-dominant inputs the values agree; for heavy
-  # multibyte text the estimates diverge slightly but stay within the
-  # conservative bound the heuristic was designed to provide.
 
   defp ceil_div4(0), do: 0
   defp ceil_div4(n) when is_integer(n) and n > 0, do: div(n + 3, 4)
