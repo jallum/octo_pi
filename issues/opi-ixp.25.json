@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-ixp.22",
     "opi-ixp.23"
   ],
   "blocks": [],
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "E5b. CompactionEntry append + :session_compact emit",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:09Z"
+  "updated_at": "2026-04-26T20:02:10Z"
 }
