@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-26T23:11:44.409489Z",
+  "description": "**Phase D follow-on. Deps: D3 (.19), E1 (.20), E3 (.22), E4 (.23), E5b (.25), A4 (.4).**\n\nPort `tmp/pi-mono/packages/coding-agent/test/compaction-thinking-model.test.ts` —\nthe live Anthropic-API compaction-with-thinking test.\n\nSurface: build an `Agent` + `Session` (or whatever the AgentSession analogue is)\nwith a reasoning-capable Claude model and `thinking_level: :high`, send a prompt,\nwait for idle, call `Session.compact/0`, assert:\n- non-empty `result.summary`\n- `tokens_before > 0`\n- after compaction, the first message in built context is a `CompactionSummaryMessage`\n\nAuth: route through the existing Anthropic OAuth path (Claude Code Max detection\n+ stored OAuth tokens) so the test runs locally for developers with an active\nClaude subscription. Skip when no auth is resolvable.\n\nMirror upstream's two `describe.skipIf(!HAS_..._AUTH)` blocks: one for Antigravity-routed\nClaude (if/when that provider lands) and one direct Anthropic. For the initial port\njust do the Anthropic block — Antigravity is out-of-scope until that provider ships.",
+  "id": "opi-ixp.44",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "D3b. Live thinking-model compaction end-to-end test",
+  "type": "task",
+  "updated_at": "2026-04-26T23:11:44.409489Z"
+}
