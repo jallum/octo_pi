@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-445.1"
+  ],
+  "blocks": [
+    "opi-445.3"
+  ],
+  "comments": [],
+  "created": "2026-04-26T15:06:12.767514Z",
+  "description": "Hold `%StdinFSM{}` in Terminal state. In the `{:stdin_chunk, bin}` handler (currently broadcasting raw bytes), call `StdinFSM.process/2`, broadcast each emitted sequence as `{:stdin_event, seq}` on topic `{:stdin_event, scope}`, and arm the next GenServer timeout from the FSM's returned `next_timeout_ms`.\n\nTerminal already uses `{:noreply, state, ms}` for `probe_timeout_ms` (terminal.ex:321). Both deadlines must coexist — implement the gb_trees / sorted-deadline pattern from auto-memory `feedback_genserver_timeout.md`: one pending GenServer timeout fires for whichever deadline is nearer; on fire, dispatch to the right handler and re-arm.\n\nWhen FSM timeout fires, call `StdinFSM.flush/1` and broadcast emitted sequences. Remove the `:stdin_chunk` broadcast topic entirely (raw chunks are now an internal Terminal concern).",
+  "id": "opi-445.2",
+  "labels": [],
+  "parent": "opi-445",
+  "priority": 2,
+  "status": "open",
+  "title": "Move FSM ownership into Terminal; multiplex flush + probe deadlines",
+  "type": "task",
+  "updated_at": "2026-04-26T15:06:12.767514Z"
+}

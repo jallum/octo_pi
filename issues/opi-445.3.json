@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-445.2"
+  ],
+  "blocks": [
+    "opi-445.4"
+  ],
+  "comments": [],
+  "created": "2026-04-26T15:06:12.767514Z",
+  "description": "- Drop the `StdinFSM` child from Interactive's startup (interactive.ex:~372).\n- Drop the `Registry.register(Events, {:stdin_chunk, terminal}, nil)` subscription (interactive.ex:384).\n- Add `Registry.register(Events, {:stdin_event, terminal}, nil)`.\n- Delete the `handle_info({:stdin_chunk, bin}, state)` clause (interactive.ex:442).\n- The existing `handle_info({:stdin_event, seq}, state)` clause continues to work unchanged.\n\nUpdate the moduledoc comment that references `:stdin_chunk` (interactive.ex:~882).",
+  "id": "opi-445.3",
+  "labels": [],
+  "parent": "opi-445",
+  "priority": 2,
+  "status": "open",
+  "title": "Update Interactive to consume cooked stdin events",
+  "type": "task",
+  "updated_at": "2026-04-26T15:06:12.767514Z"
+}

@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-445.3"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-26T15:06:12.767514Z",
+  "description": "- `terminal_test.exs`: replace `{:stdin_chunk, scope}` subscriptions with `{:stdin_event, scope}` and assert cooked sequences. Add a test for the multiplexed deadline (probe + FSM flush both pending).\n- Interactive tests: any test that fed `{:stdin_chunk, _}` directly should now feed `{:stdin_event, _}` (or feed bytes through Terminal end-to-end where appropriate).\n- Delete the GenServer scaffolding from `stdin_fsm.ex` (use_GenServer, init, handle_call, handle_info) once nothing depends on it.\n- Update terminal.ex moduledoc that documents the `{:stdin_chunk, terminal_pid}` topic.",
+  "id": "opi-445.4",
+  "labels": [],
+  "parent": "opi-445",
+  "priority": 2,
+  "status": "open",
+  "title": "Update terminal_test + interactive tests; remove dead StdinFSM GenServer code",
+  "type": "task",
+  "updated_at": "2026-04-26T15:06:12.767514Z"
+}

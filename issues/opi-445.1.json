@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-445.2"
+  ],
+  "comments": [],
+  "created": "2026-04-26T15:06:12.767514Z",
+  "description": "Replace the GenServer with a struct + pure functions:\n\n- `StdinFSM.new(opts)` → `%StdinFSM{}` (fields: `buffer`, `flush_ms`)\n- `StdinFSM.process(state, bin)` → `{state, events, next_timeout_ms | :infinity}`\n- `StdinFSM.flush(state)` → `{state, events}`\n- `StdinFSM.clear(state)` → `state`\n\nNo `subscriber` field — emission is the caller's job. No `GenServer.call`, no `handle_info`, no timeout handling inside the module.\n\nPort the existing stdin_fsm_test.exs to the functional API. Tests should drive the FSM directly and assert on returned `{state, events, next_timeout}` triples instead of `assert_receive`.",
+  "id": "opi-445.1",
+  "labels": [],
+  "parent": "opi-445",
+  "priority": 2,
+  "status": "open",
+  "title": "Refactor StdinFSM to a pure functional module",
+  "type": "task",
+  "updated_at": "2026-04-26T15:06:12.767514Z"
+}
