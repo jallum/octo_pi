@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-445",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Move FSM ownership into Terminal; multiplex flush + probe deadlines",
   "type": "task",
-  "updated_at": "2026-04-26T15:15:06.852537Z"
+  "updated_at": "2026-04-26T15:18:55.866234Z"
 }
