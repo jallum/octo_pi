@@ -4,7 +4,8 @@
     "opi-ixp.5"
   ],
   "blocks": [
-    "opi-ixp.10"
+    "opi-ixp.10",
+    "opi-ixp.11"
   ],
   "created": "2026-04-26T20:01:54Z",
   "description": "**Phase B — SessionManager. Deps: B1.**\n\n- `get_branch/1` — linear path root→leaf for a given leaf id.\n- `get_leaf_entry_id/1` — most recent message entry id (note: pi-mono and our existing API stub use `get_leaf_entry_id`, NOT `get_leaf_entry`).\n\nTests: port `tmp/pi-mono/packages/coding-agent/test/session-manager/tree-traversal.test.ts`.",
