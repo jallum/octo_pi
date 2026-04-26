@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.5"
+  ],
   "blocks": [],
   "created": "2026-04-26T20:01:55Z",
   "description": "**Phase B — SessionManager. Deps: B1.**\n\nCopy session JSONL, rewrite `parentSession` in the new file's header, return new session id.\n\nTests: forked file loads correctly; parent linkage preserved.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "B5. SessionManager.fork/3",
   "type": "task",
-  "updated_at": "2026-04-26T20:01:55Z"
+  "updated_at": "2026-04-26T20:02:04Z"
 }

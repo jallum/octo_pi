@@ -6,7 +6,8 @@
   "blocks": [
     "opi-ixp.6",
     "opi-ixp.7",
-    "opi-ixp.8"
+    "opi-ixp.8",
+    "opi-ixp.9"
   ],
   "created": "2026-04-26T20:01:54Z",
   "description": "**Phase B — SessionManager. Deps: A2.**\n\nNew module `OctoPi.Coder.SessionManager` (port of pi-mono `session-manager.ts`).\n\n`load/1` reads JSONL → entries → reconstructs full DAG via `parentId` links. Returns in-memory session struct (entries map + leaf candidates).\n\nTests: load both fixture files, assert DAG shape.",
