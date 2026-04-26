@@ -16,7 +16,9 @@ defmodule OctoPi.Agent.ExtensionRunner do
 
   use GenServer
 
-  @cancellable_events ~w(session_before_compact session_before_fork session_before_tree tool_call input)a
+  # Cancelled at first {:cancel, reason}; first {:ok, mods} with non-empty map also wins.
+  @compound_events ~w(session_before_compact session_before_fork session_before_tree tool_call input)a
+  # All handlers called; {:ok, mods} maps are merged (last-writer-wins).
   @modifiable_events ~w(context before_provider_request after_provider_response before_agent_start tool_result)a
 
   # ---------- public API ----------
@@ -33,6 +35,18 @@ defmodule OctoPi.Agent.ExtensionRunner do
     GenServer.call(pid, {:register, module})
   end
 
+  @doc "Register a slash-command handler (name without leading slash)."
+  @spec register_command(pid(), String.t(), (String.t() -> :ok)) :: :ok
+  def register_command(pid, name, handler) when is_binary(name) and is_function(handler, 1) do
+    GenServer.call(pid, {:register_command, name, handler})
+  end
+
+  @doc "Return the current command registry map (name => handler_fn)."
+  @spec get_commands(pid()) :: %{String.t() => (String.t() -> :ok)}
+  def get_commands(pid) do
+    GenServer.call(pid, :get_commands)
+  end
+
   @doc """
   Emit an event to all registered extensions.
 
@@ -46,16 +60,30 @@ defmodule OctoPi.Agent.ExtensionRunner do
     GenServer.call(pid, {:emit, event_type, payload})
   end
 
+  @doc "Emit an event with additional ctx fields merged into the base ctx."
+  @spec emit_with_ctx(pid(), atom(), map(), map()) :: :ok | {:cancelled, term()} | {:modified, map()}
+  def emit_with_ctx(pid, event_type, payload, extra_ctx) do
+    GenServer.call(pid, {:emit_with_ctx, event_type, payload, extra_ctx})
+  end
+
   # ---------- GenServer callbacks ----------
 
   @impl true
   def init(opts) do
-    {:ok, %{session_pid: Keyword.fetch!(opts, :session_pid), extensions: []}}
+    {:ok, %{session_pid: Keyword.fetch!(opts, :session_pid), extensions: [], commands: %{}}}
   end
 
   @impl true
   def handle_call({:register, module}, _from, state) do
     {:reply, :ok, %{state | extensions: state.extensions ++ [module]}}
+  end
+
+  def handle_call({:register_command, name, handler}, _from, state) do
+    {:reply, :ok, %{state | commands: Map.put(state.commands, name, handler)}}
+  end
+
+  def handle_call(:get_commands, _from, state) do
+    {:reply, state.commands, state}
   end
 
   def handle_call({:emit, event_type, payload}, _from, state) do
@@ -64,12 +92,18 @@ defmodule OctoPi.Agent.ExtensionRunner do
     {:reply, result, state}
   end
 
+  def handle_call({:emit_with_ctx, event_type, payload, extra_ctx}, _from, state) do
+    ctx = Map.merge(build_ctx(state), extra_ctx)
+    result = dispatch(state.extensions, event_type, payload, ctx)
+    {:reply, result, state}
+  end
+
   # ---------- dispatch helpers ----------
 
   defp dispatch(extensions, event_type, payload, ctx) do
     cond do
-      event_type in @cancellable_events ->
-        dispatch_cancellable(extensions, event_type, payload, ctx)
+      event_type in @compound_events ->
+        dispatch_compound(extensions, event_type, payload, ctx)
 
       event_type in @modifiable_events ->
         dispatch_modifiable(extensions, event_type, payload, ctx, %{})
@@ -79,12 +113,14 @@ defmodule OctoPi.Agent.ExtensionRunner do
     end
   end
 
-  defp dispatch_cancellable([], _type, _payload, _ctx), do: :ok
+  # Compound: stopped by the first non-:ok result (cancel OR modification).
+  defp dispatch_compound([], _type, _payload, _ctx), do: :ok
 
-  defp dispatch_cancellable([mod | rest], type, payload, ctx) do
+  defp dispatch_compound([mod | rest], type, payload, ctx) do
     case call_extension(mod, type, payload, ctx) do
       {:cancel, reason} -> {:cancelled, reason}
-      _ -> dispatch_cancellable(rest, type, payload, ctx)
+      {:ok, mods} when is_map(mods) and map_size(mods) > 0 -> {:modified, mods}
+      _ -> dispatch_compound(rest, type, payload, ctx)
     end
   end
 

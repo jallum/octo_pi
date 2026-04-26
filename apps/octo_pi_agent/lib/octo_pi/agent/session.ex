@@ -93,6 +93,18 @@ defmodule OctoPi.Agent.Session do
   def emit_hook(pid, event_type, payload), do: GenServer.call(pid, {:emit_hook, event_type, payload})
 
   @doc false
+  def register_tool(pid, tool), do: GenServer.call(pid, {:register_tool, tool})
+
+  @doc false
+  def set_active_tools(pid, tool_names), do: GenServer.call(pid, {:set_active_tools, tool_names})
+
+  @doc false
+  def get_active_tool_names(pid), do: GenServer.call(pid, :get_active_tool_names)
+
+  @doc false
+  def get_commands(pid), do: GenServer.call(pid, :get_commands)
+
+  @doc false
   def abort(pid), do: GenServer.call(pid, :abort)
 
   @doc false
@@ -127,6 +139,8 @@ defmodule OctoPi.Agent.Session do
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
       |> maybe_override_queue(:follow_up_queue, opts[:follow_up_queue_bound])
 
+    state = fire_session_start_hook(state, extension_runner)
+
     {:ok, %{session: state, idle_waiters: []}}
   end
 
@@ -142,15 +156,7 @@ defmodule OctoPi.Agent.Session do
     if store.session.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      case apply_input_hook(msgs, store.session.extension_runner) do
-        {:cancel, _reason} ->
-          {:reply, :ok, store}
-
-        {:ok, processed} ->
-          sm = SessionManager.append_messages(store.session.session_manager, processed)
-          session = %{store.session | session_manager: sm}
-          {:reply, :ok, start_run(%{store | session: session})}
-      end
+      {:reply, :ok, apply_prompt(msgs, store)}
     end
   end
 
@@ -257,6 +263,35 @@ defmodule OctoPi.Agent.Session do
       end
 
     {:reply, result, store}
+  end
+
+  def handle_call({:register_tool, tool}, _from, store) do
+    registry = Map.put(store.session.tool_registry, tool.name, tool)
+    {:reply, :ok, put_in(store.session.tool_registry, registry)}
+  end
+
+  def handle_call({:set_active_tools, names}, _from, store) do
+    tools =
+      names
+      |> Enum.filter(&Map.has_key?(store.session.tool_registry, &1))
+      |> Enum.map(&store.session.tool_registry[&1])
+
+    {:reply, :ok, put_in(store.session.tools, tools)}
+  end
+
+  def handle_call(:get_active_tool_names, _from, store) do
+    {:reply, Enum.map(store.session.tools, & &1.name), store}
+  end
+
+  def handle_call(:get_commands, _from, store) do
+    commands =
+      if store.session.extension_runner do
+        ExtensionRunner.get_commands(store.session.extension_runner)
+      else
+        %{}
+      end
+
+    {:reply, commands, store}
   end
 
   def handle_call({:compact, opts}, _from, store) do
@@ -583,6 +618,46 @@ defmodule OctoPi.Agent.Session do
 
   defp emit_session_compact_hook(_sm, _from_extension, nil), do: :ok
 
+  defp apply_prompt(msgs, store) do
+    case maybe_dispatch_slash_command(msgs, store.session.extension_runner) do
+      {:command, :handled} -> store
+      :not_a_command -> apply_prompt_after_slash_check(msgs, store)
+    end
+  end
+
+  defp apply_prompt_after_slash_check(msgs, store) do
+    case apply_input_hook(msgs, store.session.extension_runner) do
+      {:cancel, _reason} ->
+        store
+
+      {:ok, processed} ->
+        sm = SessionManager.append_messages(store.session.session_manager, processed)
+        session = %{store.session | session_manager: sm}
+        start_run(%{store | session: session})
+    end
+  end
+
+  defp maybe_dispatch_slash_command([%User{content: "/" <> rest} | _], runner) when not is_nil(runner) do
+    {name, args} =
+      case String.split(rest, " ", parts: 2) do
+        [n, a] -> {n, a}
+        [n] -> {n, ""}
+      end
+
+    commands = ExtensionRunner.get_commands(runner)
+
+    case Map.get(commands, name) do
+      nil ->
+        :not_a_command
+
+      handler ->
+        handler.(args)
+        {:command, :handled}
+    end
+  end
+
+  defp maybe_dispatch_slash_command(_msgs, _runner), do: :not_a_command
+
   defp apply_input_hook(msgs, nil), do: {:ok, msgs}
 
   defp apply_input_hook(msgs, runner) do
@@ -597,6 +672,36 @@ defmodule OctoPi.Agent.Session do
       msg, {:ok, acc} ->
         {:cont, {:ok, acc ++ [msg]}}
     end)
+  end
+
+  defp fire_session_start_hook(state, nil), do: state
+
+  defp fire_session_start_hook(state, runner) do
+    tid = :ets.new(:session_start_scratch, [:set, :public])
+
+    extra_ctx = %{
+      register_tool: fn tool ->
+        :ets.insert(tid, {:tool, tool.name, tool})
+        :ok
+      end,
+      register_command: fn name, handler ->
+        :ets.insert(tid, {:cmd, name, handler})
+        :ok
+      end
+    }
+
+    ExtensionRunner.emit_with_ctx(runner, :session_start, %{session_manager: state.session_manager}, extra_ctx)
+
+    tool_entries = :ets.match(tid, {:tool, :"$1", :"$2"})
+    cmd_entries = :ets.match(tid, {:cmd, :"$1", :"$2"})
+    :ets.delete(tid)
+
+    new_registry =
+      Enum.reduce(tool_entries, state.tool_registry, fn [name, tool], acc -> Map.put(acc, name, tool) end)
+
+    Enum.each(cmd_entries, fn [name, handler] -> ExtensionRunner.register_command(runner, name, handler) end)
+
+    %{state | tool_registry: new_registry}
   end
 
   defp maybe_start_extension_runner(_session_pid, []), do: nil

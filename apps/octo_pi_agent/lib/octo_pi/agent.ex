@@ -83,6 +83,22 @@ defmodule OctoPi.Agent do
   @spec emit_hook(session(), atom(), map()) :: :ok | {:cancelled, term()} | {:modified, map()}
   def emit_hook(pid, event_type, payload), do: Session.emit_hook(pid, event_type, payload)
 
+  @doc "Add a tool to the session's tool registry (does not activate it)."
+  @spec register_tool(session(), map()) :: :ok
+  def register_tool(pid, tool), do: Session.register_tool(pid, tool)
+
+  @doc "Activate the given tool names from the tool registry as the session's active tool set."
+  @spec set_active_tools(session(), [String.t()]) :: :ok
+  def set_active_tools(pid, tool_names), do: Session.set_active_tools(pid, tool_names)
+
+  @doc "Return the names of the currently active tools."
+  @spec get_active_tool_names(session()) :: [String.t()]
+  def get_active_tool_names(pid), do: Session.get_active_tool_names(pid)
+
+  @doc "Return the registered slash-command handlers, or %{} if no extension runner."
+  @spec get_commands(session()) :: %{String.t() => (String.t() -> :ok)}
+  def get_commands(pid), do: Session.get_commands(pid)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
