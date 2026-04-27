@@ -5,7 +5,8 @@
     "opi-ixp.50"
   ],
   "blocks": [
-    "opi-ixp.52"
+    "opi-ixp.52",
+    "opi-ixp.25"
   ],
   "comments": [],
   "created": "2026-04-27T19:25:41.300700Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "F3. Manual compact as Turn transition (replaces .25/E5b)",
   "type": "task",
-  "updated_at": "2026-04-27T19:26:31.903530Z"
+  "updated_at": "2026-04-27T19:26:41.997518Z"
 }

@@ -4,7 +4,8 @@
     "opi-ixp.22",
     "opi-ixp.23",
     "opi-ixp.24",
-    "opi-ixp.8"
+    "opi-ixp.8",
+    "opi-ixp.51"
   ],
   "blocks": [
     "opi-ixp.26",
@@ -22,5 +23,5 @@
   "status": "in_progress",
   "title": "E5b. CompactionEntry append + :session_compact emit",
   "type": "task",
-  "updated_at": "2026-04-27T19:01:11.816943Z"
+  "updated_at": "2026-04-27T19:26:41.997518Z"
 }
