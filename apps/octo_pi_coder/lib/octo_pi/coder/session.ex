@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.Session do
   use GenServer, restart: :temporary
 
   alias OctoPi.Coder.Compaction
-  alias OctoPi.Coder.Compaction.{BranchSummarization, BranchSummaryResult, Preparation, Result, Settings, TreePreparation}
+  alias OctoPi.Coder.Compaction.{BranchSummarization, BranchSummaryResult, Preparation, Result, Settings, Tokens, TreePreparation}
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
   alias OctoPi.Coder.Session.Entry
@@ -226,6 +226,29 @@ defmodule OctoPi.Coder.Session do
   def navigate_tree(server, opts),
     do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
 
+  @doc """
+  Estimate context token usage for the current session, accounting for
+  compaction boundaries. Mirrors upstream `AgentSession.getContextUsage`.
+
+  Returns `%{tokens: non_neg_integer() | nil, context_window: pos_integer(),
+  percent: float() | nil}`, or `nil` when no model with a valid context
+  window is available.
+
+  Returns `tokens: nil` when the latest compaction has no subsequent
+  valid (non-aborted/non-error) assistant response — context size is
+  unknown until the next LLM reply arrives.
+  """
+  @spec get_context_usage(GenServer.server()) :: map() | nil
+  def get_context_usage(server), do: GenServer.call(server, :get_context_usage)
+
+  @doc """
+  Session statistics: running token totals from assistant messages in the
+  current context window, plus context usage from `get_context_usage/1`.
+  Mirrors upstream `AgentSession.getSessionStats`.
+  """
+  @spec get_session_stats(GenServer.server()) :: map()
+  def get_session_stats(server), do: GenServer.call(server, :get_session_stats)
+
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
   # actions this Session actually implements are bound — unimplemented
@@ -237,7 +260,8 @@ defmodule OctoPi.Coder.Session do
   def __action_closures__(server) do
     %{
       append_entry: fn entry -> add_entry(server, entry) end,
-      compact: fn opts -> compact(server, opts) end
+      compact: fn opts -> compact(server, opts) end,
+      get_context_usage: fn -> get_context_usage(server) end
     }
   end
 
@@ -309,6 +333,12 @@ defmodule OctoPi.Coder.Session do
         {:reply, other, state}
     end
   end
+
+  def handle_call(:get_context_usage, _from, state),
+    do: {:reply, do_get_context_usage(state), state}
+
+  def handle_call(:get_session_stats, _from, state),
+    do: {:reply, do_get_session_stats(state), state}
 
   defp do_compact(%State{} = state, opts) do
     path_entries = SessionManager.get_branch(state.session_manager)
@@ -606,6 +636,102 @@ defmodule OctoPi.Coder.Session do
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  # ---- get_context_usage / get_session_stats --------------------------------
+  # Mirrors upstream AgentSession.getContextUsage / getSessionStats
+  # (agent-session.ts:2932-2973, 2887-2932).
+
+  defp do_get_context_usage(%State{model_provider: mp, session_manager: sm}) do
+    case mp.() do
+      %{context_window: cw} when is_integer(cw) and cw > 0 ->
+        branch = SessionManager.get_branch(sm)
+
+        if context_tokens_known?(branch) do
+          messages = SessionManager.build_session_context(sm).messages
+          estimate = Tokens.estimate_context_tokens(messages)
+          percent = estimate.tokens / cw * 100
+          %{tokens: estimate.tokens, context_window: cw, percent: percent}
+        else
+          %{tokens: nil, context_window: cw, percent: nil}
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp do_get_session_stats(%State{session_manager: sm} = state) do
+    messages = SessionManager.build_session_context(sm).messages
+
+    {input, output, cache_read, cache_write} =
+      Enum.reduce(messages, {0, 0, 0, 0}, fn
+        %{"role" => "assistant", "usage" => u}, {i, o, cr, cw} when is_map(u) ->
+          {i + map_int(u, "input"), o + map_int(u, "output"),
+           cr + map_int(u, "cacheRead"), cw + map_int(u, "cacheWrite")}
+
+        _, acc ->
+          acc
+      end)
+
+    %{
+      tokens: %{
+        input: input,
+        output: output,
+        cache_read: cache_read,
+        cache_write: cache_write,
+        total: input + output + cache_read + cache_write
+      },
+      context_usage: do_get_context_usage(state)
+    }
+  end
+
+  # Returns true iff context tokens are currently knowable — either no
+  # compaction exists, or a valid (non-aborted, non-error) assistant
+  # response exists after the latest compaction boundary.
+  defp context_tokens_known?(branch) do
+    case find_latest_compaction_index(branch) do
+      nil -> true
+      comp_idx -> post_compaction_valid_assistant?(branch, comp_idx)
+    end
+  end
+
+  defp find_latest_compaction_index(branch) do
+    branch
+    |> Enum.with_index()
+    |> Enum.reduce(nil, fn
+      {%Entry.Compaction{}, idx}, _ -> idx
+      _, acc -> acc
+    end)
+  end
+
+  # Walk newest → oldest after the compaction; stop at the first
+  # non-aborted/error assistant and check its token count.
+  defp post_compaction_valid_assistant?(branch, comp_idx) do
+    branch
+    |> Enum.drop(comp_idx + 1)
+    |> Enum.reverse()
+    |> Enum.reduce_while(false, fn
+      %Entry.Message{message: %{"role" => "assistant", "stopReason" => r}}, acc
+      when r in ["aborted", "error"] ->
+        {:cont, acc}
+
+      %Entry.Message{message: %{"role" => "assistant"} = msg}, _acc ->
+        u = msg["usage"] || %{}
+        total = map_int(u, "totalTokens")
+        tokens = if total > 0, do: total, else: map_int(u, "input") + map_int(u, "output") + map_int(u, "cacheRead") + map_int(u, "cacheWrite")
+        {:halt, tokens > 0}
+
+      _, acc ->
+        {:cont, acc}
+    end)
+  end
+
+  defp map_int(map, key) when is_map(map) do
+    case Map.get(map, key) do
+      n when is_integer(n) -> n
+      _ -> 0
+    end
+  end
 
   defp finish_compaction(session_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
     entry = %Entry.Compaction{

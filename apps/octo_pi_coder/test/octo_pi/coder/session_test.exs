@@ -923,4 +923,125 @@ defmodule OctoPi.Coder.SessionTest do
       _ = test_pid
     end
   end
+
+  # ---- get_context_usage / get_session_stats --------------------------------
+  # Ports `tmp/pi-mono/packages/coding-agent/test/agent-session-stats.test.ts`.
+
+  describe "get_context_usage/1 and get_session_stats/1" do
+    setup ctx do
+      store = open_store!(ctx)
+      model = %OctoPi.AI.Model{
+        id: "test-model",
+        name: "Test Model",
+        api: :anthropic_messages,
+        provider: :anthropic,
+        base_url: "https://api.anthropic.com",
+        context_window: 200_000,
+        max_tokens: 8096
+      }
+      {:ok, pid} =
+        Session.start_link(
+          extensions: [],
+          session_manager: empty_sm(),
+          store_pid: store,
+          model_provider: fn -> model end
+        )
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      %{pid: pid, model: model}
+    end
+
+    defp user_msg(text) do
+      %Entry.Message{
+        id: nil, timestamp: nil,
+        message: %{"role" => "user", "content" => text}
+      }
+    end
+
+    defp assistant_msg(text, total_tokens) do
+      %Entry.Message{
+        id: nil, timestamp: nil,
+        message: %{
+          "role" => "assistant",
+          "content" => [%{"type" => "text", "text" => text}],
+          "stopReason" => "stop",
+          "usage" => %{
+            "input" => total_tokens,
+            "output" => 0,
+            "cacheRead" => 0,
+            "cacheWrite" => 0,
+            "totalTokens" => total_tokens
+          }
+        }
+      }
+    end
+
+    defp compaction_entry(summary, first_kept_entry_id, tokens_before) do
+      %Entry.Compaction{
+        id: nil,
+        timestamp: nil,
+        summary: summary,
+        first_kept_entry_id: first_kept_entry_id,
+        tokens_before: tokens_before
+      }
+    end
+
+    test "exposes current context usage alongside token totals", %{pid: pid, model: model} do
+      Session.add_entry(pid, user_msg("hello"))
+      Session.add_entry(pid, assistant_msg("hi", 200))
+
+      stats = Session.get_session_stats(pid)
+      cu = Session.get_context_usage(pid)
+
+      assert cu.tokens == stats.context_usage.tokens
+      assert cu.tokens == 200
+      assert cu.context_window == model.context_window
+      assert_in_delta cu.percent, 200 / model.context_window * 100, 0.001
+    end
+
+    test "reports nil context tokens immediately after compaction (no post-compaction assistant)",
+         %{pid: pid} do
+      Session.add_entry(pid, user_msg("first"))
+      Session.add_entry(pid, assistant_msg("response1", 180_000))
+      {:ok, kept_id} = Session.add_entry(pid, user_msg("second"))
+      Session.add_entry(pid, assistant_msg("response2", 195_000))
+      Session.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
+      Session.add_entry(pid, user_msg("third"))
+
+      stats = Session.get_session_stats(pid)
+      assert stats.tokens.input == 195_000
+      assert stats.context_usage != nil
+      assert stats.context_usage.tokens == nil
+      assert stats.context_usage.percent == nil
+    end
+
+    test "uses post-compaction usage for current context, not stale pre-compaction usage",
+         %{pid: pid} do
+      Session.add_entry(pid, user_msg("first"))
+      Session.add_entry(pid, assistant_msg("response1", 180_000))
+      {:ok, kept_id} = Session.add_entry(pid, user_msg("second"))
+      Session.add_entry(pid, assistant_msg("response2", 195_000))
+      Session.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
+      Session.add_entry(pid, user_msg("third"))
+      Session.add_entry(pid, assistant_msg("response3", 25_000))
+
+      stats = Session.get_session_stats(pid)
+      assert stats.tokens.input == 220_000
+      assert stats.context_usage != nil
+      assert stats.context_usage.tokens == 25_000
+      assert_in_delta stats.context_usage.percent, 25_000 / 200_000 * 100, 0.001
+    end
+
+    test "returns nil when no model is set" do
+      {:ok, pid2} =
+        Session.start_link(
+          extensions: [],
+          session_manager: empty_sm(),
+          store_pid: self(),
+          model_provider: fn -> nil end
+        )
+      on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)
+
+      assert Session.get_context_usage(pid2) == nil
+    end
+  end
 end
