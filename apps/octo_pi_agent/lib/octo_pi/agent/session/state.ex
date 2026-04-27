@@ -20,7 +20,10 @@ defmodule OctoPi.Agent.Session.State do
     * `:pending_tool_calls` — ids of tools currently executing
     * `:error_message` — last failure reason from a run
     * `:steering_queue` / `:follow_up_queue` — `PendingMessageQueue.t()`
-    * `:loop_task` — `Task.t()` of the running loop, or nil
+    * `:turn` — `OctoPi.Agent.Turn.t()`, the per-turn FSM
+    * `:turn_pid` — pid of the active stream/tool-batch Task, or nil
+    * `:turn_ref` — ref tagging messages from the active Task; used to
+      drop late messages from a killed/cancelled Task. nil when idle.
     * `:abort_ref` — `AbortRef.t()` for the current run, or nil
     * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
@@ -39,6 +42,7 @@ defmodule OctoPi.Agent.Session.State do
   alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Tool
+  alias OctoPi.Agent.Turn
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
 
@@ -64,7 +68,9 @@ defmodule OctoPi.Agent.Session.State do
           error_message: String.t() | nil,
           steering_queue: PendingMessageQueue.t(),
           follow_up_queue: PendingMessageQueue.t(),
-          loop_task: pid() | nil,
+          turn: Turn.t(),
+          turn_pid: pid() | nil,
+          turn_ref: reference() | nil,
           abort_ref: AbortRef.t() | nil,
           run_started_at_mono: integer() | nil,
           before_tool_call: before_tool_call() | nil,
@@ -78,13 +84,15 @@ defmodule OctoPi.Agent.Session.State do
     :model,
     :streaming_message,
     :error_message,
-    :loop_task,
+    :turn_pid,
+    :turn_ref,
     :abort_ref,
     :run_started_at_mono,
     :before_tool_call,
     :after_tool_call,
     :transport,
     :messages_provider,
+    turn: %Turn{},
     thinking_level: :off,
     tools: [],
     messages: %MessageLog{},

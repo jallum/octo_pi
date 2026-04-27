@@ -13,7 +13,7 @@ defmodule OctoPi.Agent.Application do
     AgentHandler.attach()
 
     children = [
-      {Task.Supervisor, name: OctoPi.Agent.LoopSupervisor},
+      {Task.Supervisor, name: OctoPi.Agent.TurnTaskSupervisor},
       {Task.Supervisor, name: OctoPi.Agent.ToolSupervisor},
       {Registry, keys: :duplicate, name: OctoPi.Agent.Subscribers}
     ]
