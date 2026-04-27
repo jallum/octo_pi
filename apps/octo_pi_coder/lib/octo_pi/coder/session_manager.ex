@@ -180,6 +180,45 @@ defmodule OctoPi.Coder.SessionManager do
   end
 
   @doc """
+  Collect entries that should be summarized when navigating from one
+  tree position to another. Walks from `old_leaf_id` back to the common
+  ancestor with `target_id`, **not** stopping at compaction boundaries
+  (compaction entries are included so their summaries provide context).
+
+  Returns `{entries_in_chronological_order, common_ancestor_id}`.
+  When `old_leaf_id` is `nil` there is nothing to summarize: `{[], nil}`.
+
+  Port of `collectEntriesForBranchSummary`
+  (`tmp/pi-mono/.../compaction/branch-summarization.ts:98-136`).
+  """
+  @spec collect_entries_for_branch_summary(t(), String.t() | nil, String.t()) ::
+          {[entry()], String.t() | nil}
+  def collect_entries_for_branch_summary(_sm, nil, _target_id), do: {[], nil}
+
+  def collect_entries_for_branch_summary(%__MODULE__{} = sm, old_leaf_id, target_id)
+      when is_binary(old_leaf_id) and is_binary(target_id) do
+    common_ancestor_id = find_common_ancestor(sm, old_leaf_id, target_id)
+
+    entries =
+      sm
+      |> get_branch(old_leaf_id)
+      |> entries_after_ancestor(common_ancestor_id)
+
+    {entries, common_ancestor_id}
+  end
+
+  defp entries_after_ancestor(branch, nil), do: branch
+
+  defp entries_after_ancestor(branch, ancestor_id) do
+    branch
+    |> Enum.drop_while(fn entry -> entry_id(entry) != ancestor_id end)
+    |> tl_or_empty()
+  end
+
+  defp tl_or_empty([]), do: []
+  defp tl_or_empty([_ | rest]), do: rest
+
+  @doc """
   Assemble the LLM-ready session context from this manager's current
   branch. Walks root→leaf, collects messages, threads thinking-level
   and model selection across the path, and (when a CompactionEntry

@@ -258,6 +258,102 @@ defmodule OctoPi.Coder.SessionManagerTest do
     end
   end
 
+  describe "collect_entries_for_branch_summary/3" do
+    test "nil old_leaf_id returns {[], nil}" do
+      sm = build_linear(["a", "b", "c"])
+      assert SessionManager.collect_entries_for_branch_summary(sm, nil, "c") == {[], nil}
+    end
+
+    test "same old and target: common ancestor is the entry itself, entries list is empty" do
+      sm = build_linear(["a", "b", "c"])
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "c", "c")
+      assert ancestor_id == "c"
+      assert entries == []
+    end
+
+    test "linear session — navigating from leaf to ancestor: entries between ancestor and old leaf" do
+      # a→b→c→d, old=d, target=b → common=b, entries=[c, d]
+      sm = build_linear(["a", "b", "c", "d"])
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "d", "b")
+      assert ancestor_id == "b"
+      assert Enum.map(entries, & &1.id) == ["c", "d"]
+    end
+
+    test "linear session — navigating to root: all entries after root included" do
+      # a→b→c→d, old=d, target=a → common=a, entries=[b, c, d]
+      sm = build_linear(["a", "b", "c", "d"])
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "d", "a")
+      assert ancestor_id == "a"
+      assert Enum.map(entries, & &1.id) == ["b", "c", "d"]
+    end
+
+    test "forked session — navigating across branches: entries from common ancestor to old leaf" do
+      # a→b→c→d  (old leaf: d)
+      #    └→x→y  (target leaf: y)
+      # common ancestor: b; entries from b to d (exclusive b): [c, d]
+      sm = build_forked()
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "d", "y")
+      assert ancestor_id == "b"
+      assert Enum.map(entries, & &1.id) == ["c", "d"]
+    end
+
+    test "multi-level fork: entries from deepest common ancestor to old leaf" do
+      # a→b→c→d→e  (old leaf: e)
+      #       └→x→y  (target, branch from c)
+      # common ancestor: c; entries: [d, e]
+      sm = build_multi_fork()
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "e", "y")
+      assert ancestor_id == "c"
+      assert Enum.map(entries, & &1.id) == ["d", "e"]
+    end
+
+    test "disjoint trees: common ancestor is nil, all entries from old leaf to root included" do
+      sm = build_disjoint()
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "a2", "b2")
+      assert ancestor_id == nil
+      assert Enum.map(entries, & &1.id) == ["a1", "a2"]
+    end
+
+    test "entries are returned in root→leaf (chronological) order" do
+      sm = build_linear(["a", "b", "c", "d", "e"])
+      {entries, _} = SessionManager.collect_entries_for_branch_summary(sm, "e", "a")
+      assert Enum.map(entries, & &1.id) == ["b", "c", "d", "e"]
+    end
+
+    test "compaction entries are included (does not stop at compaction boundary)" do
+      # Build a tree that includes a compaction entry between messages
+      by_id = %{
+        "m1" => %Entry.Message{
+          id: "m1",
+          parent_id: nil,
+          timestamp: "t",
+          message: %{"role" => "user", "content" => "m1"}
+        },
+        "cmp" => %Entry.Compaction{
+          id: "cmp",
+          parent_id: "m1",
+          timestamp: "t",
+          summary: "compacted",
+          tokens_before: 100,
+          first_kept_entry_id: "m1"
+        },
+        "m2" => %Entry.Message{
+          id: "m2",
+          parent_id: "cmp",
+          timestamp: "t",
+          message: %{"role" => "user", "content" => "m2"}
+        }
+      }
+
+      sm = %SessionManager{cwd: "/c", session_id: "s", version: 3, by_id: by_id}
+
+      {entries, ancestor_id} = SessionManager.collect_entries_for_branch_summary(sm, "m2", "m1")
+      assert ancestor_id == "m1"
+      # compaction entry must be included
+      assert Enum.map(entries, & &1.id) == ["cmp", "m2"]
+    end
+  end
+
   describe "fork/4" do
     test "missing source returns :enoent" do
       assert {:error, :enoent} =
