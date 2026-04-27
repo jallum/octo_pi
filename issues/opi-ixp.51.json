@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.50"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-27T19:25:41.300700Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "F3. Manual compact as Turn transition (replaces .25/E5b)",
   "type": "task",
-  "updated_at": "2026-04-27T19:25:41.300700Z"
+  "updated_at": "2026-04-27T19:26:26.284038Z"
 }
