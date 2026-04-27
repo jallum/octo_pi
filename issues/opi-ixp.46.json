@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E0b. Production Extension.API binding + dispatcher override channel",
   "type": "task",
-  "updated_at": "2026-04-27T16:53:13.303112Z"
+  "updated_at": "2026-04-27T16:59:59.701739Z"
 }
