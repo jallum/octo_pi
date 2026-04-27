@@ -10,6 +10,13 @@
     "opi-ixp.25",
     "opi-ixp.44"
   ],
+  "comments": [
+    {
+      "author": "",
+      "text": "2026-04-27: blocked on E0a (.45) + E0b (.46). When unblocked, body needs updating: `api.compact/1` becomes `fn opts -> Coder.Session.compact(session_pid, opts) end`; `Dispatcher.cancel_on_result/3` reference becomes `halt_on_result/3` with `{:cancel, _} | {:override, %Compaction.Result{}}` semantics. Persistence + `:session_compact` emit stay in E5b (.25). See discussion captured in E0a / E0b descriptions.",
+      "timestamp": "2026-04-27T12:56:20.405867Z"
+    }
+  ],
   "created": "2026-04-26T20:01:58Z",
   "description": "**Phase E — Compaction orchestration. Deps: E1, B6.**\n\nImplement the `api.compact/1` body (currently stubbed at `apps/octo_pi_coder/lib/octo_pi/coder/extension/api.ex:27`).\n\nSequence:\n1. Build `%CompactionPreparation{}` via `Compaction.prepare/2` (C5).\n2. Emit `:session_before_compact` event (cancel-on-result pattern). Honor:\n   - `{:cancel, reason}` → abort, no entry written.\n   - Extension-supplied `%CompactionResult{}` → skip LLM call; entry will be written in E5b with `from_hook?: true`.\n3. Otherwise call `Compaction.compact/2` (E1/E2).\n\nTests: port `compaction-extensions.test.ts` and `compaction-extensions-example.test.ts`. Verify existing `apps/octo_pi_coder/test/octo_pi/coder/extension/compaction_extensions_test.exs` still passes.",
   "id": "opi-ixp.23",
@@ -19,5 +26,5 @@
   "status": "open",
   "title": "E4. Session.compact/2 + :session_before_compact dispatch",
   "type": "task",
-  "updated_at": "2026-04-27T12:56:10.711419Z"
+  "updated_at": "2026-04-27T12:56:20.405867Z"
 }
