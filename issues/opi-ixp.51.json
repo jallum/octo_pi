@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-ixp.50"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.52"
+  ],
   "comments": [],
   "created": "2026-04-27T19:25:41.300700Z",
   "description": "**Phase F — Turn FSM. Deps: F2 (.50). Supersedes E5b (.25).**\n\nLift manual compaction into the Turn FSM. Adds `:compacting` state. AgentSession exposes `compact/1` which is forwarded to (or coordinates with) `Coder.Session.compact/2`; the actual append + `:session_compact` emit happen as Turn actions executed by AgentSession.\n\n**Mechanics**\n\n- New Turn state `:compacting`. Allowed entry: from `:idle` only (auto-compact mid-turn entry is P4's problem).\n- New events:\n  - `:compact_requested` (external) — `:idle → :compacting`, action `{:start_compaction, prep, opts}`.\n  - `{:compact_done, %Compaction.Result{}, from_extension?}` — `:compacting → :idle`, actions `[{:append_compaction_entry, entry_data}, {:emit_session_compact, entry_data, from_ext?}, {:reply_to, from, {:ok, result, from_ext?}}]`.\n  - `{:compact_failed, reason}` and `{:compact_cancelled, reason}` — restore `:idle`, reply error/cancel, no append, no emit.\n- AgentSession executes:\n  - `{:start_compaction, prep, opts}` — Task that calls into `Coder.Session.compact/2` (or invokes `Compaction.compact/2` directly — decide based on whether AgentSession holds the Coder.Session pid; current `messages_provider` closure pattern suggests it does).\n  - `{:append_compaction_entry, data}` — calls `Coder.Session.add_entry/3` with a freshly built `%Entry.Compaction{from_hook: from_ext? or nil}`. The Coder.Session.add_entry path handles in-memory DAG + JSONL atomically.\n  - `{:emit_session_compact, entry, from_ext?}` — fire-and-forget `Dispatcher.emit/3` of `:session_compact` with payload `%{compaction_entry: entry, from_extension?: from_ext?}`.\n- Coder.Session.compact/2 returns a Result; AgentSession's `:start_compaction` Task wraps that into the Turn event. The persistence-and-emit side effect that would have been .25's responsibility now lives on the AgentSession side, called via Coder.Session.add_entry (which is unchanged from B4).\n\n**Public API**\n- `OctoPi.Agent.Session.compact(pid, opts)` — synchronous; returns `{:ok, %{result: r, from_extension?: f}}` | `{:cancel, reason}` | `{:error, term}`. The Turn FSM's `{:reply_to, from, ...}` action delivers the reply when `:compact_done` lands.\n\n**Tests**\n- Turn FSM tests for the new state/events (pure).\n- AgentSession integration tests covering: default-path compact appends + emits, extension override path (`from_extension?: true`), extension cancel (no append, no emit), `:nothing_to_compact` and `:no_model` errors.\n- Verify `build_session_context/1` reflects the new boundary after compaction (delegates to existing SessionManager logic).\n\n**Closes** — opi-ixp.25 (E5b) once this lands. Update .25's status accordingly when this is merged.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "F3. Manual compact as Turn transition (replaces .25/E5b)",
   "type": "task",
-  "updated_at": "2026-04-27T19:26:26.284038Z"
+  "updated_at": "2026-04-27T19:26:31.903530Z"
 }

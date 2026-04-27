@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.51"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-27T19:25:57.100031Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "F4. Auto-compaction trigger on safe Turn boundary",
   "type": "task",
-  "updated_at": "2026-04-27T19:25:57.100031Z"
+  "updated_at": "2026-04-27T19:26:31.903530Z"
 }
