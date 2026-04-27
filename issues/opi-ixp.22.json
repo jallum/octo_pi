@@ -6,7 +6,8 @@
   "blocks": [
     "opi-ixp.25",
     "opi-ixp.43",
-    "opi-ixp.44"
+    "opi-ixp.44",
+    "opi-ixp.24"
   ],
   "comments": [
     {
@@ -24,5 +25,5 @@
   "status": "closed",
   "title": "E3. Messages.to_llm/1 + create_compaction_summary_message constructor",
   "type": "task",
-  "updated_at": "2026-04-27T11:08:49.262139Z"
+  "updated_at": "2026-04-27T18:40:28.474065Z"
 }

@@ -3,7 +3,8 @@
   "blocked_by": [
     "opi-ixp.10",
     "opi-ixp.47",
-    "opi-ixp.48"
+    "opi-ixp.48",
+    "opi-ixp.22"
   ],
   "blocks": [
     "opi-ixp.25"
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "E5a. Per-turn prompt assembly via Coder.Session.build_session_context/1",
   "type": "task",
-  "updated_at": "2026-04-27T18:40:20.320786Z"
+  "updated_at": "2026-04-27T18:40:28.474065Z"
 }
