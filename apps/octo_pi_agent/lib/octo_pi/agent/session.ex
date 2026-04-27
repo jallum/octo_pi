@@ -86,6 +86,13 @@ defmodule OctoPi.Agent.Session do
   def abort(pid), do: GenServer.call(pid, :abort)
 
   @doc false
+  def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts}, :infinity)
+
+  @doc false
+  def compaction_response(pid, ref, result),
+    do: GenServer.call(pid, {:compaction_response, ref, result})
+
+  @doc false
   def state(pid), do: GenServer.call(pid, :state)
 
   @doc false
@@ -210,6 +217,38 @@ defmodule OctoPi.Agent.Session do
       {:reply, :ok, end_run_aborted(store, :killed)}
     else
       {:reply, :ok, store}
+    end
+  end
+
+  # F3: synchronous manual compact. Caller blocks until either the
+  # Subscriber-supplied `compaction_response/3` arrives, an abort
+  # interrupts, or the GenServer.call hits :infinity (it never does
+  # — caller is expected to time out if needed via Task.async).
+  def handle_call({:compact, _opts}, _from, %{session: %{is_streaming?: true}} = store) do
+    {:reply, {:error, :busy}, store}
+  end
+
+  def handle_call({:compact, opts}, from, store) do
+    # Mark the session busy *before* feeding Turn so re-entrant
+    # handle_calls (e.g. an immediate :prompt while compact is in
+    # flight) see is_streaming? = true.
+    store = put_in(store.session.is_streaming?, true)
+    store = advance(store, {:compact_requested, from, opts})
+    {:noreply, store}
+  end
+
+  # F3: synchronous response from a CompactionRequested subscriber.
+  # Ref-gates against the active turn_ref — late or stale responses
+  # get a {:error, :stale} reply and don't perturb Turn state.
+  def handle_call({:compaction_response, ref, result}, _from, store) do
+    if ref == store.session.turn_ref do
+      store = advance(store, {:compaction_response, result})
+      # Compaction's `:reply_to` action already replied to the
+      # original `compact/1` caller; flip back to idle here so
+      # subsequent prompts/compacts can proceed.
+      {:reply, :ok, flip_compaction_idle(store)}
+    else
+      {:reply, {:error, :stale}, store}
     end
   end
 
@@ -405,6 +444,24 @@ defmodule OctoPi.Agent.Session do
   # action trace).
   defp execute_action(:cancel_active_task, store), do: store
 
+  # F3: emit CompactionRequested via Subscribers and stash a fresh
+  # ref. There's no Task on Agent's side — the response arrives as
+  # an external `compaction_response/3` GenServer.call.
+  defp execute_action({:start_compaction, opts}, store) do
+    ref = make_ref()
+    Subscribers.dispatch(self(), %Event.CompactionRequested{ref: ref, opts: opts})
+
+    store
+    |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
+    |> put_in([Access.key(:session), Access.key(:turn_ref)], ref)
+  end
+
+  # F3: reply to the original synchronous caller (e.g. `compact/1`).
+  defp execute_action({:reply_to, from, term}, store) do
+    GenServer.reply(from, term)
+    store
+  end
+
   # `{:turn_done, assistant, tool_results, reason}` — append to
   # transcript, telemetry, decide next.
   defp execute_action({:turn_done, %Assistant{} = assistant, tool_results, reason}, store) do
@@ -531,6 +588,24 @@ defmodule OctoPi.Agent.Session do
     store = put_in(store.session.messages, messages)
     store = put_in(store.session.error_message, "aborted by caller")
     flip_idle(store)
+  end
+
+  # F3: lighter-weight idle flip for compaction. Doesn't touch
+  # abort_ref, run_started_at_mono, or turn_id (those are run-scoped,
+  # and compaction isn't a run).
+  defp flip_compaction_idle(store) do
+    session = %{
+      store.session
+      | is_streaming?: false,
+        turn_pid: nil,
+        turn_ref: nil,
+        turn: Turn.new()
+    }
+
+    store = %{store | session: session}
+
+    for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
+    %{store | idle_waiters: []}
   end
 
   defp flip_idle(store) do

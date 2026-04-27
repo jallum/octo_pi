@@ -19,12 +19,18 @@ defmodule OctoPi.Agent.Turn do
     * `:cancelling` — abort requested while busy. Late completion
       events from the cancelled Task are absorbed and produce a
       synthetic aborted `:turn_done`.
+    * `:compacting` (F3) — `compact/1` invoked. Session has emitted
+      `%Event.CompactionRequested{}` to subscribers and is awaiting
+      a `compaction_response/3` call. `pending_reply_to` holds the
+      original caller's `from` so the result can be replied to.
 
   ## Events accepted
 
-    * External: `:prompt_received`, `:abort_requested`.
+    * External: `:prompt_received`, `:abort_requested`,
+      `{:compact_requested, from, opts}` (F3).
     * Completion: `{:stream_done, assistant}`, `{:stream_failed,
-      reason}`, `{:tool_batch_done, results}`.
+      reason}`, `{:tool_batch_done, results}`,
+      `{:compaction_response, result}` (F3).
 
   Unexpected `(state, event)` pairs raise `ArgumentError` — bugs in
   the executor should be loud.
@@ -40,6 +46,9 @@ defmodule OctoPi.Agent.Turn do
       sequential dispatch is Session's responsibility (resolved from
       the tool definitions Turn does not carry).
     * `:cancel_active_task` — `Task.shutdown/2` on the tracked ref.
+    * `{:start_compaction, opts}` (F3) — Session emits
+      `%Event.CompactionRequested{ref, opts}` via Subscribers and
+      sets `turn_ref` so the eventual response is ref-gateable.
     * `{:emit_event, struct}` — subscriber event (`%Event.TurnStart{}`
       / `%Event.TurnEnd{}` here).
     * `{:turn_done, assistant, tool_results, stop_reason}` — normal
@@ -48,6 +57,9 @@ defmodule OctoPi.Agent.Turn do
       completion (`:error` / `:aborted`). Session builds the
       aborted/error assistant from its own model + provider — Turn
       does not carry those.
+    * `{:reply_to, from, term}` (F3) — Session calls
+      `GenServer.reply(from, term)` to unblock the original caller of
+      a synchronous request (e.g. `compact/1`).
 
   > Implementation deviation from opi-ixp.49 prose: actions land as
   > `{:start_tool_batch, calls}` (no mode arg) and a synth variant of
@@ -62,7 +74,13 @@ defmodule OctoPi.Agent.Turn do
   alias OctoPi.AI.Message.ToolResult
   alias OctoPi.AI.ToolCall
 
-  @type state :: :idle | :awaiting_response | :executing_tools | :cancelling
+  @type state ::
+          :idle | :awaiting_response | :executing_tools | :cancelling | :compacting
+
+  @type from :: GenServer.from()
+
+  @type compaction_result ::
+          {:ok, map()} | {:cancel, term()} | {:error, term()}
 
   @type event ::
           :prompt_received
@@ -70,22 +88,27 @@ defmodule OctoPi.Agent.Turn do
           | {:stream_done, Assistant.t()}
           | {:stream_failed, term()}
           | {:tool_batch_done, [ToolResult.t()]}
+          | {:compact_requested, from(), keyword()}
+          | {:compaction_response, compaction_result()}
 
   @type action ::
           :start_stream
           | {:start_tool_batch, [ToolCall.t()]}
           | :cancel_active_task
+          | {:start_compaction, keyword()}
           | {:emit_event, struct()}
           | {:turn_done, Assistant.t(), [ToolResult.t()], Assistant.stop_reason()}
           | {:turn_synth_done, :error | :aborted, String.t()}
+          | {:reply_to, from(), term()}
 
   @type t :: %__MODULE__{
           state: state(),
           id: non_neg_integer(),
-          assistant_in_flight: Assistant.t() | nil
+          assistant_in_flight: Assistant.t() | nil,
+          pending_reply_to: from() | nil
         }
 
-  defstruct state: :idle, id: 0, assistant_in_flight: nil
+  defstruct state: :idle, id: 0, assistant_in_flight: nil, pending_reply_to: nil
 
   @spec new() :: t()
   def new, do: %__MODULE__{}
@@ -101,6 +124,10 @@ defmodule OctoPi.Agent.Turn do
   end
 
   def handle_event(%__MODULE__{state: :idle} = turn, :abort_requested), do: {turn, []}
+
+  def handle_event(%__MODULE__{state: :idle} = turn, {:compact_requested, from, opts}) do
+    {%{turn | state: :compacting, pending_reply_to: from}, [{:start_compaction, opts}]}
+  end
 
   # ---------- :awaiting_response ----------
 
@@ -159,6 +186,22 @@ defmodule OctoPi.Agent.Turn do
 
   def handle_event(%__MODULE__{state: :cancelling} = turn, :abort_requested), do: {turn, []}
 
+  # ---------- :compacting ----------
+
+  def handle_event(
+        %__MODULE__{state: :compacting, pending_reply_to: from} = turn,
+        {:compaction_response, result}
+      ) do
+    turn = %{turn | state: :idle, pending_reply_to: nil}
+    {turn, [{:reply_to, from, result}]}
+  end
+
+  # Abort while compacting is a no-op — there's no Task on Agent's
+  # side to kill (compaction is handled by an external subscriber via
+  # CompactionRequested). The caller can still treat the in-flight
+  # compaction as cancelled by ignoring the eventual reply.
+  def handle_event(%__MODULE__{state: :compacting} = turn, :abort_requested), do: {turn, []}
+
   # ---------- catchall ----------
 
   def handle_event(%__MODULE__{state: state}, event) do
@@ -168,7 +211,7 @@ defmodule OctoPi.Agent.Turn do
   # ---------- helpers ----------
 
   defp finalize_turn(turn, assistant, stop_reason, tool_results \\ []) do
-    turn = %{turn | state: :idle, assistant_in_flight: nil}
+    turn = %{turn | state: :idle, assistant_in_flight: nil, pending_reply_to: nil}
 
     actions = [
       {:emit_event, %Event.TurnEnd{turn: turn.id}},
@@ -179,7 +222,7 @@ defmodule OctoPi.Agent.Turn do
   end
 
   defp finalize_synth(turn, stop_reason, error_message) do
-    turn = %{turn | state: :idle, assistant_in_flight: nil}
+    turn = %{turn | state: :idle, assistant_in_flight: nil, pending_reply_to: nil}
 
     actions = [
       {:emit_event, %Event.TurnEnd{turn: turn.id}},

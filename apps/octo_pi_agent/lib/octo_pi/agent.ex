@@ -64,6 +64,42 @@ defmodule OctoPi.Agent do
   @spec abort(session()) :: :ok
   def abort(pid), do: Session.abort(pid)
 
+  @doc """
+  Manually compact the session. Synchronous — blocks until a
+  subscriber responds via `compaction_response/3` or returns
+  `{:error, :busy}` if a run/compaction is already in flight.
+
+  When called, Session emits `%OctoPi.Agent.Event.CompactionRequested{
+  ref, opts}` to its subscribers; exactly one subscriber is expected
+  to perform the compaction (e.g. via `Coder.Session.compact/2`),
+  append the resulting `Entry.Compaction` (B4 path), emit
+  `:session_compact` to its own extension dispatcher, and call
+  `OctoPi.Agent.compaction_response(agent, ref, result)` with one of
+  `{:ok, summary_data}` | `{:cancel, reason}` | `{:error, reason}`.
+
+  The `summary_data` map shape is the responder's contract — Agent
+  passes it through verbatim. Coder uses
+  `%{summary, first_kept_entry_id, tokens_before, details, from_extension?}`.
+  """
+  @spec compact(session(), keyword()) ::
+          {:ok, map()} | {:cancel, term()} | {:error, term()}
+  def compact(pid, opts \\ []), do: Session.compact(pid, opts)
+
+  @doc """
+  Subscriber-side response API for `%Event.CompactionRequested{}`.
+  Synchronous on the responder — caller blocks until Agent has
+  threaded the result through Turn and replied to the original
+  `compact/1` caller.
+
+  Returns `:ok` on success, `{:error, :stale}` if the ref doesn't
+  match Agent's currently active compaction (e.g. the request was
+  superseded or the agent was aborted).
+  """
+  @spec compaction_response(session(), reference(), term()) ::
+          :ok | {:error, :stale}
+  def compaction_response(pid, ref, result),
+    do: Session.compaction_response(pid, ref, result)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
