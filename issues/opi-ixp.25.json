@@ -15,13 +15,13 @@
     "opi-ixp.44"
   ],
   "created": "2026-04-26T20:01:58Z",
-  "description": "**Phase E — Compaction orchestration. Deps: E4, E3, B4, E5a.**\n\nAfter `Compaction.compact/2` returns (or extension supplies a `%CompactionResult{}`):\n- Append `CompactionEntry` via `SessionManager.add_entry/3` (B4) — which appends to in-memory DAG AND on-disk JSONL. Append-only — no history rewrite.\n- Subsequent prompt assembly via `build_session_context` (B6/E5a) automatically picks up the new boundary and injects the synthetic message from E3.\n- Emit `:session_compact` (fire-and-forget) with the appended entry and `from_extension?` flag.\n\nTests: port `agent-session-auto-compaction-queue.test.ts`.",
+  "description": "**task** · parent: opi-ixp · **superseded by F3 (.51)**\n\nPhase E — Compaction orchestration. Originally to land CompactionEntry append + `:session_compact` emit directly in `Coder.Session.compact/2`.\n\n**Deferred** until F1–F3 (.49/.50/.51) restructure the per-turn lifecycle: Loop folds into AgentSession, Turn becomes a pure FSM, and compaction becomes a Turn transition rather than a side effect of `Coder.Session.compact/2`. Append + emit then live as Turn actions executed by AgentSession, with `Coder.Session.add_entry/3` handling the in-memory DAG + JSONL persistence (B4) — same target outcome, cleaner ownership.\n\nWhen F3 lands, this ticket can either be closed or repurposed to track any residual Coder-side work surfaced during F3.\n\nOriginal brief preserved below.\n\n---\n\nAfter `Compaction.compact/2` returns (or extension supplies a `%CompactionResult{}`):\n- Append `CompactionEntry` via `SessionManager.add_entry/3` (B4) — which appends to in-memory DAG AND on-disk JSONL. Append-only — no history rewrite.\n- Subsequent prompt assembly via `build_session_context` (B6/E5a) automatically picks up the new boundary and injects the synthetic message from E3.\n- Emit `:session_compact` (fire-and-forget) with the appended entry and `from_extension?` flag.\n\nTests: port `agent-session-auto-compaction-queue.test.ts` (note: the auto-compaction-queue test belongs to F5/.53, not E5b's append+emit).",
   "id": "opi-ixp.25",
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "open",
   "title": "E5b. CompactionEntry append + :session_compact emit",
   "type": "task",
-  "updated_at": "2026-04-27T19:26:41.997518Z"
+  "updated_at": "2026-04-27T19:26:57.445733Z"
 }
