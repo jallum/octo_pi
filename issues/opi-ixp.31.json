@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "F2. prepare_branch_entries/2 (two-pass)",
   "type": "task",
-  "updated_at": "2026-04-27T22:23:36.551256Z"
+  "updated_at": "2026-04-27T22:28:47.759594Z"
 }
