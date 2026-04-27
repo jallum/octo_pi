@@ -18,8 +18,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "F1. OctoPi.Agent.Turn — pure FSM struct + handle_event/2",
   "type": "task",
-  "updated_at": "2026-04-27T19:31:47.926432Z"
+  "updated_at": "2026-04-27T19:34:17.109923Z"
 }
