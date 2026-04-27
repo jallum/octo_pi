@@ -469,6 +469,113 @@ defmodule OctoPi.Coder.SessionTest do
     end
   end
 
+  describe "fork/2" do
+    defp loaded_session!(ctx) do
+      store = open_store!(ctx)
+      path = SessionStore.path(store)
+      {:ok, sm} = SessionManager.load(path)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: sm, store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      {pid, path, store}
+    end
+
+    defp fork_dir(ctx) do
+      Path.join(System.tmp_dir!(), "opi-fork-test-#{ctx.test}-#{System.unique_integer([:positive])}")
+    end
+
+    test "returns {:ok, new_session_manager} for a valid session", ctx do
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("hello"))
+
+      dir = fork_dir(ctx)
+      assert {:ok, %SessionManager{}} = Session.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+    end
+
+    test "forked session has parent_session pointing at source file", ctx do
+      {pid, source_path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+
+      dir = fork_dir(ctx)
+      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      assert new_sm.parent_session == source_path
+    end
+
+    test "forked session has the requested target_cwd", ctx do
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+
+      dir = fork_dir(ctx)
+      {:ok, new_sm} = Session.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
+      assert new_sm.cwd == "/fork/cwd"
+    end
+
+    test "forked session carries all source entries", ctx do
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("one"))
+      {:ok, _} = Session.add_entry(pid, message_entry("two"))
+
+      dir = fork_dir(ctx)
+      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      assert length(SessionManager.get_entries(new_sm)) == 2
+    end
+
+    test "forked session file is readable and loads correctly", ctx do
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("content"))
+
+      dir = fork_dir(ctx)
+      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      assert {:ok, reloaded} = SessionManager.load(new_sm.session_file)
+      assert reloaded.session_id == new_sm.session_id
+    end
+
+    test "extension {:cancel, reason} aborts fork, no file written", ctx do
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+
+      ext = ext_with("c", :session_before_fork, fn _e, _c -> {:cancel, "not allowed"} end)
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+
+      dir = fork_dir(ctx)
+      assert {:cancel, "not allowed"} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      refute File.dir?(dir)
+    end
+
+    test "event payload includes leaf entry_id", ctx do
+      test_pid = self()
+      {pid, _path, _store} = loaded_session!(ctx)
+      {:ok, leaf_id} = Session.add_entry(pid, message_entry("leaf"))
+
+      ext =
+        ext_with("e", :session_before_fork, fn event, _c ->
+          send(test_pid, {:fork_event, event})
+          nil
+        end)
+
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+      dir = fork_dir(ctx)
+      Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+
+      assert_received {:fork_event, event}
+      assert event.type == :session_before_fork
+      assert event.entry_id == leaf_id
+    end
+
+    test "{:error, :no_session_file} when session_manager has no file", ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      dir = fork_dir(ctx)
+      assert {:error, :no_session_file} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+    end
+  end
+
   describe "Context.bind_session/2" do
     setup ctx do
       store = open_store!(ctx)

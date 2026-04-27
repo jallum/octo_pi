@@ -156,6 +156,35 @@ defmodule OctoPi.Coder.Session do
   def compact(server, opts \\ []),
     do: GenServer.call(server, {:compact, opts}, :infinity)
 
+  @doc """
+  Fork the current session into a new session file.
+
+  Sequence:
+
+    1. Emit `:session_before_fork` via `Dispatcher.halt_on_result/3`.
+       - `{:cancel, reason}` → `{:cancel, reason}`; no file is written.
+       - `:ok` → call `SessionManager.fork/4`.
+
+  Options:
+    * `:target_cwd`  — working directory for the forked session (required)
+    * `:target_dir`  — directory where the new session file is written (required)
+    * `:id`          — explicit session id for the fork
+    * `:timestamp`   — explicit ISO-8601 timestamp for the fork
+
+  Returns:
+    * `{:ok, %SessionManager{}}` on success
+    * `{:cancel, reason}` when an extension vetoes the fork
+    * `{:error, reason}` when the underlying fork fails
+  """
+  @type fork_result ::
+          {:ok, SessionManager.t()}
+          | {:cancel, term()}
+          | {:error, :enoent | :empty | :missing_header | :no_session_file}
+
+  @spec fork(GenServer.server(), keyword()) :: fork_result()
+  def fork(server, opts),
+    do: GenServer.call(server, {:fork, opts}, :infinity)
+
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
   # actions this Session actually implements are bound — unimplemented
@@ -216,6 +245,10 @@ defmodule OctoPi.Coder.Session do
     {:reply, do_compact(state, opts), state}
   end
 
+  def handle_call({:fork, opts}, _from, state) do
+    {:reply, do_fork(state, opts), state}
+  end
+
   defp do_compact(%State{} = state, opts) do
     path_entries = SessionManager.get_branch(state.session_manager)
     settings = state.settings_provider.()
@@ -265,6 +298,34 @@ defmodule OctoPi.Coder.Session do
           {:error, _} = err ->
             err
         end
+    end
+  end
+
+  # ---- fork ----------------------------------------------------------------
+
+  defp do_fork(%State{} = state, opts) do
+    source_path = state.session_manager.session_file
+
+    if source_path == nil do
+      {:error, :no_session_file}
+    else
+      ctx =
+        %Context{cwd: state.session_manager.cwd}
+        |> Context.bind_session_manager(fn -> state.session_manager end)
+
+      leaf_id = SessionManager.get_leaf_entry_id(state.session_manager)
+      event = Event.new(:session_before_fork, %{entry_id: leaf_id})
+
+      case Dispatcher.halt_on_result(state.extensions, event, ctx) do
+        {:cancel, reason} ->
+          {:cancel, reason}
+
+        :ok ->
+          target_cwd = Keyword.fetch!(opts, :target_cwd)
+          target_dir = Keyword.fetch!(opts, :target_dir)
+          fork_opts = Keyword.take(opts, [:id, :timestamp])
+          SessionManager.fork(source_path, target_cwd, target_dir, fork_opts)
+      end
     end
   end
 
