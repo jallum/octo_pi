@@ -353,6 +353,56 @@ defmodule OctoPi.Coder.SessionTest do
 
   end
 
+  describe "build_session_context/1" do
+    alias OctoPi.Coder.Session.CompactionSummaryMessage
+
+    setup ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      %{pid: pid}
+    end
+
+    test "empty session returns empty context", %{pid: pid} do
+      assert %{messages: [], thinking_level: "off", model: nil} =
+               Session.build_session_context(pid)
+    end
+
+    test "delegates to SessionManager and reflects appended messages", %{pid: pid} do
+      {:ok, _} = Session.add_entry(pid, message_entry("hello"))
+      {:ok, _} = Session.add_entry(pid, message_entry("world"))
+
+      ctx = Session.build_session_context(pid)
+      assert length(ctx.messages) == 2
+    end
+
+    test "compaction boundary: synthetic summary at head, kept window after", %{pid: pid} do
+      {:ok, _id1} = Session.add_entry(pid, message_entry("first"))
+      {:ok, id2} = Session.add_entry(pid, message_entry("second"))
+
+      compaction = %Entry.Compaction{
+        id: nil,
+        timestamp: nil,
+        summary: "the summary",
+        first_kept_entry_id: id2,
+        tokens_before: 1234
+      }
+
+      {:ok, _} = Session.add_entry(pid, compaction)
+      {:ok, _} = Session.add_entry(pid, message_entry("after"))
+
+      ctx = Session.build_session_context(pid)
+
+      assert [%CompactionSummaryMessage{summary: "the summary", tokens_before: 1234} | rest] =
+               ctx.messages
+
+      assert length(rest) == 2
+    end
+  end
+
   describe "Context.bind_session/2" do
     setup ctx do
       store = open_store!(ctx)

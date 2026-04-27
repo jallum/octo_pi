@@ -97,6 +97,18 @@ defmodule OctoPi.Coder.Session do
   def get_extensions(server), do: GenServer.call(server, :get_extensions)
 
   @doc """
+  Build the LLM-ready session context from the held `SessionManager`'s
+  current branch. Pure read-only delegate to
+  `SessionManager.build_session_context/2` (B6) — no extension dispatch,
+  no state mutation. Used by the agent run-process to assemble each
+  turn's prompt with post-compaction kept-window + synthetic summary.
+  """
+  @spec build_session_context(GenServer.server()) ::
+          %{messages: [term()], thinking_level: String.t(),
+            model: %{provider: String.t(), model_id: String.t()} | nil}
+  def build_session_context(server), do: GenServer.call(server, :build_session_context)
+
+  @doc """
   Append an entry to the session. Atomic across the in-memory
   `SessionManager` and the on-disk `SessionStore` (delegates to
   `SessionManager.add_entry/3` with `:store` set to the held pid).
@@ -187,6 +199,9 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call(:get_extensions, _from, state),
     do: {:reply, state.extensions, state}
+
+  def handle_call(:build_session_context, _from, state),
+    do: {:reply, SessionManager.build_session_context(state.session_manager), state}
 
   def handle_call({:add_entry, entry, opts}, _from, state) do
     forward_opts = Keyword.put(opts, :store, state.store_pid)
