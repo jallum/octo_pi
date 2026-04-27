@@ -403,6 +403,72 @@ defmodule OctoPi.Coder.SessionTest do
     end
   end
 
+  describe "messages_provider closure for Agent.Session (E5a)" do
+    alias OctoPi.AI.Content.Text
+    alias OctoPi.AI.Message.User
+    alias OctoPi.Coder.Session.Messages
+
+    setup ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      %{pid: pid}
+    end
+
+    # The coder app builds this closure when starting an Agent.Session
+    # bound to a Coder.Session. Agent.Session calls it per turn to get
+    # the LLM messages list (replacing MessageLog.to_list/1).
+    defp build_provider(coder_session) do
+      fn _agent_state ->
+        coder_session
+        |> Session.build_session_context()
+        |> Map.fetch!(:messages)
+        |> Messages.to_llm()
+      end
+    end
+
+    test "no compaction: passes through messages as-is", %{pid: pid} do
+      {:ok, _} = Session.add_entry(pid, message_entry("hi"))
+      provider = build_provider(pid)
+
+      assert [_msg] = provider.(:dummy_state)
+    end
+
+    test "after compaction: synthetic summary becomes wrapped User at head", %{pid: pid} do
+      {:ok, _id1} = Session.add_entry(pid, message_entry("first"))
+      {:ok, id2} = Session.add_entry(pid, message_entry("kept"))
+
+      compaction = %Entry.Compaction{
+        id: nil,
+        timestamp: nil,
+        summary: "rolled-up summary",
+        first_kept_entry_id: id2,
+        tokens_before: 1000
+      }
+
+      {:ok, _} = Session.add_entry(pid, compaction)
+      {:ok, _} = Session.add_entry(pid, message_entry("after"))
+
+      provider = build_provider(pid)
+
+      [head | rest] = provider.(:dummy_state)
+
+      # Compaction summary is converted to a wrapped User block by
+      # Messages.to_llm/1 — it should never reach the provider as a
+      # synthetic struct.
+      assert %User{content: [%Text{text: text}]} = head
+      assert text =~ "rolled-up summary"
+      assert text =~ "<summary>"
+
+      # Kept window: "kept" + the compaction's own row's projection +
+      # "after". (Compaction rows themselves don't project messages.)
+      assert length(rest) == 2
+    end
+  end
+
   describe "Context.bind_session/2" do
     setup ctx do
       store = open_store!(ctx)

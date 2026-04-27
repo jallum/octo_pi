@@ -25,9 +25,14 @@ defmodule OctoPi.Agent.Session.State do
     * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
     * `:transport` — `OctoPi.Agent.Transport` impl module
-    * `:coder_session` — optional `OctoPi.Coder.Session` ref; passed to
-      the run-loop at start so the loop can call `build_session_context/1`
-      for prompt assembly (E5a). `nil` keeps the Agent app standalone.
+    * `:messages_provider` — optional 1-arity closure
+      `(Session.State -> [Message.t()])` used to build the per-turn
+      LLM messages list. `nil` falls back to
+      `MessageLog.to_list(state.messages)`. The coder app passes a
+      closure that delegates to
+      `OctoPi.Coder.Session.build_session_context/1` |>
+      `OctoPi.Coder.Session.Messages.to_llm/1` so prompt assembly
+      reflects post-compaction kept-window + synthetic summary.
   """
 
   alias OctoPi.Agent.AbortRef
@@ -65,7 +70,7 @@ defmodule OctoPi.Agent.Session.State do
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
           transport: module(),
-          coder_session: pid() | GenServer.name() | nil
+          messages_provider: (t() -> [term()]) | nil
         }
 
   defstruct [
@@ -79,7 +84,7 @@ defmodule OctoPi.Agent.Session.State do
     :before_tool_call,
     :after_tool_call,
     :transport,
-    :coder_session,
+    :messages_provider,
     thinking_level: :off,
     tools: [],
     messages: %MessageLog{},

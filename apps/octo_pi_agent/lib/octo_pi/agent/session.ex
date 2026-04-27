@@ -109,7 +109,7 @@ defmodule OctoPi.Agent.Session do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
-        coder_session: Keyword.get(opts, :coder_session),
+        messages_provider: Keyword.get(opts, :messages_provider),
         messages: MessageLog.new(Keyword.get(opts, :messages, []))
       }
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
@@ -394,14 +394,23 @@ defmodule OctoPi.Agent.Session do
     }
   end
 
-  # Per-turn LLM context. Today's path is `MessageLog.to_list/1`;
-  # E5a (opi-ixp.24) will swap to
+  # Per-turn LLM context. When a `messages_provider` closure is set
+  # (the coder app wires one in to call
   # `Coder.Session.build_session_context/1` |>
-  # `Coder.Session.Messages.to_llm/1` when `coder_session` is set.
+  # `Coder.Session.Messages.to_llm/1` for post-compaction kept-window
+  # assembly), the closure produces the messages list. Otherwise
+  # falls back to `MessageLog.to_list/1` so the Agent app stays
+  # runnable standalone.
   defp build_turn_context(session) do
+    messages =
+      case session.messages_provider do
+        nil -> MessageLog.to_list(session.messages)
+        fun when is_function(fun, 1) -> fun.(session)
+      end
+
     %AIContext{
       system_prompt: session.system_prompt,
-      messages: MessageLog.to_list(session.messages),
+      messages: messages,
       tools: Enum.map(session.tools, &agent_tool_to_ai_tool/1)
     }
   end
