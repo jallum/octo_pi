@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-27T17:47:47.212383Z",
+  "description": "**Phase E — prequel for E5a. Deps: B6 (opi-ixp.10), E0a (opi-ixp.45).**\n\nAdd `OctoPi.Coder.Session.build_session_context/1` — a `GenServer.call` that delegates to `SessionManager.build_session_context/2` with the held in-memory `SessionManager` (current branch leaf inferred internally, matching the `nil`/`:default` shape supported by B6).\n\nReturns the same shape as the underlying call: `%{messages: [...], thinking_level: ..., model: ...}`.\n\nPure read-only addition. No state mutation; no extension dispatch. Used by E5a (opi-ixp.24) so the run-process can read the post-compaction message list directly without going through `Agent.Session`.\n\nTests: GenServer test verifying delegation — append a CompactionEntry via `Session.add_entry/3`, assert the returned messages reflect the kept window with the synthetic summary at the head.",
+  "id": "opi-ixp.48",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "E5a-pre². Coder.Session.build_session_context/1 GenServer call",
+  "type": "task",
+  "updated_at": "2026-04-27T17:47:47.212383Z"
+}
