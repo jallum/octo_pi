@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-27T23:53:24Z",
+  "description": "The OpenAI producer emits :request, :start, :request, :stop, and :request, :exception telemetry events, but there is no OpenAIHandler module to subscribe to them. The Anthropic provider has one (apps/octo_pi_ai_anthropic/lib/octo_pi/telemetry/anthropic_handler.ex), but no equivalent exists for OpenAI.\\n\\nFix: Create OctoPi.Telemetry.OpenAIHandler that subscribes to the OpenAI events and delegates to TelemetryLogger, attached from the OpenAI application.ex.",
+  "id": "opi-bnz",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Add OpenAI telemetry handler",
+  "type": "task",
+  "updated_at": "2026-04-27T23:53:24Z"
+}
