@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [
     "opi-ixp.10",
-    "opi-ixp.47"
+    "opi-ixp.47",
+    "opi-ixp.48"
   ],
   "blocks": [
     "opi-ixp.25"
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "E5a. Run-process reads from Coder.Session.build_session_context/1",
   "type": "task",
-  "updated_at": "2026-04-27T17:48:04.246326Z"
+  "updated_at": "2026-04-27T17:48:08.614229Z"
 }
