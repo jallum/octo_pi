@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-27T17:47:39.172045Z",
+  "description": "**Phase E — prequel for E5a. Deps: E0a (opi-ixp.45), E0b (opi-ixp.46), E4 (opi-ixp.23).**\n\nToday `OctoPi.Agent.Loop` is a `Task` running a recursive `defp loop/N`; the `Agent.Session` GenServer mediates steering/follow-up via `GenServer.call(session, :drain_steering)` round-trips between turns, and the run signals completion via a `{:run_complete, ...}` cast back. This is a port artifact from pi-mono (TS has no processes); in OTP-native shape the run *is* the process.\n\nConvert `OctoPi.Agent.Loop` from a `Task` to a GenServer-based run-process:\n\n- Turn iteration via `handle_continue` / self-`cast` instead of recursive `defp loop/N`.\n- Steering / follow-up / abort delivered to the run-process's *own* mailbox; `Agent.Session` forwards rather than buffering for drainage. Drop `:drain_steering` and `:drain_follow_up` calls.\n- Run-process holds an optional `coder_session` ref (passed by `Agent.Session` at run start) — sets up the path used by E5a (opi-ixp.24).\n- `terminate/2` (or a final cast) does `run_complete` bookkeeping; `Agent.Session` already monitors and reacts to `:DOWN`.\n- `Agent.Session` simplifies: drops the steering/follow-up GenServer-call surface; the queues become passthrough enqueue → forward to run-process if running, hold otherwise (or refactor away entirely if no idle-time enqueue is needed — confirm via existing tests).\n\nTests: re-baseline `apps/octo_pi_agent/test/octo_pi/agent/loop_test.exs` and `agent_test.exs` against the new shape. All current behavior assertions must continue to hold (steering between turns, follow-up after terminal stop, abort kills in-flight tools).",
+  "id": "opi-ixp.47",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "E5a-pre. Convert Agent.Loop Task into a run-process GenServer",
+  "type": "task",
+  "updated_at": "2026-04-27T17:47:39.172045Z"
+}
