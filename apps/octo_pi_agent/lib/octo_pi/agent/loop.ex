@@ -1,44 +1,30 @@
 defmodule OctoPi.Agent.Loop do
   @moduledoc """
-  The inner + outer agent loop. Runs as a Task spawned from the
-  Session on `prompt`/`continue`. Drives turns until a terminal
-  stop reason, emitting agent events via
-  `OctoPi.Agent.Subscribers.dispatch/2` and building up a new
-  message list as it goes; on completion it casts
-  `{:run_complete, messages, reason}` back to the Session.
+  Per-turn worker. Spawned as a Task by `OctoPi.Agent.Session` for
+  each turn of a run; streams one turn through the configured
+  Transport, dispatches tools when the assistant stops with
+  `:tool_use`, casts subscriber-facing events back to Session as
+  they fire, and casts `{:turn_done, assistant, tool_results,
+  stop_reason}` at the end before exiting `:normal`.
 
-  Control flow per iteration:
+  Loop holds no multi-turn state — Session owns the transcript, the
+  steering / follow-up queues, and the turn counter. Between turns,
+  Session decides whether to spawn another Loop and what context to
+  hand it.
 
-    1. Cooperative abort check (ETS flag on `AbortRef`).
-    2. Drain the steering queue (skipped on turn 1).
-    3. Stream one turn through the configured Transport.
-    4. If `stop_reason` is `:tool_use`, dispatch tool calls
-       (parallel via `Task.Supervisor.async_stream` unless any tool
-       is `:sequential`), then loop. If terminal, drain the
-       follow-up queue — if it yielded messages, loop; otherwise
-       exit.
+  Subscriber events flow through Session: per stream-event Loop
+  casts `{:agent_event, self(), event}` to Session, which pid-gates
+  forwarding so events from a killed/cancelled Loop never reach
+  subscribers. Telemetry (`tool:start/stop/error`) emits inline.
 
   Tool dispatch runs under `OctoPi.Agent.ToolSupervisor` with tasks
-  linked to the loop so a brutal-kill from `Session` (hard abort)
-  propagates to in-flight tools. Tool hooks (`before_tool_call`,
-  `after_tool_call`) wrap each handler invocation; exceptions in
-  hooks or handlers fold into error results so the loop keeps
-  running.
-
-  Maintains its own local state during the run; the Session's
-  `state/1` does not see in-flight messages until `:run_complete`
-  lands.
+  linked to the Loop; a brutal kill from `Session` (hard abort)
+  propagates to in-flight tools.
   """
 
-  alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
-  alias OctoPi.Agent.MessageLog
-  alias OctoPi.Agent.Session
-  alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
-  alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Event, as: AIEvent
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.ToolCall
 
   # Upper bound on concurrent tool tasks for a single batch. A
@@ -48,131 +34,67 @@ defmodule OctoPi.Agent.Loop do
   # just in waves.
   @max_tool_concurrency 16
 
-  @type run_opts :: %{
+  @type turn_opts :: %{
           required(:session) => pid(),
-          required(:session_state) => OctoPi.Agent.Session.State.t(),
-          required(:abort_ref) => AbortRef.t()
+          required(:abort_ref) => OctoPi.Agent.AbortRef.t(),
+          required(:context) => OctoPi.AI.Context.t(),
+          required(:model) => OctoPi.AI.Model.t(),
+          required(:transport) => module(),
+          required(:tools) => [Tool.t()],
+          optional(:before_tool_call) => fun() | nil,
+          optional(:after_tool_call) => fun() | nil
         }
 
   @doc """
-  Entry point for a run. Emits `AgentStart`, drives turns until a
-  terminal stop reason, emits `AgentEnd`, then casts
-  `{:run_complete, messages, reason}` back to the Session.
-
-  Returns `:ok` on clean exit.
+  Run one turn. Streams the turn through the configured Transport,
+  dispatches tools on `:tool_use`, then casts
+  `{:turn_done, assistant, tool_results, stop_reason}` to the
+  session and exits `:normal`.
   """
-  @spec run(run_opts()) :: :ok
-  def run(%{session: session, session_state: state, abort_ref: abort_ref}) do
-    :telemetry.execute(
-      [:octo_pi_agent, :session, :start],
-      %{system_time: System.system_time()},
-      %{model: state.model.id}
+  @spec run(turn_opts()) :: :ok
+  def run(opts) do
+    # Capture the loop's own pid once and thread it through; tool
+    # sub-tasks under ToolSupervisor have their own `self()`, so
+    # using `self()` directly inside them would break Session's
+    # pid-gate on subscriber-event forwarding.
+    loop_pid = self()
+    opts = Map.put(opts, :loop_pid, loop_pid)
+
+    session = opts.session
+    assistant = stream_turn(opts)
+
+    tool_results =
+      case assistant.stop_reason do
+        :tool_use -> execute_tool_calls(opts, assistant.content)
+        _ -> []
+      end
+
+    GenServer.cast(
+      session,
+      {:turn_done, assistant, tool_results, assistant.stop_reason}
     )
-
-    dispatch(session, %Event.AgentStart{})
-
-    {messages, reason} = loop(session, state, state.messages, abort_ref, 1)
-
-    dispatch(session, %Event.AgentEnd{
-      reason: reason,
-      messages: MessageLog.to_list(messages)
-    })
-
-    # Session owns the paired [:session, :stop] telemetry emission so
-    # both the clean-exit (run_complete cast) and abnormal-exit
-    # (:DOWN) paths flow through the same code.
-    GenServer.cast(session, {:run_complete, messages, reason})
 
     :ok
   end
 
-  # Outer loop: keep turning until we hit a terminal reason.
-  # At the top of each iteration we drain the session's steering
-  # queue and fold any drained messages into the transcript before
-  # the next LLM call.
-  defp loop(session, state, messages, abort_ref, turn) do
-    if AbortRef.aborted?(abort_ref) do
-      {aborted_messages(messages), :aborted}
-    else
-      messages = drain_steering_after_first_turn(session, messages, turn)
-      start_mono = System.monotonic_time()
-
-      :telemetry.execute(
-        [:octo_pi_agent, :turn, :start],
-        %{system_time: System.system_time()},
-        %{turn: turn}
-      )
-
-      dispatch(session, %Event.TurnStart{turn: turn})
-      assistant = stream_turn(session, state, messages)
-      updated = MessageLog.push(messages, assistant)
-      dispatch(session, %Event.TurnEnd{turn: turn})
-
-      :telemetry.execute(
-        [:octo_pi_agent, :turn, :stop],
-        %{duration: System.monotonic_time() - start_mono},
-        %{turn: turn, stop_reason: assistant.stop_reason}
-      )
-
-      continue_or_stop(session, state, updated, assistant, abort_ref, turn)
-    end
-  end
-
-  defp continue_or_stop(_session, _state, updated, %{stop_reason: reason}, _abort_ref, _turn)
-       when reason in [:error, :aborted] do
-    {updated, reason}
-  end
-
-  defp continue_or_stop(session, state, updated, %{stop_reason: :tool_use} = assistant, ref, turn) do
-    tool_results = execute_tool_calls(session, state, assistant.content, ref)
-    loop(session, state, MessageLog.append_many(updated, tool_results), ref, turn + 1)
-  end
-
-  # Terminal stop — drain the follow-up queue. If anything was
-  # queued, fold it in and keep looping; otherwise exit with the
-  # stop reason.
-  defp continue_or_stop(session, state, updated, %{stop_reason: reason}, abort_ref, turn) do
-    case Session.drain_follow_up(session) do
-      [] ->
-        {updated, reason}
-
-      followups ->
-        loop(session, state, MessageLog.append_many(updated, followups), abort_ref, turn + 1)
-    end
-  end
-
-  # Turn 1's messages are the initial transcript — no steering to
-  # drain yet. Skipping the round-trip avoids a no-op GenServer.call.
-  defp drain_steering_after_first_turn(_session, messages, 1), do: messages
-
-  defp drain_steering_after_first_turn(session, messages, _turn),
-    do: MessageLog.append_many(messages, Session.drain_steering(session))
-
   # Stream one turn through the configured Transport; collect
-  # MessageStart/Update/End events and return the finalized
-  # assistant message. If the stream terminates without emitting
-  # Done or Error, synthesize an error assistant rather than folding
-  # `nil` into the transcript.
-  defp stream_turn(session, state, messages) do
-    context = %AIContext{
-      system_prompt: state.system_prompt,
-      messages: MessageLog.to_list(messages),
-      tools: Enum.map(state.tools, &agent_tool_to_ai_tool/1)
-    }
+  # MessageStart/Update/End events (routed through Session) and
+  # return the finalized assistant message. If the stream terminates
+  # without emitting Done or Error, synthesize an error assistant.
+  defp stream_turn(opts) do
+    stream = opts.transport.stream(opts.model, opts.context, %OctoPi.AI.StreamOptions{})
 
-    stream = state.transport.stream(state.model, context, %StreamOptions{})
-
-    case Enum.reduce(stream, nil, &handle_ai_event(session, &1, &2)) do
+    case Enum.reduce(stream, nil, &handle_ai_event(opts, &1, &2)) do
       %{stop_reason: reason} = assistant when not is_nil(reason) -> assistant
-      _partial_or_nil -> truncated_stream_assistant(state)
+      _partial_or_nil -> truncated_stream_assistant(opts.model)
     end
   end
 
-  defp truncated_stream_assistant(state) do
+  defp truncated_stream_assistant(model) do
     %OctoPi.AI.Message.Assistant{
-      api: state.model.api,
-      provider: state.model.provider,
-      model: state.model.id,
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
       timestamp: :os.system_time(:millisecond),
       content: [],
       stop_reason: :error,
@@ -180,50 +102,50 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp handle_ai_event(session, %AIEvent.Start{partial: p}, _acc) do
-    dispatch(session, %Event.MessageStart{partial: p})
+  defp handle_ai_event(opts, %AIEvent.Start{partial: p}, _acc) do
+    cast_event(opts, %Event.MessageStart{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.TextDelta{partial: p}, _acc) do
-    dispatch(session, %Event.MessageUpdate{partial: p})
+  defp handle_ai_event(opts, %AIEvent.TextDelta{partial: p}, _acc) do
+    cast_event(opts, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.ThinkingDelta{partial: p}, _acc) do
-    dispatch(session, %Event.MessageUpdate{partial: p})
+  defp handle_ai_event(opts, %AIEvent.ThinkingDelta{partial: p}, _acc) do
+    cast_event(opts, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.ToolCallDelta{partial: p}, _acc) do
-    dispatch(session, %Event.MessageUpdate{partial: p})
+  defp handle_ai_event(opts, %AIEvent.ToolCallDelta{partial: p}, _acc) do
+    cast_event(opts, %Event.MessageUpdate{partial: p})
     p
   end
 
-  defp handle_ai_event(session, %AIEvent.Done{message: msg}, _acc) do
-    dispatch(session, %Event.MessageEnd{message: msg})
+  defp handle_ai_event(opts, %AIEvent.Done{message: msg}, _acc) do
+    cast_event(opts, %Event.MessageEnd{message: msg})
     msg
   end
 
-  defp handle_ai_event(session, %AIEvent.Error{message: msg}, _acc) do
-    dispatch(session, %Event.MessageEnd{message: msg})
+  defp handle_ai_event(opts, %AIEvent.Error{message: msg}, _acc) do
+    cast_event(opts, %Event.MessageEnd{message: msg})
     msg
   end
 
-  defp handle_ai_event(_session, _other, acc), do: acc
+  defp handle_ai_event(_opts, _other, acc), do: acc
 
   # Dispatch tool calls from the assistant turn. Runs in parallel
   # via `Task.Supervisor.async_stream` (linked) under the
   # `OctoPi.Agent.ToolSupervisor` *unless* any tool in the batch is
   # flagged `:sequential` — in which case the whole batch serializes
   # (ape pi-mono L349). Results are returned in source order.
-  defp execute_tool_calls(session, state, content, abort_ref) do
+  defp execute_tool_calls(opts, content) do
     tool_calls = Enum.filter(content, &match?(%ToolCall{}, &1))
 
-    if any_sequential?(tool_calls, state.tools) do
-      run_sequential(session, state, tool_calls, abort_ref)
+    if any_sequential?(tool_calls, opts.tools) do
+      run_sequential(opts, tool_calls)
     else
-      run_parallel(session, state, tool_calls, abort_ref)
+      run_parallel(opts, tool_calls)
     end
   end
 
@@ -236,19 +158,19 @@ defmodule OctoPi.Agent.Loop do
     end)
   end
 
-  defp run_sequential(session, state, tool_calls, abort_ref) do
+  defp run_sequential(opts, tool_calls) do
     Enum.map(tool_calls, fn call ->
-      session
-      |> execute_one_tool_call(state, call, abort_ref)
+      opts
+      |> execute_one_tool_call(call)
       |> build_tool_result_message(call)
     end)
   end
 
-  defp run_parallel(session, state, tool_calls, abort_ref) do
+  defp run_parallel(opts, tool_calls) do
     OctoPi.Agent.ToolSupervisor
     |> Task.Supervisor.async_stream(
       tool_calls,
-      fn call -> {call, execute_one_tool_call(session, state, call, abort_ref)} end,
+      fn call -> {call, execute_one_tool_call(opts, call)} end,
       ordered: true,
       max_concurrency: min(max(length(tool_calls), 1), @max_tool_concurrency),
       timeout: :infinity
@@ -256,15 +178,15 @@ defmodule OctoPi.Agent.Loop do
     |> Enum.map(fn {:ok, {call, result}} -> build_tool_result_message(result, call) end)
   end
 
-  defp execute_one_tool_call(session, state, %ToolCall{} = call, abort_ref) do
-    case Enum.find(state.tools, &(&1.name == call.name)) do
+  defp execute_one_tool_call(opts, %ToolCall{} = call) do
+    case Enum.find(opts.tools, &(&1.name == call.name)) do
       nil ->
         result = error_result("tool not registered: #{call.name}")
-        dispatch_tool(session, call, result)
+        cast_tool_end(opts, call, result)
         result
 
       %Tool{} = tool ->
-        dispatch(session, %Event.ToolExecutionStart{
+        cast_event(opts, %Event.ToolExecutionStart{
           tool_call_id: call.id,
           tool_name: call.name,
           args: call.arguments
@@ -278,31 +200,27 @@ defmodule OctoPi.Agent.Loop do
           %{tool_call_id: call.id, tool_name: call.name}
         )
 
-        result = dispatch_with_hooks(session, state, tool, call, abort_ref)
-        dispatch_tool(session, call, result)
+        result = dispatch_with_hooks(opts, tool, call)
+        cast_tool_end(opts, call, result)
         emit_tool_stop(call, result, start_mono)
         result
     end
   end
 
-  # Run the before-hook (may block), execute the tool on `:allow`,
-  # then run the after-hook (may patch). All exceptions from hooks
-  # or the handler are caught and folded into an error result so the
-  # loop keeps running.
-  defp dispatch_with_hooks(session, state, tool, call, abort_ref) do
-    case run_before_hook(state.before_tool_call, call) do
+  defp dispatch_with_hooks(opts, tool, call) do
+    case run_before_hook(opts[:before_tool_call], call) do
       {:block, reason} ->
         error_result("blocked by before_tool_call: #{reason}")
 
       :allow ->
-        result = run_tool_handler(session, tool, call, abort_ref)
-        run_after_hook(state.after_tool_call, call, result)
+        result = run_tool_handler(opts, tool, call)
+        run_after_hook(opts[:after_tool_call], call, result)
     end
   end
 
-  defp run_tool_handler(session, tool, call, abort_ref) do
+  defp run_tool_handler(opts, tool, call) do
     on_update = fn partial ->
-      dispatch(session, %Event.ToolExecutionUpdate{
+      cast_event(opts, %Event.ToolExecutionUpdate{
         tool_call_id: call.id,
         partial: partial
       })
@@ -311,7 +229,7 @@ defmodule OctoPi.Agent.Loop do
     params = prepare_params(tool, call.arguments)
 
     try do
-      case tool.handler.execute(call.id, params, abort_ref, on_update) do
+      case tool.handler.execute(call.id, params, opts.abort_ref, on_update) do
         {:ok, %Tool.Result{} = r} -> r
         {:error, reason} -> error_result("handler returned {:error, #{inspect(reason)}}")
       end
@@ -356,8 +274,8 @@ defmodule OctoPi.Agent.Loop do
     )
   end
 
-  defp dispatch_tool(session, %ToolCall{} = call, result) do
-    dispatch(session, %Event.ToolExecutionEnd{
+  defp cast_tool_end(opts, %ToolCall{} = call, result) do
+    cast_event(opts, %Event.ToolExecutionEnd{
       tool_call_id: call.id,
       tool_name: call.name,
       result: result
@@ -386,15 +304,10 @@ defmodule OctoPi.Agent.Loop do
     }
   end
 
-  defp aborted_messages(messages), do: MessageLog.push(messages, Session.aborted_assistant())
-
-  defp agent_tool_to_ai_tool(%Tool{} = t) do
-    %OctoPi.AI.Tool{
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters
-    }
-  end
-
-  defp dispatch(session, event), do: Subscribers.dispatch(session, event)
+  # Cast a subscriber-facing event to Session for routing, tagged
+  # with the *Loop's* pid (captured at run/1). Session pid-gates
+  # forwarding so events from a cancelled Loop are dropped — and
+  # tool sub-tasks that call this still get the right tag.
+  defp cast_event(%{session: session, loop_pid: from}, event),
+    do: GenServer.cast(session, {:agent_event, from, event})
 end

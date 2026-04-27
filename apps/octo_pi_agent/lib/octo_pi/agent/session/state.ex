@@ -25,6 +25,9 @@ defmodule OctoPi.Agent.Session.State do
     * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
     * `:transport` — `OctoPi.Agent.Transport` impl module
+    * `:coder_session` — optional `OctoPi.Coder.Session` ref; passed to
+      the run-loop at start so the loop can call `build_session_context/1`
+      for prompt assembly (E5a). `nil` keeps the Agent app standalone.
   """
 
   alias OctoPi.Agent.AbortRef
@@ -61,7 +64,8 @@ defmodule OctoPi.Agent.Session.State do
           run_started_at_mono: integer() | nil,
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
-          transport: module()
+          transport: module(),
+          coder_session: pid() | GenServer.name() | nil
         }
 
   defstruct [
@@ -75,6 +79,7 @@ defmodule OctoPi.Agent.Session.State do
     :before_tool_call,
     :after_tool_call,
     :transport,
+    :coder_session,
     thinking_level: :off,
     tools: [],
     messages: %MessageLog{},

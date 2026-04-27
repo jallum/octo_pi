@@ -1,26 +1,32 @@
 defmodule OctoPi.Agent.Session do
   @moduledoc """
-  Per-session GenServer owning the transcript, tools, queues, and
-  subscriber list. Called via the `OctoPi.Agent` facade; no one
-  should import this module directly.
+  Per-session GenServer owning the transcript, queues, tools,
+  subscribers, and turn iteration. Called via the `OctoPi.Agent`
+  facade; no one should import this module directly.
 
-  Runs the state machine (Idle ↔ Running), spawns the `Loop` task
-  on `prompt`/`continue`, and handles loop completion via
-  `:run_complete` cast or abnormal `:DOWN`. Also emits the
-  `[:octo_pi_agent, :session, :stop]` telemetry event for both
-  clean and aborted exits so duration metering covers every run.
+  Drives the run as a sequence of per-turn `OctoPi.Agent.Loop` Tasks.
+  Each turn: Session builds the prompt context and spawns a Loop
+  Task, which streams the turn, dispatches tools when the assistant
+  stops with `:tool_use`, casts subscriber-facing events back to
+  Session for routing, and casts
+  `{:turn_done, assistant, tool_results, stop_reason}` before
+  exiting `:normal`.
+
+  On `:turn_done`, Session appends the assistant + tool results to
+  the transcript, drains the appropriate queue (steering on
+  `:tool_use`; follow-up on terminal stop), and either spawns the
+  next turn or ends the run.
+
+  Subscriber routing is pid-gated against `loop_task`: events from
+  a killed/cancelled Loop never reach subscribers.
 
   State invariants:
 
     - `is_streaming?` is `true` iff a run is in flight.
-    - `loop_task` is the pid of the running loop (nil when idle).
-    - `abort_ref` is the current run's ref (nil when idle; set on
-      run start and forgotten when the run settles).
+    - `loop_task` is the pid of the *current turn's* Loop, or nil.
+    - `abort_ref` is the current run's ref (nil when idle).
     - `run_started_at_mono` is the monotonic start time of the
-      current run (nil when idle).
-    - Steering + follow-up enqueue works in any state; drainage
-      happens inside the Loop between turns (steering) or at
-      terminal exit (follow-up).
+      current run, nil when idle.
   """
 
   use GenServer
@@ -32,7 +38,9 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.Subscribers
+  alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Transport
+  alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
 
@@ -101,12 +109,19 @@ defmodule OctoPi.Agent.Session do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
+        coder_session: Keyword.get(opts, :coder_session),
         messages: MessageLog.new(Keyword.get(opts, :messages, []))
       }
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
       |> maybe_override_queue(:follow_up_queue, opts[:follow_up_queue_bound])
 
-    {:ok, %{session: state, idle_waiters: []}}
+    {:ok,
+     %{
+       session: state,
+       idle_waiters: [],
+       turn: 0,
+       turn_started_at_mono: nil
+     }}
   end
 
   defp maybe_override_queue(state, _field, nil), do: state
@@ -148,21 +163,17 @@ defmodule OctoPi.Agent.Session do
     end
   end
 
-  def handle_call({:set_queue_mode, :steering, mode}, _from, store) do
-    {:reply, :ok, put_in(store.session.steering_queue.mode, mode)}
-  end
+  def handle_call({:set_queue_mode, :steering, mode}, _from, store),
+    do: {:reply, :ok, put_in(store.session.steering_queue.mode, mode)}
 
-  def handle_call({:set_queue_mode, :follow_up, mode}, _from, store) do
-    {:reply, :ok, put_in(store.session.follow_up_queue.mode, mode)}
-  end
+  def handle_call({:set_queue_mode, :follow_up, mode}, _from, store),
+    do: {:reply, :ok, put_in(store.session.follow_up_queue.mode, mode)}
 
-  def handle_call({:set_thinking_level, level}, _from, store) do
-    {:reply, :ok, put_in(store.session.thinking_level, level)}
-  end
+  def handle_call({:set_thinking_level, level}, _from, store),
+    do: {:reply, :ok, put_in(store.session.thinking_level, level)}
 
-  def handle_call({:set_model, model}, _from, store) do
-    {:reply, :ok, put_in(store.session.model, model)}
-  end
+  def handle_call({:set_model, model}, _from, store),
+    do: {:reply, :ok, put_in(store.session.model, model)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.session.tools
@@ -182,19 +193,30 @@ defmodule OctoPi.Agent.Session do
 
   def handle_call(:abort, _from, store) do
     if store.session.is_streaming? do
-      # Flip the ETS flag (cooperative backstop) and brutal-kill the
-      # loop task *if still alive*. Tool tasks started under
-      # `ToolSupervisor` are linked to the loop, so they die with it.
-      # Cleanup (AgentEnd + idle transition) happens in
-      # `handle_info({:DOWN, ...})`.
+      # Brutal-kill the current turn's Loop and wind the run down
+      # inline:
+      #   1. Flip ETS abort flag (cooperative backstop for tools).
+      #   2. Process.exit(loop_task, :kill) — linked tool tasks under
+      #      ToolSupervisor die with it.
+      #   3. Clear loop_task immediately so any in-flight
+      #      `:agent_event` casts from the dying Loop fail the
+      #      pid-gate and never reach subscribers.
+      #   4. Synthesize aborted assistant + AgentEnd, emit
+      #      session:stop telemetry, flip idle.
+      # The `:DOWN` for the killed Loop arrives later; by then
+      # loop_task is nil and the handler is a no-op (or a new run
+      # has started with a different pid).
       if store.session.abort_ref, do: AbortRef.abort(store.session.abort_ref)
 
       if is_pid(store.session.loop_task) and Process.alive?(store.session.loop_task) do
         Process.exit(store.session.loop_task, :kill)
       end
-    end
 
-    {:reply, :ok, store}
+      store = put_in(store.session.loop_task, nil)
+      {:reply, :ok, end_run_aborted(store, :killed)}
+    else
+      {:reply, :ok, store}
+    end
   end
 
   def handle_call(:state, _from, store), do: {:reply, store.session, store}
@@ -208,43 +230,75 @@ defmodule OctoPi.Agent.Session do
   end
 
   @impl true
-  def handle_cast({:run_complete, messages, reason}, store) do
-    emit_session_stop(store.session, reason, MessageLog.count(messages))
+  # Subscriber-facing event from a Loop turn. Forward only when it
+  # came from the *current* loop_task; events from a cancelled /
+  # killed Loop are dropped.
+  def handle_cast({:agent_event, from_pid, event}, store) do
+    if from_pid == store.session.loop_task do
+      Subscribers.dispatch(self(), event)
+    end
 
-    session = %{
-      store.session
-      | messages: messages,
-        abort_ref: maybe_forget_ref(store.session.abort_ref),
-        loop_task: nil,
-        run_started_at_mono: nil
-    }
+    {:noreply, store}
+  end
 
-    {:noreply, idle(%{store | session: session})}
+  # A turn finished cleanly. Append assistant + tool_results, decide
+  # whether to spawn the next turn or end the run.
+  def handle_cast({:turn_done, _assistant, _tool_results, _reason}, %{session: %{loop_task: nil}} = store) do
+    # Loop_task was cleared (e.g., abort raced with turn_done arrival).
+    # Drop the cast — the abort path's :DOWN handler is in charge of
+    # the wind-down.
+    {:noreply, store}
+  end
+
+  def handle_cast({:turn_done, assistant, tool_results, reason}, store) do
+    emit_turn_stop(store, reason)
+
+    Subscribers.dispatch(self(), %Event.TurnEnd{turn: store.turn})
+
+    messages =
+      store.session.messages
+      |> MessageLog.push(assistant)
+      |> MessageLog.append_many(tool_results)
+
+    store = put_in(store.session.messages, messages)
+
+    case decide_next(reason, store) do
+      {:continue, store} -> {:noreply, spawn_turn(store)}
+      {:terminate, store} -> {:noreply, end_run(store, reason)}
+    end
   end
 
   @impl true
   def handle_info({:DOWN, _mref, :process, pid, reason}, store) do
-    if pid == store.session.loop_task do
-      # Loop died. If the reason is :normal, the loop completed
-      # cleanly and its `run_complete` cast will have already landed
-      # (or will shortly) — nothing to synthesize. Otherwise (brutal
-      # kill from abort, crash, etc.) synthesize an aborted assistant
-      # message + AgentEnd so subscribers see a terminal event.
-      {:noreply, on_loop_down(store, reason)}
-    else
-      {:noreply, store}
+    cond do
+      pid == store.session.loop_task ->
+        # Loop died abnormally before casting :turn_done. Clear
+        # loop_task, synthesize an aborted assistant + AgentEnd, and
+        # end the run.
+        store = put_in(store.session.loop_task, nil)
+        {:noreply, end_run_aborted(store, reason)}
+
+      true ->
+        {:noreply, store}
     end
   end
 
   def handle_info(_msg, store), do: {:noreply, store}
 
-  # ---------- internal helpers ----------
+  # ---------- run / turn lifecycle ----------
 
   defp start_run(store) do
     abort_ref = AbortRef.new()
-    session_pid = self()
 
-    session_snapshot = %{
+    :telemetry.execute(
+      [:octo_pi_agent, :session, :start],
+      %{system_time: System.system_time()},
+      %{model: store.session.model.id}
+    )
+
+    Subscribers.dispatch(self(), %Event.AgentStart{})
+
+    session = %{
       store.session
       | is_streaming?: true,
         error_message: nil,
@@ -252,38 +306,124 @@ defmodule OctoPi.Agent.Session do
         run_started_at_mono: System.monotonic_time()
     }
 
+    spawn_turn(%{store | session: session, turn: 0})
+  end
+
+  # Decide whether to continue or terminate after a turn.
+  # On :tool_use, drain the steering queue and fold drained
+  # messages into the transcript before spawning the next turn.
+  # On a terminal stop reason, drain the follow-up queue; non-empty
+  # → fold + spawn next turn; empty → terminate.
+  # On :error / :aborted → terminate.
+  defp decide_next(reason, store) when reason in [:error, :aborted], do: {:terminate, store}
+
+  defp decide_next(:tool_use, store) do
+    {steers, q} = PendingMessageQueue.drain(store.session.steering_queue)
+
+    store =
+      store
+      |> put_in([Access.key(:session), Access.key(:steering_queue)], q)
+      |> put_in(
+        [Access.key(:session), Access.key(:messages)],
+        MessageLog.append_many(store.session.messages, steers)
+      )
+
+    {:continue, store}
+  end
+
+  defp decide_next(_terminal_reason, store) do
+    {followups, q} = PendingMessageQueue.drain(store.session.follow_up_queue)
+
+    case followups do
+      [] ->
+        {:terminate, store}
+
+      msgs ->
+        store =
+          store
+          |> put_in([Access.key(:session), Access.key(:follow_up_queue)], q)
+          |> put_in(
+            [Access.key(:session), Access.key(:messages)],
+            MessageLog.append_many(store.session.messages, msgs)
+          )
+
+        {:continue, store}
+    end
+  end
+
+  defp spawn_turn(store) do
+    turn = store.turn + 1
+    context = build_turn_context(store.session)
+
+    Subscribers.dispatch(self(), %Event.TurnStart{turn: turn})
+
+    :telemetry.execute(
+      [:octo_pi_agent, :turn, :start],
+      %{system_time: System.system_time()},
+      %{turn: turn}
+    )
+
+    session_pid = self()
+    session = store.session
+
     {:ok, pid} =
       Task.Supervisor.start_child(
         OctoPi.Agent.LoopSupervisor,
         fn ->
           Loop.run(%{
             session: session_pid,
-            session_state: session_snapshot,
-            abort_ref: abort_ref
+            abort_ref: session.abort_ref,
+            context: context,
+            model: session.model,
+            transport: session.transport,
+            tools: session.tools,
+            before_tool_call: session.before_tool_call,
+            after_tool_call: session.after_tool_call
           })
         end,
         restart: :temporary
       )
 
     Process.monitor(pid)
-    %{store | session: %{session_snapshot | loop_task: pid}}
-  end
 
-  defp on_loop_down(store, :normal) do
-    # Normal completion: run_complete handled (or will be) the
-    # transcript update + session:stop emission. Just release the
-    # abort ref + flip idle.
-    session = %{
-      store.session
-      | abort_ref: maybe_forget_ref(store.session.abort_ref),
-        loop_task: nil,
-        run_started_at_mono: nil
+    %{
+      store
+      | session: %{session | loop_task: pid},
+        turn: turn,
+        turn_started_at_mono: System.monotonic_time()
     }
-
-    idle(%{store | session: session})
   end
 
-  defp on_loop_down(store, _reason) do
+  # Per-turn LLM context. Today's path is `MessageLog.to_list/1`;
+  # E5a (opi-ixp.24) will swap to
+  # `Coder.Session.build_session_context/1` |>
+  # `Coder.Session.Messages.to_llm/1` when `coder_session` is set.
+  defp build_turn_context(session) do
+    %AIContext{
+      system_prompt: session.system_prompt,
+      messages: MessageLog.to_list(session.messages),
+      tools: Enum.map(session.tools, &agent_tool_to_ai_tool/1)
+    }
+  end
+
+  defp end_run(store, reason) do
+    Subscribers.dispatch(self(), %Event.AgentEnd{
+      reason: reason,
+      messages: MessageLog.to_list(store.session.messages)
+    })
+
+    emit_session_stop(store.session, reason, MessageLog.count(store.session.messages))
+    flip_idle(store)
+  end
+
+  defp end_run_aborted(store, :normal) do
+    # Loop exited :normal without casting :turn_done — shouldn't
+    # happen in practice (a clean Loop run always casts), but be
+    # defensive: just flip idle without touching the transcript.
+    flip_idle(store)
+  end
+
+  defp end_run_aborted(store, _reason) do
     messages = MessageLog.push(store.session.messages, aborted_assistant())
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
@@ -293,16 +433,24 @@ defmodule OctoPi.Agent.Session do
 
     emit_session_stop(store.session, :aborted, MessageLog.count(messages))
 
+    store = put_in(store.session.messages, messages)
+    store = put_in(store.session.error_message, "aborted by caller")
+    flip_idle(store)
+  end
+
+  defp flip_idle(store) do
     session = %{
       store.session
-      | messages: messages,
-        error_message: "aborted by caller",
+      | is_streaming?: false,
         abort_ref: maybe_forget_ref(store.session.abort_ref),
         loop_task: nil,
         run_started_at_mono: nil
     }
 
-    idle(%{store | session: session})
+    store = %{store | session: session, turn: 0, turn_started_at_mono: nil}
+
+    for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
+    %{store | idle_waiters: []}
   end
 
   @doc false
@@ -329,10 +477,14 @@ defmodule OctoPi.Agent.Session do
     )
   end
 
-  defp idle(store) do
-    store = %{store | session: %{store.session | is_streaming?: false}}
-    for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
-    %{store | idle_waiters: []}
+  defp emit_turn_stop(%{turn_started_at_mono: nil}, _reason), do: :ok
+
+  defp emit_turn_stop(%{turn: turn, turn_started_at_mono: started}, reason) do
+    :telemetry.execute(
+      [:octo_pi_agent, :turn, :stop],
+      %{duration: System.monotonic_time() - started},
+      %{turn: turn, stop_reason: reason}
+    )
   end
 
   defp maybe_forget_ref(nil), do: nil
@@ -340,6 +492,14 @@ defmodule OctoPi.Agent.Session do
   defp maybe_forget_ref(ref) do
     AbortRef.forget(ref)
     nil
+  end
+
+  defp agent_tool_to_ai_tool(%Tool{} = t) do
+    %OctoPi.AI.Tool{
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters
+    }
   end
 
   # Normalize an incoming message: strings become User messages,
