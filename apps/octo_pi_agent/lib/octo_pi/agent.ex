@@ -65,24 +65,17 @@ defmodule OctoPi.Agent do
   def abort(pid), do: Session.abort(pid)
 
   @doc """
-  Manually compact the session. Synchronous — blocks until a
-  subscriber responds via `compaction_response/3` or returns
-  `{:error, :busy}` if a run/compaction is already in flight.
+  Request a manual compaction. Fire-and-forget — returns `:ok`
+  immediately (or `{:error, :busy}` if a run or compaction is already
+  in flight).
 
-  When called, Session emits `%OctoPi.Agent.Event.CompactionRequested{
-  ref, opts}` to its subscribers; exactly one subscriber is expected
-  to perform the compaction (e.g. via `Coder.Session.compact/2`),
-  append the resulting `Entry.Compaction` (B4 path), emit
-  `:session_compact` to its own extension dispatcher, and call
-  `OctoPi.Agent.compaction_response(agent, ref, result)` with one of
-  `{:ok, summary_data}` | `{:cancel, reason}` | `{:error, reason}`.
-
-  The `summary_data` map shape is the responder's contract — Agent
-  passes it through verbatim. Coder uses
-  `%{summary, first_kept_entry_id, tokens_before, details, from_extension?}`.
+  Session emits `%Event.CompactionRequested{ref, opts}` to subscribers;
+  exactly one subscriber performs the work and calls
+  `compaction_response/3` when done. Session then emits
+  `%Event.CompactionEnd{result}` to all subscribers. Callers who need
+  to synchronize use `wait_for_idle/2` or watch for `CompactionEnd`.
   """
-  @spec compact(session(), keyword()) ::
-          {:ok, map()} | {:cancel, term()} | {:error, term()}
+  @spec compact(session(), keyword()) :: :ok | {:error, :busy}
   def compact(pid, opts \\ []), do: Session.compact(pid, opts)
 
   @doc """

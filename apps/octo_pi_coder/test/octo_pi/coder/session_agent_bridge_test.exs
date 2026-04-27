@@ -1,6 +1,7 @@
 defmodule OctoPi.Coder.SessionAgentBridgeTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.Agent.Event, as: AgentEvent
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message.Assistant
@@ -45,8 +46,6 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
     :ok
   end
 
-  # Starts a fresh Agent + store + Coder.Session, registers on_exit cleanup.
-  # opts overrides defaults passed to Session.start_link.
   defp new_wiring(ctx, opts \\ []) do
     id = "bridge-#{System.unique_integer([:positive])}"
     root = Path.join(System.tmp_dir!(), "opi-bridge-#{ctx.test}-#{id}")
@@ -105,12 +104,18 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
   end
 
   describe "happy path" do
-    test "Entry.Compaction lands in SessionManager + JSONL, summary returned", ctx do
+    test "Entry.Compaction lands in SessionManager + JSONL, CompactionEnd emitted", ctx do
       %{agent: agent, coder: coder, store: store} = new_wiring(ctx)
+      OctoPi.Agent.subscribe(agent, self(), :async)
       seed_entries(coder)
-      producer = fn _, _, _ -> done_event("THE-SUMMARY") end
 
-      assert {:ok, result} = OctoPi.Agent.compact(agent, producer: producer)
+      producer = fn _, _, _ -> done_event("THE-SUMMARY") end
+      assert :ok = OctoPi.Agent.compact(agent, producer: producer)
+      assert :ok = OctoPi.Agent.wait_for_idle(agent, 2_000)
+
+      assert_receive {:octo_pi_agent_event,
+                      %AgentEvent.CompactionEnd{result: {:ok, result}}},
+                     1_000
 
       assert result.summary == "THE-SUMMARY"
       assert result.tokens_before > 0
@@ -141,9 +146,10 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       seed_entries(coder)
       producer = fn _, _, _ -> done_event("EXT-SUMMARY") end
 
-      assert {:ok, _} = OctoPi.Agent.compact(agent, producer: producer)
+      :ok = OctoPi.Agent.compact(agent, producer: producer)
+      :ok = OctoPi.Agent.wait_for_idle(agent, 2_000)
 
-      assert_receive {:session_compact, event}, 1000
+      assert_receive {:session_compact, event}, 1_000
       assert event.type == :session_compact
       assert %Entry.Compaction{summary: "EXT-SUMMARY"} = event.compaction_entry
       assert event.from_extension? == false
@@ -160,7 +166,14 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       %{agent: agent, coder: coder} = new_wiring(ctx, extensions: [ext])
       seed_entries(coder)
 
-      assert {:ok, result} = OctoPi.Agent.compact(agent)
+      OctoPi.Agent.subscribe(agent, self(), :async)
+      :ok = OctoPi.Agent.compact(agent)
+      :ok = OctoPi.Agent.wait_for_idle(agent, 2_000)
+
+      assert_receive {:octo_pi_agent_event,
+                      %AgentEvent.CompactionEnd{result: {:ok, result}}},
+                     1_000
+
       assert result.summary == "ext-override"
       assert result.from_extension? == true
 
@@ -171,7 +184,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
   end
 
   describe "cancel and error paths" do
-    test "{:cancel, reason} propagates back to Agent.compact/1 caller", ctx do
+    test "{:cancel, reason} surfaces via CompactionEnd", ctx do
       ext =
         ext_with("cancel", :session_before_compact, fn _event, _ctx ->
           {:cancel, "not now"}
@@ -180,21 +193,38 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       %{agent: agent, coder: coder} = new_wiring(ctx, extensions: [ext])
       seed_entries(coder)
 
-      assert {:cancel, "not now"} = OctoPi.Agent.compact(agent)
+      OctoPi.Agent.subscribe(agent, self(), :async)
+      :ok = OctoPi.Agent.compact(agent)
+
+      assert_receive {:octo_pi_agent_event,
+                      %AgentEvent.CompactionEnd{result: {:cancel, "not now"}}},
+                     2_000
 
       sm = Session.get_session_manager(coder)
       refute Enum.any?(Map.values(sm.by_id), &match?(%Entry.Compaction{}, &1))
     end
 
-    test "{:error, :nothing_to_compact} when session has no entries", ctx do
+    test "{:error, :nothing_to_compact} surfaces via CompactionEnd", ctx do
       %{agent: agent} = new_wiring(ctx)
-      assert {:error, :nothing_to_compact} = OctoPi.Agent.compact(agent)
+
+      OctoPi.Agent.subscribe(agent, self(), :async)
+      :ok = OctoPi.Agent.compact(agent)
+
+      assert_receive {:octo_pi_agent_event,
+                      %AgentEvent.CompactionEnd{result: {:error, :nothing_to_compact}}},
+                     2_000
     end
 
-    test "{:error, :no_model} when model_provider returns nil", ctx do
+    test "{:error, :no_model} surfaces via CompactionEnd", ctx do
       %{agent: agent, coder: coder} = new_wiring(ctx, model_provider: fn -> nil end)
       seed_entries(coder)
-      assert {:error, :no_model} = OctoPi.Agent.compact(agent)
+
+      OctoPi.Agent.subscribe(agent, self(), :async)
+      :ok = OctoPi.Agent.compact(agent)
+
+      assert_receive {:octo_pi_agent_event,
+                      %AgentEvent.CompactionEnd{result: {:error, :no_model}}},
+                     2_000
     end
   end
 end

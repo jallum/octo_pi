@@ -292,57 +292,49 @@ defmodule OctoPi.Agent.TurnTest do
   end
 
   describe "compacting (F3)" do
-    test ":idle + {:compact_requested, from, opts} → :compacting + {:start_compaction, opts}" do
-      from = {self(), make_ref()}
+    test ":idle + {:compact_requested, opts} → :compacting + {:start_compaction, opts}" do
       opts = [custom_instructions: "x"]
 
-      {turn, actions} = Turn.handle_event(Turn.new(), {:compact_requested, from, opts})
+      {turn, actions} = Turn.handle_event(Turn.new(), {:compact_requested, opts})
 
       assert turn.state == :compacting
-      assert turn.pending_reply_to == from
       assert actions == [{:start_compaction, opts}]
     end
 
-    test ":compacting + {:compaction_response, result} → :idle + {:reply_to, from, result}" do
-      from = {self(), make_ref()}
-
-      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, from, []})
+    test ":compacting + {:compaction_response, result} → :idle + {:emit_event, %CompactionEnd{}}" do
+      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, []})
 
       result = {:ok, %{summary: "rolled-up", from_extension?: false}}
       {turn, actions} = Turn.handle_event(turn, {:compaction_response, result})
 
       assert turn.state == :idle
-      assert turn.pending_reply_to == nil
-      assert actions == [{:reply_to, from, result}]
+      assert actions == [{:emit_event, %Event.CompactionEnd{result: result}}]
     end
 
-    test "cancel/error responses thread through verbatim" do
-      from = {self(), make_ref()}
-      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, from, []})
+    test "cancel/error responses emit CompactionEnd verbatim" do
+      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, []})
 
-      {_turn, [{:reply_to, ^from, {:cancel, "user said no"}}]} =
+      {_turn, [{:emit_event, %Event.CompactionEnd{result: {:cancel, "user said no"}}}]} =
         Turn.handle_event(turn, {:compaction_response, {:cancel, "user said no"}})
 
-      {turn2, _} = Turn.handle_event(Turn.new(), {:compact_requested, from, []})
+      {turn2, _} = Turn.handle_event(Turn.new(), {:compact_requested, []})
 
-      {_turn, [{:reply_to, ^from, {:error, :no_model}}]} =
+      {_turn, [{:emit_event, %Event.CompactionEnd{result: {:error, :no_model}}}]} =
         Turn.handle_event(turn2, {:compaction_response, {:error, :no_model}})
     end
 
     test "abort while :compacting is a no-op (no Task to kill on Agent's side)" do
-      from = {self(), make_ref()}
-      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, from, []})
+      {turn, _} = Turn.handle_event(Turn.new(), {:compact_requested, []})
 
       assert {turn2, []} = Turn.handle_event(turn, :abort_requested)
       assert turn2.state == :compacting
-      assert turn2.pending_reply_to == from
     end
 
     test "compact_requested while :awaiting_response raises (must be :idle)" do
       {turn, _} = Turn.handle_event(Turn.new(), :prompt_received)
 
       assert_raise ArgumentError, fn ->
-        Turn.handle_event(turn, {:compact_requested, {self(), make_ref()}, []})
+        Turn.handle_event(turn, {:compact_requested, []})
       end
     end
 
@@ -353,11 +345,9 @@ defmodule OctoPi.Agent.TurnTest do
     end
 
     test "id is not bumped by compaction (compaction is not a turn)" do
-      from = {self(), make_ref()}
-
       {turn, _} =
         run_script(Turn.new(), [
-          {:compact_requested, from, []},
+          {:compact_requested, []},
           {:compaction_response, {:ok, %{}}}
         ])
 

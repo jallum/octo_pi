@@ -36,7 +36,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
   end
 
   describe "compact/2 — happy path" do
-    test "emits CompactionRequested, threads response back to caller" do
+    test "returns :ok immediately, emits CompactionRequested then CompactionEnd" do
       session = start_session()
       Agent.subscribe(session, self(), :async)
 
@@ -48,14 +48,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
         from_extension?: false
       }
 
-      caller = self()
-
-      # Drive compact/2 from a separate Task so we can step the
-      # request/response across processes.
-      compact_task =
-        Task.async(fn ->
-          Agent.compact(session, custom_instructions: "summarize")
-        end)
+      assert :ok = Agent.compact(session, custom_instructions: "summarize")
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref, opts: opts}},
                      1_000
@@ -63,39 +56,51 @@ defmodule OctoPi.Agent.SessionCompactTest do
       assert opts == [custom_instructions: "summarize"]
       assert is_reference(ref)
 
-      send(caller, :saw_request)
-
       assert :ok = Agent.compaction_response(session, ref, {:ok, summary})
 
-      assert {:ok, ^summary} = Task.await(compact_task, 1_000)
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, ^summary}}}, 1_000
 
-      # Session should be idle again.
       refute Agent.state(session).is_streaming?
     end
 
-    test "{:cancel, reason} threads through" do
+    test "{:cancel, reason} surfaces via CompactionEnd" do
       session = start_session()
       Agent.subscribe(session, self(), :async)
 
-      task = Task.async(fn -> Agent.compact(session) end)
-
+      :ok = Agent.compact(session)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
+
       assert :ok = Agent.compaction_response(session, ref, {:cancel, "user said no"})
 
-      assert {:cancel, "user said no"} = Task.await(task, 1_000)
+      assert_receive {:octo_pi_agent_event,
+                      %Event.CompactionEnd{result: {:cancel, "user said no"}}},
+                     1_000
+
       refute Agent.state(session).is_streaming?
     end
 
-    test "{:error, reason} threads through" do
+    test "{:error, reason} surfaces via CompactionEnd" do
       session = start_session()
       Agent.subscribe(session, self(), :async)
 
-      task = Task.async(fn -> Agent.compact(session) end)
-
+      :ok = Agent.compact(session)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
+
       assert :ok = Agent.compaction_response(session, ref, {:error, :no_model})
 
-      assert {:error, :no_model} = Task.await(task, 1_000)
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:error, :no_model}}},
+                     1_000
+    end
+
+    test "wait_for_idle/2 unblocks after CompactionEnd" do
+      session = start_session()
+      Agent.subscribe(session, self(), :async)
+
+      :ok = Agent.compact(session)
+      assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
+      Agent.compaction_response(session, ref, {:ok, %{summary: "x"}})
+
+      assert :ok = Agent.wait_for_idle(session, 1_000)
     end
   end
 
@@ -111,7 +116,6 @@ defmodule OctoPi.Agent.SessionCompactTest do
         usage: %Usage{}
       }
 
-      # A 50ms-pause stream so we can race compact against it.
       sleeping_stream = [
         %AIEvent.Start{partial: %{final | content: [], stop_reason: nil}},
         %AIEvent.Done{reason: :stop, message: final}
@@ -132,23 +136,20 @@ defmodule OctoPi.Agent.SessionCompactTest do
       session = start_session()
       Agent.subscribe(session, self(), :async)
 
-      first = Task.async(fn -> Agent.compact(session) end)
+      :ok = Agent.compact(session)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
 
       assert {:error, :busy} = Agent.compact(session)
 
-      # Drain the first one so the test exits cleanly.
       Agent.compaction_response(session, ref, {:ok, %{summary: "x"}})
-      assert {:ok, _} = Task.await(first, 1_000)
+      :ok = Agent.wait_for_idle(session, 1_000)
     end
   end
 
   describe "compaction_response/3 — staleness" do
     test "{:error, :stale} when ref doesn't match the active turn" do
       session = start_session()
-      Agent.subscribe(session, self(), :async)
 
-      # Without an in-flight compact, turn_ref is nil and any ref is stale.
       assert {:error, :stale} =
                Agent.compaction_response(session, make_ref(), {:ok, %{summary: "x"}})
     end
@@ -157,14 +158,12 @@ defmodule OctoPi.Agent.SessionCompactTest do
       session = start_session()
       Agent.subscribe(session, self(), :async)
 
-      first = Task.async(fn -> Agent.compact(session) end)
+      :ok = Agent.compact(session)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: first_ref}}, 1_000
 
-      # Resolve the first compact.
-      assert :ok = Agent.compaction_response(session, first_ref, {:ok, %{summary: "first"}})
-      assert {:ok, _} = Task.await(first, 1_000)
+      :ok = Agent.compaction_response(session, first_ref, {:ok, %{summary: "first"}})
+      :ok = Agent.wait_for_idle(session, 1_000)
 
-      # Late response with the old ref is now stale.
       assert {:error, :stale} =
                Agent.compaction_response(session, first_ref, {:ok, %{summary: "late"}})
     end
@@ -195,12 +194,13 @@ defmodule OctoPi.Agent.SessionCompactTest do
       :ok = Agent.prompt(session, "hi")
       :ok = Agent.wait_for_idle(session, 2_000)
 
-      task = Task.async(fn -> Agent.compact(session) end)
-
+      :ok = Agent.compact(session)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
-      assert :ok = Agent.compaction_response(session, ref, {:ok, %{summary: "post-stream"}})
+      :ok = Agent.compaction_response(session, ref, {:ok, %{summary: "post-stream"}})
 
-      assert {:ok, %{summary: "post-stream"}} = Task.await(task, 1_000)
+      assert_receive {:octo_pi_agent_event,
+                      %Event.CompactionEnd{result: {:ok, %{summary: "post-stream"}}}},
+                     1_000
     end
   end
 end
