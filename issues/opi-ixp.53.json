@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.52"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-27T19:26:16.000678Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "F5. Pending-message handling during compaction + queue-resume test port",
   "type": "task",
-  "updated_at": "2026-04-27T19:26:16.000678Z"
+  "updated_at": "2026-04-27T19:26:36.902911Z"
 }

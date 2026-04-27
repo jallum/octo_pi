@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-ixp.51"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.53"
+  ],
   "comments": [],
   "created": "2026-04-27T19:25:57.100031Z",
   "description": "**Phase F — Turn FSM. Deps: F3 (.51).**\n\nDetect token-threshold overflow at the safe interrupt boundary (between `:turn_done` and the next `:awaiting_response`) and detour through `:compacting` before resuming.\n\n**Mechanics**\n\n- After Turn emits `:turn_done`, AgentSession appends to transcript and would normally feed `:prompt_received` back for the next turn (or terminate). Insert a token check:\n  - Compute estimated context tokens via the existing token-estimation path used by `Compaction.Preparation` / `Compaction.Settings`. If over `context_window - reserve_tokens`, feed `:compact_requested {auto: true}` into Turn instead of `:prompt_received`.\n- Turn extends `:compact_requested` to carry an `:auto?` flag (or introduce a sibling event `:compact_required_auto`). Actions identical to F3's manual path but flagged so telemetry/events reflect the trigger reason.\n- On `:compact_done`, Turn re-enters the next-turn path automatically (action: `{:start_stream, ctx}` for the deferred turn).\n- On `:compact_failed` during auto-trigger: terminate the run with an error stop reason rather than retrying.\n\n**Out of scope**\n- Mid-stream / mid-tool overflow detection. Only the boundary between turns is checked.\n- Pending-message queueing during the detour — that's F5.\n\n**Tests**\n- Turn FSM unit tests for the auto detour path.\n- AgentSession integration test using a mocked transport that produces an assistant with a Usage above threshold; assert: compaction runs, `:session_compact` emits, then the deferred turn streams.\n- Negative path: token check below threshold → no detour.\n- `:compact_failed` during auto-trigger → run terminates with `:error` stop reason and an error_message.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "F4. Auto-compaction trigger on safe Turn boundary",
   "type": "task",
-  "updated_at": "2026-04-27T19:26:31.903530Z"
+  "updated_at": "2026-04-27T19:26:36.902911Z"
 }
