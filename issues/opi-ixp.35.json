@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "G3. BranchSummaryEntry append at new leaf",
   "type": "task",
-  "updated_at": "2026-04-27T23:33:47.586517Z"
+  "updated_at": "2026-04-27T23:36:05.723721Z"
 }
