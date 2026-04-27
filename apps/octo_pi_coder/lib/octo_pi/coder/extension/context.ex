@@ -19,7 +19,8 @@ defmodule OctoPi.Coder.Extension.Context do
           get_branch: (-> [Session.Entry.t()]),
           get_leaf_entry_id: (-> String.t() | nil),
           find_model: (atom(), String.t() -> Model.t() | nil),
-          get_model_auth: (Model.t() -> {:ok, map()} | {:error, String.t()})
+          get_model_auth: (Model.t() -> {:ok, map()} | {:error, String.t()}),
+          summary_producer: (term(), term(), term() -> Enumerable.t()) | nil
         }
 
   defstruct cwd: ".",
@@ -34,7 +35,8 @@ defmodule OctoPi.Coder.Extension.Context do
             get_branch: &__MODULE__.empty_list/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0,
             find_model: &OctoPi.Coder.Models.find/2,
-            get_model_auth: &__MODULE__.no_auth/1
+            get_model_auth: &__MODULE__.no_auth/1,
+            summary_producer: nil
 
   @doc false
   @spec empty_list() :: []
