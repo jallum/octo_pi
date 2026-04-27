@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.49"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-27T19:25:17.316200Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "F2. AgentSession adopts Turn; delete Loop module",
   "type": "task",
-  "updated_at": "2026-04-27T19:25:17.316200Z"
+  "updated_at": "2026-04-27T19:26:21.416261Z"
 }

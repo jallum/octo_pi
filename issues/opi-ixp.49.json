@@ -2,7 +2,9 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-ixp.50"
+  ],
   "comments": [],
   "created": "2026-04-27T19:24:47.101797Z",
   "description": "**Phase F — Turn FSM. Prequel to compaction-as-turn-transition (.25, .P3) and the auto-compaction port. No deps on prior phase tickets.**\n\nIntroduce a pure state machine that AgentSession will drive in P2. Lives at `apps/octo_pi_agent/lib/octo_pi/agent/turn.ex`. No process, no I/O, no funs in struct fields — keep snapshots serializable and tests trivial.\n\n**Contract**\n\n```\nTurn.handle_event(turn, event) :: {turn', [action]}\n```\n\nStates (initial set): `:idle | :awaiting_response | :executing_tools | :cancelling`. (`:compacting` lands in P3; `:compaction_pending`/queue handling in P5.)\n\nEvents the FSM accepts in this ticket:\n- External: `:prompt_received`, `:abort_requested`\n- Completion: `{:stream_done, assistant}`, `{:stream_failed, reason}`, `{:tool_batch_done, results}`\n\nActions (descriptors only):\n- `{:start_stream, ai_context}` — Session spawns the stream Task.\n- `{:start_tool_batch, calls, :parallel | :sequential}` — Session spawns the tool batch Task.\n- `{:emit_event, event}` — subscriber-facing event (TurnStart/TurnEnd, etc).\n- `{:turn_done, assistant, tool_results, stop_reason}` — Session appends + drains queues + decides next.\n- `{:reply_to, from, term}` — for synchronous calls awaiting a state change.\n\nThe `decide_next` logic (steering drain on `:tool_use`, follow-up drain on terminal) stays in Session for now — Turn just signals `:turn_done` and Session decides whether to feed back another `:prompt_received`. P3/P5 may move more of that into Turn if it simplifies.\n\n**Out of scope here** — no compaction state, no auto-compaction trigger, no queue handling. P3/P4/P5 extend the FSM.\n\n**Tests** (`apps/octo_pi_agent/test/octo_pi/agent/turn_test.exs`)\n- Per-transition unit tests: `(turn, event) → (turn', actions)`.\n- Scripted multi-event sequences: fold a list of events through `handle_event`, assert the resulting action trace and final state.\n- Cover happy path (prompt → stream_done :stop → turn_done), tool_use loop (stream_done :tool_use → start_tool_batch → tool_batch_done → turn_done), abort mid-stream (abort_requested while `:awaiting_response`), and stream failure.\n\n**Not used by Session yet** — P2 wires it in. This ticket lands the module + tests in isolation. Compile must pass; integration with Loop is P2's job.",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "F1. OctoPi.Agent.Turn — pure FSM struct + handle_event/2",
   "type": "task",
-  "updated_at": "2026-04-27T19:24:47.101797Z"
+  "updated_at": "2026-04-27T19:26:21.416261Z"
 }
