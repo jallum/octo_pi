@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "G1. Session.fork/2 + :session_before_fork dispatch",
   "type": "task",
-  "updated_at": "2026-04-27T23:24:44.080184Z"
+  "updated_at": "2026-04-27T23:27:50.941938Z"
 }
