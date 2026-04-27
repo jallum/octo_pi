@@ -18,6 +18,8 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.Settings
+  alias OctoPi.Coder.Session.BranchSummaryMessage
+  alias OctoPi.Coder.Session.CompactionSummaryMessage
 
   @type estimate :: %{
           tokens: non_neg_integer(),
@@ -43,11 +45,17 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   @doc """
   Conservative chars/4 estimator. Mirrors upstream's `estimateTokens`
-  per-role logic. Future tickets add heads for `bash_execution`,
-  `branch_summary`, and `compaction_summary` message kinds as those
-  structs land (tracked under opi-ixp.43).
+  per-role logic. Handles `BranchSummaryMessage` and
+  `CompactionSummaryMessage` (upstream `compaction.ts:282-286`); the
+  `bash_execution` role is tracked under opi-ixp.43.
   """
   @spec estimate_tokens(struct() | map()) :: non_neg_integer()
+  def estimate_tokens(%BranchSummaryMessage{summary: s}) when is_binary(s),
+    do: ceil_div4(byte_size(s))
+
+  def estimate_tokens(%CompactionSummaryMessage{summary: s}) when is_binary(s),
+    do: ceil_div4(byte_size(s))
+
   def estimate_tokens(%User{content: content}), do: ceil_div4(user_chars(content))
 
   def estimate_tokens(%Assistant{content: blocks}),
