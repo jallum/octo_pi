@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-27T23:53:35Z",
+  "description": "Both OpenAI and Anthropic producers emit :request, :start and :request, :stop telemetry events, but there is no shared correlation ID to tie them together. The decoder captures the provider's response_id (OpenAI's 'id' / Anthropic's 'message.id') on the message object, but it never reaches telemetry.\\n\\nFix: Add a unique request_id (e.g. generated at :start time) to both start and stop events as metadata, so downstream consumers can correlate token counts with their corresponding request lifecycle.",
+  "id": "opi-9cc",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Add request correlation ID to AI telemetry events",
+  "type": "task",
+  "updated_at": "2026-04-27T23:53:35Z"
+}
