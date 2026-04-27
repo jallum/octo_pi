@@ -598,4 +598,206 @@ defmodule OctoPi.Coder.SessionTest do
       assert bound.get_leaf_entry_id.() == id
     end
   end
+
+  describe "navigate_tree/2" do
+    alias OctoPi.AI.Content.Text
+    alias OctoPi.AI.Event, as: AIEvent
+    alias OctoPi.AI.Message.Assistant
+    alias OctoPi.AI.Model
+    alias OctoPi.AI.Usage
+    alias OctoPi.Coder.Compaction.BranchSummaryResult
+    alias OctoPi.Coder.Compaction.TreePreparation
+
+    defp nav_model do
+      %Model{
+        id: "nav-model",
+        name: "Nav Model",
+        api: :anthropic,
+        provider: :anthropic,
+        base_url: "https://api.anthropic.com",
+        context_window: 200_000,
+        max_tokens: 8192
+      }
+    end
+
+    defp summary_producer(text) do
+      msg = %Assistant{
+        api: :anthropic,
+        provider: :anthropic,
+        model: "nav-model",
+        timestamp: 0,
+        content: [%Text{text: text}],
+        stop_reason: :end_turn,
+        usage: %Usage{}
+      }
+
+      fn _m, _c, _o -> [%AIEvent.Done{reason: :stop, message: msg}] end
+    end
+
+    defp session_with_two_branches(ctx) do
+      store = open_store!(ctx)
+      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      {:ok, id1} = Session.add_entry(pid, message_entry("root message"))
+      {:ok, id2} = Session.add_entry(pid, message_entry("branch A"))
+      # Navigate back to id1 to create a fork point for id3
+      :sys.replace_state(pid, fn state ->
+        %{state | session_manager: %{state.session_manager | leaf_id: id1}}
+      end)
+      {:ok, id3} = Session.add_entry(pid, message_entry("branch B"))
+
+      {pid, id1, id2, id3}
+    end
+
+    # ---- no-op ----
+
+    test "returns {:ok, nil} immediately when target_id == current leaf", ctx do
+      store = open_store!(ctx)
+      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      {:ok, id} = Session.add_entry(pid, message_entry("a"))
+      assert {:ok, nil} = Session.navigate_tree(pid, target_id: id)
+    end
+
+    test "returns {:error, :not_found} for an unknown target_id", ctx do
+      store = open_store!(ctx)
+      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      assert {:error, :not_found} = Session.navigate_tree(pid, target_id: "ghost")
+    end
+
+    # ---- cancel path ----
+
+    test "extension {:cancel, reason} aborts navigation without changing leaf", ctx do
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+      ext = ext_with("c", :session_before_tree, fn _e, _c -> {:cancel, "denied"} end)
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+
+      assert {:cancel, "denied"} = Session.navigate_tree(pid, target_id: id2)
+      # leaf unchanged (should still be id3 — the last one added)
+      sm = Session.get_session_manager(pid)
+      refute sm.leaf_id == id2
+    end
+
+    # ---- extension-override path ----
+
+    test "extension {:override, BranchSummaryResult} is used when user_wants_summary != :no", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      ext_result = %BranchSummaryResult{summary: "ext summary", read_files: [], modified_files: []}
+
+      ext =
+        ext_with("o", :session_before_tree, fn _e, _c ->
+          send(test_pid, :ext_ran)
+          {:override, ext_result}
+        end)
+
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+
+      assert {:ok, ^ext_result} =
+               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :yes, model: nav_model())
+
+      assert_received :ext_ran
+    end
+
+    test "extension {:override, BranchSummaryResult} is ignored when user_wants_summary is :no", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      ext_result = %BranchSummaryResult{summary: "ext summary", read_files: [], modified_files: []}
+      ext = ext_with("o", :session_before_tree, fn _e, _c -> {:override, ext_result} end)
+      producer = fn _m, _c, _o -> send(test_pid, :llm_called); [] end
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+
+      assert {:ok, nil} =
+               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
+
+      refute_received :llm_called
+    end
+
+    # ---- no-summary path ----
+
+    test "user_wants_summary: :no skips LLM and updates leaf", ctx do
+      test_pid = self()
+      {pid, id1, id2, _id3} = session_with_two_branches(ctx)
+
+      producer = fn _m, _c, _o -> send(test_pid, :llm_called); [] end
+
+      assert {:ok, nil} =
+               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
+
+      refute_received :llm_called
+      sm = Session.get_session_manager(pid)
+      # id2 is a user message → new leaf is id2's parent (id1)
+      assert sm.leaf_id == id1
+    end
+
+    # ---- LLM path ----
+
+    test "user_wants_summary: :yes calls BranchSummarization.generate and updates leaf", ctx do
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+      producer = summary_producer("summarized")
+
+      assert {:ok, %BranchSummaryResult{summary: summary}} =
+               Session.navigate_tree(pid,
+                 target_id: id2,
+                 user_wants_summary: :yes,
+                 model: nav_model(),
+                 producer: producer
+               )
+
+      assert summary =~ "summarized"
+    end
+
+    test "{:yes, instructions} threads custom_instructions into generate", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      capturing = fn model, ai_ctx, opts ->
+        send(test_pid, {:generate_called, ai_ctx})
+        [_] = summary_producer("ok").(model, ai_ctx, opts)
+      end
+
+      Session.navigate_tree(pid,
+        target_id: id2,
+        user_wants_summary: {:yes, "focus on files"},
+        model: nav_model(),
+        producer: capturing
+      )
+
+      assert_received {:generate_called, ai_ctx}
+      [msg] = ai_ctx.messages
+      [%Text{text: prompt}] = msg.content
+      assert prompt =~ "focus on files"
+    end
+
+    test "no model given with user_wants_summary != :no returns {:error, :no_model}", ctx do
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      assert {:error, :no_model} =
+               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :yes)
+    end
+
+    # ---- event payload ----
+
+    test ":session_before_tree event payload carries TreePreparation", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      ext =
+        ext_with("p", :session_before_tree, fn event, _c ->
+          send(test_pid, {:tree_event, event})
+          nil
+        end)
+
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+
+      assert_received {:tree_event, event}
+      assert event.type == :session_before_tree
+      assert %TreePreparation{target_id: ^id2} = event.preparation
+    end
+  end
 end

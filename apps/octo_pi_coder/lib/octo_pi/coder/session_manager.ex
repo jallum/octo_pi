@@ -122,6 +122,13 @@ defmodule OctoPi.Coder.SessionManager do
   def get_leaf_entry_id(%__MODULE__{leaf_id: id}), do: id
 
   @doc """
+  Look up a single entry by id. Returns `nil` when not found.
+  Mirrors `getEntry(id)` (`session-manager.ts:1024`).
+  """
+  @spec get_entry(t(), String.t()) :: entry() | nil
+  def get_entry(%__MODULE__{by_id: by_id}, id) when is_binary(id), do: Map.get(by_id, id)
+
+  @doc """
   Walk from the current leaf to root and return the path in
   root→leaf order. Returns `[]` when the session has no leaf.
   Mirrors `getBranch()` with no argument (`session-manager.ts:1034`).

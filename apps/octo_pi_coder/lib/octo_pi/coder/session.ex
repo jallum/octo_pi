@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.Session do
   use GenServer, restart: :temporary
 
   alias OctoPi.Coder.Compaction
-  alias OctoPi.Coder.Compaction.{Preparation, Result, Settings}
+  alias OctoPi.Coder.Compaction.{BranchSummarization, BranchSummaryResult, Preparation, Result, Settings, TreePreparation}
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
   alias OctoPi.Coder.Session.Entry
@@ -185,6 +185,47 @@ defmodule OctoPi.Coder.Session do
   def fork(server, opts),
     do: GenServer.call(server, {:fork, opts}, :infinity)
 
+  @doc """
+  Navigate the session tree to `target_id`.
+
+  Sequence:
+
+    1. No-op when `target_id == current_leaf_id` → `{:ok, nil}`.
+    2. Build `%TreePreparation{}` from the current and target positions.
+    3. Emit `:session_before_tree` via `Dispatcher.halt_on_result/3`.
+       - `{:cancel, reason}` → `{:cancel, reason}`; session unchanged.
+       - `{:override, %BranchSummaryResult{}}` → use extension summary
+         (only honored when `user_wants_summary != :no`).
+    4. If no override and `user_wants_summary != :no`, call
+       `BranchSummarization.generate/2`.
+    5. Update `session_manager.leaf_id` to the new position; when a
+       summary was produced, append a `BranchSummary` entry at the
+       navigation target first.
+
+  Options:
+    * `:target_id`          — (required) entry id to navigate to
+    * `:user_wants_summary` — `:no | :yes | {:yes, instructions}`
+      (default `:no`)
+    * `:model`              — `%OctoPi.AI.Model{}` (required when summarizing)
+    * `:api_key`, `:headers`— forwarded to the summarization producer
+    * `:producer`           — test injection for `BranchSummarization.generate/2`
+
+  Returns:
+    * `{:ok, %BranchSummaryResult{} | nil}` on success
+    * `{:cancel, reason}` when an extension vetoes
+    * `{:error, :not_found}` when `target_id` is not in the session
+    * `{:error, :no_model}` when summarization required but no model given
+    * `{:error, term()}` on LLM failure
+  """
+  @type navigate_tree_result ::
+          {:ok, BranchSummaryResult.t() | nil}
+          | {:cancel, term()}
+          | {:error, :not_found | :no_model | term()}
+
+  @spec navigate_tree(GenServer.server(), keyword()) :: navigate_tree_result()
+  def navigate_tree(server, opts),
+    do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
+
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
   # actions this Session actually implements are bound — unimplemented
@@ -247,6 +288,13 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call({:fork, opts}, _from, state) do
     {:reply, do_fork(state, opts), state}
+  end
+
+  def handle_call({:navigate_tree, opts}, _from, state) do
+    case do_navigate_tree(state, opts) do
+      {:ok, summary, new_sm} -> {:reply, {:ok, summary}, %{state | session_manager: new_sm}}
+      other -> {:reply, other, state}
+    end
   end
 
   defp do_compact(%State{} = state, opts) do
@@ -328,6 +376,156 @@ defmodule OctoPi.Coder.Session do
       end
     end
   end
+
+  # ---- navigate_tree -------------------------------------------------------
+
+  defp do_navigate_tree(%State{} = state, opts) do
+    target_id = Keyword.fetch!(opts, :target_id)
+    old_leaf_id = SessionManager.get_leaf_entry_id(state.session_manager)
+
+    if target_id == old_leaf_id do
+      {:ok, nil, state.session_manager}
+    else
+      case SessionManager.get_entry(state.session_manager, target_id) do
+        nil ->
+          {:error, :not_found}
+
+        target_entry ->
+          {entries_to_summarize, common_ancestor_id} =
+            SessionManager.collect_entries_for_branch_summary(
+              state.session_manager,
+              old_leaf_id,
+              target_id
+            )
+
+          user_wants_summary = Keyword.get(opts, :user_wants_summary, :no)
+
+          prep = %TreePreparation{
+            target_id: target_id,
+            old_leaf_id: old_leaf_id,
+            common_ancestor_id: common_ancestor_id,
+            entries_to_summarize: entries_to_summarize,
+            user_wants_summary: user_wants_summary
+          }
+
+          ctx =
+            %Context{cwd: state.session_manager.cwd}
+            |> Context.bind_session_manager(fn -> state.session_manager end)
+
+          event = Event.new(:session_before_tree, %{preparation: prep})
+
+          case Dispatcher.halt_on_result(state.extensions, event, ctx) do
+            {:cancel, reason} ->
+              {:cancel, reason}
+
+            {:override, %BranchSummaryResult{} = ext_result} when user_wants_summary != :no ->
+              new_sm =
+                branch_with_or_without_summary(
+                  state.session_manager,
+                  target_entry,
+                  target_id,
+                  ext_result,
+                  true,
+                  state.store_pid
+                )
+
+              {:ok, ext_result, new_sm}
+
+            :ok ->
+              run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts)
+
+            {:override, _ignored} ->
+              run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts)
+          end
+      end
+    end
+  end
+
+  defp run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts) do
+    if user_wants_summary == :no or entries_to_summarize == [] do
+      new_sm = set_new_leaf(state.session_manager, target_entry, target_id, state.store_pid)
+      {:ok, nil, new_sm}
+    else
+      model = Keyword.get(opts, :model)
+
+      if model == nil do
+        {:error, :no_model}
+      else
+        generate_opts = build_summary_opts(model, user_wants_summary, opts)
+
+        case BranchSummarization.generate(entries_to_summarize, generate_opts) do
+          {:ok, %BranchSummaryResult{} = result} ->
+            new_sm =
+              branch_with_or_without_summary(
+                state.session_manager,
+                target_entry,
+                target_id,
+                result,
+                false,
+                state.store_pid
+              )
+
+            {:ok, result, new_sm}
+
+          :aborted ->
+            {:cancel, :aborted}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+      end
+    end
+  end
+
+  defp build_summary_opts(model, user_wants_summary, opts) do
+    base = [
+      model: model,
+      api_key: Keyword.get(opts, :api_key),
+      headers: Keyword.get(opts, :headers)
+    ]
+
+    base = case Keyword.get(opts, :producer) do
+      nil -> base
+      producer -> [{:producer, producer} | base]
+    end
+
+    case user_wants_summary do
+      :yes -> base
+      {:yes, instructions} -> [{:custom_instructions, instructions} | base]
+    end
+  end
+
+  defp branch_with_or_without_summary(sm, target_entry, target_id, summary_result, from_hook, store_pid) do
+    new_leaf_id = compute_new_leaf_id(target_entry, target_id)
+    sm = %{sm | leaf_id: new_leaf_id}
+
+    from_id = new_leaf_id || "root"
+    details = %{
+      "readFiles" => summary_result.read_files,
+      "modifiedFiles" => summary_result.modified_files
+    }
+
+    entry = %Entry.BranchSummary{
+      id: nil,
+      timestamp: nil,
+      from_id: from_id,
+      summary: summary_result.summary,
+      from_hook: from_hook,
+      details: details
+    }
+
+    {new_sm, _id} = SessionManager.add_entry(sm, entry, store: store_pid)
+    new_sm
+  end
+
+  defp set_new_leaf(sm, target_entry, target_id, _store_pid) do
+    %{sm | leaf_id: compute_new_leaf_id(target_entry, target_id)}
+  end
+
+  defp compute_new_leaf_id(%Entry.Message{message: %{"role" => "user"}, parent_id: pid}, _target_id),
+    do: pid
+
+  defp compute_new_leaf_id(_entry, target_id), do: target_id
 
   # ---- agent event handling ----
 
