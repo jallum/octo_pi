@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E0a. OctoPi.Coder.Session GenServer skeleton",
   "type": "task",
-  "updated_at": "2026-04-27T12:56:08.093919Z"
+  "updated_at": "2026-04-27T16:50:10.761112Z"
 }
