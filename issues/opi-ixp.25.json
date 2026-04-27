@@ -19,8 +19,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E5b. CompactionEntry append + :session_compact emit",
   "type": "task",
-  "updated_at": "2026-04-26T23:12:07.792818Z"
+  "updated_at": "2026-04-27T19:01:11.816943Z"
 }
