@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E7. Wire CustomCompaction extension to real implementation",
   "type": "task",
-  "updated_at": "2026-04-27T21:22:31.902401Z"
+  "updated_at": "2026-04-27T21:27:41.236824Z"
 }
