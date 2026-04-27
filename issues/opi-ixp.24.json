@@ -10,13 +10,13 @@
     "opi-ixp.25"
   ],
   "created": "2026-04-26T20:01:58Z",
-  "description": "**Phase E — Compaction orchestration. Deps: opi-ixp.47, opi-ixp.48, E3 (opi-ixp.22).**\n\nWhen `Agent.Session` has a `coder_session` set, it builds each turn's LLM context by calling `Coder.Session.build_session_context/1` (opi-ixp.48) and piping the result through `Coder.Session.Messages.to_llm/1` (E3, opi-ixp.22). This gives prompt assembly the post-compaction kept-window with the synthetic summary at the head, derived live from the SessionManager DAG — compaction never rewrites the message log, only sets a boundary that prompt assembly respects.\n\nWhen no `coder_session` is attached, Session falls back to `MessageLog.to_list/1` so the Agent app stays runnable standalone.\n\nThe change lands inside Session's per-turn context-assembly helper (the one that produces `%AIContext{messages: ...}` to hand to a Loop Task — see opi-ixp.47).\n\nTests: integration test that, after a `CompactionEntry` is appended to the bound `Coder.Session`'s `SessionManager`, the next turn's `AIContext.messages` reflects the kept window with the synthetic `CompactionSummaryMessage` at the head.",
+  "description": "**Phase E — Compaction orchestration. Deps: opi-ixp.47, opi-ixp.48, E3 (opi-ixp.22).**\n\n`Agent.Session.build_turn_context/1` calls a 1-arity `messages_provider` closure (when set on Session.State) to produce the per-turn LLM messages list, replacing `MessageLog.to_list/1`. Falls back to `MessageLog.to_list/1` when nil so the Agent app stays runnable standalone.\n\nThe coder app builds the closure when wiring an `Agent.Session` to a `Coder.Session`:\n\n```elixir\nfn _agent_state ->\n  coder_session\n  |> Coder.Session.build_session_context()  # (opi-ixp.48)\n  |> Map.fetch!(:messages)\n  |> Coder.Session.Messages.to_llm()        # (E3 / opi-ixp.22)\nend\n```\n\nThis gives prompt assembly the post-compaction kept-window with the synthetic `CompactionSummaryMessage` at the head — converted by `Messages.to_llm/1` into a wrapped `User` block before reaching the provider. Compaction never rewrites the message log; it sets a boundary that prompt assembly respects.\n\nThe closure shape (rather than `Agent.Session` calling `Coder.Session` directly) keeps `octo_pi_agent` free of any `octo_pi_coder` dependency. The wiring shape is messy and will get cleaned up in a later pass.\n\nTests: integration test in `apps/octo_pi_coder/test/octo_pi/coder/session_test.exs` confirms that, after a `CompactionEntry` is appended to the bound `Coder.Session`'s `SessionManager`, the closure returns the kept window with the synthetic summary converted to a wrapped `User` block at the head.",
   "id": "opi-ixp.24",
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
   "status": "in_progress",
-  "title": "E5a. Per-turn prompt assembly via Coder.Session.build_session_context/1",
+  "title": "E5a. Per-turn prompt assembly via messages_provider closure",
   "type": "task",
-  "updated_at": "2026-04-27T18:51:45.762297Z"
+  "updated_at": "2026-04-27T18:59:17.502585Z"
 }
