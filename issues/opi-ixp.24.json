@@ -15,8 +15,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E5a. Per-turn prompt assembly via messages_provider closure",
   "type": "task",
-  "updated_at": "2026-04-27T18:59:17.502585Z"
+  "updated_at": "2026-04-27T18:59:22.555145Z"
 }
