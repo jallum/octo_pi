@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-ixp.45"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-27T12:55:58.318767Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "E0b. Production Extension.API binding + dispatcher override channel",
   "type": "task",
-  "updated_at": "2026-04-27T12:55:58.318767Z"
+  "updated_at": "2026-04-27T12:56:06.731258Z"
 }
