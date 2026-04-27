@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E4. Session.compact/2 + :session_before_compact dispatch",
   "type": "task",
-  "updated_at": "2026-04-26T23:12:03.684139Z"
+  "updated_at": "2026-04-27T11:09:37.134921Z"
 }
