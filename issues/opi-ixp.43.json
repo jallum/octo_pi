@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "C2a. Wire bash_execution / branch_summary / compaction_summary message-role heads into find_cut_point + estimate_tokens",
   "type": "task",
-  "updated_at": "2026-04-27T23:36:12.792676Z"
+  "updated_at": "2026-04-27T23:41:49.138168Z"
 }
