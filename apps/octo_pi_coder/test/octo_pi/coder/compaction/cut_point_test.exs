@@ -185,6 +185,38 @@ defmodule OctoPi.Coder.Compaction.CutPointTest do
     end
   end
 
+  # ---- cut-point eligibility for synthetic-role messages ---------------
+
+  describe "find_cut_point/4 — synthetic-role cut-point eligibility" do
+    # Strategy: prepend an ineligible toolResult so the first valid cut point
+    # in the list is the synthetic-role entry at index 1. With a generous
+    # budget the walk drains to the default (first valid cut), revealing
+    # whether the role is actually in the cut_point? allow-list.
+    test "bashExecution entry is a valid cut point" do
+      bash = message("bashExecution", %{"command" => "ls", "output" => "a"}, [])
+      entries = [tool_result("prefix"), bash, assistant("a")]
+      result = CutPoint.find_cut_point(entries, 0, 3, 50_000)
+      assert result.first_kept_entry_index == 1
+      assert match?(%Entry.Message{message: %{"role" => "bashExecution"}}, Enum.at(entries, 1))
+    end
+
+    test "branchSummary entry is a valid cut point" do
+      branch = message("branchSummary", %{"summary" => "branch summary"}, [])
+      entries = [tool_result("prefix"), branch, assistant("a")]
+      result = CutPoint.find_cut_point(entries, 0, 3, 50_000)
+      assert result.first_kept_entry_index == 1
+      assert match?(%Entry.Message{message: %{"role" => "branchSummary"}}, Enum.at(entries, 1))
+    end
+
+    test "compactionSummary entry is a valid cut point" do
+      compact = message("compactionSummary", %{"summary" => "compaction summary"}, [])
+      entries = [tool_result("prefix"), compact, assistant("a")]
+      result = CutPoint.find_cut_point(entries, 0, 3, 50_000)
+      assert result.first_kept_entry_index == 1
+      assert match?(%Entry.Message{message: %{"role" => "compactionSummary"}}, Enum.at(entries, 1))
+    end
+  end
+
   # ---- find_cut_point: against existing compaction boundary ------------
 
   describe "find_cut_point/4 — pre-existing compaction" do

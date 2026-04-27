@@ -144,6 +144,46 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
     end
   end
 
+  describe "estimate_tokens/1 — bashExecution / branchSummary / compactionSummary raw maps" do
+    test "bashExecution: ceil((command + output) / 4)" do
+      m = %{"role" => "bashExecution", "command" => "ls -la", "output" => "total 0"}
+      # "ls -la" = 6 bytes, "total 0" = 7 bytes → 13 bytes → ceil(13/4) = 4
+      assert Tokens.estimate_tokens(m) == 4
+    end
+
+    test "bashExecution: zero-length command and output" do
+      assert Tokens.estimate_tokens(%{"role" => "bashExecution", "command" => "", "output" => ""}) == 0
+    end
+
+    test "branchSummary: ceil(byte_size(summary) / 4)" do
+      summary = String.duplicate("a", 40)
+      m = %{"role" => "branchSummary", "summary" => summary}
+      assert Tokens.estimate_tokens(m) == 10
+    end
+
+    test "compactionSummary: ceil(byte_size(summary) / 4)" do
+      summary = String.duplicate("b", 20)
+      m = %{"role" => "compactionSummary", "summary" => summary}
+      assert Tokens.estimate_tokens(m) == 5
+    end
+
+    test "branchSummary parity with BranchSummaryMessage struct" do
+      alias OctoPi.Coder.Session.BranchSummaryMessage
+      text = "some branch summary text"
+      map = %{"role" => "branchSummary", "summary" => text}
+      struct = BranchSummaryMessage.new(text, "root", 0)
+      assert Tokens.estimate_tokens(map) == Tokens.estimate_tokens(struct)
+    end
+
+    test "compactionSummary parity with CompactionSummaryMessage struct" do
+      alias OctoPi.Coder.Session.CompactionSummaryMessage
+      text = "some compaction summary text"
+      map = %{"role" => "compactionSummary", "summary" => text}
+      struct = CompactionSummaryMessage.new(text, 0, 0)
+      assert Tokens.estimate_tokens(map) == Tokens.estimate_tokens(struct)
+    end
+  end
+
   describe "estimate_context_tokens/1" do
     test "no assistant messages: pure estimation" do
       msgs = [%User{content: "abcdefgh", timestamp: 0}]

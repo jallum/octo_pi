@@ -76,6 +76,15 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   def estimate_tokens(%{"role" => "toolResult", "content" => content}),
     do: ceil_div4(map_tool_result_chars(content))
 
+  # Mirrors upstream compaction.ts:278-286.
+  def estimate_tokens(%{"role" => "bashExecution", "command" => c, "output" => o})
+      when is_binary(c) and is_binary(o),
+      do: ceil_div4(byte_size(c) + byte_size(o))
+
+  def estimate_tokens(%{"role" => role, "summary" => s})
+      when role in ["branchSummary", "compactionSummary"] and is_binary(s),
+      do: ceil_div4(byte_size(s))
+
   def estimate_tokens(_other), do: 0
 
   # All char counts use `byte_size/1` (UTF-8 byte length). For ASCII the
