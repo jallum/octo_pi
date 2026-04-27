@@ -7,13 +7,13 @@
     "opi-ixp.25"
   ],
   "created": "2026-04-26T20:01:58Z",
-  "description": "**Phase E — Compaction orchestration. Deps: B6.**\n\nPer upstream pattern: compaction NEVER mutates the message log; the kept-window is computed at prompt-assembly time via `build_session_context`.\n\nToday, `OctoPi.Agent.Loop` dumps `MessageLog.to_list/1` to the LLM. After this ticket, `Loop` instead asks `Session` for the post-compaction message list. `Session` delegates to `SessionManager.build_session_context/2` (B6) which respects the most recent `CompactionEntry`'s `firstKeptEntryId` and injects the synthetic summary message.\n\nThis preserves `MessageLog` as append-only (current API: push/append_many/to_list/count) — no new mutation methods needed.\n\nTests: integration test confirming Loop receives the rebuilt list after a compaction is appended.",
+  "description": "**Phase E — Compaction orchestration. Deps: E5a-pre (opi-ixp.47), E5a-pre² (opi-ixp.48), E3 (opi-ixp.22).**\n\nPer upstream pattern: compaction NEVER mutates the message log; the kept window is computed at prompt-assembly time via `build_session_context`.\n\nToday, the run-process (post-opi-ixp.47) sends `MessageLog.to_list/1` to the LLM. After this ticket, when a `coder_session` ref is set on the run-process, it instead calls `Coder.Session.build_session_context/1` (opi-ixp.48) and pipes the result through `Coder.Session.Messages.to_llm/1` (E3) before handing it to the transport. When no `coder_session` is attached, the run-process falls back to `MessageLog.to_list/1` so the Agent app stays runnable standalone.\n\n`MessageLog` remains append-only (current API: push/append_many/to_list/count) — no new mutation methods needed.\n\nTests: integration test confirming the run-process receives the rebuilt list (kept window + synthetic summary) after a CompactionEntry is appended to the SessionManager.",
   "id": "opi-ixp.24",
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
-  "title": "E5a. Loop reads from Session.build_session_context/0 (upstream pattern)",
+  "status": "open",
+  "title": "E5a. Run-process reads from Coder.Session.build_session_context/1",
   "type": "task",
-  "updated_at": "2026-04-27T17:33:26.380277Z"
+  "updated_at": "2026-04-27T17:47:59.524526Z"
 }
