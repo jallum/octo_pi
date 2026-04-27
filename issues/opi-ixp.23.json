@@ -3,7 +3,8 @@
   "blocked_by": [
     "opi-ixp.10",
     "opi-ixp.20",
-    "opi-ixp.45"
+    "opi-ixp.45",
+    "opi-ixp.46"
   ],
   "blocks": [
     "opi-ixp.25",
@@ -18,5 +19,5 @@
   "status": "in_progress",
   "title": "E4. Session.compact/2 + :session_before_compact dispatch",
   "type": "task",
-  "updated_at": "2026-04-27T12:56:08.093919Z"
+  "updated_at": "2026-04-27T12:56:09.416773Z"
 }
