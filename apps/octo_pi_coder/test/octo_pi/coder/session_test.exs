@@ -189,7 +189,6 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "unimplemented one-arity actions return {:error, :not_implemented}", %{pid: pid} do
       actions = Session.actions(pid)
-      assert {:error, :not_implemented} = actions.compact.([])
       assert {:error, :not_implemented} = actions.send_message.("hi")
       assert {:error, :not_implemented} = actions.set_model.(:m)
     end
@@ -204,6 +203,198 @@ defmodule OctoPi.Coder.SessionTest do
     test "unimplemented two-arity action returns {:error, :not_implemented}", %{pid: pid} do
       actions = Session.actions(pid)
       assert {:error, :not_implemented} = actions.exec.("ls", [])
+    end
+  end
+
+  describe "compact/2" do
+    alias OctoPi.AI.Content.Text
+    alias OctoPi.AI.Event
+    alias OctoPi.AI.Message.Assistant
+    alias OctoPi.AI.Model
+    alias OctoPi.AI.Usage
+    alias OctoPi.Coder.Compaction.Result
+    alias OctoPi.Coder.Extension
+
+    defp test_model do
+      %Model{
+        id: "claude-test",
+        name: "Test",
+        api: :anthropic_messages,
+        provider: :anthropic,
+        base_url: "https://example",
+        reasoning: false,
+        input: [:text],
+        context_window: 200_000,
+        max_tokens: 8192,
+        cost: nil
+      }
+    end
+
+    defp done_event(text) do
+      [
+        %Event.Done{
+          reason: :stop,
+          message: %Assistant{
+            api: :anthropic_messages,
+            provider: :anthropic,
+            model: "claude-test",
+            timestamp: 0,
+            stop_reason: :stop,
+            content: [%Text{text: text}],
+            usage: %Usage{}
+          }
+        }
+      ]
+    end
+
+    defp populated_session(ctx, extensions \\ []) do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(
+          extensions: extensions,
+          session_manager: empty_sm(),
+          store_pid: store,
+          model_provider: fn -> test_model() end,
+          settings_provider: fn ->
+            %Settings{enabled: true, reserve_tokens: 1000, keep_recent_tokens: 0}
+          end
+        )
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      # Two messages so prep has something to summarize.
+      {:ok, _} = Session.add_entry(pid, message_entry("first"))
+      {:ok, _} = Session.add_entry(pid, message_entry("second"))
+
+      pid
+    end
+
+    defp ext_with(id, event_type, handler) do
+      ext = %Extension{id: id, path: "/dev/null"}
+      Extension.add_handler(ext, event_type, handler)
+    end
+
+    test "returns {:error, :nothing_to_compact} for an empty session", ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(
+          extensions: [],
+          session_manager: empty_sm(),
+          store_pid: store,
+          model_provider: fn -> test_model() end
+        )
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      assert {:error, :nothing_to_compact} = Session.compact(pid)
+    end
+
+    test "extension {:cancel, reason} surfaces verbatim, no LLM call", ctx do
+      test_pid = self()
+
+      ext =
+        ext_with("c", :session_before_compact, fn _e, _c ->
+          send(test_pid, :cancel_handler_ran)
+          {:cancel, "user said no"}
+        end)
+
+      pid = populated_session(ctx, [ext])
+
+      producer = fn _, _, _ -> send(test_pid, :producer_called); done_event("") end
+
+      assert {:cancel, "user said no"} = Session.compact(pid, producer: producer)
+      assert_received :cancel_handler_ran
+      refute_received :producer_called
+    end
+
+    test "extension {:override, %Result{}} surfaces with from_extension?: true, no LLM call", ctx do
+      test_pid = self()
+
+      override_result = %Result{
+        summary: "ext-supplied",
+        first_kept_entry_id: "anything",
+        tokens_before: 42
+      }
+
+      ext =
+        ext_with("o", :session_before_compact, fn _e, _c ->
+          {:override, override_result}
+        end)
+
+      pid = populated_session(ctx, [ext])
+      producer = fn _, _, _ -> send(test_pid, :producer_called); done_event("") end
+
+      assert {:ok, %{result: ^override_result, from_extension?: true}} =
+               Session.compact(pid, producer: producer)
+
+      refute_received :producer_called
+    end
+
+    test "no extension override falls through to Compaction.compact/2 with model + opts", ctx do
+      test_pid = self()
+
+      producer = fn _, _, _ ->
+        send(test_pid, :producer_called)
+        done_event("LLM-SUMMARY")
+      end
+
+      pid = populated_session(ctx)
+
+      assert {:ok, %{result: %Result{summary: "LLM-SUMMARY"}, from_extension?: false}} =
+               Session.compact(pid, producer: producer)
+
+      assert_received :producer_called
+    end
+
+    test "{:error, :no_model} when model_provider returns nil", ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(
+          extensions: [],
+          session_manager: empty_sm(),
+          store_pid: store,
+          model_provider: fn -> nil end,
+          settings_provider: fn ->
+            %Settings{enabled: true, reserve_tokens: 1000, keep_recent_tokens: 0}
+          end
+        )
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+      {:ok, _} = Session.add_entry(pid, message_entry("b"))
+
+      assert {:error, :no_model} = Session.compact(pid)
+    end
+
+    test "passes preparation in :session_before_compact event payload", ctx do
+      test_pid = self()
+
+      ext =
+        ext_with("p", :session_before_compact, fn event, _c ->
+          send(test_pid, {:event_seen, event})
+          nil
+        end)
+
+      pid = populated_session(ctx, [ext])
+      producer = fn _, _, _ -> done_event("ok") end
+      Session.compact(pid, producer: producer, custom_instructions: "tag this")
+
+      assert_received {:event_seen, event}
+      assert event.type == :session_before_compact
+      assert match?(%OctoPi.Coder.Compaction.Preparation{}, event.preparation)
+      assert event.custom_instructions == "tag this"
+    end
+
+    test "actions/1 wires :compact through Session.compact", ctx do
+      pid = populated_session(ctx)
+      actions = Session.actions(pid)
+
+      producer = fn _, _, _ -> done_event("via-actions") end
+
+      assert {:ok, %{result: %Result{summary: "via-actions"}, from_extension?: false}} =
+               actions.compact.(producer: producer)
     end
   end
 

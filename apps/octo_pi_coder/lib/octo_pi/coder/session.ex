@@ -19,8 +19,10 @@ defmodule OctoPi.Coder.Session do
 
   use GenServer, restart: :temporary
 
-  alias OctoPi.Coder.Compaction.Settings
+  alias OctoPi.Coder.Compaction
+  alias OctoPi.Coder.Compaction.{Preparation, Result, Settings}
   alias OctoPi.Coder.Extension
+  alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
 
@@ -126,6 +128,7 @@ defmodule OctoPi.Coder.Session do
     %{
       # Implemented today.
       append_entry: fn entry -> add_entry(server, entry) end,
+      compact: fn opts -> compact(server, opts) end,
 
       # Stubs that return {:error, :not_implemented} until their
       # respective tickets land. Listing them keeps `bind_core` from
@@ -134,7 +137,6 @@ defmodule OctoPi.Coder.Session do
       send_user_message: fn _ -> not_implemented(server, :send_user_message) end,
       set_model: fn _ -> not_implemented(server, :set_model) end,
       set_thinking_level: fn _ -> not_implemented(server, :set_thinking_level) end,
-      compact: fn _ -> not_implemented(server, :compact) end,
       set_active_tools: fn _ -> not_implemented(server, :set_active_tools) end,
       set_session_name: fn _ -> not_implemented(server, :set_session_name) end,
       set_label: fn _ -> not_implemented(server, :set_label) end,
@@ -154,6 +156,36 @@ defmodule OctoPi.Coder.Session do
 
   defp not_implemented(server, name),
     do: GenServer.call(server, {:not_implemented, name})
+
+  @doc """
+  Run the compaction orchestrator. Port of upstream `AgentSession.compact`
+  (`tmp/pi-mono/.../core/agent-session.ts:1605`).
+
+  Sequence:
+
+    1. Build a `%Compaction.Preparation{}` from the current branch and
+       the held compaction settings.
+    2. Emit `:session_before_compact` via `Dispatcher.halt_on_result/3`.
+       Honor:
+       - `{:cancel, reason}` → reply `{:cancel, reason}`; no LLM call.
+       - `{:override, %Result{}}` → reply `{:ok, result, from_extension?: true}`
+         (callers persist with `from_hook?: true` per E5b/.25).
+    3. Otherwise call `Compaction.compact/2` with the held model.
+
+  Persistence + `:session_compact` emit are scoped to E5b (.25); this
+  function only computes and returns the result. Callers persist.
+
+  Options passed through to the LLM path: `:custom_instructions`,
+  `:thinking_level`, `:api_key`, `:headers`, `:producer`.
+  """
+  @type compact_result ::
+          {:ok, %{result: Result.t(), from_extension?: boolean()}}
+          | {:cancel, term()}
+          | {:error, :nothing_to_compact | :no_model | term()}
+
+  @spec compact(GenServer.server(), keyword()) :: compact_result()
+  def compact(server, opts \\ []),
+    do: GenServer.call(server, {:compact, opts}, :infinity)
 
   @doc """
   Bind the `Context` getters (`get_entries`, `get_branch`,
@@ -205,4 +237,60 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call({:not_implemented, _name}, _from, state),
     do: {:reply, {:error, :not_implemented}, state}
+
+  def handle_call({:compact, opts}, _from, state) do
+    {:reply, do_compact(state, opts), state}
+  end
+
+  defp do_compact(%State{} = state, opts) do
+    path_entries = SessionManager.get_branch(state.session_manager)
+    settings = state.settings_provider.()
+
+    case Preparation.prepare(path_entries, settings) do
+      nil ->
+        {:error, :nothing_to_compact}
+
+      %Preparation{} = prep ->
+        dispatch_compact(state, prep, opts)
+    end
+  end
+
+  defp dispatch_compact(%State{} = state, prep, opts) do
+    ctx =
+      %Context{cwd: state.session_manager.cwd}
+      |> Context.bind_session_manager(fn -> state.session_manager end)
+
+    event =
+      Event.new(:session_before_compact, %{
+        preparation: prep,
+        custom_instructions: Keyword.get(opts, :custom_instructions)
+      })
+
+    case Dispatcher.halt_on_result(state.extensions, event, ctx) do
+      {:cancel, reason} ->
+        {:cancel, reason}
+
+      {:override, %Result{} = result} ->
+        {:ok, %{result: result, from_extension?: true}}
+
+      :ok ->
+        run_default_compact(state, prep, opts)
+    end
+  end
+
+  defp run_default_compact(%State{} = state, prep, opts) do
+    case state.model_provider.() do
+      nil ->
+        {:error, :no_model}
+
+      model ->
+        case Compaction.compact(prep, model, opts) do
+          {:ok, %Result{} = result} ->
+            {:ok, %{result: result, from_extension?: false}}
+
+          {:error, _} = err ->
+            err
+        end
+    end
+  end
 end
