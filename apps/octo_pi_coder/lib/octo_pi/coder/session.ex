@@ -178,12 +178,15 @@ defmodule OctoPi.Coder.Session do
     extensions = Keyword.fetch!(opts, :extensions)
     session_manager = Keyword.fetch!(opts, :session_manager)
     store_pid = Keyword.fetch!(opts, :store_pid)
+    agent_pid = Keyword.get(opts, :agent_pid)
+
+    if agent_pid, do: OctoPi.Agent.subscribe(agent_pid, self(), :async)
 
     state = %State{
       extensions: extensions,
       session_manager: session_manager,
       store_pid: store_pid,
-      agent_pid: Keyword.get(opts, :agent_pid),
+      agent_pid: agent_pid,
       model_provider: Keyword.get(opts, :model_provider, fn -> nil end),
       settings_provider: Keyword.get(opts, :settings_provider, &Settings.default/0)
     }
@@ -263,5 +266,96 @@ defmodule OctoPi.Coder.Session do
             err
         end
     end
+  end
+
+  # ---- agent event handling ----
+
+  @impl true
+  def handle_info(
+        {:octo_pi_agent_event, %OctoPi.Agent.Event.CompactionRequested{ref: ref, opts: opts}},
+        %State{agent_pid: agent_pid} = state
+      ) do
+    path_entries = SessionManager.get_branch(state.session_manager)
+    settings = state.settings_provider.()
+
+    case Preparation.prepare(path_entries, settings) do
+      nil ->
+        OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :nothing_to_compact})
+        {:noreply, state}
+
+      %Preparation{} = prep ->
+        ctx =
+          %Context{cwd: state.session_manager.cwd}
+          |> Context.bind_session_manager(fn -> state.session_manager end)
+
+        before_event =
+          Event.new(:session_before_compact, %{
+            preparation: prep,
+            custom_instructions: Keyword.get(opts, :custom_instructions)
+          })
+
+        case Dispatcher.halt_on_result(state.extensions, before_event, ctx) do
+          {:cancel, reason} ->
+            OctoPi.Agent.compaction_response(agent_pid, ref, {:cancel, reason})
+            {:noreply, state}
+
+          {:override, %Result{} = result} ->
+            session_pid = self()
+            extensions = state.extensions
+            spawn(fn -> finish_compaction(session_pid, agent_pid, ref, result, true, extensions) end)
+            {:noreply, state}
+
+          :ok ->
+            case state.model_provider.() do
+              nil ->
+                OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :no_model})
+                {:noreply, state}
+
+              model ->
+                session_pid = self()
+                extensions = state.extensions
+
+                spawn(fn ->
+                  case Compaction.compact(prep, model, opts) do
+                    {:ok, %Result{} = result} ->
+                      finish_compaction(session_pid, agent_pid, ref, result, false, extensions)
+
+                    {:error, reason} ->
+                      OctoPi.Agent.compaction_response(agent_pid, ref, {:error, reason})
+                  end
+                end)
+
+                {:noreply, state}
+            end
+        end
+    end
+  end
+
+  def handle_info(_msg, state), do: {:noreply, state}
+
+  defp finish_compaction(session_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
+    entry = %Entry.Compaction{
+      id: nil,
+      timestamp: nil,
+      summary: result.summary,
+      first_kept_entry_id: result.first_kept_entry_id,
+      tokens_before: result.tokens_before,
+      from_hook: if(from_ext?, do: true, else: nil),
+      details: result.details
+    }
+
+    {:ok, id} = add_entry(session_pid, entry)
+    sm = get_session_manager(session_pid)
+    stored = Map.fetch!(sm.by_id, id)
+    ctx = %Context{cwd: sm.cwd} |> Context.bind_session_manager(fn -> sm end)
+    Dispatcher.emit(extensions, Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}), ctx)
+
+    OctoPi.Agent.compaction_response(agent_pid, ref, {:ok, %{
+      summary: result.summary,
+      first_kept_entry_id: result.first_kept_entry_id,
+      tokens_before: result.tokens_before,
+      details: result.details,
+      from_extension?: from_ext?
+    }})
   end
 end
