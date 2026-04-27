@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-27T19:26:16.000678Z",
+  "description": "**Phase F — Turn FSM. Deps: F4 (.52).**\n\nHandle external messages (`prompt`, `steer`, `follow_up`) that arrive while Turn is in `:compacting`. Port the upstream `agent-session-auto-compaction-queue.test.ts` (437 LOC) suite as Elixir tests under `apps/octo_pi_agent/test/octo_pi/agent/`.\n\n**Mechanics**\n\n- While Turn is `:compacting`, AgentSession.prompt/steer/follow_up calls accept the message and route into the appropriate queue (existing `PendingMessageQueue` for steering / follow-up; behavior for `prompt` while compacting needs a decision — likely treat as follow-up or surface `{:error, :compacting}` per upstream semantics).\n- On `:compact_done` arriving back at AgentSession, the executor checks the queues before deciding the next event into Turn:\n  - Queued messages exist → fold into transcript and feed `:prompt_received` for a fresh turn.\n  - No queued messages → return to `:idle` and terminate the run if it was an auto-compact detour.\n\n**Upstream behaviors to port** (from `tmp/pi-mono/.../test/agent-session-auto-compaction-queue.test.ts`)\n- \"should resume after threshold compaction when only agent-level queued messages exist\" (line 100)\n- \"Don't compact repeatedly after overflow recovery\" (line 126)\n- \"Ignore stale pre-compaction assistant usage\" (line 181)\n- \"Trigger threshold compaction for error messages using last successful usage\" (line 238)\n- \"Don't trigger when no prior usage exists\" (line 308)\n\nThe upstream test mocks `compaction/index.js` to control summary/threshold deterministically. In Elixir, supply a stub `messages_provider` and a fake compaction path (or inject results via the extension override channel from F3) so tests stay deterministic.\n\n**Tests**\n- Port the five upstream cases above.\n- Negative: messages arriving via `prompt` after compaction triggers but before completion don't lose data.\n- Subscriber-event ordering: `TurnEnd → :session_compact → TurnStart` for the deferred turn.\n\n**Closes the auto-compaction-queue line in the original .25 brief.**",
+  "id": "opi-ixp.53",
+  "labels": [],
+  "parent": "opi-ixp",
+  "priority": 2,
+  "status": "open",
+  "title": "F5. Pending-message handling during compaction + queue-resume test port",
+  "type": "task",
+  "updated_at": "2026-04-27T19:26:16.000678Z"
+}
