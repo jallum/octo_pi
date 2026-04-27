@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "F5. Pending-message handling during compaction + queue-resume test port",
   "type": "task",
-  "updated_at": "2026-04-27T20:55:29.179193Z"
+  "updated_at": "2026-04-27T21:18:14.503100Z"
 }
