@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E8. /compact [instructions] slash command",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:12Z"
+  "updated_at": "2026-04-27T21:28:00.262198Z"
 }
