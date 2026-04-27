@@ -3,7 +3,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "opi-ixp.46"
+    "opi-ixp.46",
+    "opi-ixp.23"
   ],
   "comments": [],
   "created": "2026-04-27T12:55:34.076498Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "E0a. OctoPi.Coder.Session GenServer skeleton",
   "type": "task",
-  "updated_at": "2026-04-27T12:56:06.731258Z"
+  "updated_at": "2026-04-27T12:56:08.093919Z"
 }
