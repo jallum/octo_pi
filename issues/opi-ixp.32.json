@@ -9,13 +9,13 @@
     "opi-ixp.34"
   ],
   "created": "2026-04-26T20:02:00Z",
-  "description": "**Phase F — Branch summarization. Deps: F2, C4, D1.**\n\n- Add `BRANCH_SUMMARY_PROMPT` constant from `tmp/pi-mono/.../branch-summarization.ts:248-275` to D1's prompts module.\n- Port `generateBranchSummary` from `branch-summarization.ts:283-355`.\n\n**Important** (verified): this is INDEPENDENT of `generate_summary` from D2. It calls `completeSimple` directly with its own messages and `SUMMARIZATION_SYSTEM_PROMPT`. Reuses the Producer pipeline but is a parallel function — do not refactor D2 to absorb this.\n\nOutput preamble (verified at branch-summarization.ts:243-246): prepend `\\\"The user explored a different conversation branch before returning here. Summary of that exploration:\\\\n\\\\n\\\"` before LLM output, then append `\u003cread-files\u003e` / `\u003cmodified-files\u003e` blocks.\n\nReturns `%BranchSummaryResult{summary, read_files, modified_files}`.\n\nTests: prompt construction; preamble; file-op block assembly.",
+  "description": "**Phase F — Branch summarization. Deps: F2, C4, D1.**\n\n- Add `BRANCH_SUMMARY_PROMPT` constant from `tmp/pi-mono/.../branch-summarization.ts:248-275` to D1's prompts module.\n- Port `generateBranchSummary` from `branch-summarization.ts:283-355`.\n\n**Important** (verified): this is INDEPENDENT of `generate_summary` from D2. It calls `completeSimple` directly with its own messages and `SUMMARIZATION_SYSTEM_PROMPT`. Reuses the Producer pipeline but is a parallel function — do not refactor D2 to absorb this.\n\nOutput preamble (verified at branch-summarization.ts:243-246): prepend `\\\"The user explored a different conversation branch before returning here. Summary of that exploration:\\\\n\\\\n\\\"` before LLM output, then append `<read-files>` / `<modified-files>` blocks.\n\nReturns `%BranchSummaryResult{summary, read_files, modified_files}`.\n\nTests: prompt construction; preamble; file-op block assembly.",
   "id": "opi-ixp.32",
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "F4. BRANCH_SUMMARY_PROMPT + generate_branch_summary/2",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:15Z"
+  "updated_at": "2026-04-27T23:17:12.673073Z"
 }
