@@ -3,13 +3,12 @@ defmodule OctoPi.Coder.Compaction.Prompts do
   Verbatim summarization prompt strings.
 
   Sources (read implementation, not docs):
-  - `system/0`        — `tmp/pi-mono/.../compaction/utils.ts:168-170`
-  - `summarize/0`     — `tmp/pi-mono/.../compaction/compaction.ts:454-485`
-  - `update/0`        — `compaction.ts:487-524`
-  - `turn_prefix/0`   — `compaction.ts:695-708`
-
-  `branch_summary/0` is added by F4 (opi-ixp.31), keeping every
-  summarization prompt in one place.
+  - `system/0`               — `tmp/pi-mono/.../compaction/utils.ts:168-170`
+  - `summarize/0`            — `tmp/pi-mono/.../compaction/compaction.ts:454-485`
+  - `update/0`               — `compaction.ts:487-524`
+  - `turn_prefix/0`          — `compaction.ts:695-708`
+  - `branch_summary/0`       — `branch-summarization.ts:248-275`
+  - `branch_summary_preamble/0` — `branch-summarization.ts:243-246`
   """
 
   @system """
@@ -111,6 +110,39 @@ defmodule OctoPi.Coder.Compaction.Prompts do
   Be concise. Focus on what's needed to understand the kept suffix.\
   """
 
+  @branch_summary_preamble "The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n"
+
+  @branch_summary """
+  Create a structured summary of this conversation branch for context when returning later.
+
+  Use this EXACT format:
+
+  ## Goal
+  [What was the user trying to accomplish in this branch?]
+
+  ## Constraints & Preferences
+  - [Any constraints, preferences, or requirements mentioned]
+  - [Or "(none)" if none were mentioned]
+
+  ## Progress
+  ### Done
+  - [x] [Completed tasks/changes]
+
+  ### In Progress
+  - [ ] [Work that was started but not finished]
+
+  ### Blocked
+  - [Issues preventing progress, if any]
+
+  ## Key Decisions
+  - **[Decision]**: [Brief rationale]
+
+  ## Next Steps
+  1. [What should happen next to continue this work]
+
+  Keep each section concise. Preserve exact file paths, function names, and error messages.\
+  """
+
   @spec system() :: String.t()
   def system, do: @system
 
@@ -122,4 +154,10 @@ defmodule OctoPi.Coder.Compaction.Prompts do
 
   @spec turn_prefix() :: String.t()
   def turn_prefix, do: @turn_prefix
+
+  @spec branch_summary() :: String.t()
+  def branch_summary, do: @branch_summary
+
+  @spec branch_summary_preamble() :: String.t()
+  def branch_summary_preamble, do: @branch_summary_preamble
 end

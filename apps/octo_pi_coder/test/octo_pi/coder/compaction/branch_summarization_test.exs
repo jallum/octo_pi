@@ -1,8 +1,15 @@
 defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Event, as: AIEvent
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.BranchSummarization
+  alias OctoPi.Coder.Compaction.BranchSummaryResult
   alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Prompts
   alias OctoPi.Coder.Session.BranchSummaryMessage
   alias OctoPi.Coder.Session.CompactionSummaryMessage
   alias OctoPi.Coder.Session.Entry
@@ -233,6 +240,189 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
       # Budget: 90 → includes m3(40) + m2(40) = 80, m1 would make 120 > 90
       result = BranchSummarization.prepare(msgs, 90)
       assert result.total_tokens == 80
+    end
+  end
+
+  # ---- generate/2 helpers --------------------------------------------------
+
+  defp test_model do
+    %Model{
+      id: "test-model",
+      name: "Test Model",
+      api: :anthropic,
+      provider: :anthropic,
+      base_url: "https://api.anthropic.com",
+      context_window: 200_000,
+      max_tokens: 8192
+    }
+  end
+
+  defp base_assistant(fields) do
+    struct!(Assistant, Keyword.merge([api: :anthropic, provider: :anthropic, model: "claude-3", timestamp: 0, usage: %Usage{}], fields))
+  end
+
+  defp done_producer(summary_text) do
+    msg = base_assistant(content: [%Text{text: summary_text}], stop_reason: :end_turn)
+    fn _model, _ctx, _opts -> [%AIEvent.Done{reason: :stop, message: msg}] end
+  end
+
+  defp aborted_producer do
+    msg = base_assistant(content: [], stop_reason: :aborted)
+    fn _model, _ctx, _opts -> [%AIEvent.Done{reason: :stop, message: msg}] end
+  end
+
+  defp error_producer(reason) do
+    msg = base_assistant(content: [], stop_reason: :error, error_message: reason)
+    fn _model, _ctx, _opts -> [%AIEvent.Error{reason: :error, message: msg}] end
+  end
+
+  defp capturing_producer(pid) do
+    fn model, ctx, opts ->
+      send(pid, {:producer_called, %{model: model, ctx: ctx, opts: opts}})
+      msg = base_assistant(content: [%Text{text: "captured summary"}], stop_reason: :end_turn)
+      [%AIEvent.Done{reason: :stop, message: msg}]
+    end
+  end
+
+  # ---- generate/2 — basic --------------------------------------------------
+
+  describe "generate/2 — basic" do
+    test "returns :no_content error when entries produce no messages" do
+      # Only toolResult entries → prepare returns empty messages
+      entries = [tool_result_msg("tr1"), tool_result_msg("tr2")]
+      result = BranchSummarization.generate(entries, model: test_model(), producer: done_producer("x"))
+      assert result == {:error, :no_content}
+    end
+
+    test "returns {:ok, BranchSummaryResult} on success" do
+      entries = [user_msg("hello world")]
+      {:ok, result} = BranchSummarization.generate(entries, model: test_model(), producer: done_producer("The summary"))
+      assert %BranchSummaryResult{} = result
+    end
+
+    test "summary is prefixed with the branch preamble" do
+      entries = [user_msg("did some work")]
+      {:ok, result} = BranchSummarization.generate(entries, model: test_model(), producer: done_producer("body text"))
+      preamble = Prompts.branch_summary_preamble()
+      assert String.starts_with?(result.summary, preamble)
+    end
+
+    test "summary body follows the preamble" do
+      entries = [user_msg("did some work")]
+      {:ok, result} = BranchSummarization.generate(entries, model: test_model(), producer: done_producer("body text"))
+      preamble = Prompts.branch_summary_preamble()
+      assert result.summary == preamble <> "body text"
+    end
+
+    test "returns :aborted when stream signals abort" do
+      entries = [user_msg("something")]
+      result = BranchSummarization.generate(entries, model: test_model(), producer: aborted_producer())
+      assert result == :aborted
+    end
+
+    test "returns {:error, reason} on stream error" do
+      entries = [user_msg("something")]
+      result = BranchSummarization.generate(entries, model: test_model(), producer: error_producer("LLM down"))
+      assert result == {:error, "LLM down"}
+    end
+
+    test "returns {:error, fallback} when error message is nil" do
+      entries = [user_msg("something")]
+      result = BranchSummarization.generate(entries, model: test_model(), producer: error_producer(nil))
+      assert {:error, msg} = result
+      assert is_binary(msg)
+    end
+  end
+
+  # ---- generate/2 — prompt construction ------------------------------------
+
+  describe "generate/2 — prompt construction" do
+    test "prompt sent to producer contains <conversation> tags" do
+      entries = [user_msg("a task")]
+      producer = capturing_producer(self())
+      BranchSummarization.generate(entries, model: test_model(), producer: producer)
+      assert_received {:producer_called, %{ctx: ctx}}
+      [user_message] = ctx.messages
+      [%Text{text: prompt}] = user_message.content
+      assert prompt =~ "<conversation>"
+      assert prompt =~ "</conversation>"
+    end
+
+    test "prompt includes BRANCH_SUMMARY_PROMPT by default" do
+      entries = [user_msg("a task")]
+      producer = capturing_producer(self())
+      BranchSummarization.generate(entries, model: test_model(), producer: producer)
+      assert_received {:producer_called, %{ctx: ctx}}
+      [user_message] = ctx.messages
+      [%Text{text: prompt}] = user_message.content
+      assert prompt =~ Prompts.branch_summary()
+    end
+
+    test "custom_instructions is appended when replace_instructions is false" do
+      entries = [user_msg("a task")]
+      producer = capturing_producer(self())
+      BranchSummarization.generate(entries,
+        model: test_model(),
+        producer: producer,
+        custom_instructions: "Focus on auth changes",
+        replace_instructions: false
+      )
+      assert_received {:producer_called, %{ctx: ctx}}
+      [user_message] = ctx.messages
+      [%Text{text: prompt}] = user_message.content
+      assert prompt =~ Prompts.branch_summary()
+      assert prompt =~ "Focus on auth changes"
+    end
+
+    test "custom_instructions replaces base prompt when replace_instructions is true" do
+      entries = [user_msg("a task")]
+      producer = capturing_producer(self())
+      BranchSummarization.generate(entries,
+        model: test_model(),
+        producer: producer,
+        custom_instructions: "Custom only",
+        replace_instructions: true
+      )
+      assert_received {:producer_called, %{ctx: ctx}}
+      [user_message] = ctx.messages
+      [%Text{text: prompt}] = user_message.content
+      refute prompt =~ Prompts.branch_summary()
+      assert prompt =~ "Custom only"
+    end
+  end
+
+  # ---- generate/2 — file ops block assembly --------------------------------
+
+  describe "generate/2 — file ops block assembly" do
+    test "read_files and modified_files are returned in the result" do
+      entry = branch_summary_entry(
+        details: %{"readFiles" => ["a.txt"], "modifiedFiles" => ["b.txt"]}
+      )
+      {:ok, result} = BranchSummarization.generate([entry], model: test_model(), producer: done_producer("summary"))
+      assert "a.txt" in result.read_files
+      assert "b.txt" in result.modified_files
+    end
+
+    test "summary contains read-files XML block when reads exist" do
+      entry = branch_summary_entry(details: %{"readFiles" => ["readme.md"], "modifiedFiles" => []})
+      {:ok, result} = BranchSummarization.generate([entry], model: test_model(), producer: done_producer("s"))
+      assert result.summary =~ "readme.md"
+    end
+
+    test "modified_files are excluded from read_files in result" do
+      entry = branch_summary_entry(
+        details: %{"readFiles" => ["shared.ex"], "modifiedFiles" => ["shared.ex", "other.ex"]}
+      )
+      {:ok, result} = BranchSummarization.generate([entry], model: test_model(), producer: done_producer("s"))
+      assert "shared.ex" in result.modified_files
+      refute "shared.ex" in result.read_files
+    end
+
+    test "empty file ops produce no XML blocks in summary" do
+      entries = [user_msg("plain message")]
+      {:ok, result} = BranchSummarization.generate(entries, model: test_model(), producer: done_producer("body"))
+      preamble = Prompts.branch_summary_preamble()
+      assert result.summary == preamble <> "body"
     end
   end
 end
