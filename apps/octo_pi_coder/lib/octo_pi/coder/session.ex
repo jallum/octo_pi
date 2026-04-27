@@ -292,8 +292,21 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call({:navigate_tree, opts}, _from, state) do
     case do_navigate_tree(state, opts) do
-      {:ok, summary, new_sm} -> {:reply, {:ok, summary}, %{state | session_manager: new_sm}}
-      other -> {:reply, other, state}
+      {:ok, summary, old_leaf_id, new_sm} ->
+        ctx =
+          %Context{cwd: new_sm.cwd}
+          |> Context.bind_session_manager(fn -> new_sm end)
+
+        tree_event = Event.new(:session_tree, %{
+          new_leaf_id: new_sm.leaf_id,
+          old_leaf_id: old_leaf_id
+        })
+
+        Dispatcher.emit(state.extensions, tree_event, ctx)
+        {:reply, {:ok, summary}, %{state | session_manager: new_sm}}
+
+      other ->
+        {:reply, other, state}
     end
   end
 
@@ -384,7 +397,7 @@ defmodule OctoPi.Coder.Session do
     old_leaf_id = SessionManager.get_leaf_entry_id(state.session_manager)
 
     if target_id == old_leaf_id do
-      {:ok, nil, state.session_manager}
+      {:ok, nil, old_leaf_id, state.session_manager}
     else
       case SessionManager.get_entry(state.session_manager, target_id) do
         nil ->
@@ -424,27 +437,28 @@ defmodule OctoPi.Coder.Session do
                   state.session_manager,
                   target_entry,
                   target_id,
+                  old_leaf_id,
                   ext_result,
                   true,
                   state.store_pid
                 )
 
-              {:ok, ext_result, new_sm}
+              {:ok, ext_result, old_leaf_id, new_sm}
 
             :ok ->
-              run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts)
+              run_default_navigate(state, target_entry, target_id, old_leaf_id, entries_to_summarize, user_wants_summary, opts)
 
             {:override, _ignored} ->
-              run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts)
+              run_default_navigate(state, target_entry, target_id, old_leaf_id, entries_to_summarize, user_wants_summary, opts)
           end
       end
     end
   end
 
-  defp run_default_navigate(state, target_entry, target_id, entries_to_summarize, user_wants_summary, opts) do
+  defp run_default_navigate(state, target_entry, target_id, old_leaf_id, entries_to_summarize, user_wants_summary, opts) do
     if user_wants_summary == :no or entries_to_summarize == [] do
-      new_sm = set_new_leaf(state.session_manager, target_entry, target_id, state.store_pid)
-      {:ok, nil, new_sm}
+      new_sm = set_new_leaf(state.session_manager, target_entry, target_id)
+      {:ok, nil, old_leaf_id, new_sm}
     else
       model = Keyword.get(opts, :model)
 
@@ -460,12 +474,13 @@ defmodule OctoPi.Coder.Session do
                 state.session_manager,
                 target_entry,
                 target_id,
+                old_leaf_id,
                 result,
                 false,
                 state.store_pid
               )
 
-            {:ok, result, new_sm}
+            {:ok, result, old_leaf_id, new_sm}
 
           :aborted ->
             {:cancel, :aborted}
@@ -495,11 +510,11 @@ defmodule OctoPi.Coder.Session do
     end
   end
 
-  defp branch_with_or_without_summary(sm, target_entry, target_id, summary_result, from_hook, store_pid) do
+  defp branch_with_or_without_summary(sm, target_entry, target_id, old_leaf_id, summary_result, from_hook, store_pid) do
     new_leaf_id = compute_new_leaf_id(target_entry, target_id)
     sm = %{sm | leaf_id: new_leaf_id}
 
-    from_id = new_leaf_id || "root"
+    from_id = old_leaf_id || "root"
     details = %{
       "readFiles" => summary_result.read_files,
       "modifiedFiles" => summary_result.modified_files
@@ -518,7 +533,7 @@ defmodule OctoPi.Coder.Session do
     new_sm
   end
 
-  defp set_new_leaf(sm, target_entry, target_id, _store_pid) do
+  defp set_new_leaf(sm, target_entry, target_id) do
     %{sm | leaf_id: compute_new_leaf_id(target_entry, target_id)}
   end
 

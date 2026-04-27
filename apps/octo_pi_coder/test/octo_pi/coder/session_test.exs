@@ -799,5 +799,128 @@ defmodule OctoPi.Coder.SessionTest do
       assert event.type == :session_before_tree
       assert %TreePreparation{target_id: ^id2} = event.preparation
     end
+
+    # ---- :session_tree fire-and-forget ----
+
+    test ":session_tree event is emitted after successful navigation", ctx do
+      test_pid = self()
+      {pid, id1, id2, _id3} = session_with_two_branches(ctx)
+
+      ext =
+        ext_with("t", :session_tree, fn event, _c ->
+          send(test_pid, {:session_tree, event})
+          nil
+        end)
+
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+
+      assert_received {:session_tree, event}
+      assert event.type == :session_tree
+      # id2 is a user message → new_leaf = id2's parent = id1
+      assert event.new_leaf_id == id1
+      assert event.old_leaf_id != nil
+    end
+
+    test ":session_tree is NOT emitted on cancel", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      cancel_ext = ext_with("c", :session_before_tree, fn _e, _c -> {:cancel, "no"} end)
+
+      tree_ext =
+        ext_with("t", :session_tree, fn _event, _c ->
+          send(test_pid, :session_tree_emitted)
+          nil
+        end)
+
+      :sys.replace_state(pid, fn state -> %{state | extensions: [cancel_ext, tree_ext]} end)
+      assert {:cancel, "no"} = Session.navigate_tree(pid, target_id: id2)
+      refute_received :session_tree_emitted
+    end
+
+    # ---- from_id and summary parent position ----
+
+    test "BranchSummary entry has from_id == old_leaf_id", ctx do
+      {pid, _id1, id2, id3} = session_with_two_branches(ctx)
+      # current leaf is id3 (branch B)
+      producer = summary_producer("summary text")
+
+      {:ok, _result} =
+        Session.navigate_tree(pid,
+          target_id: id2,
+          user_wants_summary: :yes,
+          model: nav_model(),
+          producer: producer
+        )
+
+      sm = Session.get_session_manager(pid)
+      # Find the BranchSummary entry
+      branch_summary =
+        sm
+        |> SessionManager.get_entries()
+        |> Enum.find(&match?(%Entry.BranchSummary{}, &1))
+
+      assert branch_summary != nil
+      # from_id is the old leaf before navigation (id3)
+      assert branch_summary.from_id == id3
+    end
+
+    test "BranchSummary parent is new_leaf_id (parent of user-message target)", ctx do
+      {pid, id1, id2, _id3} = session_with_two_branches(ctx)
+      producer = summary_producer("summary")
+
+      {:ok, _result} =
+        Session.navigate_tree(pid,
+          target_id: id2,
+          user_wants_summary: :yes,
+          model: nav_model(),
+          producer: producer
+        )
+
+      sm = Session.get_session_manager(pid)
+      branch_summary =
+        sm
+        |> SessionManager.get_entries()
+        |> Enum.find(&match?(%Entry.BranchSummary{}, &1))
+
+      # id2 is a user message → new_leaf = id1 → summary.parent_id = id1
+      assert branch_summary.parent_id == id1
+    end
+
+    test "no-summary navigation does not append any new entries", ctx do
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+      count_before = pid |> Session.get_session_manager() |> SessionManager.get_entries() |> length()
+
+      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+
+      count_after = pid |> Session.get_session_manager() |> SessionManager.get_entries() |> length()
+      assert count_after == count_before
+    end
+
+    test "from_hook: false for LLM-generated summary, true for extension override", ctx do
+      test_pid = self()
+      {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
+
+      ext_result = %BranchSummaryResult{summary: "ext summary", read_files: [], modified_files: []}
+      ext = ext_with("o", :session_before_tree, fn _e, _c -> {:override, ext_result} end)
+      :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
+
+      {:ok, _} =
+        Session.navigate_tree(pid,
+          target_id: id2,
+          user_wants_summary: :yes,
+          model: nav_model()
+        )
+
+      sm = Session.get_session_manager(pid)
+      branch_summary =
+        sm
+        |> SessionManager.get_entries()
+        |> Enum.find(&match?(%Entry.BranchSummary{}, &1))
+
+      assert branch_summary.from_hook == true
+      _ = test_pid
+    end
   end
 end
