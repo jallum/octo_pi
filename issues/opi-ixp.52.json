@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "F4. Auto-compaction trigger on safe Turn boundary",
   "type": "task",
-  "updated_at": "2026-04-27T20:44:31.194042Z"
+  "updated_at": "2026-04-27T20:53:41.736081Z"
 }
