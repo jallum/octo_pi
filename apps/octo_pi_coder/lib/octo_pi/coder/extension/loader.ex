@@ -48,21 +48,24 @@ defmodule OctoPi.Coder.Extension.Loader do
   def load(path), do: do_load(path, _actions = nil)
 
   @doc """
-  Load an extension and pre-bind a production `actions` map (and
-  optional `events`) into the API **before** `module.init/1` runs.
+  Load an extension and pre-bind it to a live `OctoPi.Coder.Session`
+  process **before** `module.init/1` runs.
 
   This ordering matters: extension handlers register via `API.on(api,
   ...)` and close over the `api` they were given. If we bound after
   init, the captured api would still hold the raise-on-call stubs.
-  Compare with the post-init upstream pattern which is fine in JS
+  Compare with the post-init upstream pattern, which is fine in JS
   because handlers reference the `api` object by mutable identity.
 
-  `actions` is the map you'd pass to `API.bind_core/2` — typically
-  `OctoPi.Coder.Session.actions(session_pid)`. `events` is the optional
-  `{emit, on}` event-bus pair.
+  Routes API actions like `api.compact.([])` to `Coder.Session.compact/2`
+  on the given pid. Unimplemented actions stay as the raise-on-call
+  stubs installed by `API.new/1`.
   """
-  @spec load_for_session(String.t(), map()) :: {:ok, Extension.t()} | {:error, term()}
-  def load_for_session(path, %{} = actions), do: do_load(path, actions)
+  @spec load_for_session(String.t(), GenServer.server()) ::
+          {:ok, Extension.t()} | {:error, term()}
+  def load_for_session(path, session) do
+    do_load(path, OctoPi.Coder.Session.__action_closures__(session))
+  end
 
   defp do_load(path, actions) do
     :telemetry.execute([:octo_pi_coder, :extension, :load_start], %{}, %{path: path})

@@ -11,10 +11,10 @@ defmodule OctoPi.Coder.Session do
   state to read and a single writer that keeps the in-memory DAG and
   the on-disk JSONL in lockstep.
 
-  Skeleton-only at this point. Orchestration methods land in their own
-  tickets — `compact/2` in opi-ixp.23, etc. The current public surface
-  is just enough for opi-ixp.46 (production API binding) to wire the
-  extension API closures to a live process.
+  The public surface is the idiomatic Elixir one — `compact/2`,
+  `add_entry/3`, `state/1`, etc. The bridge into the extension API
+  (a closure map per `Extension.API.bind_core/2`) is built inside
+  `Extension.Loader.load_for_session/2` and is not exposed here.
   """
 
   use GenServer, restart: :temporary
@@ -115,49 +115,6 @@ defmodule OctoPi.Coder.Session do
     do: GenServer.call(server, {:add_entry, entry, opts})
 
   @doc """
-  Build the `actions` map for `Extension.API.bind_core/2` so that
-  extension calls like `api.compact.([])` route to this session
-  process.
-
-  Each closure does `GenServer.call(server, {:action, name, args})`.
-  Action call handlers that aren't implemented yet reply
-  `{:error, :not_implemented}` — see ticket `opi-ixp.46`.
-  """
-  @spec actions(GenServer.server()) :: map()
-  def actions(server) do
-    %{
-      # Implemented today.
-      append_entry: fn entry -> add_entry(server, entry) end,
-      compact: fn opts -> compact(server, opts) end,
-
-      # Stubs that return {:error, :not_implemented} until their
-      # respective tickets land. Listing them keeps `bind_core` from
-      # falling back to the raise-on-call stubs from `API.new/1`.
-      send_message: fn _ -> not_implemented(server, :send_message) end,
-      send_user_message: fn _ -> not_implemented(server, :send_user_message) end,
-      set_model: fn _ -> not_implemented(server, :set_model) end,
-      set_thinking_level: fn _ -> not_implemented(server, :set_thinking_level) end,
-      set_active_tools: fn _ -> not_implemented(server, :set_active_tools) end,
-      set_session_name: fn _ -> not_implemented(server, :set_session_name) end,
-      set_label: fn _ -> not_implemented(server, :set_label) end,
-      register_tool: fn _ -> not_implemented(server, :register_tool) end,
-      get_model: fn -> not_implemented(server, :get_model) end,
-      get_thinking_level: fn -> not_implemented(server, :get_thinking_level) end,
-      abort: fn -> not_implemented(server, :abort) end,
-      get_system_prompt: fn -> not_implemented(server, :get_system_prompt) end,
-      get_active_tools: fn -> not_implemented(server, :get_active_tools) end,
-      get_all_tools: fn -> not_implemented(server, :get_all_tools) end,
-      get_session_name: fn -> not_implemented(server, :get_session_name) end,
-      get_commands: fn -> not_implemented(server, :get_commands) end,
-      get_context_usage: fn -> not_implemented(server, :get_context_usage) end,
-      exec: fn _, _ -> not_implemented(server, :exec) end
-    }
-  end
-
-  defp not_implemented(server, name),
-    do: GenServer.call(server, {:not_implemented, name})
-
-  @doc """
   Run the compaction orchestrator. Port of upstream `AgentSession.compact`
   (`tmp/pi-mono/.../core/agent-session.ts:1605`).
 
@@ -187,17 +144,19 @@ defmodule OctoPi.Coder.Session do
   def compact(server, opts \\ []),
     do: GenServer.call(server, {:compact, opts}, :infinity)
 
-  @doc """
-  Bind the `Context` getters (`get_entries`, `get_branch`,
-  `get_leaf_entry_id`) to read live from this session's
-  `SessionManager`.
-  """
-  @spec bind_context(GenServer.server(), OctoPi.Coder.Extension.Context.t()) ::
-          OctoPi.Coder.Extension.Context.t()
-  def bind_context(server, ctx) do
-    OctoPi.Coder.Extension.Context.bind_session_manager(ctx, fn ->
-      get_session_manager(server)
-    end)
+  @doc false
+  # Internal: closure map for `Extension.API.bind_core/2`. Only the
+  # actions this Session actually implements are bound — unimplemented
+  # ones stay as the raise-on-call stubs from `API.new/1`, which is
+  # exactly the right contract ("not bound — call bind_core first" or
+  # not implemented at all is the same observable outcome at the API
+  # surface). Used by `Extension.Loader.load_for_session/2`.
+  @spec __action_closures__(GenServer.server()) :: map()
+  def __action_closures__(server) do
+    %{
+      append_entry: fn entry -> add_entry(server, entry) end,
+      compact: fn opts -> compact(server, opts) end
+    }
   end
 
   # ---- callbacks ----
@@ -234,9 +193,6 @@ defmodule OctoPi.Coder.Session do
     {sm, id} = SessionManager.add_entry(state.session_manager, entry, forward_opts)
     {:reply, {:ok, id}, %{state | session_manager: sm}}
   end
-
-  def handle_call({:not_implemented, _name}, _from, state),
-    do: {:reply, {:error, :not_implemented}, state}
 
   def handle_call({:compact, opts}, _from, state) do
     {:reply, do_compact(state, opts), state}

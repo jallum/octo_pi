@@ -413,7 +413,33 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
   end
 
   describe "load_for_session/2" do
-    test "binds the actions map into api before init/1 captures it", %{dir: dir} do
+    setup do
+      session_opts = [
+        id: "loader-#{:erlang.unique_integer([:positive])}",
+        cwd: System.tmp_dir!(),
+        root: Path.join(System.tmp_dir!(), "opi-loader-test-#{:erlang.unique_integer([:positive])}")
+      ]
+
+      {:ok, store} = OctoPi.Coder.SessionStore.start_link(session_opts)
+
+      sm = %OctoPi.Coder.SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
+
+      {:ok, session} =
+        OctoPi.Coder.Session.start_link(
+          extensions: [],
+          session_manager: sm,
+          store_pid: store
+        )
+
+      on_exit(fn ->
+        if Process.alive?(session), do: GenServer.stop(session)
+        if Process.alive?(store), do: OctoPi.Coder.SessionStore.close(store)
+      end)
+
+      {:ok, session: session}
+    end
+
+    test "routes api.compact.() through the bound Session pid", %{dir: dir, session: session} do
       uniq = uid()
       reporter = :"loader_compact_reporter_#{uniq}"
       Process.register(self(), reporter)
@@ -432,15 +458,14 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
         """
       )
 
-      actions = %{compact: fn _ -> :stubbed end}
-
       assert {:ok, ext} =
-               Loader.load_for_session(Path.join(dir, "compact_caller.ex"), actions)
+               Loader.load_for_session(Path.join(dir, "compact_caller.ex"), session)
 
       [handler] = OctoPi.Coder.Extension.get_handlers(ext, :turn_end)
       handler.(%{type: :turn_end}, %OctoPi.Coder.Extension.Context{cwd: "/tmp"})
 
-      assert_received {:result, :stubbed}
+      # Empty session → :nothing_to_compact, but the call reached Session.
+      assert_received {:result, {:error, :nothing_to_compact}}
     end
 
     test "without load_for_session, api.compact.() raises on call (raise-stub path)", %{dir: dir} do

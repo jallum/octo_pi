@@ -73,4 +73,14 @@ defmodule OctoPi.Coder.Extension.Context do
         get_leaf_entry_id: fn -> SessionManager.get_leaf_entry_id(get_sm.()) end
     }
   end
+
+  @doc """
+  Wire the `SessionManager` getters to a live `OctoPi.Coder.Session`
+  pid. Convenience around `bind_session_manager/2` for the common
+  case where the manager lives behind the session GenServer.
+  """
+  @spec bind_session(t(), GenServer.server()) :: t()
+  def bind_session(%__MODULE__{} = ctx, session) do
+    bind_session_manager(ctx, fn -> Session.get_session_manager(session) end)
+  end
 end

@@ -170,42 +170,6 @@ defmodule OctoPi.Coder.SessionTest do
     end
   end
 
-  describe "actions/1" do
-    setup ctx do
-      store = open_store!(ctx)
-
-      {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
-
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      %{pid: pid}
-    end
-
-    test "append_entry routes to the GenServer and updates state", %{pid: pid} do
-      actions = Session.actions(pid)
-      assert {:ok, id} = actions.append_entry.(message_entry("from-action"))
-      assert Session.get_session_manager(pid).leaf_id == id
-    end
-
-    test "unimplemented one-arity actions return {:error, :not_implemented}", %{pid: pid} do
-      actions = Session.actions(pid)
-      assert {:error, :not_implemented} = actions.send_message.("hi")
-      assert {:error, :not_implemented} = actions.set_model.(:m)
-    end
-
-    test "unimplemented zero-arity actions return {:error, :not_implemented}", %{pid: pid} do
-      actions = Session.actions(pid)
-      assert {:error, :not_implemented} = actions.get_model.()
-      assert {:error, :not_implemented} = actions.abort.()
-      assert {:error, :not_implemented} = actions.get_context_usage.()
-    end
-
-    test "unimplemented two-arity action returns {:error, :not_implemented}", %{pid: pid} do
-      actions = Session.actions(pid)
-      assert {:error, :not_implemented} = actions.exec.("ls", [])
-    end
-  end
-
   describe "compact/2" do
     alias OctoPi.AI.Content.Text
     alias OctoPi.AI.Event
@@ -387,18 +351,9 @@ defmodule OctoPi.Coder.SessionTest do
       assert event.custom_instructions == "tag this"
     end
 
-    test "actions/1 wires :compact through Session.compact", ctx do
-      pid = populated_session(ctx)
-      actions = Session.actions(pid)
-
-      producer = fn _, _, _ -> done_event("via-actions") end
-
-      assert {:ok, %{result: %Result{summary: "via-actions"}, from_extension?: false}} =
-               actions.compact.(producer: producer)
-    end
   end
 
-  describe "bind_context/2" do
+  describe "Context.bind_session/2" do
     setup ctx do
       store = open_store!(ctx)
 
@@ -411,7 +366,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "wires get_entries / get_branch / get_leaf_entry_id to live SessionManager", %{pid: pid} do
       ctx = OctoPi.Coder.Extension.Context.new(%{cwd: "/tmp"})
-      bound = Session.bind_context(pid, ctx)
+      bound = OctoPi.Coder.Extension.Context.bind_session(ctx, pid)
 
       assert bound.get_entries.() == []
       assert bound.get_leaf_entry_id.() == nil
