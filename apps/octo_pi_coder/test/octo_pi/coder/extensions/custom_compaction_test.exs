@@ -42,17 +42,17 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
   end
 
   describe "session_before_compact handler" do
-    test "returns {:cancel, compaction} to provide custom compaction" do
+    test "returns {:override, %Result{}} to provide custom compaction" do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       result = handler.(compact_event(), ctx())
-      assert match?({:cancel, %{compaction: _}}, result)
+      assert match?({:override, %OctoPi.Coder.Compaction.Result{}}, result)
     end
 
     test "compaction result includes a non-empty summary" do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
-      {:cancel, %{compaction: compaction}} = handler.(compact_event(), ctx())
+      {:override, compaction} = handler.(compact_event(), ctx())
       assert is_binary(compaction.summary) and compaction.summary != ""
     end
 
@@ -60,7 +60,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       event = compact_event(first_kept_entry_id: "entry-99")
-      {:cancel, %{compaction: compaction}} = handler.(event, ctx())
+      {:override, compaction} = handler.(event, ctx())
       assert compaction.first_kept_entry_id == "entry-99"
     end
 
@@ -68,7 +68,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       event = compact_event(tokens_before: 75_000)
-      {:cancel, %{compaction: compaction}} = handler.(event, ctx())
+      {:override, compaction} = handler.(event, ctx())
       assert compaction.tokens_before == 75_000
     end
 
@@ -76,7 +76,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       event = compact_event(previous_summary: "Prior: worked on auth module")
-      {:cancel, %{compaction: compaction}} = handler.(event, ctx())
+      {:override, compaction} = handler.(event, ctx())
       assert compaction.summary =~ "Prior"
     end
 
@@ -113,7 +113,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       result = handler.(compact_event(), ctx(find_model: find_fn))
-      assert match?({:cancel, %{compaction: _}}, result)
+      assert match?({:override, %OctoPi.Coder.Compaction.Result{}}, result)
     end
 
     test "still returns local compaction when get_model_auth fails" do
@@ -123,7 +123,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       result = handler.(compact_event(), ctx(find_model: find_fn, get_model_auth: auth_fn))
-      assert match?({:cancel, %{compaction: _}}, result)
+      assert match?({:override, %OctoPi.Coder.Compaction.Result{}}, result)
     end
 
     test "still returns local compaction when auth succeeds (LLM call deferred)" do
@@ -133,7 +133,7 @@ defmodule OctoPi.Coder.Extensions.CustomCompactionTest do
       ext = load_ext()
       [handler] = ext.handlers[:session_before_compact]
       result = handler.(compact_event(), ctx(find_model: find_fn, get_model_auth: auth_fn))
-      assert match?({:cancel, %{compaction: _}}, result)
+      assert match?({:override, %OctoPi.Coder.Compaction.Result{}}, result)
     end
   end
 end

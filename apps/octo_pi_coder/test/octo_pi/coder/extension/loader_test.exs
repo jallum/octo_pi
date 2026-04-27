@@ -412,6 +412,73 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
     end
   end
 
+  describe "load_for_session/2" do
+    test "binds the actions map into api before init/1 captures it", %{dir: dir} do
+      uniq = uid()
+      reporter = :"loader_compact_reporter_#{uniq}"
+      Process.register(self(), reporter)
+      on_exit(fn -> if Process.whereis(reporter), do: Process.unregister(reporter) end)
+
+      File.write!(
+        Path.join(dir, "compact_caller.ex"),
+        """
+        defmodule OctoPiTestLoaderCompact#{uniq} do
+          def init(api) do
+            OctoPi.Coder.Extension.API.on(api, :turn_end, fn _e, _c ->
+              send(:#{reporter}, {:result, api.compact.([])})
+            end)
+          end
+        end
+        """
+      )
+
+      actions = %{compact: fn _ -> :stubbed end}
+
+      assert {:ok, ext} =
+               Loader.load_for_session(Path.join(dir, "compact_caller.ex"), actions)
+
+      [handler] = OctoPi.Coder.Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %OctoPi.Coder.Extension.Context{cwd: "/tmp"})
+
+      assert_received {:result, :stubbed}
+    end
+
+    test "without load_for_session, api.compact.() raises on call (raise-stub path)", %{dir: dir} do
+      uniq = uid()
+      reporter = :"loader_compact_raw_reporter_#{uniq}"
+      Process.register(self(), reporter)
+      on_exit(fn -> if Process.whereis(reporter), do: Process.unregister(reporter) end)
+
+      File.write!(
+        Path.join(dir, "compact_caller_raw.ex"),
+        """
+        defmodule OctoPiTestLoaderCompactRaw#{uniq} do
+          def init(api) do
+            OctoPi.Coder.Extension.API.on(api, :turn_end, fn _e, _c ->
+              msg =
+                try do
+                  api.compact.([])
+                rescue
+                  e -> Exception.message(e)
+                end
+
+              send(:#{reporter}, {:caught, msg})
+            end)
+          end
+        end
+        """
+      )
+
+      assert {:ok, ext} = Loader.load(Path.join(dir, "compact_caller_raw.ex"))
+
+      [handler] = OctoPi.Coder.Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %OctoPi.Coder.Extension.Context{cwd: "/tmp"})
+
+      assert_received {:caught, msg}
+      assert msg =~ "compact not bound"
+    end
+  end
+
   defp sample_extension(module_suffix) do
     """
     defmodule OctoPi.Extensions.#{module_suffix} do

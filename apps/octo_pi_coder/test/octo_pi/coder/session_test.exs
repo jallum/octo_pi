@@ -169,4 +169,64 @@ defmodule OctoPi.Coder.SessionTest do
       assert Session.get_session_manager(pid).leaf_id == "fixed-id"
     end
   end
+
+  describe "actions/1" do
+    setup ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      %{pid: pid}
+    end
+
+    test "append_entry routes to the GenServer and updates state", %{pid: pid} do
+      actions = Session.actions(pid)
+      assert {:ok, id} = actions.append_entry.(message_entry("from-action"))
+      assert Session.get_session_manager(pid).leaf_id == id
+    end
+
+    test "unimplemented one-arity actions return {:error, :not_implemented}", %{pid: pid} do
+      actions = Session.actions(pid)
+      assert {:error, :not_implemented} = actions.compact.([])
+      assert {:error, :not_implemented} = actions.send_message.("hi")
+      assert {:error, :not_implemented} = actions.set_model.(:m)
+    end
+
+    test "unimplemented zero-arity actions return {:error, :not_implemented}", %{pid: pid} do
+      actions = Session.actions(pid)
+      assert {:error, :not_implemented} = actions.get_model.()
+      assert {:error, :not_implemented} = actions.abort.()
+      assert {:error, :not_implemented} = actions.get_context_usage.()
+    end
+
+    test "unimplemented two-arity action returns {:error, :not_implemented}", %{pid: pid} do
+      actions = Session.actions(pid)
+      assert {:error, :not_implemented} = actions.exec.("ls", [])
+    end
+  end
+
+  describe "bind_context/2" do
+    setup ctx do
+      store = open_store!(ctx)
+
+      {:ok, pid} =
+        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      %{pid: pid}
+    end
+
+    test "wires get_entries / get_branch / get_leaf_entry_id to live SessionManager", %{pid: pid} do
+      ctx = OctoPi.Coder.Extension.Context.new(%{cwd: "/tmp"})
+      bound = Session.bind_context(pid, ctx)
+
+      assert bound.get_entries.() == []
+      assert bound.get_leaf_entry_id.() == nil
+
+      assert {:ok, id} = Session.add_entry(pid, message_entry("x"))
+      assert bound.get_leaf_entry_id.() == id
+    end
+  end
 end

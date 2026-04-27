@@ -2,15 +2,20 @@ defmodule OctoPi.Coder.Extensions.CustomCompaction do
   @moduledoc """
   Replaces default compaction with a full-context summary.
 
-  Uses ctx.find_model and ctx.get_model_auth to look up an alternative model
-  (e.g. Gemini Flash) for LLM-based summarization. When the model registry is
-  configured and auth succeeds, that model is preferred; until the LLM call is
-  wired in, falls back to a local summary. When the registry is absent, falls
-  back immediately without notifying.
-  Returns {:cancel, compaction} to override the default compaction behavior.
-  Ported from examples/extensions/custom-compaction.ts.
+  Uses `ctx.find_model` and `ctx.get_model_auth` to look up an alternative
+  model (e.g. Gemini Flash) for LLM-based summarization. When the registry
+  is configured and auth succeeds, that model is preferred; until the LLM
+  call is wired in, falls back to a local summary. When the registry is
+  absent, falls back immediately without notifying.
+
+  Returns `{:override, %Compaction.Result{}}` to supply an extension-built
+  result; `Dispatcher.halt_on_result/3` (opi-ixp.46) surfaces the value to
+  `Coder.Session.compact/2` (opi-ixp.23), which then writes the entry as
+  `from_hook?: true` (opi-ixp.25). Ported from
+  `examples/extensions/custom-compaction.ts`.
   """
 
+  alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Extension.API
 
   @summarization_provider :google
@@ -36,13 +41,12 @@ defmodule OctoPi.Coder.Extensions.CustomCompaction do
         nil
 
       summary ->
-        {:cancel,
-         %{
-           compaction: %{
-             summary: summary,
-             first_kept_entry_id: first_kept_entry_id,
-             tokens_before: tokens_before
-           }
+        {:override,
+         %Result{
+           summary: summary,
+           first_kept_entry_id: first_kept_entry_id,
+           tokens_before: tokens_before,
+           details: nil
          }}
     end
   end

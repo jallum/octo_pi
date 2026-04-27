@@ -44,7 +44,7 @@ defmodule OctoPi.Coder.Extension.EventTest do
             :session_before_compact,
             :session_before_tree
           ] do
-        assert :cancel_on_result == Event.pattern(t), "expected #{t} to be cancel_on_result"
+        assert :halt_on_result == Event.pattern(t), "expected #{t} to be halt_on_result"
       end
     end
 

@@ -97,12 +97,12 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
     end
   end
 
-  # --- cancel_on_result ---
+  # --- halt_on_result ---
 
-  describe "cancel_on_result/3" do
+  describe "halt_on_result/3" do
     test "returns :ok when no handler cancels" do
       e = ext("a", session_before_switch: fn _e, _c -> nil end)
-      assert :ok = Dispatcher.cancel_on_result([e], Event.new(:session_before_switch), ctx())
+      assert :ok = Dispatcher.halt_on_result([e], Event.new(:session_before_switch), ctx())
     end
 
     test "short-circuits on {:cancel, reason}" do
@@ -115,7 +115,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
         ])
 
       assert {:cancel, "dirty repo"} =
-               Dispatcher.cancel_on_result([e], Event.new(:session_before_switch), ctx())
+               Dispatcher.halt_on_result([e], Event.new(:session_before_switch), ctx())
 
       refute_received :should_not_reach
     end
@@ -126,7 +126,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
       e1 = ext("a", session_before_fork: fn _e, _c -> nil end)
       e2 = ext("b", session_before_fork: fn _e, _c -> send(test_pid, :reached) end)
 
-      Dispatcher.cancel_on_result([e1, e2], Event.new(:session_before_fork), ctx())
+      Dispatcher.halt_on_result([e1, e2], Event.new(:session_before_fork), ctx())
       assert_received :reached
     end
 
@@ -135,7 +135,33 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
       e2 = ext("b", session_before_compact: fn _e, _c -> {:cancel, "reason"} end)
 
       assert {:cancel, "reason"} =
-               Dispatcher.cancel_on_result([e1, e2], Event.new(:session_before_compact), ctx())
+               Dispatcher.halt_on_result([e1, e2], Event.new(:session_before_compact), ctx())
+    end
+
+    test "{:override, value} halts and surfaces the value" do
+      e = ext("a", session_before_compact: fn _e, _c -> {:override, %{summary: "stub"}} end)
+
+      assert {:override, %{summary: "stub"}} =
+               Dispatcher.halt_on_result([e], Event.new(:session_before_compact), ctx())
+    end
+
+    test "first halting result wins regardless of channel" do
+      test_pid = self()
+
+      e =
+        ext("a", [
+          {:session_before_compact, fn _e, _c -> {:override, :first} end},
+          {:session_before_compact,
+           fn _e, _c ->
+             send(test_pid, :should_not_reach)
+             {:cancel, :second}
+           end}
+        ])
+
+      assert {:override, :first} =
+               Dispatcher.halt_on_result([e], Event.new(:session_before_compact), ctx())
+
+      refute_received :should_not_reach
     end
   end
 
@@ -422,7 +448,7 @@ defmodule OctoPi.Coder.Extension.DispatcherTest do
       assert_received :called
     end
 
-    test "auto-dispatches cancel_on_result" do
+    test "auto-dispatches halt_on_result" do
       e = ext("a", session_before_switch: fn _e, _c -> {:cancel, "nope"} end)
       assert {:cancel, "nope"} = Dispatcher.emit([e], Event.new(:session_before_switch), ctx())
     end
