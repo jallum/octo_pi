@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "A4. Settings file plumbing (SettingsManager port) + compaction schema",
   "type": "task",
-  "updated_at": "2026-04-27T23:58:10.506777Z"
+  "updated_at": "2026-04-28T00:01:58.604330Z"
 }
