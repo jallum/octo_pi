@@ -1545,8 +1545,10 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, component}, width: width}, _input_lines) do
-    [""] ++ component.render.(width)
+  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
+    lines = component.render.(width)
+    len = length(lines)
+    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
   end
 
   def render(
