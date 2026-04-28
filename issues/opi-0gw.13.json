@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T17:11:13.201374Z",
+  "description": "When the user types `/` to see slash commands, `FilePathProvider.extract_query/1` matches `\"/\" <> _ = path` and returns `{:abs, \"/\"}`, triggering `suggest_absolute(\"/\", 50)`. That function calls `File.ls(\"/\")` and returns all root-directory entries (`/bin`, `/etc`, `/usr`, `/Volumes`, etc.) as autocomplete suggestions.\n\nThe `CombinedProvider` merges these with the 7 slash commands, producing 28 results. The user sees root-directory paths mixed into — and below — the slash command list (confirmed by scrolling to position 26/28 and seeing `/usr`, `/var`, `/Volumes`, `/.file`).\n\n**Root cause:** `extract_query(\"/\" <> _ = path)` matches the bare string `\"/\"`. Absolute-path completion should only trigger when there is at least one character after the `/`, e.g., `/h` → `/home/...`.\n\n**Fix:** Tighten the guard in `FilePathProvider`:\n\n```elixir\n# before\ndefp extract_query(\"/\" <> _ = path), do: {:abs, path}\n\n# after\ndefp extract_query(\"/\" <> rest = path) when rest != \"\", do: {:abs, path}\n```\n\nThis ensures a bare `/` returns `:none`, leaving slash-command autocomplete uncontaminated.\n\n**Update test:** The existing test `\"absolute path returns matching entries\"` passes `File.cwd!()` which always has content after `/`, so it is unaffected. Add a new test asserting `get_suggestions(provider, \"/\")` returns `[]` from `FilePathProvider` alone.",
+  "id": "opi-0gw.13",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "FilePathProvider contaminates slash-command autocomplete when input is \"/\"",
+  "type": "bug",
+  "updated_at": "2026-04-28T17:11:13.201374Z"
+}
