@@ -58,7 +58,7 @@ defmodule OctoPi.TUI.Autocomplete.FilePathProvider do
   # --- trigger extraction ---
 
   defp extract_query("@" <> rest), do: {:at, rest}
-  defp extract_query("/" <> _ = path), do: {:abs, path}
+  defp extract_query("/" <> rest = path) when rest != "", do: {:abs, path}
   defp extract_query(_other), do: :none
 
   # --- absolute-path completion (complete a single path) ---

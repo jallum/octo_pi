@@ -162,6 +162,10 @@ defmodule OctoPi.TUI.AutocompleteTest do
       assert {:ok, []} = Autocomplete.get_suggestions(provider, "hello")
     end
 
+    test "bare / does not trigger absolute path completion", %{provider: provider} do
+      assert {:ok, []} = Autocomplete.get_suggestions(provider, "/")
+    end
+
     test "returns suggestions for @ prefix", %{provider: provider} do
       {:ok, suggestions} = Autocomplete.get_suggestions(provider, "@mix.exs")
       assert is_list(suggestions)
