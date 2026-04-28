@@ -234,38 +234,51 @@ defmodule OctoPi.Coder.CLI do
       IO.puts(Jason.encode!(fallback))
   end
 
-  defp resolve_model(id) do
-    case provider_from_model_id(id) do
-      :ollama ->
-        %Model{
-          id: id,
-          name: id,
-          api: :openai_completions,
-          provider: :ollama,
-          base_url: "http://localhost:1234/v1",
-          context_window: 262_144,
-          max_tokens: 4_096
-        }
+  defp resolve_model(id), do: build_model(provider_from_model_id(id), id)
 
-      :anthropic ->
-        %Model{
-          id: id,
-          name: id,
-          api: :anthropic_messages,
-          provider: :anthropic,
-          base_url: "https://api.anthropic.com/v1",
-          context_window: 200_000,
-          max_tokens: 8000
-        }
-    end
+  defp build_model(:ollama, id) do
+    %Model{
+      id: id,
+      name: id,
+      api: :openai_completions,
+      provider: :ollama,
+      base_url: "http://localhost:1234/v1",
+      context_window: 262_144,
+      max_tokens: 4_096
+    }
   end
 
-  defp provider_from_model_id(id) do
-    if String.starts_with?(id, "claude") do
-      :anthropic
-    else
-      :ollama
-    end
+  defp build_model(:anthropic, id) do
+    %Model{
+      id: id,
+      name: id,
+      api: :anthropic_messages,
+      provider: :anthropic,
+      base_url: "https://api.anthropic.com/v1",
+      context_window: 200_000,
+      max_tokens: 8000
+    }
+  end
+
+  defp build_model(:openrouter, id) do
+    %Model{
+      id: id,
+      name: id,
+      api: :openai_completions,
+      provider: :openrouter,
+      base_url: "https://openrouter.ai/api/v1",
+      context_window: 200_000,
+      max_tokens: 8_192
+    }
+  end
+
+  # Detection: `claude*` → Anthropic; any id with a `/` (the universal
+  # OpenRouter slug shape, e.g. `anthropic/claude-sonnet-4.5`) →
+  # OpenRouter; everything else → local Ollama.
+  defp provider_from_model_id("claude" <> _), do: :anthropic
+
+  defp provider_from_model_id(id) when is_binary(id) do
+    if String.contains?(id, "/"), do: :openrouter, else: :ollama
   end
 
   defp usage_text do
@@ -279,7 +292,9 @@ defmodule OctoPi.Coder.CLI do
     Flags:
       --print, -p    force print mode (default when a prompt is given)
       --mode rpc     run as a JSON-line RPC server on stdin/stdout
-      --model, -m    model id (default: #{@default_model}; claude* → Anthropic, else → Ollama)
+      --model, -m    model id (default: #{@default_model};
+                     claude* → Anthropic; vendor/model → OpenRouter
+                     (set OPENROUTER_API_KEY); else → local Ollama)
       --cwd          working dir (default: current dir)
       --help, -h     show this message
       --debug-events log stdin/key pipeline to debug_events.log

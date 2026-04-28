@@ -30,6 +30,28 @@ defmodule OctoPi.Coder.CLITest do
                CLI.parse_args(["--model", "claude-sonnet-4-5", "hi"])
     end
 
+    test "vendor/model id resolves to OpenRouter" do
+      assert {:ok,
+              %{
+                model: %{
+                  id: "anthropic/claude-sonnet-4.5",
+                  provider: :openrouter,
+                  api: :openai_completions,
+                  base_url: "https://openrouter.ai/api/v1"
+                }
+              }} = CLI.parse_args(["--model", "anthropic/claude-sonnet-4.5", "hi"])
+    end
+
+    test "claude* id resolves to Anthropic regardless of slashes" do
+      assert {:ok, %{model: %{provider: :anthropic}}} =
+               CLI.parse_args(["--model", "claude-sonnet-4-5", "hi"])
+    end
+
+    test "non-slash, non-claude id resolves to local Ollama" do
+      assert {:ok, %{model: %{provider: :ollama, id: "qwen3.5:latest"}}} =
+               CLI.parse_args(["--model", "qwen3.5:latest", "hi"])
+    end
+
     test "--help returns a help sentinel" do
       assert {:help, _usage} = CLI.parse_args(["--help"])
     end
