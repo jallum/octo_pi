@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:31:35Z",
+  "description": "## What to do\n\nAdapt the upstream JSON event stream doc (tmp/pi-mono/packages/coding-agent/docs/json.md, 82 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/json.md\n- tmp/pi-mono/packages/coding-agent/src/modes/json-mode.ts (reference)\n\n## Output\n\nCreate docs/json.md\n\n## How to adapt\n\n1. **Overview**: Document our JSON event stream mode. This is a simpler doc — it describes the JSON event output format for programmatic consumption.\n\n2. **Starting JSON Mode**: Document how to start JSON mode in our system (likely `mix pi --mode json` or similar).\n\n3. **Event Format**: Document the JSON event format. This is largely the same as the RPC events since it is a wire format:\n   - `agent_start`, `agent_end`\n   - `turn_start`, `turn_end`\n   - `message_start`, `message_update`, `message_end`\n   - `tool_execution_start`, `tool_execution_update`, `tool_execution_end`\n   - `compaction_start`, `compaction_end`\n   - `queue_update`\n\n4. **Message Format**: Document the message JSON format (same as RPC messages).\n\n5. **Usage Examples**: Convert the examples to our CLI.\n\n## What to preserve verbatim\n\n- The JSON event format (wire protocol)\n- The event type list\n- The message format\n\n## Key upstream references to include\n\n- [json-mode.ts](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/json-mode.ts)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All event types match our actual events\n2. The JSON format is accurate\n3. The CLI command is correct",
+  "id": "opi-tpj.17",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "JSON Event Stream Mode",
+  "type": "task",
+  "updated_at": "2026-04-28T11:31:35Z"
+}
