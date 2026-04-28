@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:29:32Z",
+  "description": "## What to do\n\nAdapt the upstream themes doc (tmp/pi-mono/packages/coding-agent/docs/themes.md, 295 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/themes.md\n- tmp/pi-mono/packages/coding-agent/src/modes/interactive/theme/ (theme system)\n- tmp/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme-schema.json\n\n## Output\n\nCreate docs/themes.md\n\n## How to adapt\n\n1. **Locations**: Update paths from `~/.pi/agent/themes/` and `.pi/themes/` to our paths. Document our theme discovery:\n   - Built-in: `dark`, `light`\n   - Global: `~/.octo_pi/themes/*.json`\n   - Project: `.pi/themes/*.json`\n   - Settings: `themes` array\n   - CLI: `--theme \u003cpath\u003e`\n\n2. **Selecting a Theme**: Document our `/settings` theme selection and `theme` setting in settings.json.\n\n3. **Creating a Custom Theme**: Convert the theme JSON example to our format. Update the $schema URL.\n\n4. **Theme Format**: Document our theme JSON schema:\n   ```json\n   {\n     \"$schema\": \"...\",\n     \"name\": \"my-theme\",\n     \"vars\": {\n       \"primary\": \"#00aaff\",\n       \"secondary\": 242\n     },\n     \"colors\": {\n       \"accent\": \"primary\",\n       \"border\": \"primary\",\n       ...\n     }\n   }\n   ```\n\n5. **Color Tokens**: Convert the full color tokens table. This is large — include all tokens:\n   - UI colors: accent, border, borderAccent, borderMuted, success, error, warning, muted, dim, text\n   - Message colors: thinkingText, selectedBg, userMessageBg, userMessageText, customMessageBg, customMessageText, customMessageLabel\n   - Tool colors: toolPendingBg, toolSuccessBg, toolErrorBg, toolTitle, toolOutput\n   - Markdown colors: mdHeading, mdLink, mdLinkUrl, mdCode, mdCodeBlock, mdCodeBlockBorder, mdQuote, mdQuoteBorder, mdHr, mdListBullet\n   - Diff colors: toolDiffAdded, toolDiffRemoved, toolDiffContext\n   - Syntax colors: syntaxComment, syntaxKeyword, syntaxFunction, syntaxVariable\n\n6. **Color Values**: Document our color value formats:\n   - Hex: `#RRGGBB`\n   - ANSI: integer (0-255)\n   - Named: variable reference (e.g., \"primary\")\n   - Empty string: inherit from terminal\n\n## What to preserve verbatim\n\n- The color token names (they are part of the wire format)\n- The theme JSON structure\n- The color value format options\n- The tips for creating themes\n\n## Key upstream references to include\n\n- [theme-schema.json](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All color tokens match our actual theme system\n2. All paths match our config directories\n3. The color value formats are accurate",
+  "id": "opi-tpj.13",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Themes",
+  "type": "task",
+  "updated_at": "2026-04-28T11:29:32Z"
+}
