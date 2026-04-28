@@ -147,6 +147,7 @@ defmodule OctoPi.Coder.CLI do
         # etc.) is up before Interactive.run/1 tries to register
         # subscribers against it.
         {:ok, _} = Application.ensure_all_started(:octo_pi_tui)
+        if opts.log_telemetry, do: OctoPi.Tracer.attach_all()
         tools = OctoPi.Coder.default_tools(opts.cwd)
         loader = ResourceLoader.load(opts.cwd, nil)
         system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)

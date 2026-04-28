@@ -32,6 +32,12 @@ defmodule OctoPi.TUI.RenderThrottle do
     if elapsed >= t.min_interval_ms do
       {true, t}
     else
+      :telemetry.execute(
+        [:octo_pi_tui, :render_throttle, :skip],
+        %{elapsed_ms: elapsed},
+        %{min_interval_ms: t.min_interval_ms}
+      )
+
       {false, %{t | skip_count: t.skip_count + 1}}
     end
   end

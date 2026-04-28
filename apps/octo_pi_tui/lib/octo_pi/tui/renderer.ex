@@ -116,7 +116,20 @@ defmodule OctoPi.TUI.Renderer do
 
   @impl true
   def handle_call({:render, lines, cursor_seq}, _from, state) do
+    start_mono = System.monotonic_time()
     {bytes, new_state} = compute(lines, cursor_seq, state)
+    {mode, lines_changed} = render_telemetry_fields(state, new_state, lines)
+
+    :telemetry.execute(
+      [:octo_pi_tui, :renderer, :render],
+      %{
+        duration: System.monotonic_time() - start_mono,
+        byte_count: byte_size(bytes),
+        lines_changed: lines_changed
+      },
+      %{mode: mode, line_count: length(lines)}
+    )
+
     {:reply, {:ok, bytes}, new_state}
   end
 
@@ -429,4 +442,19 @@ defmodule OctoPi.TUI.Renderer do
   defp wrap_sync(body, %{csi_2026?: false}), do: body
 
   defp termux?, do: System.get_env("TERMUX_VERSION") != nil
+
+  defp render_telemetry_fields(%{previous: nil}, _new_state, lines) do
+    {:first, length(lines)}
+  end
+
+  defp render_telemetry_fields(state, new_state, lines) do
+    if new_state.full_redraws > state.full_redraws do
+      {:full, length(lines)}
+    else
+      {first, last} = find_diff_range(lines, state.previous)
+      changed = if first == -1, do: 0, else: last - first + 1
+      mode = if first == -1, do: :noop, else: :diff
+      {mode, changed}
+    end
+  end
 end

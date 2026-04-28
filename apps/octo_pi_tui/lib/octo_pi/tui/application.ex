@@ -54,6 +54,16 @@ defmodule OctoPi.TUI.Application do
       level: :debug
     })
 
+    OctoPi.Tracer.register(%{
+      id: :tui_render,
+      description: "TUI renderer frame timing and throttle skips",
+      events: [
+        [:octo_pi_tui, :renderer, :render],
+        [:octo_pi_tui, :render_throttle, :skip]
+      ],
+      level: :debug
+    })
+
     Supervisor.start_link([], strategy: :one_for_one, name: OctoPi.TUI.Supervisor)
   end
 end
