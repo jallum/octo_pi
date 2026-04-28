@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Verify MacKeychain auth wiring and add macOS runtime configuration",
   "type": "task",
-  "updated_at": "2026-04-28T14:23:11.985412Z"
+  "updated_at": "2026-04-28T14:26:45.257350Z"
 }
