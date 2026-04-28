@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Move rendering to a dedicated RenderLoop Task with fixed-interval tick",
   "type": "epic",
-  "updated_at": "2026-04-28T20:09:34.517290Z"
+  "updated_at": "2026-04-28T20:30:48.385514Z"
 }
