@@ -4,6 +4,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Keybindings
 
   # ── fixtures ──────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     test "enter on empty list emits nothing" do
       sel = %TreeSelector{
         entries: [],
-        keybindings: OctoPi.TUI.Keybindings.new(),
+        keybindings: Keybindings.new(),
         flat_nodes: [],
         filtered_nodes: []
       }

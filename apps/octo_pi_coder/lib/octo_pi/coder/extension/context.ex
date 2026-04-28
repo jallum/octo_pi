@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.Extension.Context do
 
   alias OctoPi.Agent.Message
   alias OctoPi.AI.Model
+  alias OctoPi.Coder.Models
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.SessionManager
 
@@ -34,7 +35,7 @@ defmodule OctoPi.Coder.Extension.Context do
             get_messages: &__MODULE__.empty_list/0,
             get_branch: &__MODULE__.empty_list/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0,
-            find_model: &OctoPi.Coder.Models.find/2,
+            find_model: &Models.find/2,
             get_model_auth: &__MODULE__.no_auth/1,
             summary_producer: nil
 

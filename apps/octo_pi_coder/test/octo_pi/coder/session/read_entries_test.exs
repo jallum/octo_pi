@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.Session.ReadEntriesTest do
       assert %Header{} = first
       assert first.cwd =~ "pi-mono"
 
-      assert length(rest) > 0
+      assert rest != []
       assert Enum.all?(rest, &is_struct/1)
     end
 

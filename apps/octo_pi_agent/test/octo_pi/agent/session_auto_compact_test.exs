@@ -3,6 +3,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
 
   alias OctoPi.Agent
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event, as: AIEvent
@@ -378,7 +379,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
       # Both follow-ups should have reached the transcript (the in-compaction one
       # is drained by drain_queues_into_transcript in after_compaction)
       state = Agent.state(session)
-      messages = OctoPi.Agent.MessageLog.to_list(state.messages)
+      messages = MessageLog.to_list(state.messages)
       # The second turn ran and produced output — transcript has two assistant messages
       assert length(Enum.filter(messages, &match?(%Assistant{}, &1))) == 2
       # follow-up queue should be empty after drain

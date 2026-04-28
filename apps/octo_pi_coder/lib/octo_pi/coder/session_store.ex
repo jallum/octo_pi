@@ -36,6 +36,9 @@ defmodule OctoPi.Coder.SessionStore do
 
   use GenServer, restart: :temporary
 
+  alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Header
+
   @type open_opt ::
           {:id, String.t()}
           | {:cwd, String.t()}
@@ -107,8 +110,8 @@ defmodule OctoPi.Coder.SessionStore do
 
   defp decode_line(line) do
     case Jason.decode(line) do
-      {:ok, %{"type" => "session"} = m} -> OctoPi.Coder.Session.Header.decode(m)
-      {:ok, %{"type" => _} = m} -> OctoPi.Coder.Session.Entry.decode(m)
+      {:ok, %{"type" => "session"} = m} -> Header.decode(m)
+      {:ok, %{"type" => _} = m} -> Entry.decode(m)
       _ -> nil
     end
   end

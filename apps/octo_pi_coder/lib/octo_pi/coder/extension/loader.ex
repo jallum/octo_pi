@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.Extension.Loader do
 
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Session
 
   require Logger
 
@@ -64,7 +65,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   @spec load_for_session(String.t(), GenServer.server()) ::
           {:ok, Extension.t()} | {:error, term()}
   def load_for_session(path, session) do
-    do_load(path, OctoPi.Coder.Session.__action_closures__(session))
+    do_load(path, Session.__action_closures__(session))
   end
 
   defp do_load(path, actions) do

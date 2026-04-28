@@ -90,7 +90,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       assert sm.migrated?
 
       [%Header{} | body] = sm.file_entries
-      assert length(body) > 0
+      assert body != []
       assert map_size(sm.by_id) == length(body)
       assert_linear_parent_chain(body)
     end

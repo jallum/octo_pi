@@ -7,6 +7,8 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
 
   @moduletag capture_log: true
@@ -425,10 +427,10 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
       {:ok, store} = SessionStore.start_link(session_opts)
 
-      sm = %OctoPi.Coder.SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
+      sm = %SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
 
       {:ok, session} =
-        OctoPi.Coder.Session.start_link(
+        Session.start_link(
           extensions: [],
           session_manager: sm,
           store_pid: store

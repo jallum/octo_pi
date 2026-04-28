@@ -388,7 +388,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   end
 
   defp passes_mode_filter?(%FlatNode{node: %TreeNode{entry: entry, label: label}}, mode) do
-    settings_entry? = is_settings_entry?(entry)
+    settings_entry? = settings_entry?(entry)
 
     case mode do
       :user_only ->
@@ -408,12 +408,12 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     end
   end
 
-  defp is_settings_entry?(%Entry.Label{}), do: true
-  defp is_settings_entry?(%Entry.Custom{}), do: true
-  defp is_settings_entry?(%Entry.ModelChange{}), do: true
-  defp is_settings_entry?(%Entry.ThinkingLevelChange{}), do: true
-  defp is_settings_entry?(%Entry.SessionInfo{}), do: true
-  defp is_settings_entry?(_), do: false
+  defp settings_entry?(%Entry.Label{}), do: true
+  defp settings_entry?(%Entry.Custom{}), do: true
+  defp settings_entry?(%Entry.ModelChange{}), do: true
+  defp settings_entry?(%Entry.ThinkingLevelChange{}), do: true
+  defp settings_entry?(%Entry.SessionInfo{}), do: true
+  defp settings_entry?(_), do: false
 
   defp has_text_content?(nil), do: false
   defp has_text_content?(s) when is_binary(s), do: String.trim(s) != ""
