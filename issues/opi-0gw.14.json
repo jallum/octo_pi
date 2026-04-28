@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T18:02:37.236570Z",
+  "description": "Two private functions added as infrastructure stubs in opi-0gw.9 emit compiler warnings because nothing calls them yet:\n\n```\nwarning: function handle_component_event/2 is unused\nwarning: function apply_component_result/3 is unused\n```\n\nBoth functions live in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`. They are intentional stubs for the component-event aggregation layer; they will be wired in when components start emitting events. Until then the warnings are noise.\n\n**Fix:** Wire `apply_component_result/3` into `handle_model_selector_key/2` to process the `new_ms` (pass-through) case, and use `handle_component_event/2` inside it — replacing the two bespoke branches with a single dispatch. The `:cancel` and `{:select_model, model}` branches keep their explicit logic since they need side-effects (CoderSession.set_model) and state merges that go beyond what the generic event handler provides.",
+  "id": "opi-0gw.14",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Suppress unused-function compiler warnings for apply_component_result/3 and handle_component_event/2",
+  "type": "bug",
+  "updated_at": "2026-04-28T18:02:37.236570Z"
+}
