@@ -13,9 +13,9 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
   defstruct [:id, :parent_id, :timestamp, :custom_type, :data, extras: %{}]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           custom_type: String.t(),
           data: term() | nil,
           extras: %{optional(String.t()) => term()}

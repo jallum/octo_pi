@@ -121,27 +121,25 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     kb = state.keybindings
 
     cond do
-      Keybindings.matches?(kb, key, "tui.select.up") ->
-        {move_cursor(state, -1), []}
+      Keybindings.matches?(kb, key, "tui.select.up") -> {move_cursor(state, -1), []}
+      Keybindings.matches?(kb, key, "tui.select.down") -> {move_cursor(state, +1), []}
+      Keybindings.matches?(kb, key, "tui.select.pageUp") -> {move_cursor(state, -state.max_visible_lines), []}
+      Keybindings.matches?(kb, key, "tui.select.pageDown") -> {move_cursor(state, +state.max_visible_lines), []}
+      Keybindings.matches?(kb, key, "tui.select.confirm") -> handle_confirm(state)
+      Keybindings.matches?(kb, key, "tui.select.cancel") -> {state, [:cancel]}
+      true -> handle_filter_key(state, kb, key)
+    end
+  end
 
-      Keybindings.matches?(kb, key, "tui.select.down") ->
-        {move_cursor(state, +1), []}
+  defp handle_confirm(state) do
+    case selected_id(state) do
+      nil -> {state, []}
+      id -> {state, [{:select, id}]}
+    end
+  end
 
-      Keybindings.matches?(kb, key, "tui.select.pageUp") ->
-        {move_cursor(state, -state.max_visible_lines), []}
-
-      Keybindings.matches?(kb, key, "tui.select.pageDown") ->
-        {move_cursor(state, +state.max_visible_lines), []}
-
-      Keybindings.matches?(kb, key, "tui.select.confirm") ->
-        case selected_id(state) do
-          nil -> {state, []}
-          id -> {state, [{:select, id}]}
-        end
-
-      Keybindings.matches?(kb, key, "tui.select.cancel") ->
-        {state, [:cancel]}
-
+  defp handle_filter_key(state, kb, key) do
+    cond do
       Keybindings.matches?(kb, key, "app.tree.filter.cycleForward") ->
         {set_filter(state, cycle_filter(state.filter_mode, +1)), []}
 

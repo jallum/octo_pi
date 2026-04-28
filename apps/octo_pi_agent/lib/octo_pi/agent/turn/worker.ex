@@ -309,15 +309,10 @@ defmodule OctoPi.Agent.Turn.Worker do
   """
   @spec resolve_mode([ToolCall.t()], [Tool.t()]) :: :parallel | :sequential
   def resolve_mode(calls, tools) do
-    if Enum.any?(calls, fn call ->
-         case Enum.find(tools, &(&1.name == call.name)) do
-           %Tool{execution_mode: :sequential} -> true
-           _ -> false
-         end
-       end) do
-      :sequential
-    else
-      :parallel
-    end
+    if Enum.any?(calls, &sequential_tool?(&1, tools)), do: :sequential, else: :parallel
+  end
+
+  defp sequential_tool?(call, tools) do
+    match?(%Tool{execution_mode: :sequential}, Enum.find(tools, &(&1.name == call.name)))
   end
 end

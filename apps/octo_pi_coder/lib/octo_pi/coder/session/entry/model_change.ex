@@ -12,9 +12,9 @@ defmodule OctoPi.Coder.Session.Entry.ModelChange do
   defstruct [:id, :parent_id, :timestamp, :provider, :model_id, extras: %{}]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           provider: String.t(),
           model_id: String.t(),
           extras: %{optional(String.t()) => term()}

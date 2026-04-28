@@ -258,26 +258,34 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
   defp second_pass(entries, file_ops, token_budget) do
     entries
     |> Enum.reverse()
-    |> Enum.reduce_while({[], file_ops, 0}, fn entry, {msgs, ops, total} ->
-      case message_from_entry(entry) do
-        nil ->
-          {:cont, {msgs, ops, total}}
-
-        msg ->
-          ops = FileOps.extract(msg, ops)
-          tokens = Tokens.estimate_tokens(msg)
-
-          if token_budget > 0 and total + tokens > token_budget do
-            if summary_entry?(entry) and total < token_budget * 0.9 do
-              {:halt, {[msg | msgs], ops, total + tokens}}
-            else
-              {:halt, {msgs, ops, total}}
-            end
-          else
-            {:cont, {[msg | msgs], ops, total + tokens}}
-          end
-      end
+    |> Enum.reduce_while({[], file_ops, 0}, fn entry, acc ->
+      accumulate_entry(entry, acc, token_budget)
     end)
+  end
+
+  defp accumulate_entry(entry, {msgs, ops, total}, token_budget) do
+    case message_from_entry(entry) do
+      nil ->
+        {:cont, {msgs, ops, total}}
+
+      msg ->
+        ops = FileOps.extract(msg, ops)
+        tokens = Tokens.estimate_tokens(msg)
+        apply_token_budget(entry, msg, {msgs, ops, total}, tokens, token_budget)
+    end
+  end
+
+  defp apply_token_budget(entry, msg, {msgs, ops, total}, tokens, token_budget)
+       when token_budget > 0 and total + tokens > token_budget do
+    if summary_entry?(entry) and total < token_budget * 0.9 do
+      {:halt, {[msg | msgs], ops, total + tokens}}
+    else
+      {:halt, {msgs, ops, total}}
+    end
+  end
+
+  defp apply_token_budget(_entry, msg, {msgs, ops, total}, tokens, _token_budget) do
+    {:cont, {[msg | msgs], ops, total + tokens}}
   end
 
   defp summary_entry?(%Entry.Compaction{}), do: true

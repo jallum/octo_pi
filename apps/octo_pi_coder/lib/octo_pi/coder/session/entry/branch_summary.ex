@@ -21,9 +21,9 @@ defmodule OctoPi.Coder.Session.Entry.BranchSummary do
   ]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           from_id: String.t(),
           summary: String.t(),
           from_hook: boolean() | nil,

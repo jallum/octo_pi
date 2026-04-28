@@ -106,27 +106,27 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
     # Use a mutable-style accumulator: build children lists then assemble.
     {by_id_final, roots_reversed} =
-      Enum.reduce(nodes, {by_id, []}, fn node, {acc_by_id, roots} ->
-        case node.entry.parent_id do
-          nil ->
-            {acc_by_id, [node | roots]}
-
-          parent_id ->
-            case Map.get(acc_by_id, parent_id) do
-              nil ->
-                {acc_by_id, roots}
-
-              parent ->
-                updated_parent = %{parent | children: parent.children ++ [node]}
-                {Map.put(acc_by_id, parent_id, updated_parent), roots}
-            end
-        end
+      Enum.reduce(nodes, {by_id, []}, fn node, acc ->
+        place_node(node, acc, node.entry.parent_id)
       end)
 
     roots_reversed
     |> Enum.map(fn root -> Map.fetch!(by_id_final, root.entry.id) end)
     |> Enum.reverse()
     |> Enum.map(&rebuild_children(&1, by_id_final))
+  end
+
+  defp place_node(node, {acc_by_id, roots}, nil), do: {acc_by_id, [node | roots]}
+
+  defp place_node(node, {acc_by_id, roots}, parent_id) do
+    case Map.get(acc_by_id, parent_id) do
+      nil ->
+        {acc_by_id, roots}
+
+      parent ->
+        updated = %{parent | children: parent.children ++ [node]}
+        {Map.put(acc_by_id, parent_id, updated), roots}
+    end
   end
 
   defp rebuild_children(%TreeNode{} = node, by_id) do
@@ -243,29 +243,31 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
 
     Enum.map(flat_nodes, fn flat_node ->
-      entry = flat_node.node.entry
-      cursor = if selected_id && entry.id == selected_id, do: "› ", else: "  "
-      display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
-
-      connector =
-        if flat_node.show_connector and not flat_node.is_virtual_root_child do
-          if flat_node.is_last, do: "└─ ", else: "├─ "
-        else
-          ""
-        end
-
-      connector_position = if connector == "", do: -1, else: display_indent - 1
-      prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
-
-      path_marker = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
-      label = if flat_node.node.label, do: "[#{flat_node.node.label}] ", else: ""
-      content = entry_display_text(flat_node.node)
-
-      cursor <> prefix <> path_marker <> label <> content
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids)
     end)
   end
 
   # ── private: render helpers ───────────────────────────────────────────────
+
+  # build_active_path_ids returns a MapSet whose internal type Dialyzer
+  # cannot resolve to the parametric MapSet.t(String.t()). False positive.
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 4}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids) do
+    entry = flat_node.node.entry
+    cursor = if selected_id && entry.id == selected_id, do: "› ", else: "  "
+    display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
+    connector = node_connector(flat_node)
+    connector_position = if connector == "", do: -1, else: display_indent - 1
+    prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
+    path_marker = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
+    label = if flat_node.node.label, do: "[#{flat_node.node.label}] ", else: ""
+    content = entry_display_text(flat_node.node)
+    cursor <> prefix <> path_marker <> label <> content
+  end
+
+  defp node_connector(%FlatNode{show_connector: true, is_virtual_root_child: false, is_last: true}), do: "└─ "
+  defp node_connector(%FlatNode{show_connector: true, is_virtual_root_child: false}), do: "├─ "
+  defp node_connector(_flat_node), do: ""
 
   defp build_prefix(display_indent, gutters, connector, connector_position, is_last) do
     total_chars = display_indent * 3
@@ -280,78 +282,62 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp build_prefix_chars(total_chars, gutters, connector, connector_position, is_last) do
     Enum.map_join(0..(total_chars - 1)//1, fn i ->
       level = div(i, 3)
-      pos_in_level = rem(i, 3)
-
+      pos = rem(i, 3)
       gutter = Enum.find(gutters, fn g -> g.position == level end)
-
-      cond do
-        gutter ->
-          if pos_in_level == 0, do: if(gutter.show, do: "│", else: " "), else: " "
-
-        connector != "" and level == connector_position ->
-          case pos_in_level do
-            0 -> if is_last, do: "└", else: "├"
-            1 -> "─"
-            _ -> " "
-          end
-
-        true ->
-          " "
-      end
+      prefix_char(gutter, connector, level, connector_position, pos, is_last)
     end)
   end
 
-  defp entry_display_text(%TreeNode{entry: entry}) do
-    case entry do
-      %Entry.Message{message: %{"role" => "user"} = msg} ->
-        "user: " <> extract_content_text(msg["content"])
+  defp prefix_char(gutter, _connector, _level, _cp, pos, _last) when not is_nil(gutter) do
+    if pos == 0, do: if(gutter.show, do: "│", else: " "), else: " "
+  end
 
-      %Entry.Message{message: %{"role" => "assistant"} = msg} ->
-        text = extract_content_text(msg["content"])
-        stop = msg["stopReason"] || msg["stop_reason"]
-
-        if text == "" do
-          case stop do
-            "aborted" -> "assistant: (aborted)"
-            _ -> "assistant: (no content)"
-          end
-        else
-          "assistant: " <> text
-        end
-
-      %Entry.Message{message: %{"role" => "toolResult"} = msg} ->
-        tool_name = msg["toolName"] || msg["tool_name"] || "tool"
-        "[#{tool_name}]"
-
-      %Entry.Message{message: %{"role" => "bashExecution"} = msg} ->
-        cmd = normalize_text(msg["command"] || "")
-        "[bash]: #{cmd}"
-
-      %Entry.Message{message: %{"role" => role}} ->
-        "[#{role}]"
-
-      %Entry.ModelChange{model_id: model_id} ->
-        "model: #{model_id}"
-
-      %Entry.ThinkingLevelChange{thinking_level: level} ->
-        "thinking: #{level}"
-
-      %Entry.Compaction{summary: s} ->
-        "compaction: #{String.slice(s || "", 0, 40)}"
-
-      %Entry.BranchSummary{summary: s} ->
-        "branch summary: #{String.slice(s || "", 0, 40)}"
-
-      %Entry.Label{label: label} ->
-        "label: #{label}"
-
-      %Entry.SessionInfo{} ->
-        "session info"
-
-      _ ->
-        "[entry]"
+  defp prefix_char(_gutter, connector, level, cp, pos, is_last) when connector != "" and level == cp do
+    case pos do
+      0 -> if is_last, do: "└", else: "├"
+      1 -> "─"
+      _ -> " "
     end
   end
+
+  defp prefix_char(_gutter, _connector, _level, _cp, _pos, _last), do: " "
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}) do
+    "user: " <> extract_content_text(msg["content"])
+  end
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}) do
+    text = extract_content_text(msg["content"])
+    stop = msg["stopReason"] || msg["stop_reason"]
+    assistant_display_text(text, stop)
+  end
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}) do
+    tool_name = msg["toolName"] || msg["tool_name"] || "tool"
+    "[#{tool_name}]"
+  end
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}) do
+    "[bash]: #{normalize_text(msg["command"] || "")}"
+  end
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}), do: "[#{role}]"
+  defp entry_display_text(%TreeNode{entry: %Entry.ModelChange{model_id: id}}), do: "model: #{id}"
+  defp entry_display_text(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}), do: "thinking: #{lvl}"
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Compaction{summary: s}}),
+    do: "compaction: #{String.slice(s || "", 0, 40)}"
+
+  defp entry_display_text(%TreeNode{entry: %Entry.BranchSummary{summary: s}}),
+    do: "branch summary: #{String.slice(s || "", 0, 40)}"
+
+  defp entry_display_text(%TreeNode{entry: %Entry.Label{label: label}}), do: "label: #{label}"
+  defp entry_display_text(%TreeNode{entry: %Entry.SessionInfo{}}), do: "session info"
+  defp entry_display_text(_node), do: "[entry]"
+
+  defp assistant_display_text("", "aborted"), do: "assistant: (aborted)"
+  defp assistant_display_text("", _stop), do: "assistant: (no content)"
+  defp assistant_display_text(text, _stop), do: "assistant: " <> text
 
   defp extract_content_text(nil), do: ""
   defp extract_content_text(s) when is_binary(s), do: normalize_text(s)

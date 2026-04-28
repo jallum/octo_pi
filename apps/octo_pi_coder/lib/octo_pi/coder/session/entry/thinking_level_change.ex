@@ -12,9 +12,9 @@ defmodule OctoPi.Coder.Session.Entry.ThinkingLevelChange do
   defstruct [:id, :parent_id, :timestamp, :thinking_level, extras: %{}]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           thinking_level: String.t(),
           extras: %{optional(String.t()) => term()}
         }

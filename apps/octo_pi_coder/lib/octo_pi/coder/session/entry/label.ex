@@ -13,9 +13,9 @@ defmodule OctoPi.Coder.Session.Entry.Label do
   defstruct [:id, :parent_id, :timestamp, :target_id, :label, extras: %{}]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           target_id: String.t(),
           label: String.t() | nil,
           extras: %{optional(String.t()) => term()}

@@ -26,9 +26,9 @@ defmodule OctoPi.Coder.Session.Entry.Compaction do
   ]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           summary: String.t(),
           first_kept_entry_id: String.t(),
           tokens_before: non_neg_integer(),

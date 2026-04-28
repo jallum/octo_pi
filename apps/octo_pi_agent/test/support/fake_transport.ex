@@ -47,16 +47,17 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
 
   @spec release_gate() :: :ok
   def release_gate do
-    if Process.whereis(@agent_name) do
-      case Agent.get_and_update(@agent_name, fn state ->
-             {Map.get(state, :gate), Map.delete(state, :gate)}
-           end) do
-        pid when is_pid(pid) -> send(pid, :gate_released)
-        _ -> :ok
-      end
-    end
-
+    if Process.whereis(@agent_name), do: notify_gate_waiter()
     :ok
+  end
+
+  defp notify_gate_waiter do
+    case Agent.get_and_update(@agent_name, fn state ->
+           {Map.get(state, :gate), Map.delete(state, :gate)}
+         end) do
+      pid when is_pid(pid) -> send(pid, :gate_released)
+      _ -> :ok
+    end
   end
 
   @impl true

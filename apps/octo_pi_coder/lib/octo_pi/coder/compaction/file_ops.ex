@@ -23,6 +23,9 @@ defmodule OctoPi.Coder.Compaction.FileOps do
 
   defstruct read: MapSet.new(), written: MapSet.new(), edited: MapSet.new()
 
+  # MapSet.new() returns %MapSet{map: %{}} which Dialyzer types as
+  # MapSet.t(_), not the parametric MapSet.t(String.t()). False positive.
+  @dialyzer {:nowarn_function, new: 0}
   @spec new() :: t()
   def new, do: %__MODULE__{}
 

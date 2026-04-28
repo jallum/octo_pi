@@ -27,9 +27,9 @@ defmodule OctoPi.Coder.Session.Entry.CustomMessage do
   ]
 
   @type t :: %__MODULE__{
-          id: String.t(),
+          id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           custom_type: String.t(),
           content: String.t() | [map()],
           details: term() | nil,

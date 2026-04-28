@@ -19,7 +19,7 @@ defmodule OctoPi.Coder.Session.Entry.Message do
   @type t :: %__MODULE__{
           id: String.t() | nil,
           parent_id: String.t() | nil,
-          timestamp: String.t(),
+          timestamp: String.t() | nil,
           message: map(),
           extras: %{optional(String.t()) => term()}
         }

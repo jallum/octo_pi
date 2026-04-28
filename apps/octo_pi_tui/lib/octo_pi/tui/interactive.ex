@@ -665,6 +665,9 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  # CoderSession.set_agent_pid → Subscribers.subscribe registry call appears
+  # to Dialyzer as no_return when the Registry is not started. False positive.
+  @dialyzer {:nowarn_function, new_session: 6}
   defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
     session_id = new_session_id()
     {:ok, store_pid} = SessionStore.start_link(id: session_id, cwd: cwd)
