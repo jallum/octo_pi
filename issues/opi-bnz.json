@@ -7,8 +7,8 @@
   "id": "opi-bnz",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Add OpenAI telemetry handler",
   "type": "task",
-  "updated_at": "2026-04-28T02:10:15.858136Z"
+  "updated_at": "2026-04-28T02:12:10.800267Z"
 }
