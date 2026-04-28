@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire ExtensionCommandProvider and FilePathProvider into combined autocomplete",
   "type": "task",
-  "updated_at": "2026-04-28T16:28:43.641886Z"
+  "updated_at": "2026-04-28T18:06:09.132712Z"
 }
