@@ -45,9 +45,14 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
+  alias OctoPi.TUI.Components.Container
+  alias OctoPi.TUI.Components.CustomMessage
+  alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.ModelSelector
   alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.TruncatedText
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
@@ -99,6 +104,7 @@ defmodule OctoPi.TUI.Interactive do
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
+          header: Header.t(),
           loaded_resources: resource_data() | nil,
           expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
@@ -125,6 +131,7 @@ defmodule OctoPi.TUI.Interactive do
             footer_data: nil,
             theme: nil,
             banner: nil,
+            header: %Header{},
             loaded_resources: nil,
             expand_prompt_fn: nil,
             width: 80,
@@ -1138,7 +1145,9 @@ defmodule OctoPi.TUI.Interactive do
         other -> other
       end
 
-    %{state | tools_expanded: expanded, banner: banner}
+    header = if is_nil(state.banner), do: %{state.header | expanded: expanded}, else: state.header
+
+    %{state | tools_expanded: expanded, banner: banner, header: header}
   end
 
   defp dispatch_app_action("app.editor.external", state, _key), do: %{state | editor_pending: true}
@@ -1235,6 +1244,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
+
+  defp handle_event_key(
+         %{input: %{value: ""}, banner: nil, header: header} = state,
+         %Key{key: ??, modifiers: []} = key
+       ), do: %{state | header: Header.handle_key(header, key)}
 
   defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
     do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
@@ -1544,7 +1558,7 @@ defmodule OctoPi.TUI.Interactive do
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
         input_lines
       ) do
-    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, width)
+    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
@@ -1569,7 +1583,10 @@ defmodule OctoPi.TUI.Interactive do
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_notification(nil, _width), do: []
-  defp render_notification(text, _width), do: [dim(text)]
+
+  defp render_notification(text, width) do
+    [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
+  end
 
   defp next_thinking_level(:off), do: :low
   defp next_thinking_level(:low), do: :medium
@@ -1683,8 +1700,9 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp header_lines(render_fn, _banner, width) when is_function(render_fn, 1), do: render_fn.(width)
-  defp header_lines(nil, banner, width), do: render_banner(banner, width)
+  defp header_lines(render_fn, _banner, _header, width) when is_function(render_fn, 1), do: render_fn.(width)
+  defp header_lines(nil, nil, header, width), do: Header.render(header, width)
+  defp header_lines(nil, banner, _header, width), do: render_banner(banner, width)
 
   defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2),
     do: render_fn.(width, build_footer_context(footer, footer_data_pid))
@@ -1778,6 +1796,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_entry(%AssistantMessage{} = msg, width, thinking_visible) do
     AssistantMessage.render(%{msg | hide_thinking: not thinking_visible}, width)
+  end
+
+  # Diff does not implement Component.render/2 — route explicitly.
+  defp render_entry(%Diff{diff_text: diff_text, theme: theme}, _width, _thinking_visible) do
+    Diff.render_diff(diff_text, theme)
   end
 
   defp render_entry(%mod{} = component, width, _thinking_visible), do: mod.render(component, width)

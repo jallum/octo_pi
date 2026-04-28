@@ -12,7 +12,10 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.Coder.Session
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
+  alias OctoPi.TUI.Components.CustomMessage
+  alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Components.ToolExecution
@@ -1511,6 +1514,78 @@ defmodule OctoPi.TUI.InteractiveTest do
       s2 = Interactive.handle_event(s, %Key{key: ??})
       assert s2.input.value == "hello?"
       refute s2.banner.expanded
+    end
+  end
+
+  describe "header component" do
+    test "renders Header when banner is nil" do
+      s = %Interactive{banner: nil, width: 80}
+      lines = Interactive.render(s)
+      text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
+      assert text =~ "OctoPi"
+    end
+
+    test "? toggles header.expanded when banner is nil" do
+      s = %Interactive{input: %Input{value: ""}, banner: nil}
+      refute s.header.expanded
+      s2 = Interactive.handle_event(s, %Key{key: ??})
+      assert s2.header.expanded
+    end
+
+    test "? does not affect header when banner is present" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = WelcomeBanner.new(theme)
+      s = %Interactive{input: %Input{value: ""}, banner: banner}
+      s2 = Interactive.handle_event(s, %Key{key: ??})
+      assert s2.header == s.header
+    end
+
+    test "ctrl+o syncs header.expanded when banner is nil" do
+      s = %Interactive{tools_expanded: false, banner: nil}
+      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
+      assert s2.tools_expanded == true
+      assert s2.header.expanded == true
+    end
+
+    test "ctrl+o does not change header when banner is present" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      banner = WelcomeBanner.new(theme)
+      s = %Interactive{tools_expanded: false, banner: banner}
+      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
+      assert s2.header == s.header
+    end
+  end
+
+  describe "render/1 — notification truncation" do
+    test "notification is rendered and truncated to width" do
+      long_text = String.duplicate("x", 200)
+      s = %Interactive{notification: long_text, width: 40}
+      lines = Interactive.render(s)
+      notif_line = Enum.find(lines, &String.contains?(&1, "xxx"))
+      assert notif_line
+      stripped = String.replace(notif_line, ~r/\e\[[0-9;]*m/, "")
+      assert String.length(stripped) <= 40
+    end
+  end
+
+  describe "render/1 — transcript component routing" do
+    test "Diff struct in transcript renders coloured lines" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      diff = %Diff{diff_text: "+1 new line\n-1 old line", theme: theme}
+      s = %Interactive{transcript: [diff], width: 80}
+      lines = Interactive.render(s)
+      text = Enum.join(lines, "\n")
+      assert text =~ "new line"
+      assert text =~ "old line"
+    end
+
+    test "CustomMessage struct in transcript renders via Component protocol" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      msg = CustomMessage.new("alert", "Something happened", theme)
+      s = %Interactive{transcript: [msg], width: 80}
+      lines = Interactive.render(s)
+      text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
+      assert text =~ "Something happened"
     end
   end
 
