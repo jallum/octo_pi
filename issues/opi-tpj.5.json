@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:17:10Z",
+  "description": "## What to do\n\nAdapt the upstream models doc (tmp/pi-mono/packages/coding-agent/docs/models.md, 395 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/models.md\n- tmp/pi-mono/packages/coding-agent/src/core/models.ts (reference)\n\n## Output\n\nCreate docs/models.md\n\n## How to adapt\n\n1. **Minimal Example**: Convert the Ollama example JSON to our format. Update the path from `~/.pi/agent/models.json` to our path.\n\n2. **Full Example**: Convert the full provider config example. Update all paths.\n\n3. **Google AI Studio Example**: Keep the JSON structure, update paths.\n\n4. **Supported APIs**: Update the table of supported APIs to match our providers:\n   - `anthropic-messages` → `OctoPi.AI.Anthropic`\n   - `openai-completions` → `OctoPi.AI.OpenAI`\n   - Check which other APIs we support\n\n5. **Provider Configuration**: Document our `OctoPi.AI.ProviderConfig` struct fields:\n   - `:name`, `:base_url`, `:api`, `:api_key`, `:models`, `:headers`, `:oauth`, `:compat`\n\n6. **Model Configuration**: Convert the TypeScript model interface to our `OctoPi.AI.Model` struct:\n   ```elixir\n   defstruct id: nil, name: nil, api: nil, provider: nil,\n             base_url: nil, reasoning: false, input: [],\n             cost: %{}, context_window: 128000, max_tokens: 4096,\n             compat: nil\n   ```\n\n7. **Overriding Built-in Providers**: Show how to override via models.json.\n\n8. **Per-model Overrides**: Document the compat field for model-specific quirks.\n\n9. **OpenAI Compatibility**: Document the compat flags:\n   - `supports_developer_role`\n   - `supports_reasoning_effort`\n   - `reasoning_effort_map`\n   - `max_tokens_field`\n   - `requires_tool_result_name`\n   - `thinking_format`\n   - `cache_control_format`\n\n## What to preserve verbatim\n\n- The Ollama example JSON structure\n- The Google AI Studio example\n- The compat flag descriptions\n- The cost field structure\n\n## Key upstream references to include\n\n- [models.ts](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/models.ts)\n- [models.json schema](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/config/models-schema.json)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All struct names match our actual modules\n2. All field names are snake_case Elixir atoms\n3. The compat flags match our implementation\n4. The model config format is accurate",
+  "id": "opi-tpj.5",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Custom Models",
+  "type": "task",
+  "updated_at": "2026-04-28T11:17:10Z"
+}
