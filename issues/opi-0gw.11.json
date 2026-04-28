@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire interactive TUI components (SelectList, SessionSelector, SettingsList, SettingsSelector, LoginDialog, SummarizePrompt, TreeSelector) into Interactive dispatch",
   "type": "task",
-  "updated_at": "2026-04-28T18:15:18.313170Z"
+  "updated_at": "2026-04-28T18:24:59.319688Z"
 }
