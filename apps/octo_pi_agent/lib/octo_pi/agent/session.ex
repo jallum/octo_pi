@@ -140,7 +140,7 @@ defmodule OctoPi.Agent.Session do
       {:reply, {:error, :already_streaming}, store}
     else
       session = %{store.session | messages: MessageLog.append_many(store.session.messages, msgs)}
-      {:reply, :ok, start_run(%{store | session: session})}
+      {:reply, :ok, %{store | session: session}, {:continue, :start_run}}
     end
   end
 
@@ -148,7 +148,7 @@ defmodule OctoPi.Agent.Session do
     if store.session.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      {:reply, :ok, start_run(store)}
+      {:reply, :ok, store, {:continue, :start_run}}
     end
   end
 
@@ -252,6 +252,13 @@ defmodule OctoPi.Agent.Session do
     else
       {:reply, :ok, store}
     end
+  end
+
+  # ---------- handle_continue ----------
+
+  @impl true
+  def handle_continue(:start_run, store) do
+    {:noreply, start_run(store)}
   end
 
   # ---------- handle_info: Task → Session messages ----------
