@@ -22,9 +22,10 @@ defmodule OctoPi.TUI.Terminal do
       ready to be re-opened.
     * `terminate/2` deactivates if currently active.
 
-  Holders receive `{:key_event, parsed}`, `{:paste, content}`, and
-  `{:resize, w, h}` messages directly. Multiple Terminal/Interactive
-  pairs are isolated by construction — no global registry.
+  Holders receive `{:hid_event, struct}` messages, where `struct` is
+  one of `%Key{}`, `%Paste{}`, or `%Terminal.Resize{}`. Multiple
+  Terminal/Interactive pairs are isolated by construction — no
+  global registry.
 
   Terminal owns the `StdinFSM` decode buffer + the bracketed-paste
   accumulator. The only deadline it tracks is the FSM flush — a
@@ -40,8 +41,11 @@ defmodule OctoPi.TUI.Terminal do
 
   use GenServer
 
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Paste
   alias OctoPi.TUI.Terminal.KeyParser
   alias OctoPi.TUI.Terminal.Reader
+  alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Terminal.StdinFSM
 
   @reader_opt_keys [
@@ -135,7 +139,7 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_call({:resize, w, h}, _from, state) do
-    narrowcast(state, {:resize, w, h})
+    narrowcast(state, {:hid_event, %Resize{width: w, height: h}})
     {:reply, :ok, %{state | width: w, height: h}, next_timeout(state)}
   end
 
@@ -156,7 +160,7 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   def handle_info({:resize, w, h}, state) do
-    narrowcast(state, {:resize, w, h})
+    narrowcast(state, {:hid_event, %Resize{width: w, height: h}})
     {:noreply, %{state | width: w, height: h}, next_timeout(state)}
   end
 
@@ -267,19 +271,22 @@ defmodule OctoPi.TUI.Terminal do
     :telemetry.execute([:octo_pi_tui, :stdin, :sequence], %{}, %{seq: seq})
     parsed = KeyParser.parse(seq)
     :telemetry.execute([:octo_pi_tui, :key, :event], %{}, %{parsed: parsed, seq: seq})
-    if parsed != :unknown, do: narrowcast(state, {:key_event, parsed})
+    maybe_narrowcast_key(state, parsed)
     state
   end
 
   # Inside paste mode: end marker emits accumulated content as one
-  # `:paste` broadcast; everything else accumulates raw bytes.
+  # paste event; everything else accumulates raw bytes.
   defp dispatch_seq(%{paste_buffer: buf} = state, "\e[201~") do
     :telemetry.execute([:octo_pi_tui, :paste], %{byte_count: byte_size(buf)}, %{content: buf})
-    narrowcast(state, {:paste, buf})
+    narrowcast(state, {:hid_event, %Paste{content: buf}})
     %{state | paste_buffer: nil}
   end
 
   defp dispatch_seq(%{paste_buffer: buf} = state, seq), do: %{state | paste_buffer: buf <> seq}
+
+  defp maybe_narrowcast_key(state, %Key{} = key), do: narrowcast(state, {:hid_event, key})
+  defp maybe_narrowcast_key(_state, :unknown), do: :ok
 
   # --- flush deadline ---
 

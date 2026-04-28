@@ -251,7 +251,9 @@ defmodule OctoPi.Coder.CLI do
     Flags:
       --print, -p    force print mode (default when a prompt is given)
       --mode rpc     run as a JSON-line RPC server on stdin/stdout
-      --model, -m    model id (default: #{@default_model}; claude* → Anthropic, else → Ollama)
+      --model, -m    model id (default: #{@default_model};
+                     claude* → Anthropic; vendor/model → OpenRouter
+                     (set OPENROUTER_API_KEY); else → local Ollama)
       --cwd          working dir (default: current dir)
       --help, -h     show this message
       --debug-events log stdin/key pipeline to debug_events.log

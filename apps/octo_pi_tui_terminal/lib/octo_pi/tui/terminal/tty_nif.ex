@@ -8,7 +8,7 @@ defmodule OctoPi.TUI.Terminal.TtyNif do
 
   @doc false
   def load_nif do
-    path = :filename.join(:code.priv_dir(:octo_pi_tui), ~c"tty_nif")
+    path = :filename.join(:code.priv_dir(:octo_pi_tui_terminal), ~c"tty_nif")
 
     case :erlang.load_nif(path, 0) do
       :ok ->

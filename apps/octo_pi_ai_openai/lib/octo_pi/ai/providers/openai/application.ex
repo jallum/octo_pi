@@ -4,10 +4,12 @@ defmodule OctoPi.AI.Providers.OpenAI.Application do
   use Application
 
   alias OctoPi.AI.ProviderRegistry
+  alias OctoPi.Telemetry.OpenAIHandler
 
   @impl true
   def start(_type, _args) do
     ProviderRegistry.register(:openai_completions, OctoPi.AI.Providers.OpenAI)
+    OpenAIHandler.attach()
 
     children = [
       {Task.Supervisor, name: OctoPi.AI.Providers.OpenAI.TaskSup}

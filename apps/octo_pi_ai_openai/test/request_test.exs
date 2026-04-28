@@ -458,6 +458,28 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     end
   end
 
+  describe "Authorization header" do
+    test "adds Bearer token when api_key set in opts" do
+      req =
+        Request.build(model(), context([]), %StreamOptions{api_key: "sk-test"}, Compat.detect(model()))
+
+      assert {"authorization", "Bearer sk-test"} in req.headers
+    end
+
+    test "omits authorization when api_key is nil" do
+      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+
+      refute Enum.any?(req.headers, fn {k, _} -> k == "authorization" end)
+    end
+
+    test "omits authorization when api_key is empty string" do
+      req =
+        Request.build(model(), context([]), %StreamOptions{api_key: ""}, Compat.detect(model()))
+
+      refute Enum.any?(req.headers, fn {k, _} -> k == "authorization" end)
+    end
+  end
+
   describe "GitHub Copilot headers" do
     test "adds X-Initiator user when last message is user" do
       m = model(%{provider: :github_copilot})

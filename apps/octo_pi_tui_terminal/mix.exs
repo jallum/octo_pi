@@ -1,9 +1,9 @@
-defmodule OctoPi.TUI.MixProject do
+defmodule OctoPi.TUI.Terminal.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :octo_pi_tui,
+      app: :octo_pi_tui_terminal,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",
@@ -11,16 +11,16 @@ defmodule OctoPi.TUI.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:elixir_make] ++ Mix.compilers(),
+      make_targets: ["all"],
+      make_clean: ["clean"],
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
   end
 
   def application do
-    [
-      extra_applications: [:logger],
-      mod: {OctoPi.TUI.Application, []}
-    ]
+    [extra_applications: [:logger]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -28,10 +28,8 @@ defmodule OctoPi.TUI.MixProject do
 
   defp deps do
     [
-      {:octo_pi_coder, in_umbrella: true},
-      {:octo_pi_tui_terminal, in_umbrella: true},
-      {:jason, "~> 1.4"},
-      {:earmark_parser, "~> 1.4"}
+      {:telemetry, "~> 1.4"},
+      {:elixir_make, "~> 0.9", runtime: false}
     ]
   end
 end

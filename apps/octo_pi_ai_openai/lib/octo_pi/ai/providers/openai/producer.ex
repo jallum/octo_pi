@@ -14,8 +14,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   Ported from `openai-completions.ts` L110-196.
   """
 
-  alias OctoPi.AI.{PartialJson, SSE}
-  alias OctoPi.AI.Providers.OpenAI.{Compat, Decoder, Request}
+  alias OctoPi.AI.{PartialJson, SSE, StreamOptions}
+  alias OctoPi.AI.Providers.OpenAI.{Auth, Compat, Decoder, Request}
   alias OctoPi.AI.SSE.Event, as: SseEvent
 
   @type start_arg :: %{
@@ -62,9 +62,10 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
       aborted?: false
     }
 
-    req_spec = Request.build(args.model, args.context, args.opts, compat)
+    opts = ensure_api_key(args.opts, args.model)
+    req_spec = Request.build(args.model, args.context, opts, compat)
 
-    body = apply_on_payload(req_spec.body, args.opts, args.model)
+    body = apply_on_payload(req_spec.body, opts, args.model)
 
     req_opts =
       [
@@ -78,7 +79,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
     state =
       try do
         resp = Req.post!(req_opts)
-        apply_on_response(resp, args.opts, args.model)
+        apply_on_response(resp, opts, args.model)
         state = drain_body(resp, state)
         state = flush_sse(state)
 
@@ -168,6 +169,15 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
         dstate
     end
   end
+
+  # --- auth ---
+
+  defp ensure_api_key(%StreamOptions{api_key: key} = opts, _model)
+       when is_binary(key) and key != "",
+       do: opts
+
+  defp ensure_api_key(%StreamOptions{} = opts, model),
+    do: %{opts | api_key: Auth.resolve(model, opts)}
 
   # --- callbacks ---
 

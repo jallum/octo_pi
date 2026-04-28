@@ -3,6 +3,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.TerminalHelpers
 
   def __reader_exit_forward__(_event, _measurements, meta, %{pid: pid}) do
@@ -22,7 +23,8 @@ defmodule OctoPi.TUI.TerminalTest do
       skip_raw_mode: true,
       skip_sigwinch: true,
       auto_start_reader: false,
-      dimensions: {80, 24}
+      dimensions: {80, 24},
+      name: nil
     ]
 
     {:ok, pid} = Terminal.start_link(Keyword.merge(defaults, opts))
@@ -37,13 +39,13 @@ defmodule OctoPi.TUI.TerminalTest do
   end
 
   describe "stdin chunk processing" do
-    test "broadcasts parsed key events under {:key_event, scope} topic" do
+    test "broadcasts parsed key events under {:hid_event, scope} topic" do
       pid = start_terminal()
       :ok = Terminal.open(pid)
       :ok = TerminalHelpers.simulate_stdin(pid, "abc")
-      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
-      assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
-      assert_receive {:key_event, {:key, %Key{key: ?c}}}, 500
+      assert_receive {:hid_event, %Key{key: ?a}}, 500
+      assert_receive {:hid_event, %Key{key: ?b}}, 500
+      assert_receive {:hid_event, %Key{key: ?c}}, 500
     end
 
     test "forwards multiple chunks in order" do
@@ -51,8 +53,8 @@ defmodule OctoPi.TUI.TerminalTest do
       :ok = Terminal.open(pid)
       :ok = TerminalHelpers.simulate_stdin(pid, "a")
       :ok = TerminalHelpers.simulate_stdin(pid, "b")
-      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
-      assert_receive {:key_event, {:key, %Key{key: ?b}}}, 500
+      assert_receive {:hid_event, %Key{key: ?a}}, 500
+      assert_receive {:hid_event, %Key{key: ?b}}, 500
     end
   end
 
@@ -65,7 +67,7 @@ defmodule OctoPi.TUI.TerminalTest do
       # production we'd read :io.columns/0, but tests inject.
       :ok = TerminalHelpers.simulate_resize(pid, 120, 40)
 
-      assert_receive {:resize, 120, 40}, 500
+      assert_receive {:hid_event, %Resize{width: 120, height: 40}}, 500
       assert %{width: 120, height: 40} = Terminal.info(pid)
     end
   end
@@ -80,8 +82,8 @@ defmodule OctoPi.TUI.TerminalTest do
       TerminalHelpers.simulate_stdin(t1, "x")
       TerminalHelpers.simulate_stdin(t2, "y")
 
-      assert_receive {:key_event, {:key, %Key{key: ?x}}}, 500
-      refute_receive {:key_event, {:key, %Key{key: ?y}}}, 100
+      assert_receive {:hid_event, %Key{key: ?x}}, 500
+      refute_receive {:hid_event, %Key{key: ?y}}, 100
     end
   end
 
@@ -176,7 +178,7 @@ defmodule OctoPi.TUI.TerminalTest do
       :ok = Terminal.open(pid)
       assert_receive {:tty, "\e[?u"}, 500
       TerminalHelpers.simulate_stdin(pid, "a")
-      assert_receive {:key_event, {:key, %Key{key: ?a}}}, 500
+      assert_receive {:hid_event, %Key{key: ?a}}, 500
     end
   end
 
@@ -185,8 +187,8 @@ defmodule OctoPi.TUI.TerminalTest do
       pid = start_terminal(flush_ms: 20)
       :ok = Terminal.open(pid)
       TerminalHelpers.simulate_stdin(pid, "\e")
-      refute_receive {:key_event, _}, 5
-      assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
+      refute_receive {:hid_event, _}, 5
+      assert_receive {:hid_event, %Key{key: :escape}}, 200
     end
 
     test "flush deadline coexists with probe deadline (multiplexed)" do
@@ -211,7 +213,7 @@ defmodule OctoPi.TUI.TerminalTest do
       # first, then the probe should still fall back.
       TerminalHelpers.simulate_stdin(pid, "\e")
 
-      assert_receive {:key_event, {:key, %Key{key: :escape}}}, 200
+      assert_receive {:hid_event, %Key{key: :escape}}, 200
       assert_receive {:tty, "\e[>4;2m"}, 500
     end
   end
@@ -452,7 +454,7 @@ defmodule OctoPi.TUI.TerminalTest do
 
       Task.await(stop_task, 2000)
 
-      refute_receive {:key_event, _}, 100
+      refute_receive {:hid_event, _}, 100
     end
   end
 

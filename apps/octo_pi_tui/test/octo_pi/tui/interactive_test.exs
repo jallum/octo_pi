@@ -17,41 +17,41 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.WelcomeBanner
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
-  alias OctoPi.TUI.Terminal
-  alias OctoPi.TUI.TerminalHelpers
+  alias OctoPi.TUI.Paste
+  alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
 
   describe "handle_event — keyboard input" do
     test "printable char is inserted into the Input" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?h}})
+      s = Interactive.handle_event(s, %Key{key: ?h})
       assert s.input.value == "h"
       assert s.input.cursor == 1
     end
 
     test "Ctrl+C with empty editor and idle is a no-op (opi-0g4.9)" do
       s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl]})
       refute s2.exit
       assert s2 == s
     end
 
     test "left arrow routes to Input cursor movement" do
       s = %Interactive{input: %Input{value: "abc", cursor: 2}}
-      s = Interactive.handle_event(s, {:key, %Key{key: :left}})
+      s = Interactive.handle_event(s, %Key{key: :left})
       assert s.input.cursor == 1
     end
 
     test "Enter with empty input is a no-op" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.input.value == ""
       assert s.transcript == []
     end
 
     test "Enter with non-empty input appends user message + clears input" do
       s = %Interactive{input: %Input{value: "hi", cursor: 2}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.transcript == [{:user, "hi"}]
       assert s.input.value == ""
       assert s.input.cursor == 0
@@ -66,7 +66,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{input: %Input{value: "/greet world", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert_received {:expanded, "/greet world"}
       assert s.transcript == [{:user, "/greet world"}]
       assert s.input.value == ""
@@ -74,19 +74,19 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "Enter without expand_prompt_fn works as before" do
       s = %Interactive{input: %Input{value: "/foo", cursor: 4}, session: nil, expand_prompt_fn: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.transcript == [{:user, "/foo"}]
     end
 
     test "! prefix adds a running BashExecution to transcript immediately" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert [%BashExecution{command: "echo hello", status: :running}] = s.transcript
     end
 
     test "! prefix completes BashExecution on :bash_done event" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       be = hd(s.transcript)
       id = be.id
       assert_receive {:bash_done, ^id, output, exit_code}, 2_000
@@ -97,7 +97,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "! prefix without space also runs shell command" do
       s = %Interactive{input: %Input{value: "!echo hi", cursor: 8}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert [%BashExecution{command: "echo hi", status: :running}] = s.transcript
       be = hd(s.transcript)
       id = be.id
@@ -106,7 +106,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "! prefix clears input after execution" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.input.value == ""
       assert s.input.cursor == 0
     end
@@ -120,13 +120,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
-      Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      Interactive.handle_event(s, %Key{key: :enter})
       refute_received {:expanded, _}
     end
 
     test "! prefix with non-zero exit sets error status on :bash_done event" do
       s = %Interactive{input: %Input{value: "! exit 1", cursor: 8}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       be = hd(s.transcript)
       id = be.id
       assert_receive {:bash_done, ^id, _output, exit_code}, 2_000
@@ -136,7 +136,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "/clear clears transcript without sending to AI" do
       s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, transcript: [{:user, "hi"}]}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.transcript == []
       assert s.input.value == ""
     end
@@ -150,7 +150,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, expand_prompt_fn: expand_fn}
-      Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      Interactive.handle_event(s, %Key{key: :enter})
       refute_received {:expanded, _}
     end
 
@@ -166,14 +166,14 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       s = %Interactive{input: %Input{value: "/model", cursor: 6}, session: nil, models: [model], theme: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.model_selector
       assert s.input.value == ""
     end
 
     test "/help sets a notification" do
       s = %Interactive{input: %Input{value: "/help", cursor: 5}, session: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.notification
       assert s.input.value == ""
     end
@@ -181,7 +181,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "/cost shows cost notification from footer" do
       footer = %Footer{cost: 0.042, input_tokens: 5_000, output_tokens: 1_000, context_window: 200_000}
       s = %Interactive{input: %Input{value: "/cost", cursor: 5}, session: nil, footer: footer}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.notification
       assert s.notification =~ "0.042"
       assert s.input.value == ""
@@ -190,13 +190,13 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "/unknown-builtin falls through to AI prompt" do
       expand_fn = fn text -> text end
       s = %Interactive{input: %Input{value: "/my-template", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
-      s = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.transcript == [{:user, "/my-template"}]
     end
 
     test "Escape clears non-empty input" do
       s = %Interactive{input: %Input{value: "draft", cursor: 5}}
-      s = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s = Interactive.handle_event(s, %Key{key: :escape})
       assert s.input.value == ""
       assert s.input.cursor == 0
       refute s.exit
@@ -204,26 +204,26 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "Escape with empty input exits (double-Escape pattern)" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s = Interactive.handle_event(s, %Key{key: :escape})
       assert s.exit
     end
 
     test "Escape with active loader does not exit (aborts generation)" do
       s = %Interactive{input: %Input{value: "", cursor: 0}, loader: %Loader{}, session: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
       refute s2.exit
     end
 
     test "Escape with active loader and non-empty input clears input, does not exit" do
       s = %Interactive{input: %Input{value: "draft", cursor: 5}, loader: %Loader{}, session: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
       refute s2.exit
       assert s2.input.value == ""
     end
 
     test "paste event inserts content atomically into the input field" do
       s = %Interactive{input: %Input{value: "hello world", cursor: 5}}
-      s = Interactive.handle_event(s, {:paste, "boo"})
+      s = Interactive.handle_event(s, %Paste{content: "boo"})
       assert s.input.value == "helloboo world"
     end
   end
@@ -231,38 +231,38 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Shift+Tab thinking cycle (opi-0g4.11)" do
     test "cycles off → low → medium → high → off" do
       s = %Interactive{thinking_level: :off}
-      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s.thinking_level == :low
-      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s.thinking_level == :medium
-      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s.thinking_level == :high
-      s = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s.thinking_level == :off
     end
 
     test "updates footer thinking_level to string label" do
       s = %Interactive{thinking_level: :off, footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s2.footer.thinking_level == "low"
     end
 
     test "footer thinking_level is 'off' when cycling back to off" do
       s = %Interactive{thinking_level: :high, footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s2.footer.thinking_level == "off"
     end
 
     test "footer thinking_level rendered in stats line after cycle" do
       s = %Interactive{thinking_level: :off, footer: %Footer{context_window: 200_000}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       [_, stats | _] = Footer.render(s2.footer, 80)
       assert String.replace(stats, ~r/\e\[[0-9;]*m/, "") =~ "low"
     end
 
     test "sets notification with new level" do
       s = %Interactive{thinking_level: :off}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :tab, modifiers: [:shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
       assert s2.notification
       assert s2.notification =~ "low"
     end
@@ -284,7 +284,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "Alt+Up with nil session is a no-op" do
       s = %Interactive{session: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2 == s
     end
 
@@ -304,7 +304,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       OctoPi.Agent.follow_up(session, "queued message")
       s = %Interactive{session: session}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2.dequeue_overlay
       items = s2.dequeue_overlay.items
       assert length(items) == 1
@@ -326,7 +326,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         )
 
       s = %Interactive{session: session}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :up, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2.dequeue_overlay == nil
       assert s2.notification =~ "No queued"
     end
@@ -334,35 +334,35 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "when dequeue_overlay open, Up moves selection toward first item" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
       s = dequeue_state(items, 2)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :up}})
+      s2 = Interactive.handle_event(s, %Key{key: :up})
       assert s2.dequeue_overlay.selected == 1
     end
 
     test "when dequeue_overlay open, Up does not go below 0" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
       s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :up}})
+      s2 = Interactive.handle_event(s, %Key{key: :up})
       assert s2.dequeue_overlay.selected == 0
     end
 
     test "when dequeue_overlay open, Down moves selection toward last item" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
       s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :down}})
+      s2 = Interactive.handle_event(s, %Key{key: :down})
       assert s2.dequeue_overlay.selected == 1
     end
 
     test "when dequeue_overlay open, Down does not go past last item" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
       s = dequeue_state(items, 1)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :down}})
+      s2 = Interactive.handle_event(s, %Key{key: :down})
       assert s2.dequeue_overlay.selected == 1
     end
 
     test "when dequeue_overlay open, Delete removes selected item" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
       s = dequeue_state(items, 1)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :delete}})
+      s2 = Interactive.handle_event(s, %Key{key: :delete})
       assert length(s2.dequeue_overlay.items) == 2
       assert match?([{:follow_up, _}, {:follow_up, _}], s2.dequeue_overlay.items)
     end
@@ -370,14 +370,14 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "when dequeue_overlay open, Delete on last remaining item closes overlay" do
       items = [tagged(:follow_up, "only")]
       s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :delete}})
+      s2 = Interactive.handle_event(s, %Key{key: :delete})
       assert s2.dequeue_overlay == nil
     end
 
     test "when dequeue_overlay open, Escape closes overlay" do
       items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
       s = dequeue_state(items, 0, session: nil)
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
       assert s2.dequeue_overlay == nil
     end
   end
@@ -394,7 +394,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         session: nil
       }
 
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
       assert s2.input.value == ""
       assert s2.input.cursor == 0
     end
@@ -406,20 +406,20 @@ defmodule OctoPi.TUI.InteractiveTest do
         session: nil
       }
 
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
       assert s2.notification =~ "Follow-up"
     end
 
     test "Alt+Enter while idle with non-empty input submits immediately (like Enter)" do
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, session: nil, loader: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
       assert [{:user, "hello"}] = s2.transcript
       assert s2.input.value == ""
     end
 
     test "Alt+Enter while idle with empty input is no-op" do
       s = %Interactive{input: %Input{value: "", cursor: 0}, session: nil, loader: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter, modifiers: [:alt]}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
       assert s2.transcript == []
       assert s2.input.value == ""
     end
@@ -428,13 +428,13 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Ctrl+G external editor (opi-0g4.14)" do
     test "Ctrl+G sets editor_pending to true" do
       s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?g, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?g, modifiers: [:ctrl]})
       assert s2.editor_pending
     end
 
     test "Ctrl+G does not set exit" do
       s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?g, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?g, modifiers: [:ctrl]})
       refute s2.exit
     end
   end
@@ -442,13 +442,13 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Ctrl+Z process suspend (opi-0g4.10)" do
     test "Ctrl+Z sets suspend_pending to true" do
       s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?z, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?z, modifiers: [:ctrl]})
       assert s2.suspend_pending
     end
 
     test "Ctrl+Z does not set exit" do
       s = %Interactive{}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?z, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?z, modifiers: [:ctrl]})
       refute s2.exit
     end
   end
@@ -456,13 +456,13 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Ctrl+T thinking visibility (opi-0g4.13)" do
     test "Ctrl+T toggles thinking_visible from true to false" do
       s = %Interactive{thinking_visible: true}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?t, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?t, modifiers: [:ctrl]})
       refute s2.thinking_visible
     end
 
     test "Ctrl+T toggles thinking_visible from false to true" do
       s = %Interactive{thinking_visible: false}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?t, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?t, modifiers: [:ctrl]})
       assert s2.thinking_visible
     end
 
@@ -503,7 +503,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Ctrl+C and Ctrl+D (opi-0g4.9)" do
     test "Ctrl+C with non-empty editor clears editor text" do
       s = %Interactive{input: %Input{value: "hello", cursor: 5}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl]})
       assert s2.input.value == ""
       assert s2.input.cursor == 0
       refute s2.exit
@@ -511,26 +511,26 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "Ctrl+C with empty editor and idle is a no-op" do
       s = %Interactive{input: %Input{value: "", cursor: 0}, loader: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl]})
       refute s2.exit
       assert s2 == s
     end
 
     test "Ctrl+C with empty editor and agent running does not exit" do
       s = %Interactive{input: %Input{value: "", cursor: 0}, loader: %Loader{}, session: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl]})
       refute s2.exit
     end
 
     test "Ctrl+D with empty editor exits" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?d, modifiers: [:ctrl]})
       assert s2.exit
     end
 
     test "Ctrl+D with non-empty editor does not exit" do
       s = %Interactive{input: %Input{value: "abc", cursor: 1}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?d, modifiers: [:ctrl]})
       refute s2.exit
     end
   end
@@ -538,26 +538,26 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — key release/repeat filtering (opi-0g4.6)" do
     test "release event is dropped — state unchanged" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl], event_type: :release}})
+      s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl], event_type: :release})
       refute s2.exit
       assert s2 == s
     end
 
     test "release of a printable key does not insert char" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?a, event_type: :release}})
+      s2 = Interactive.handle_event(s, %Key{key: ?a, event_type: :release})
       assert s2 == s
     end
 
     test "repeat event is processed normally" do
       s = %Interactive{input: %Input{value: "ab", cursor: 2}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :left, event_type: :repeat}})
+      s2 = Interactive.handle_event(s, %Key{key: :left, event_type: :repeat})
       assert s2.input.cursor == 1
     end
 
     test "press event is processed normally" do
       s = %Interactive{tools_expanded: false}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl], event_type: :press}})
+      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl], event_type: :press})
       assert s2.tools_expanded
     end
   end
@@ -897,7 +897,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — resize" do
     test "updates width + height" do
       s = %Interactive{width: 80, height: 24}
-      s = Interactive.handle_event(s, {:resize, 100, 30})
+      s = Interactive.handle_event(s, %Resize{width: 100, height: 30})
       assert s.width == 100
       assert s.height == 30
     end
@@ -936,7 +936,7 @@ defmodule OctoPi.TUI.InteractiveTest do
           end)
         end)
 
-      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"ext_test_interactive_#{System.unique_integer([:positive])}"
 
       Task.async(fn ->
         Interactive.run(
@@ -949,12 +949,13 @@ defmodule OctoPi.TUI.InteractiveTest do
           skip_sigwinch: true,
           auto_start_reader: false,
           dimensions: {80, 24},
-          terminal_name: terminal_name
+          terminal_name: nil,
+          name: interactive_name
         )
       end)
 
       assert_receive {:session_start, true}, 2_000
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
     end
 
     test "session_start context includes cwd" do
@@ -967,7 +968,7 @@ defmodule OctoPi.TUI.InteractiveTest do
           end)
         end)
 
-      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"ext_test_interactive_#{System.unique_integer([:positive])}"
 
       Task.async(fn ->
         Interactive.run(
@@ -981,12 +982,13 @@ defmodule OctoPi.TUI.InteractiveTest do
           skip_sigwinch: true,
           auto_start_reader: false,
           dimensions: {80, 24},
-          terminal_name: terminal_name
+          terminal_name: nil,
+          name: interactive_name
         )
       end)
 
       assert_receive {:cwd, "/test/workdir"}, 2_000
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
     end
 
     test "extensions field defaults to empty list" do
@@ -995,7 +997,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "no extensions — no session_start messages sent" do
-      terminal_name = :"ext_test_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"ext_test_interactive_#{System.unique_integer([:positive])}"
       test_pid = self()
 
       runner =
@@ -1013,12 +1015,13 @@ defmodule OctoPi.TUI.InteractiveTest do
             skip_sigwinch: true,
             auto_start_reader: false,
             dimensions: {80, 24},
-            terminal_name: terminal_name
+            terminal_name: nil,
+            name: interactive_name
           )
         end)
 
       assert_receive :rendered, 2_000
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
       Task.await(runner, 2_000)
     end
   end
@@ -1046,14 +1049,14 @@ defmodule OctoPi.TUI.InteractiveTest do
         end)
 
       state = %Interactive{input: %Input{value: "/myext", cursor: 6}, extensions: [ext], session: nil}
-      Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      Interactive.handle_event(state, %Key{key: :enter})
       assert_receive :called, 1_000
     end
 
     test "extension command clears input without sending to AI" do
       ext = ext_with_command("myext", fn _args, _ctx -> "result" end)
       state = %Interactive{input: %Input{value: "/myext", cursor: 6}, extensions: [ext], session: nil}
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert new_state.input.value == ""
       assert new_state.input.cursor == 0
       assert new_state.transcript == []
@@ -1061,7 +1064,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "unknown slash command with no matching extension falls through to AI" do
       state = %Interactive{input: %Input{value: "/unknown", cursor: 8}, extensions: [], session: nil}
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert new_state.transcript == [{:user, "/unknown"}]
     end
 
@@ -1080,7 +1083,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         session: nil
       }
 
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert_receive :ext_called, 1_000
       assert new_state.transcript == []
     end
@@ -1095,7 +1098,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         end)
 
       state = %Interactive{input: %Input{value: "/uicheck", cursor: 8}, extensions: [ext], session: nil}
-      Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      Interactive.handle_event(state, %Key{key: :enter})
       assert_receive {:has_ui, true}, 1_000
     end
 
@@ -1108,7 +1111,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         session: nil
       }
 
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert new_state.notification =~ "Commands:"
     end
   end
@@ -1152,7 +1155,7 @@ defmodule OctoPi.TUI.InteractiveTest do
           end)
         end)
 
-      terminal_name = :"tool_reg_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"tool_reg_interactive_#{System.unique_integer([:positive])}"
 
       runner =
         Task.async(fn ->
@@ -1166,12 +1169,13 @@ defmodule OctoPi.TUI.InteractiveTest do
             skip_sigwinch: true,
             auto_start_reader: false,
             dimensions: {80, 24},
-            terminal_name: terminal_name
+            terminal_name: nil,
+            name: interactive_name
           )
         end)
 
       assert_receive :session_started, 2_000
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
       Task.await(runner, 2_000)
     end
 
@@ -1251,7 +1255,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         send(parent, {:tui_output, bin})
       end
 
-      terminal_name = :"test_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"test_interactive_#{System.unique_integer([:positive])}"
 
       runner =
         Task.async(fn ->
@@ -1265,7 +1269,8 @@ defmodule OctoPi.TUI.InteractiveTest do
               skip_sigwinch: true,
               auto_start_reader: false,
               dimensions: {80, 24},
-              terminal_name: terminal_name
+              terminal_name: nil,
+              name: interactive_name
             )
 
           send(parent, {:run_done, result})
@@ -1275,15 +1280,16 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert_receive {:tui_output, _initial}, 2_000
 
       # Feed the prompt + Enter.
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, "hi")
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, "\r")
+      send(interactive_name, {:hid_event, %Key{key: ?h}})
+      send(interactive_name, {:hid_event, %Key{key: ?i}})
+      send(interactive_name, {:hid_event, %Key{key: :enter}})
 
       # Drain tui_output messages until one contains "pong" (the
       # agent's streamed response). receive_until is defined below.
       receive_until_containing("pong", 2_000)
 
       # Ctrl+D exits (empty editor after response clears input).
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
       assert_receive {:run_done, :ok}, 2_000
 
       Task.await(runner, 1_000)
@@ -1337,7 +1343,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "normal exit path calls raw_mode_fn.(:exit)" do
       test_pid = self()
       raw_mode_fn = counting_raw_mode(test_pid)
-      terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
+      interactive_name = :"crash_test_interactive_#{System.unique_integer([:positive])}"
 
       write_fn = fn _ ->
         send(test_pid, :frame_rendered)
@@ -1356,14 +1362,15 @@ defmodule OctoPi.TUI.InteractiveTest do
             skip_sigwinch: true,
             auto_start_reader: false,
             dimensions: {80, 24},
-            terminal_name: terminal_name
+            terminal_name: nil,
+            name: interactive_name
           )
         end)
 
       assert_receive {:raw_mode, :enter}, 1_000
       assert_receive :frame_rendered, 1_000
 
-      :ok = TerminalHelpers.simulate_stdin(terminal_name, <<0x04>>)
+      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
       assert :ok = Task.await(runner, 2_000)
 
       assert_receive {:raw_mode, :exit}, 1_000
@@ -1474,7 +1481,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
+      s2 = Interactive.handle_event(s, %Key{key: ??})
       assert s2.banner.expanded
     end
 
@@ -1483,7 +1490,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       banner = WelcomeBanner.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, banner: banner, theme: theme}
 
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ??}})
+      s2 = Interactive.handle_event(s, %Key{key: ??})
       assert s2.input.value == "hello?"
       refute s2.banner.expanded
     end
@@ -2019,15 +2026,15 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "typing / activates autocomplete in the input" do
-      s = Interactive.handle_event(state_with_autocomplete(), {:key, %Key{key: ?/}})
+      s = Interactive.handle_event(state_with_autocomplete(), %Key{key: ?/})
       assert s.input.autocomplete_active
     end
 
     test "typing / then h narrows autocomplete to /help" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:key, %Key{key: ?/}})
-        |> Interactive.handle_event({:key, %Key{key: ?h}})
+        |> Interactive.handle_event(%Key{key: ?/})
+        |> Interactive.handle_event(%Key{key: ?h})
 
       assert s.input.autocomplete_active
       assert Enum.all?(s.input.autocomplete_suggestions, &String.starts_with?(&1.value, "/h"))
@@ -2036,9 +2043,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Enter with autocomplete active dispatches slash command and clears input" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:key, %Key{key: ?/}})
-        |> Interactive.handle_event({:key, %Key{key: ?h}})
-        |> Interactive.handle_event({:key, %Key{key: :enter}})
+        |> Interactive.handle_event(%Key{key: ?/})
+        |> Interactive.handle_event(%Key{key: ?h})
+        |> Interactive.handle_event(%Key{key: :enter})
 
       refute s.input.autocomplete_active
       assert s.input.value == ""
@@ -2048,9 +2055,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Tab with autocomplete active fills in suggestion without submitting" do
       s =
         state_with_autocomplete()
-        |> Interactive.handle_event({:key, %Key{key: ?/}})
-        |> Interactive.handle_event({:key, %Key{key: ?h}})
-        |> Interactive.handle_event({:key, %Key{key: :tab}})
+        |> Interactive.handle_event(%Key{key: ?/})
+        |> Interactive.handle_event(%Key{key: ?h})
+        |> Interactive.handle_event(%Key{key: :tab})
 
       refute s.input.autocomplete_active
       assert String.starts_with?(s.input.value, "/h")
@@ -2138,8 +2145,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
-      Interactive.handle_event(state, {:key, %Key{key: :enter}})
-      assert [{:key, %Key{key: :enter}}] = Agent.get(received, & &1)
+      Interactive.handle_event(state, %Key{key: :enter})
+      assert [%Key{key: :enter}] = Agent.get(received, & &1)
     end
 
     test "char events are forwarded to handle_input when custom_widget is active" do
@@ -2154,20 +2161,20 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
-      Interactive.handle_event(state, {:key, %Key{key: ?x}})
-      assert [{:key, %Key{key: ?x}}] = Agent.get(received, & &1)
+      Interactive.handle_event(state, %Key{key: ?x})
+      assert [%Key{key: ?x}] = Agent.get(received, & &1)
     end
 
     test "state is unchanged after routing key to custom widget" do
       component = %{render: fn _ -> [] end, handle_input: fn _ -> :ok end}
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}}
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :enter}})
+      new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert new_state == state
     end
 
     test "normal key handling resumes when custom_widget is nil" do
       state = %Interactive{input: %Input{value: "", cursor: 0}}
-      new_state = Interactive.handle_event(state, {:key, %Key{key: :escape}})
+      new_state = Interactive.handle_event(state, %Key{key: :escape})
       assert new_state.exit == true
     end
   end
@@ -2184,7 +2191,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       handler = fn state -> %{state | notification: "shortcut fired"} end
 
       s = %Interactive{extension_shortcuts: [{match_fn, handler}]}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?x, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?x, modifiers: [:ctrl]})
       assert s.notification == "shortcut fired"
     end
 
@@ -2201,7 +2208,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         extension_shortcuts: [{match_fn, handler}]
       }
 
-      s = Interactive.handle_event(s, {:key, %Key{key: :left}})
+      s = Interactive.handle_event(s, %Key{key: :left})
       assert s.input.cursor == 2
       assert s.notification == nil
     end
@@ -2222,7 +2229,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       h2 = fn state -> %{state | notification: "second"} end
 
       s = %Interactive{extension_shortcuts: [{m1, h1}, {m2, h2}]}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?a, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?a, modifiers: [:ctrl]})
       assert s.notification == "first"
     end
 
@@ -2231,14 +2238,14 @@ defmodule OctoPi.TUI.InteractiveTest do
       handler = fn state -> %{state | notification: "blocked"} end
 
       s = %Interactive{input: %Input{value: "hi", cursor: 2}, extension_shortcuts: [{match_fn, handler}]}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?c, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl]})
       assert s.input.value == ""
       assert s.notification == nil
     end
 
     test "empty shortcuts list behaves normally" do
       s = %Interactive{input: %Input{value: "hi", cursor: 2}}
-      s = Interactive.handle_event(s, {:key, %Key{key: :left}})
+      s = Interactive.handle_event(s, %Key{key: :left})
       assert s.input.cursor == 1
     end
   end
@@ -2248,13 +2255,13 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — ctrl+o" do
     test "ctrl+o toggles tools_expanded from false to true" do
       s = %Interactive{tools_expanded: false}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.tools_expanded == true
     end
 
     test "ctrl+o toggles tools_expanded from true to false" do
       s = %Interactive{tools_expanded: true}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.tools_expanded == false
     end
 
@@ -2262,7 +2269,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       banner = WelcomeBanner.new(theme)
       s = %Interactive{tools_expanded: false, banner: banner}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.tools_expanded == true
       assert s.banner.expanded == true
     end
@@ -2271,15 +2278,15 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       banner = WelcomeBanner.new(theme, [])
       s = %Interactive{tools_expanded: false, banner: banner}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.banner.expanded == true
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.banner.expanded == false
     end
 
     test "ctrl+o is safe when banner is nil" do
       s = %Interactive{tools_expanded: false, banner: nil}
-      s = Interactive.handle_event(s, {:key, %Key{key: ?o, modifiers: [:ctrl]}})
+      s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.tools_expanded == true
       assert s.banner == nil
     end
@@ -2305,7 +2312,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       m2 = make_model("m2")
       m3 = make_model("m3")
       s = %Interactive{model: m1, models: [m1, m2, m3], footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl]})
       assert s2.model.id == "m2"
       assert s2.footer.model_id == "m2"
     end
@@ -2314,13 +2321,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       m1 = make_model("m1")
       m2 = make_model("m2")
       s = %Interactive{model: m2, models: [m1, m2], footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl]})
       assert s2.model.id == "m1"
     end
 
     test "Ctrl+P with empty models is no-op" do
       s = %Interactive{model: nil, models: []}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl]})
       assert s2.model == nil
     end
 
@@ -2328,7 +2335,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       m1 = make_model("m1")
       m2 = make_model("m2")
       s = %Interactive{model: m1, models: [m1, m2], footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl]})
       assert s2.notification =~ "m2"
     end
 
@@ -2337,7 +2344,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       m2 = make_model("m2")
       m3 = make_model("m3")
       s = %Interactive{model: m2, models: [m1, m2, m3], footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl, :shift]})
       assert s2.model.id == "m1"
     end
 
@@ -2345,7 +2352,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       m1 = make_model("m1")
       m2 = make_model("m2")
       s = %Interactive{model: m1, models: [m1, m2], footer: %Footer{}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?p, modifiers: [:ctrl, :shift]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?p, modifiers: [:ctrl, :shift]})
       assert s2.model.id == "m2"
     end
   end
@@ -2357,13 +2364,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       m1 = make_model("m1")
       s = %Interactive{models: [m1], theme: theme, model: m1}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?l, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?l, modifiers: [:ctrl]})
       assert %ModelSelector{} = s2.model_selector
     end
 
     test "Ctrl+L with empty models is no-op" do
       s = %Interactive{models: [], theme: nil}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?l, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?l, modifiers: [:ctrl]})
       assert s2.model_selector == nil
     end
 
@@ -2371,7 +2378,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       ms = ModelSelector.new([make_model("m1")], theme)
       s = %Interactive{model_selector: ms}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :escape}})
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
       assert s2.model_selector == nil
     end
 
@@ -2380,7 +2387,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       m1 = make_model("m1", :anthropic)
       ms = ModelSelector.new([m1], theme)
       s = %Interactive{model_selector: ms, models: [m1], model: nil, footer: %Footer{}, theme: theme}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
       assert s2.model_selector == nil
       assert s2.model.id == "m1"
       assert s2.footer.model_id == "m1"
@@ -2391,7 +2398,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       ms = ModelSelector.new([], theme)
       s = %Interactive{model_selector: ms, model: nil, footer: %Footer{}, theme: theme}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: :enter}})
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
       assert s2.model_selector == nil
       assert s2.model == nil
     end
@@ -2444,26 +2451,26 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "remapped app.exit key exits on empty editor" do
       s = state_with_keybindings(%{"app.exit" => "ctrl+q"})
       s = %{s | input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?q, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?q, modifiers: [:ctrl]})
       assert s2.exit
     end
 
     test "old key no longer exits when app.exit is remapped" do
       s = state_with_keybindings(%{"app.exit" => "ctrl+q"})
       s = %{s | input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?d, modifiers: [:ctrl]})
       refute s2.exit
     end
 
     test "remapped app.suspend suspends on new key" do
       s = state_with_keybindings(%{"app.suspend" => "ctrl+b"})
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?b, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?b, modifiers: [:ctrl]})
       assert s2.suspend_pending
     end
 
     test "default keybindings (nil) still dispatch correctly" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
-      s2 = Interactive.handle_event(s, {:key, %Key{key: ?d, modifiers: [:ctrl]}})
+      s2 = Interactive.handle_event(s, %Key{key: ?d, modifiers: [:ctrl]})
       assert s2.exit
     end
   end

@@ -29,6 +29,7 @@ defmodule OctoPi.Coder.Models do
   def find(:anthropic, id) when is_binary(id), do: anthropic_model(id)
   def find(:ollama, id) when is_binary(id), do: ollama_model(id)
   def find(:openai, id) when is_binary(id), do: openai_model(id)
+  def find(:openrouter, id) when is_binary(id), do: openrouter_model(id)
   def find(:google, id) when is_binary(id), do: google_model(id)
   def find(_provider, _id), do: nil
 
@@ -44,7 +45,7 @@ defmodule OctoPi.Coder.Models do
   defp provider_from_id("gpt-" <> _), do: :openai
   defp provider_from_id("o1" <> _), do: :openai
   defp provider_from_id("o3" <> _), do: :openai
-  defp provider_from_id(_), do: :ollama
+  defp provider_from_id(id) when is_binary(id), do: if(String.contains?(id, "/"), do: :openrouter, else: :ollama)
 
   defp anthropic_model(id) do
     base = %Model{
@@ -77,6 +78,18 @@ defmodule OctoPi.Coder.Models do
       base_url: "http://localhost:1234/v1",
       context_window: 262_144,
       max_tokens: 4_096
+    }
+  end
+
+  defp openrouter_model(id) do
+    %Model{
+      id: id,
+      name: id,
+      api: :openai_completions,
+      provider: :openrouter,
+      base_url: "https://openrouter.ai/api/v1",
+      context_window: 200_000,
+      max_tokens: 8_192
     }
   end
 

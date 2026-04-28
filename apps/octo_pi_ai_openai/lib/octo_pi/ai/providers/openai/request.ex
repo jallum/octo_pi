@@ -50,10 +50,17 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     base = [{"content-type", "application/json"}, {"accept", "application/json"}]
 
     base
+    |> auth_header(opts)
     |> copilot_headers(model, context)
     |> session_affinity_headers(opts, compat)
     |> extra_headers(opts)
   end
+
+  defp auth_header(hdrs, %StreamOptions{api_key: key})
+       when is_binary(key) and key != "",
+       do: hdrs ++ [{"authorization", "Bearer " <> key}]
+
+  defp auth_header(hdrs, _opts), do: hdrs
 
   defp copilot_headers(hdrs, %Model{provider: :github_copilot}, %Context{messages: messages}) do
     initiator = if match?(%Message.User{}, List.last(messages)), do: "user", else: "agent"
