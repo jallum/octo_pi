@@ -697,7 +697,7 @@ defmodule OctoPi.Agent.Session do
   defp over_threshold?(%Assistant{usage: usage}, %{session: session}) do
     reserve = session.auto_compact_reserve_tokens
     ctx = session.model && session.model.context_window
-    input = usage && usage.input
+    input = usage.input
 
     is_integer(reserve) and is_integer(ctx) and is_integer(input) and
       input + reserve > ctx
@@ -749,7 +749,7 @@ defmodule OctoPi.Agent.Session do
        })
        when is_binary(msg) do
     same_model = session.model != nil and session.model.id == model_id
-    not_stale = is_nil(session.last_compaction_at_ms) or is_nil(ts) or ts > session.last_compaction_at_ms
+    not_stale = is_nil(session.last_compaction_at_ms) or ts > session.last_compaction_at_ms
     same_model and not_stale and context_overflow_msg?(msg)
   end
 

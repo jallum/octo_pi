@@ -10,10 +10,7 @@ defmodule OctoPi.MixProject do
       aliases: aliases(),
       dialyzer: [
         plt_add_apps: [:mix, :ex_unit],
-        plt_core_path: "_build/#{Mix.env()}/plt",
-        # dialyxir 1.4.x doesn't know :exact_compare (added in OTP 28.3); suppress at
-        # the dialyzer level so it never surfaces to dialyxir's warning classifier.
-        flags: ["-Wno_exact_compare"]
+        plt_core_path: "_build/#{Mix.env()}/plt"
       ],
       releases: releases()
     ]
