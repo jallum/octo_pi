@@ -1922,16 +1922,22 @@ defmodule OctoPi.TUI.InteractiveTest do
 
   describe "build_autocomplete_provider/1" do
     alias OctoPi.TUI.Autocomplete
-    alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+    alias OctoPi.TUI.Autocomplete.CombinedProvider
 
-    test "returns SlashCommandProvider with builtin commands" do
+    test "returns CombinedProvider with builtin commands" do
       provider = Interactive.build_autocomplete_provider(nil)
-      assert %SlashCommandProvider{} = provider
-      {:ok, items} = Autocomplete.get_suggestions(provider, "/")
+      assert %CombinedProvider{} = provider
+      {:ok, items} = Autocomplete.get_suggestions(provider, "/help")
       labels = Enum.map(items, & &1.value)
       assert "/help" in labels
-      assert "/clear" in labels
-      assert "/model" in labels
+    end
+
+    test "returns clear and model commands" do
+      provider = Interactive.build_autocomplete_provider(nil)
+      {:ok, clear_items} = Autocomplete.get_suggestions(provider, "/clear")
+      {:ok, model_items} = Autocomplete.get_suggestions(provider, "/model")
+      assert Enum.any?(clear_items, &(&1.value == "/clear"))
+      assert Enum.any?(model_items, &(&1.value == "/model"))
     end
 
     test "suggestions filtered by prefix" do

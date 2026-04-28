@@ -36,6 +36,9 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
   alias OctoPi.TUI.Autocomplete
+  alias OctoPi.TUI.Autocomplete.CombinedProvider
+  alias OctoPi.TUI.Autocomplete.ExtensionCommandProvider
+  alias OctoPi.TUI.Autocomplete.FilePathProvider
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Clipboard
   alias OctoPi.TUI.Components
@@ -711,7 +714,7 @@ defmodule OctoPi.TUI.Interactive do
   defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
 
   @doc false
-  @spec build_autocomplete_provider(map() | nil, [Extension.t()]) :: SlashCommandProvider.t()
+  @spec build_autocomplete_provider(map() | nil, [Extension.t()]) :: CombinedProvider.t()
   def build_autocomplete_provider(loaded_resources, extensions \\ []) do
     template_commands =
       case loaded_resources do
@@ -724,15 +727,26 @@ defmodule OctoPi.TUI.Interactive do
           []
       end
 
+    registered = Dispatcher.get_registered_commands(extensions)
+
     extension_commands =
-      Enum.map(Dispatcher.get_registered_commands(extensions), fn entry ->
+      Enum.map(registered, fn entry ->
         %Autocomplete.SlashCommand{
           name: entry.invocation_name,
           description: entry.cmd.description
         }
       end)
 
-    SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands ++ extension_commands)
+    slash_provider =
+      SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands ++ extension_commands)
+
+    builtin_names = MapSet.new(Autocomplete.builtin_commands(), & &1.name)
+    ext_cmd_tuples = Enum.map(registered, fn entry -> {entry.invocation_name, entry.cmd, entry.ext_id} end)
+    ext_cmd_provider = ExtensionCommandProvider.new(ext_cmd_tuples, builtin_names)
+
+    file_provider = FilePathProvider.new(cwd: File.cwd!(), max_results: 50)
+
+    CombinedProvider.new([slash_provider, ext_cmd_provider, file_provider])
   end
 
   defp build_loaded_resources(opts) do
