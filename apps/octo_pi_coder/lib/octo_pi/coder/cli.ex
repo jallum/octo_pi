@@ -7,7 +7,7 @@ defmodule OctoPi.Coder.CLI do
     selected mode. Returns an integer exit code.
   """
 
-  alias OctoPi.AI.Model
+  alias OctoPi.Coder.Models
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
@@ -28,15 +28,17 @@ defmodule OctoPi.Coder.CLI do
     help: :boolean,
     debug_render: :boolean,
     debug_events: :boolean,
-    trace: :string
+    trace: :string,
+    telemetry: :string,
+    continue: :boolean
   ]
 
-  @aliases [p: :print, m: :model, h: :help]
+  @aliases [p: :print, m: :model, h: :help, c: :continue]
 
   @type opts :: %{
           mode: :print | :rpc | :interactive,
           prompt: String.t() | nil,
-          model: Model.t(),
+          model: OctoPi.AI.Model.t(),
           cwd: String.t()
         }
 
@@ -77,7 +79,9 @@ defmodule OctoPi.Coder.CLI do
       cwd: switches[:cwd] || File.cwd!(),
       debug_render: switches[:debug_render] || false,
       debug_events: switches[:debug_events] || false,
-      trace: switches[:trace]
+      trace: switches[:trace],
+      telemetry: switches[:telemetry],
+      continue: switches[:continue] || false
     }
   end
 
@@ -234,52 +238,7 @@ defmodule OctoPi.Coder.CLI do
       IO.puts(Jason.encode!(fallback))
   end
 
-  defp resolve_model(id), do: build_model(provider_from_model_id(id), id)
-
-  defp build_model(:ollama, id) do
-    %Model{
-      id: id,
-      name: id,
-      api: :openai_completions,
-      provider: :ollama,
-      base_url: "http://localhost:1234/v1",
-      context_window: 262_144,
-      max_tokens: 4_096
-    }
-  end
-
-  defp build_model(:anthropic, id) do
-    %Model{
-      id: id,
-      name: id,
-      api: :anthropic_messages,
-      provider: :anthropic,
-      base_url: "https://api.anthropic.com/v1",
-      context_window: 200_000,
-      max_tokens: 8000
-    }
-  end
-
-  defp build_model(:openrouter, id) do
-    %Model{
-      id: id,
-      name: id,
-      api: :openai_completions,
-      provider: :openrouter,
-      base_url: "https://openrouter.ai/api/v1",
-      context_window: 200_000,
-      max_tokens: 8_192
-    }
-  end
-
-  # Detection: `claude*` → Anthropic; any id with a `/` (the universal
-  # OpenRouter slug shape, e.g. `anthropic/claude-sonnet-4.5`) →
-  # OpenRouter; everything else → local Ollama.
-  defp provider_from_model_id("claude" <> _), do: :anthropic
-
-  defp provider_from_model_id(id) when is_binary(id) do
-    if String.contains?(id, "/"), do: :openrouter, else: :ollama
-  end
+  defp resolve_model(id), do: Models.resolve(id)
 
   defp usage_text do
     """
@@ -300,6 +259,8 @@ defmodule OctoPi.Coder.CLI do
       --debug-events log stdin/key pipeline to debug_events.log
       --trace=PATH   write a timestamped tty/stdin trace to PATH (use to diagnose
                      shutdown leaks; install Tracer telemetry handler on startup)
+      --telemetry=PATH  write agent session/turn/tool telemetry to PATH
+      --continue, -c    resume the most recent session for this directory
     """
   end
 end

@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.Extension.Loader do
 
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Session
 
   require Logger
 
@@ -45,13 +46,35 @@ defmodule OctoPi.Coder.Extension.Loader do
   end
 
   @spec load(String.t()) :: {:ok, Extension.t()} | {:error, term()}
-  def load(path) do
+  def load(path), do: do_load(path, _actions = nil)
+
+  @doc """
+  Load an extension and pre-bind it to a live `OctoPi.Coder.Session`
+  process **before** `module.init/1` runs.
+
+  This ordering matters: extension handlers register via `API.on(api,
+  ...)` and close over the `api` they were given. If we bound after
+  init, the captured api would still hold the raise-on-call stubs.
+  Compare with the post-init upstream pattern, which is fine in JS
+  because handlers reference the `api` object by mutable identity.
+
+  Routes API actions like `api.compact.([])` to `Coder.Session.compact/2`
+  on the given pid. Unimplemented actions stay as the raise-on-call
+  stubs installed by `API.new/1`.
+  """
+  @spec load_for_session(String.t(), GenServer.server()) ::
+          {:ok, Extension.t()} | {:error, term()}
+  def load_for_session(path, session) do
+    do_load(path, Session.__action_closures__(session))
+  end
+
+  defp do_load(path, actions) do
     :telemetry.execute([:octo_pi_coder, :extension, :load_start], %{}, %{path: path})
     id = extension_id(path)
 
     with {:ok, modules} <- compile_file(path),
          {:ok, module} <- find_init_module(modules, path),
-         {:ok, api} <- call_init(module, id) do
+         {:ok, api} <- call_init(module, id, actions) do
       {:ok, API.build_extension(api, path)}
     end
   rescue
@@ -199,8 +222,8 @@ defmodule OctoPi.Coder.Extension.Loader do
     end
   end
 
-  defp call_init(module, id) do
-    api = API.new(id)
+  defp call_init(module, id, actions) do
+    api = id |> API.new() |> maybe_bind_core(actions)
 
     case module.init(api) do
       {:ok, %API{} = api} -> {:ok, api}
@@ -210,4 +233,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   rescue
     e -> {:error, "init/1 raised: #{Exception.message(e)}"}
   end
+
+  defp maybe_bind_core(api, nil), do: api
+  defp maybe_bind_core(api, %{} = actions), do: API.bind_core(api, actions)
 end

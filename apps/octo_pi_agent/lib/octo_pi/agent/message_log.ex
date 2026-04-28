@@ -56,4 +56,20 @@ defmodule OctoPi.Agent.MessageLog do
   @doc "Number of messages in the log. O(1) — reads the cached counter."
   @spec count(t()) :: non_neg_integer()
   def count(%__MODULE__{count: count}), do: count
+
+  @doc """
+  Remove the last (newest) message from the log. O(1). Returns the
+  original log unchanged if it is empty.
+  """
+  @spec pop(t()) :: t()
+  def pop(%__MODULE__{rev: [_ | rest], count: count}), do: %__MODULE__{rev: rest, count: count - 1}
+  def pop(%__MODULE__{rev: []} = log), do: log
+
+  @doc """
+  Scan the log from newest to oldest, returning the first non-nil
+  value produced by `fun/1`, or `nil` if none match. Equivalent to
+  `Enum.find_value/2` over `to_list/1` but without the O(n) reversal.
+  """
+  @spec find_last_value(t(), (term() -> term() | nil)) :: term() | nil
+  def find_last_value(%__MODULE__{rev: rev}, fun), do: Enum.find_value(rev, fun)
 end

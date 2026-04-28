@@ -64,6 +64,34 @@ defmodule OctoPi.Agent do
   @spec abort(session()) :: :ok
   def abort(pid), do: Session.abort(pid)
 
+  @doc """
+  Request a manual compaction. Fire-and-forget — returns `:ok`
+  immediately (or `{:error, :busy}` if a run or compaction is already
+  in flight).
+
+  Session emits `%Event.CompactionRequested{ref, opts}` to subscribers;
+  exactly one subscriber performs the work and calls
+  `compaction_response/3` when done. Session then emits
+  `%Event.CompactionEnd{result}` to all subscribers. Callers who need
+  to synchronize use `wait_for_idle/2` or watch for `CompactionEnd`.
+  """
+  @spec compact(session(), keyword()) :: :ok | {:error, :busy}
+  def compact(pid, opts \\ []), do: Session.compact(pid, opts)
+
+  @doc """
+  Subscriber-side response API for `%Event.CompactionRequested{}`.
+  Synchronous on the responder — caller blocks until Agent has
+  threaded the result through Turn and replied to the original
+  `compact/1` caller.
+
+  Returns `:ok` on success, `{:error, :stale}` if the ref doesn't
+  match Agent's currently active compaction (e.g. the request was
+  superseded or the agent was aborted).
+  """
+  @spec compaction_response(session(), reference(), term()) ::
+          :ok | {:error, :stale}
+  def compaction_response(pid, ref, result), do: Session.compaction_response(pid, ref, result)
+
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)

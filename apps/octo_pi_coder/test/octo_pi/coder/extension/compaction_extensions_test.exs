@@ -1,24 +1,20 @@
 defmodule OctoPi.Coder.Extension.CompactionExtensionsTest do
   @moduledoc """
-  Elixir port of upstream compaction-extensions.test.ts.
+  Elixir port of upstream `compaction-extensions.test.ts`.
 
-  Upstream tests are fully live-integration: they call session.compact()
-  against a real LLM (guarded by API_KEY) and verify the full
-  before_compact → compact lifecycle including session storage.
+  Upstream tests are fully live-integration: they call `session.compact()`
+  against a real LLM (guarded by `API_KEY`) and verify the full
+  `before_compact → compact` lifecycle including session storage.
 
   The Elixir equivalent tests the dispatcher semantics for the two
   compaction event types in isolation:
 
-  * `:session_before_compact` — pattern: cancel_on_result
-      {:cancel, reason} halts; anything else continues.
-  * `:session_compact` — pattern: fire_and_forget
-      All handlers called; results are ignored; returns :ok.
-
-  Divergence: upstream supports a {compaction: %{}} return value from
-  session_before_compact handlers, letting extensions supply custom
-  compaction data. The Elixir cancel_on_result pattern does not carry
-  this data back to callers (it returns :ok for non-cancel results).
-  That semantic would require a dedicated pattern change.
+  * `:session_before_compact` — pattern: `halt_on_result`
+      `{:cancel, reason}` halts and aborts; `{:override, value}` halts
+      and surfaces the supplied value (extensions provide a pre-built
+      `%Compaction.Result{}` here); anything else continues.
+  * `:session_compact` — pattern: `fire_and_forget`
+      All handlers called; results are ignored; returns `:ok`.
   """
 
   use ExUnit.Case, async: true
@@ -41,7 +37,7 @@ defmodule OctoPi.Coder.Extension.CompactionExtensionsTest do
   defp before_compact_event, do: Event.new(:session_before_compact)
   defp compact_event, do: Event.new(:session_compact)
 
-  # ── session_before_compact (cancel_on_result) ────────────────────
+  # ── session_before_compact (halt_on_result) ──────────────────────
 
   describe "session_before_compact — cancel" do
     test "returns :ok when no handler cancels" do
@@ -104,9 +100,19 @@ defmodule OctoPi.Coder.Extension.CompactionExtensionsTest do
       assert :ok = Dispatcher.emit([e], before_compact_event(), ctx())
     end
 
-    test "non-cancel return (custom compaction map) is treated as :ok" do
-      custom = %{summary: "custom summary", tokens_before: 999}
-      e = ext("custom", session_before_compact: fn _ev, _ctx -> {:compact, custom} end)
+    test "{:override, %Result{}} surfaces the extension-supplied result" do
+      result = %OctoPi.Coder.Compaction.Result{
+        summary: "custom summary",
+        first_kept_entry_id: "kept-1",
+        tokens_before: 999
+      }
+
+      e = ext("custom", session_before_compact: fn _ev, _ctx -> {:override, result} end)
+      assert {:override, ^result} = Dispatcher.emit([e], before_compact_event(), ctx())
+    end
+
+    test "non-halting return (e.g. arbitrary tuple) is treated as :ok" do
+      e = ext("custom", session_before_compact: fn _ev, _ctx -> {:compact, :anything} end)
       assert :ok = Dispatcher.emit([e], before_compact_event(), ctx())
     end
 

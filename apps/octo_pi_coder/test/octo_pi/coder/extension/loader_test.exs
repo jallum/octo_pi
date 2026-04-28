@@ -3,8 +3,13 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
   # Tests that exercise bad-syntax/crashing-init paths log warnings
   # by design; capture them so test output stays clean.
+  alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SessionStore
 
   @moduletag capture_log: true
 
@@ -409,6 +414,98 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
       tool_names = Enum.flat_map(result.extensions, fn ext -> Map.keys(ext.tools) end)
       assert "tool-a" in tool_names
       assert "tool-b" in tool_names
+    end
+  end
+
+  describe "load_for_session/2" do
+    setup do
+      session_opts = [
+        id: "loader-#{:erlang.unique_integer([:positive])}",
+        cwd: System.tmp_dir!(),
+        root: Path.join(System.tmp_dir!(), "opi-loader-test-#{:erlang.unique_integer([:positive])}")
+      ]
+
+      {:ok, store} = SessionStore.start_link(session_opts)
+
+      sm = %SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
+
+      {:ok, session} =
+        Session.start_link(
+          extensions: [],
+          session_manager: sm,
+          store_pid: store
+        )
+
+      on_exit(fn ->
+        if Process.alive?(session), do: GenServer.stop(session)
+        if Process.alive?(store), do: SessionStore.close(store)
+      end)
+
+      {:ok, session: session}
+    end
+
+    test "routes api.compact.() through the bound Session pid", %{dir: dir, session: session} do
+      uniq = uid()
+      reporter = :"loader_compact_reporter_#{uniq}"
+      Process.register(self(), reporter)
+      on_exit(fn -> if Process.whereis(reporter), do: Process.unregister(reporter) end)
+
+      File.write!(
+        Path.join(dir, "compact_caller.ex"),
+        """
+        defmodule OctoPiTestLoaderCompact#{uniq} do
+          def init(api) do
+            OctoPi.Coder.Extension.API.on(api, :turn_end, fn _e, _c ->
+              send(:#{reporter}, {:result, api.compact.([])})
+            end)
+          end
+        end
+        """
+      )
+
+      assert {:ok, ext} =
+               Loader.load_for_session(Path.join(dir, "compact_caller.ex"), session)
+
+      [handler] = Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %Context{cwd: "/tmp"})
+
+      # Empty session → :nothing_to_compact, but the call reached Session.
+      assert_received {:result, {:error, :nothing_to_compact}}
+    end
+
+    test "without load_for_session, api.compact.() raises on call (raise-stub path)", %{dir: dir} do
+      uniq = uid()
+      reporter = :"loader_compact_raw_reporter_#{uniq}"
+      Process.register(self(), reporter)
+      on_exit(fn -> if Process.whereis(reporter), do: Process.unregister(reporter) end)
+
+      File.write!(
+        Path.join(dir, "compact_caller_raw.ex"),
+        """
+        defmodule OctoPiTestLoaderCompactRaw#{uniq} do
+          def init(api) do
+            OctoPi.Coder.Extension.API.on(api, :turn_end, fn _e, _c ->
+              msg =
+                try do
+                  api.compact.([])
+                rescue
+                  e -> Exception.message(e)
+                end
+
+              send(:#{reporter}, {:caught, msg})
+            end)
+          end
+        end
+        """
+      )
+
+      assert {:ok, ext} = Loader.load(Path.join(dir, "compact_caller_raw.ex"))
+
+      [handler] = Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %Context{cwd: "/tmp"})
+
+      assert_received {:caught, msg}
+      assert msg =~ "compact not bound"
     end
   end
 

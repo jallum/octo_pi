@@ -35,7 +35,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       event = Event.new(:session_before_switch, %{reason: :new})
 
       assert {:cancel, "uncommitted changes in repo"} =
-               Dispatcher.cancel_on_result([ext], event, ctx)
+               Dispatcher.halt_on_result([ext], event, ctx)
     end
 
     test "allows when repo is clean", %{ext: ext} do
@@ -63,7 +63,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       ctx = Context.new(%{cwd: dir})
       event = Event.new(:session_before_switch, %{reason: :new})
 
-      assert :ok = Dispatcher.cancel_on_result([ext], event, ctx)
+      assert :ok = Dispatcher.halt_on_result([ext], event, ctx)
     end
 
     test "allows in non-git directory", %{ext: ext} do
@@ -74,7 +74,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
       ctx = Context.new(%{cwd: dir})
       event = Event.new(:session_before_switch, %{reason: :new})
 
-      assert :ok = Dispatcher.cancel_on_result([ext], event, ctx)
+      assert :ok = Dispatcher.halt_on_result([ext], event, ctx)
     end
   end
 
@@ -152,7 +152,7 @@ defmodule OctoPi.Coder.Extension.ReferenceExtensionsTest do
     test "each extension only handles its registered events", %{extensions: exts} do
       ctx = Context.new(%{cwd: "/tmp"})
 
-      assert :ok = Dispatcher.cancel_on_result(exts, Event.new(:session_before_switch), ctx)
+      assert :ok = Dispatcher.halt_on_result(exts, Event.new(:session_before_switch), ctx)
 
       [handler] = Extension.get_handlers(Enum.at(exts, 1), :input)
 

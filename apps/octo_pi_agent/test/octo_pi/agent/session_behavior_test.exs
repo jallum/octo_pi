@@ -1,10 +1,15 @@
-defmodule OctoPi.Agent.LoopTest do
+defmodule OctoPi.Agent.SessionBehaviorTest do
   use ExUnit.Case, async: false
 
-  # The agent runs each turn inside a Task; transport-level abort/error
-  # tests deliberately leave the scripted stream in a state that makes
-  # that Task crash (script exhausted / brutal kill). ExUnit prints the
-  # Task supervisor's error log by default — capture it.
+  # End-to-end Session behavior driven through the public Agent
+  # facade. Renamed from LoopTest after F2 (.50) folded Loop into
+  # Session as a Turn-FSM-driven executor.
+  #
+  # Stream and tool-batch run as Tasks under TurnTaskSupervisor;
+  # transport-level abort/error tests deliberately leave the scripted
+  # stream in a state that makes that Task crash (script exhausted /
+  # brutal kill). ExUnit prints the supervisor's error log by default
+  # — capture it.
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.TestSupport.EchoTool
   alias OctoPi.Agent.TestSupport.FakeTransport

@@ -2,6 +2,7 @@ defmodule OctoPi.Coder.Extension.ContextTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.SessionManager
 
   describe "new/1" do
     test "creates context with defaults" do
@@ -13,7 +14,7 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.signal == nil
     end
 
-    test "get_entries defaults to a function returning an empty list" do
+    test "get_entries defaults to a function returning an empty list (Session.Entry stream)" do
       ctx = Context.new(%{cwd: "/tmp"})
       assert ctx.get_entries.() == []
     end
@@ -22,6 +23,17 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       entries = [:a, :b]
       ctx = Context.new(%{cwd: "/tmp", get_entries: fn -> entries end})
       assert ctx.get_entries.() == entries
+    end
+
+    test "get_messages defaults to a function returning an empty list (Message stream)" do
+      ctx = Context.new(%{cwd: "/tmp"})
+      assert ctx.get_messages.() == []
+    end
+
+    test "accepts a custom get_messages function" do
+      msgs = [:msg1, :msg2]
+      ctx = Context.new(%{cwd: "/tmp", get_messages: fn -> msgs end})
+      assert ctx.get_messages.() == msgs
     end
 
     test "get_leaf_entry_id defaults to a function returning nil" do
@@ -45,9 +57,9 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.get_branch.() == entries
     end
 
-    test "find_model defaults to a function returning nil" do
+    test "find_model defaults to the Models registry; nil for unmodelled providers" do
       ctx = Context.new(%{cwd: "/tmp"})
-      assert ctx.find_model.(:google, "gemini-2.5-flash") == nil
+      assert ctx.find_model.(:azure, "anything") == nil
     end
 
     test "accepts a custom find_model function" do
@@ -82,6 +94,53 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       assert ctx.session_id == "sess-123"
       assert ctx.idle?
       assert is_reference(ctx.signal)
+    end
+  end
+
+  describe "bind_session_manager/2" do
+    setup do
+      tmp =
+        Path.join(
+          System.tmp_dir!(),
+          "ctx-bind-sm-#{System.unique_integer([:positive])}.jsonl"
+        )
+
+      File.write!(tmp, """
+      {"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}
+      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"a"}}
+      {"type":"message","id":"m2","parentId":"m1","timestamp":"t","message":{"role":"assistant","content":"b"}}
+      """)
+
+      on_exit(fn -> File.rm(tmp) end)
+      {:ok, sm} = SessionManager.load(tmp)
+      %{sm: sm}
+    end
+
+    test "wires get_entries / get_branch / get_leaf_entry_id from a snapshot SessionManager", %{sm: sm} do
+      ctx = %{cwd: "/tmp"} |> Context.new() |> Context.bind_session_manager(sm)
+
+      assert ctx.get_leaf_entry_id.() == "m2"
+      assert Enum.map(ctx.get_entries.(), & &1.id) == ~w(m1 m2)
+      assert Enum.map(ctx.get_branch.(), & &1.id) == ~w(m1 m2)
+    end
+
+    test "accepts a 0-arity getter so the context tracks live SessionManager state", %{sm: sm} do
+      agent = start_supervised!({Agent, fn -> sm end})
+      ctx = %{cwd: "/tmp"} |> Context.new() |> Context.bind_session_manager(fn -> Agent.get(agent, & &1) end)
+
+      assert ctx.get_leaf_entry_id.() == "m2"
+
+      {sm2, _id} =
+        SessionManager.add_entry(sm, %OctoPi.Coder.Session.Entry.Message{
+          id: "_",
+          timestamp: "_",
+          message: %{"role" => "user", "content" => "c"}
+        })
+
+      Agent.update(agent, fn _ -> sm2 end)
+
+      assert ctx.get_leaf_entry_id.() == sm2.leaf_id
+      assert Enum.count(ctx.get_entries.()) == 3
     end
   end
 end

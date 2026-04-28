@@ -8,6 +8,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.Coder.Session
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Footer
@@ -269,6 +270,10 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — Alt+Up dequeue overlay (opi-0g4.16)" do
+    alias OctoPi.Coder.SessionManager
+    alias OctoPi.Coder.SessionStore
+    alias Session, as: CoderSession
+
     defp dequeue_state(items, selected) do
       %Interactive{dequeue_overlay: %{items: items, selected: selected}}
     end
@@ -282,6 +287,28 @@ defmodule OctoPi.TUI.InteractiveTest do
       {type, msg}
     end
 
+    defp start_coder_session! do
+      model = %OctoPi.AI.Model{
+        id: "fake",
+        name: "fake",
+        api: :fake,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      id = "test-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), "opi-dequeue-test-#{id}")
+      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+
+      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+      coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
+      {:ok, agent} = OctoPi.Agent.start_session(model: model)
+      :ok = CoderSession.set_agent_pid(coder, agent)
+      {coder, agent}
+    end
+
     test "Alt+Up with nil session is a no-op" do
       s = %Interactive{session: nil}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
@@ -289,21 +316,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up with live session and queued follow-up opens overlay" do
-      {:ok, session} =
-        OctoPi.Agent.start_session(
-          model: %OctoPi.AI.Model{
-            id: "fake",
-            name: "fake",
-            api: :fake,
-            provider: :fake,
-            base_url: "http://fake",
-            context_window: 100,
-            max_tokens: 100
-          }
-        )
-
-      OctoPi.Agent.follow_up(session, "queued message")
-      s = %Interactive{session: session}
+      {coder, agent} = start_coder_session!()
+      OctoPi.Agent.follow_up(agent, "queued message")
+      s = %Interactive{session: coder}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2.dequeue_overlay
       items = s2.dequeue_overlay.items
@@ -312,20 +327,8 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up with live session and empty queues shows notification" do
-      {:ok, session} =
-        OctoPi.Agent.start_session(
-          model: %OctoPi.AI.Model{
-            id: "fake",
-            name: "fake",
-            api: :fake,
-            provider: :fake,
-            base_url: "http://fake",
-            context_window: 100,
-            max_tokens: 100
-          }
-        )
-
-      s = %Interactive{session: session}
+      {coder, _agent} = start_coder_session!()
+      s = %Interactive{session: coder}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2.dequeue_overlay == nil
       assert s2.notification =~ "No queued"
@@ -1180,13 +1183,23 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "add_tool via handle_ui_request registers the tool when a session is active" do
-      {:ok, session} = OctoPi.Agent.start_session(model: tool_reg_model(), transport: FakeTransport)
-      tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
+      alias OctoPi.Coder.SessionManager
+      alias OctoPi.Coder.SessionStore
+      alias Session, as: CoderSession
 
-      state = %Interactive{session: session}
+      id = "test-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), "opi-addtool-test-#{id}")
+      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+      coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
+      {:ok, agent} = OctoPi.Agent.start_session(model: tool_reg_model(), transport: FakeTransport)
+      :ok = CoderSession.set_agent_pid(coder, agent)
+
+      tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
+      state = %Interactive{session: coder}
       {_new_state, :ok} = Interactive.handle_ui_request(state, {:register_extension_tool, tool})
 
-      session_state = OctoPi.Agent.state(session)
+      session_state = OctoPi.Agent.state(agent)
       assert Enum.any?(session_state.tools, &(&1.name == "runtime_tool"))
     end
 

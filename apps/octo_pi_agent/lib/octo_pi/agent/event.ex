@@ -39,6 +39,8 @@ defmodule OctoPi.Agent.Event do
           | Event.ToolExecutionStart.t()
           | Event.ToolExecutionUpdate.t()
           | Event.ToolExecutionEnd.t()
+          | Event.CompactionRequested.t()
+          | Event.CompactionEnd.t()
 
   defmodule AgentStart do
     @moduledoc "Emitted once at the start of a run."
@@ -116,5 +118,38 @@ defmodule OctoPi.Agent.Event do
             result: Tool.Result.t()
           }
     defstruct [:tool_call_id, :tool_name, :result]
+  end
+
+  defmodule CompactionRequested do
+    @moduledoc """
+    Emitted when the Session enters the `:compacting` Turn state.
+    Exactly one subscriber is expected to perform the compaction and
+    respond via `OctoPi.Agent.compaction_response/3`. The `ref`
+    carried here matches the one Session will check on the response —
+    late or stale responses get rejected.
+
+    `opts` is the keyword list passed to `OctoPi.Agent.compact/2`,
+    forwarded verbatim. Subscribers interpret it (e.g. the Coder app
+    forwards `:custom_instructions`, `:thinking_level`, etc. into
+    `Coder.Session.compact/2`).
+    """
+    @enforce_keys [:ref, :opts]
+    @type t :: %__MODULE__{ref: reference(), opts: keyword()}
+    defstruct [:ref, :opts]
+  end
+
+  defmodule CompactionEnd do
+    @moduledoc """
+    Emitted when a compaction completes (success, cancel, or error).
+    Subscribers and callers observe this event to know the outcome —
+    `OctoPi.Agent.compact/2` returns immediately so callers must
+    watch the event stream (or use `wait_for_idle/2`) to synchronize.
+
+    `result` mirrors the shape returned by the responder:
+    `{:ok, summary_data} | {:cancel, reason} | {:error, reason}`.
+    """
+    @enforce_keys [:result]
+    @type t :: %__MODULE__{result: {:ok, map()} | {:cancel, term()} | {:error, term()}}
+    defstruct [:result]
   end
 end

@@ -77,7 +77,14 @@ defmodule OctoPi.TUI.Keybindings do
     "app.editor.external" => %{keys: ["ctrl+g"], description: "Open external editor"},
     "app.message.followUp" => %{keys: ["alt+enter"], description: "Queue follow-up message"},
     "app.message.dequeue" => %{keys: ["alt+up"], description: "Edit queued messages"},
-    "app.clipboard.pasteImage" => %{keys: ["ctrl+v"], description: "Paste image from clipboard"}
+    "app.clipboard.pasteImage" => %{keys: ["ctrl+v"], description: "Paste image from clipboard"},
+    "app.tree.filter.default" => %{keys: ["ctrl+d"], description: "Tree filter: default view"},
+    "app.tree.filter.noTools" => %{keys: ["ctrl+t"], description: "Tree filter: hide tool results"},
+    "app.tree.filter.userOnly" => %{keys: ["ctrl+u"], description: "Tree filter: user messages only"},
+    "app.tree.filter.labeledOnly" => %{keys: ["ctrl+l"], description: "Tree filter: labeled entries only"},
+    "app.tree.filter.all" => %{keys: ["ctrl+a"], description: "Tree filter: show all entries"},
+    "app.tree.filter.cycleForward" => %{keys: ["ctrl+o"], description: "Tree filter: cycle forward"},
+    "app.tree.filter.cycleBackward" => %{keys: ["shift+ctrl+o"], description: "Tree filter: cycle backward"}
   }
 
   @spec new(map()) :: t()

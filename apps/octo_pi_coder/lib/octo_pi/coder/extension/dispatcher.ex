@@ -43,7 +43,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     result =
       case pattern do
         :fire_and_forget -> fire_and_forget(extensions, event, ctx)
-        :cancel_on_result -> cancel_on_result(extensions, event, ctx)
+        :halt_on_result -> halt_on_result(extensions, event, ctx)
         :reduce_chain -> reduce_chain(extensions, type, event_acc(event), ctx)
         :mutate_in_place -> mutate_in_place(extensions, event, ctx)
         :patch_merge -> patch_merge(extensions, event, ctx)
@@ -71,10 +71,25 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
     :ok
   end
 
-  @spec cancel_on_result([Extension.t()], Event.t(), Context.t()) :: :ok | {:cancel, term()}
-  def cancel_on_result(extensions, event, ctx) do
+  @doc """
+  Run handlers in order until one returns a halting result.
+
+  Halting return shapes:
+    * `{:cancel, reason}` — abort the operation; reason is surfaced to caller.
+    * `{:override, value}` — extension supplies a result that replaces the
+      default operation. The value is opaque to the dispatcher.
+
+  Anything else (`:ok`, `nil`, raise, other) → continue to the next handler.
+
+  Renamed from `cancel_on_result/3` (which only had the cancel channel) so
+  extensions like `:session_before_compact` can supply pre-built results
+  without smuggling them through the cancel channel.
+  """
+  @spec halt_on_result([Extension.t()], Event.t(), Context.t()) ::
+          :ok | {:cancel, term()} | {:override, term()}
+  def halt_on_result(extensions, event, ctx) do
     Enum.reduce_while(all_handlers(extensions, event.type), :ok, fn {handler, ext}, :ok ->
-      try_cancel(ext, event, ctx, handler)
+      try_halt(ext, event, ctx, handler)
     end)
   end
 
@@ -252,11 +267,15 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
   defp apply_input_result(_, state), do: {:cont, %{state | action: :continue}}
 
-  defp try_cancel(ext, event, ctx, handler) do
+  defp try_halt(ext, event, ctx, handler) do
     case safe_call(ext, event.type, fn -> handler.(event, ctx) end) do
       {:cancel, reason} ->
         emit_cancel_telemetry(ext, event.type, reason)
         {:halt, {:cancel, reason}}
+
+      {:override, value} ->
+        emit_override_telemetry(ext, event.type)
+        {:halt, {:override, value}}
 
       _ ->
         {:cont, :ok}
@@ -355,6 +374,14 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
       [:octo_pi_coder, :extension, :handler_cancel],
       %{},
       %{extension_id: ext.id, event_type: event_type, reason: reason}
+    )
+  end
+
+  defp emit_override_telemetry(ext, event_type) do
+    :telemetry.execute(
+      [:octo_pi_coder, :extension, :handler_override],
+      %{},
+      %{extension_id: ext.id, event_type: event_type}
     )
   end
 

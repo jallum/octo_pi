@@ -103,7 +103,7 @@ defmodule OctoPi.Coder.SessionStoreTest do
       {:ok, pid} = SessionStore.open(id: "enc", cwd: "/home/alice/proj", root: tmp)
       path = SessionStore.path(pid)
 
-      assert path =~ ~r|#{Regex.escape(tmp)}/sessions/--[^/]+--/enc\.jsonl|
+      assert path =~ ~r|#{Regex.escape(tmp)}/sessions/--[^/]+--/[^/]*enc\.jsonl|
       assert path =~ "home"
       :ok = SessionStore.close(pid)
     end

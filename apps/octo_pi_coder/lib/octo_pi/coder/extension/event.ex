@@ -20,7 +20,7 @@ defmodule OctoPi.Coder.Extension.Event do
     :after_provider_response
   ]
 
-  @cancel_on_result [
+  @halt_on_result [
     :session_before_switch,
     :session_before_fork,
     :session_before_compact,
@@ -38,7 +38,7 @@ defmodule OctoPi.Coder.Extension.Event do
   @collect_all [:before_agent_start, :resources_discover]
 
   @all_types @fire_and_forget ++
-               @cancel_on_result ++
+               @halt_on_result ++
                @reduce_chain ++
                @mutate_in_place ++
                @patch_merge ++
@@ -77,7 +77,7 @@ defmodule OctoPi.Coder.Extension.Event do
 
   @type pattern ::
           :fire_and_forget
-          | :cancel_on_result
+          | :halt_on_result
           | :reduce_chain
           | :mutate_in_place
           | :patch_merge
@@ -94,7 +94,7 @@ defmodule OctoPi.Coder.Extension.Event do
 
   @spec pattern(event_type()) :: pattern()
   for t <- @fire_and_forget, do: def(pattern(unquote(t)), do: :fire_and_forget)
-  for t <- @cancel_on_result, do: def(pattern(unquote(t)), do: :cancel_on_result)
+  for t <- @halt_on_result, do: def(pattern(unquote(t)), do: :halt_on_result)
   for t <- @reduce_chain, do: def(pattern(unquote(t)), do: :reduce_chain)
   for t <- @mutate_in_place, do: def(pattern(unquote(t)), do: :mutate_in_place)
   for t <- @patch_merge, do: def(pattern(unquote(t)), do: :patch_merge)
