@@ -4,7 +4,7 @@ defmodule OctoPi.TUI.RendererTest do
   alias OctoPi.TUI.Renderer
 
   defp new(opts \\ []) do
-    {:ok, pid} = Renderer.start_link(Keyword.merge([width: 80, height: 24], opts))
+    {:ok, pid} = Renderer.start_link(Keyword.merge([width: 80, height: 24, min_interval_ms: 0], opts))
     pid
   end
 
@@ -330,6 +330,50 @@ defmodule OctoPi.TUI.RendererTest do
     test "non-adjacent changes → full spanning range" do
       assert {1, 3} =
                Renderer.find_diff_range(["a", "X", "c", "Y", "e"], ["a", "b", "c", "d", "e"])
+    end
+  end
+
+  describe "throttle" do
+    test "rapid calls within min_interval skip render and return empty bytes" do
+      pid = new(min_interval_ms: 100_000)
+      # First render (previous: nil) always goes through
+      {:ok, bytes1} = Renderer.render(pid, ["hello"])
+      assert bytes1 != ""
+      # Second call — content changed but throttle blocks it
+      {:ok, bytes2} = Renderer.render(pid, ["world"])
+      assert bytes2 == ""
+    end
+
+    test "force: true bypasses throttle regardless of elapsed time" do
+      pid = new(min_interval_ms: 100_000)
+      {:ok, _} = Renderer.render(pid, ["hello"])
+      {:ok, bytes} = Renderer.render(pid, ["world"], "", force: true)
+      assert bytes != ""
+    end
+
+    test "render_count increments on each rendered frame" do
+      pid = new(min_interval_ms: 0)
+      {:ok, _} = Renderer.render(pid, ["a"])
+      {:ok, _} = Renderer.render(pid, ["b"])
+      {:ok, _} = Renderer.render(pid, ["c"])
+      assert Renderer.render_count(pid) == 3
+    end
+
+    test "skip_count increments on each skipped frame" do
+      pid = new(min_interval_ms: 100_000)
+      {:ok, _} = Renderer.render(pid, ["a"])
+      {:ok, ""} = Renderer.render(pid, ["b"])
+      {:ok, ""} = Renderer.render(pid, ["c"])
+      assert Renderer.skip_count(pid) == 2
+    end
+
+    test "resize forces next render through throttle" do
+      pid = new(min_interval_ms: 100_000)
+      {:ok, _} = Renderer.render(pid, ["hello"])
+      # Simulate resize — sets previous: nil and needs_clear: true
+      :ok = Renderer.resize(pid, 80, 24)
+      {:ok, bytes} = Renderer.render(pid, ["hello"])
+      assert bytes != ""
     end
   end
 end

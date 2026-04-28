@@ -100,7 +100,8 @@ defmodule OctoPi.TUI.Interactive do
           dialog: tuple() | nil,
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
-          extensions: [Extension.t()]
+          extensions: [Extension.t()],
+          force_next_render: boolean()
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
@@ -139,7 +140,8 @@ defmodule OctoPi.TUI.Interactive do
             dialog: nil,
             custom_widget: nil,
             extension_shortcuts: [],
-            extensions: []
+            extensions: [],
+            force_next_render: false
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -376,7 +378,7 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: Renderer, start: {Renderer, :start_link, [[width: w, height: h, csi_2026?: true]]}},
+      %{id: Renderer, start: {Renderer, :start_link, [build_renderer_opts(opts, w, h)]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
 
@@ -447,6 +449,7 @@ defmodule OctoPi.TUI.Interactive do
     Renderer.resize(state.renderer, w, h)
 
     state
+    |> Map.put(:force_next_render, true)
     |> handle_event(event)
     |> advance()
   end
@@ -786,6 +789,15 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
+  defp build_renderer_opts(opts, w, h) do
+    base = [width: w, height: h, csi_2026?: true]
+
+    case Keyword.fetch(opts, :min_interval_ms) do
+      {:ok, ms} -> Keyword.put(base, :min_interval_ms, ms)
+      :error -> base
+    end
+  end
+
   defp build_terminal_opts(opts, write_fn) do
     opts
     |> Keyword.take([
@@ -861,10 +873,10 @@ defmodule OctoPi.TUI.Interactive do
 
     post_input_h = post_input_height(state)
     cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
-    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)
+    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq, force: state.force_next_render)
 
     if bytes != "", do: Terminal.write(state.terminal, bytes)
-    state
+    %{state | force_next_render: false}
   end
 
   defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines

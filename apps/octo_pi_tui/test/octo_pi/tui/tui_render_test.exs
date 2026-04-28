@@ -17,7 +17,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
   defp setup_render(opts) do
     width = Keyword.get(opts, :width, 40)
     height = Keyword.get(opts, :height, 10)
-    {:ok, r} = Renderer.start_link(width: width, height: height)
+    {:ok, r} = Renderer.start_link(width: width, height: height, min_interval_ms: 0)
     vt = VT.new(width, height)
     {r, vt}
   end

@@ -199,7 +199,7 @@ defmodule OctoPi.TUI.OverlayTest do
       alias VirtualTerminal, as: VT
 
       width = 20
-      {:ok, r} = Renderer.start_link(width: width, height: 6)
+      {:ok, r} = Renderer.start_link(width: width, height: 6, min_interval_ms: 0)
       base_line = "\e[3m" <> String.duplicate("X", width) <> "\e[23m"
       lines = [base_line, "INPUT", "", "", "", ""]
 
@@ -298,7 +298,7 @@ defmodule OctoPi.TUI.OverlayTest do
       alias VirtualTerminal, as: VT
 
       width = 20
-      {:ok, r} = Renderer.start_link(width: width, height: 6)
+      {:ok, r} = Renderer.start_link(width: width, height: 6, min_interval_ms: 0)
       base_line = "\e[3m" <> String.duplicate("X", width) <> "\e[23m"
       base = [base_line, "INPUT", "", "", "", ""]
       overlay = %Overlay{lines: ["OVR"], width: 3, anchor: :top_left, row: 0, col: 5}

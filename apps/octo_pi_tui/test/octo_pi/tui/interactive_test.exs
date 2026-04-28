@@ -1283,7 +1283,8 @@ defmodule OctoPi.TUI.InteractiveTest do
               auto_start_reader: false,
               dimensions: {80, 24},
               terminal_name: nil,
-              name: interactive_name
+              name: interactive_name,
+              min_interval_ms: 0
             )
 
           send(parent, {:run_done, result})

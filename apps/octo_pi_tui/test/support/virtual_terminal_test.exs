@@ -103,7 +103,7 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "full redraw renders correctly" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5)
+      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
       {:ok, bytes} = Renderer.render(r, ["hello", "world"])
 
       vt = 40 |> VT.new(5) |> VT.write(bytes)
@@ -116,7 +116,7 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "differential render updates only changed lines" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5)
+      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
 
       {:ok, bytes1} = Renderer.render(r, ["aaa", "bbb", "ccc"])
       vt = 40 |> VT.new(5) |> VT.write(bytes1)
@@ -133,7 +133,7 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "shrink clears stale rows" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 10)
+      {:ok, r} = Renderer.start_link(width: 40, height: 10, min_interval_ms: 0)
 
       {:ok, bytes1} = Renderer.render(r, ["a", "b", "c", "d", "e"])
       vt = 40 |> VT.new(10) |> VT.write(bytes1)
@@ -152,7 +152,7 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "resize then render clears and redraws" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5)
+      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
 
       {:ok, bytes1} = Renderer.render(r, ["old1", "old2", "old3"])
       vt = 40 |> VT.new(5) |> VT.write(bytes1)
@@ -170,7 +170,7 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "spinner animation: only middle line changes" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5)
+      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
 
       {:ok, bytes1} = Renderer.render(r, ["Header", "⠋ Working...", "Footer"])
       vt = 40 |> VT.new(5) |> VT.write(bytes1)

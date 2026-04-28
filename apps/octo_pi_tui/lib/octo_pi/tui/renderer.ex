@@ -29,6 +29,10 @@ defmodule OctoPi.TUI.Renderer do
 
   use GenServer
 
+  alias OctoPi.TUI.RenderThrottle
+
+  require Logger
+
   @clear_screen "\e[2J\e[H\e[3J"
   @erase_line "\e[2K"
   @sync_on "\e[?2026h"
@@ -45,11 +49,15 @@ defmodule OctoPi.TUI.Renderer do
   Lines may exceed the terminal height — the renderer writes them
   all to the terminal. An optional `cursor_seq` positions the
   hardware cursor (for IME) after the frame update.
-  """
-  @spec render(GenServer.server(), [binary()], binary()) :: {:ok, binary()}
-  def render(pid, lines, cursor_seq \\ "")
 
-  def render(pid, lines, cursor_seq) when is_list(lines), do: GenServer.call(pid, {:render, lines, cursor_seq})
+  Options:
+    * `:force` — bypass the render throttle (use for resize and first-render)
+  """
+  @spec render(GenServer.server(), [binary()], binary(), keyword()) :: {:ok, binary()}
+  def render(pid, lines, cursor_seq \\ "", opts \\ [])
+
+  def render(pid, lines, cursor_seq, opts) when is_list(lines),
+    do: GenServer.call(pid, {:render, lines, cursor_seq, opts})
 
   @doc "Update the terminal dimensions. Next render is a full redraw."
   @spec resize(GenServer.server(), pos_integer(), pos_integer()) :: :ok
@@ -58,6 +66,14 @@ defmodule OctoPi.TUI.Renderer do
   @doc "Return the number of full-redraw passes performed since start."
   @spec full_redraws(GenServer.server()) :: non_neg_integer()
   def full_redraws(pid), do: GenServer.call(pid, :full_redraws)
+
+  @doc "Return the number of frames rendered (not skipped) since start."
+  @spec render_count(GenServer.server()) :: non_neg_integer()
+  def render_count(pid), do: GenServer.call(pid, :render_count)
+
+  @doc "Return the number of frames skipped by the throttle since start."
+  @spec skip_count(GenServer.server()) :: non_neg_integer()
+  def skip_count(pid), do: GenServer.call(pid, :skip_count)
 
   @doc """
   Return bytes that move the cursor to just past the last rendered line.
@@ -108,29 +124,50 @@ defmodule OctoPi.TUI.Renderer do
       csi_2026?: Keyword.get(opts, :csi_2026?, false),
       termux?: termux?(),
       full_redraws: 0,
-      clear_on_shrink: System.get_env("PI_CLEAR_ON_SHRINK") == "1"
+      clear_on_shrink: System.get_env("PI_CLEAR_ON_SHRINK") == "1",
+      throttle: RenderThrottle.new(Keyword.take(opts, [:min_interval_ms]))
     }
 
     {:ok, state}
   end
 
   @impl true
-  def handle_call({:render, lines, cursor_seq}, _from, state) do
-    start_mono = System.monotonic_time()
-    {bytes, new_state} = compute(lines, cursor_seq, state)
-    {mode, lines_changed} = render_telemetry_fields(state, new_state, lines)
+  def handle_call({:render, lines, cursor_seq, opts}, _from, state) do
+    force? = Keyword.get(opts, :force, false) or is_nil(state.previous) or state.needs_clear
 
-    :telemetry.execute(
-      [:octo_pi_tui, :renderer, :render],
-      %{
-        duration: System.monotonic_time() - start_mono,
-        byte_count: byte_size(bytes),
-        lines_changed: lines_changed
-      },
-      %{mode: mode, line_count: length(lines)}
-    )
+    {should?, throttle} =
+      if force?,
+        do: {true, state.throttle},
+        else: RenderThrottle.should_render?(state.throttle)
 
-    {:reply, {:ok, bytes}, new_state}
+    if should? do
+      case RenderThrottle.check_width_overflow(lines, state.width) do
+        {:overflow, overflows} ->
+          Logger.warning("Renderer: #{length(overflows)} line(s) exceed terminal width #{state.width}")
+
+        :ok ->
+          :ok
+      end
+
+      start_mono = System.monotonic_time()
+      {bytes, new_state} = compute(lines, cursor_seq, state)
+      throttle = RenderThrottle.record_render(throttle)
+      {mode, lines_changed} = render_telemetry_fields(state, new_state, lines)
+
+      :telemetry.execute(
+        [:octo_pi_tui, :renderer, :render],
+        %{
+          duration: System.monotonic_time() - start_mono,
+          byte_count: byte_size(bytes),
+          lines_changed: lines_changed
+        },
+        %{mode: mode, line_count: length(lines)}
+      )
+
+      {:reply, {:ok, bytes}, %{new_state | throttle: throttle}}
+    else
+      {:reply, {:ok, ""}, %{state | throttle: throttle}}
+    end
   end
 
   def handle_call({:resize, w, h}, _from, state) do
@@ -149,6 +186,8 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   def handle_call(:full_redraws, _from, state), do: {:reply, state.full_redraws, state}
+  def handle_call(:render_count, _from, state), do: {:reply, state.throttle.render_count, state}
+  def handle_call(:skip_count, _from, state), do: {:reply, state.throttle.skip_count, state}
 
   def handle_call(:exit_bytes, _from, %{previous: nil} = state), do: {:reply, "", state}
 
