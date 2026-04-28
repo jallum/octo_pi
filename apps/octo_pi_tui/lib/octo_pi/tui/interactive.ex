@@ -1642,8 +1642,8 @@ defmodule OctoPi.TUI.Interactive do
             footer: %{state.footer | model_id: model.id, provider: model.provider}
         })
 
-      new_ms ->
-        %{state | model_selector: new_ms}
+      result ->
+        apply_component_result(state, :model_selector, result)
     end
   end
 
