@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "FilePathProvider contaminates slash-command autocomplete when input is \"/\"",
   "type": "bug",
-  "updated_at": "2026-04-28T18:01:33.645615Z"
+  "updated_at": "2026-04-28T18:06:24.241331Z"
 }
