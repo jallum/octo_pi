@@ -50,8 +50,6 @@ defmodule OctoPi.AI do
   def stream(%Model{} = model, %Context{} = context, opts \\ []) do
     provider = provider_module(model.api)
     call_opts = build_call_opts(opts)
-    start_mono = System.monotonic_time()
-    emit_stream_open(model, provider)
 
     Stream.resource(
       fn ->
@@ -70,7 +68,6 @@ defmodule OctoPi.AI do
       fn {pid, _ref, mon} ->
         Process.demonitor(mon, [:flush])
         if Process.alive?(pid), do: Process.exit(pid, :shutdown)
-        emit_stream_close(model, provider, start_mono)
       end
     )
   end
@@ -101,22 +98,6 @@ defmodule OctoPi.AI do
         :on_payload,
         :on_response
       ])
-    )
-  end
-
-  defp emit_stream_open(%Model{} = model, provider) do
-    :telemetry.execute(
-      [:octo_pi_ai, :stream, :open],
-      %{system_time: System.system_time()},
-      %{api: model.api, model: model.id, provider: provider}
-    )
-  end
-
-  defp emit_stream_close(%Model{} = model, provider, start_mono) do
-    :telemetry.execute(
-      [:octo_pi_ai, :stream, :close],
-      %{duration: System.monotonic_time() - start_mono},
-      %{api: model.api, model: model.id, provider: provider}
     )
   end
 
