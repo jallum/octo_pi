@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire OctoPi.AI.SanitizeUnicode into Anthropic and OpenAI request builders",
   "type": "task",
-  "updated_at": "2026-04-28T13:19:13.956310Z"
+  "updated_at": "2026-04-28T13:22:29.574613Z"
 }
