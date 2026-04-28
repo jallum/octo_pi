@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-tdj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Fold TUI telemetry handlers into Tracer",
   "type": "task",
-  "updated_at": "2026-04-28T14:17:49.019966Z"
+  "updated_at": "2026-04-28T14:25:49.710521Z"
 }
