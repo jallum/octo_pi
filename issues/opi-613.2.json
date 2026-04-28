@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-613",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Thread layout metadata from build_screen/2 to eliminate redundant re-renders; rename render/2",
   "type": "task",
-  "updated_at": "2026-04-28T19:15:18.981509Z"
+  "updated_at": "2026-04-28T19:19:00.882811Z"
 }
