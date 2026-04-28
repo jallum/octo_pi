@@ -163,7 +163,12 @@ defmodule OctoPi.Coder.CLI do
     case ensure_tui_available() do
       {:module, mod} ->
         {:ok, _} = Application.ensure_all_started(:octo_pi_tui)
-        if opts.log_telemetry, do: OctoPi.Tracer.attach_all()
+
+        if opts.log_telemetry do
+          OctoPi.Tracer.attach_all()
+          Enum.each(opts.no_telemetry, &OctoPi.Tracer.detach/1)
+        end
+
         tools = OctoPi.Coder.default_tools(opts.cwd)
         loader = ResourceLoader.load(opts.cwd, nil)
         system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
