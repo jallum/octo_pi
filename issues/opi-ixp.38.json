@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "G5c. Tree-selector: three-way 'Summarize?' prompt integration",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:16Z"
+  "updated_at": "2026-04-28T00:16:13.715461Z"
 }
