@@ -33,8 +33,7 @@ defmodule OctoPi.TUI.TracerHandlersTest do
 
     OctoPi.Tracer.register(%{
       id: :tui_raw,
-      description:
-        "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
+      description: "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
       events: [
         [:octo_pi_tui, :stdin, :chunk],
         [:octo_pi_tui, :stdin, :sequence],
@@ -50,22 +49,22 @@ defmodule OctoPi.TUI.TracerHandlersTest do
 
   describe "registered handlers" do
     test "Events.Tracer registers :tui_events with OctoPi.Tracer" do
-      ids = OctoPi.Tracer.registered() |> Enum.map(& &1.id)
+      ids = Enum.map(OctoPi.Tracer.registered(), & &1.id)
       assert :tui_events in ids
     end
 
     test "Agent.Tracer registers :tui_agent with OctoPi.Tracer" do
-      ids = OctoPi.Tracer.registered() |> Enum.map(& &1.id)
+      ids = Enum.map(OctoPi.Tracer.registered(), & &1.id)
       assert :tui_agent in ids
     end
 
     test "Tracer registers :tui_raw with OctoPi.Tracer" do
-      ids = OctoPi.Tracer.registered() |> Enum.map(& &1.id)
+      ids = Enum.map(OctoPi.Tracer.registered(), & &1.id)
       assert :tui_raw in ids
     end
 
     test ":tui_raw description mentions high-frequency" do
-      spec = OctoPi.Tracer.registered() |> Enum.find(&(&1.id == :tui_raw))
+      spec = Enum.find(OctoPi.Tracer.registered(), &(&1.id == :tui_raw))
       assert spec.description =~ "high-frequency"
     end
   end

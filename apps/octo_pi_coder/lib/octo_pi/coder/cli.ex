@@ -112,8 +112,7 @@ defmodule OctoPi.Coder.CLI do
         0
 
       {:ok, %{list_telemetry: true}} ->
-        OctoPi.Tracer.registered()
-        |> Enum.each(fn %{id: id, description: desc} ->
+        Enum.each(OctoPi.Tracer.registered(), fn %{id: id, description: desc} ->
           IO.puts("#{id}  #{desc}")
         end)
 

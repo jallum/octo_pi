@@ -13,6 +13,7 @@ defmodule OctoPi.Tracer.Formatter do
   defp format_elapsed(us) do
     s = div(us, 1_000_000)
     frac = rem(us, 1_000_000)
+
     "#{String.pad_leading(Integer.to_string(s), 5)}.#{String.pad_leading(Integer.to_string(frac), 6, "0")}"
   end
 

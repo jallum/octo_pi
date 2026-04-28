@@ -33,8 +33,7 @@ defmodule OctoPi.TUI.Application do
 
     OctoPi.Tracer.register(%{
       id: :tui_raw,
-      description:
-        "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
+      description: "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
       events: [
         [:octo_pi_tui, :reader, :read],
         [:octo_pi_tui, :stdin, :chunk],
