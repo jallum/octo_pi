@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Simplify and streamline the TUI rendering pipeline",
   "type": "epic",
-  "updated_at": "2026-04-28T19:03:56.479461Z"
+  "updated_at": "2026-04-28T19:20:44.385367Z"
 }
