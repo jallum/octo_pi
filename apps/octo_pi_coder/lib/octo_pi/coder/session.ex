@@ -139,6 +139,57 @@ defmodule OctoPi.Coder.Session do
   def set_agent_pid(server, agent_pid),
     do: GenServer.call(server, {:set_agent_pid, agent_pid})
 
+  @doc """
+  Subscribe `subscriber` to agent events. Delegates to `OctoPi.Agent.subscribe/3`.
+  The caller will receive `{:octo_pi_agent_event, event}` messages.
+  """
+  @spec subscribe(GenServer.server(), pid(), :async | :sync) :: :ok
+  def subscribe(server, subscriber, mode \\ :async),
+    do: GenServer.call(server, {:agent_subscribe, subscriber, mode})
+
+  @doc """
+  Write the user message entry to the session file and dispatch the prompt
+  to the agent. `save_text` is persisted as-is; `send_text` is what the
+  agent receives (allows template expansion by the caller before this call).
+  When `send_text` is omitted it defaults to `save_text`.
+  """
+  @spec prompt(GenServer.server(), String.t(), String.t()) :: :ok | {:error, term()}
+  def prompt(server, save_text, send_text \\ nil),
+    do: GenServer.call(server, {:agent_prompt, save_text, send_text || save_text})
+
+  @doc "Abort the current agent run."
+  @spec abort(GenServer.server()) :: :ok
+  def abort(server), do: GenServer.call(server, :agent_abort)
+
+  @doc "Queue a follow-up message with the held agent."
+  @spec follow_up(GenServer.server(), String.t()) :: :ok
+  def follow_up(server, text), do: GenServer.call(server, {:agent_follow_up, text})
+
+  @doc "Queue a steering message with the held agent."
+  @spec steer(GenServer.server(), String.t()) :: :ok
+  def steer(server, text), do: GenServer.call(server, {:agent_steer, text})
+
+  @doc "Set the model on the held agent."
+  @spec set_model(GenServer.server(), OctoPi.AI.Model.t()) :: :ok
+  def set_model(server, model), do: GenServer.call(server, {:agent_set_model, model})
+
+  @doc "Set the thinking level on the held agent."
+  @spec set_thinking_level(GenServer.server(), atom()) :: :ok
+  def set_thinking_level(server, level),
+    do: GenServer.call(server, {:agent_set_thinking_level, level})
+
+  @doc "Register an additional tool with the held agent."
+  @spec add_tool(GenServer.server(), OctoPi.Agent.Tool.t()) :: :ok
+  def add_tool(server, tool), do: GenServer.call(server, {:agent_add_tool, tool})
+
+  @doc "Drain and return pending steering messages from the agent queue."
+  @spec drain_steering(GenServer.server()) :: [String.t()]
+  def drain_steering(server), do: GenServer.call(server, :agent_drain_steering)
+
+  @doc "Drain and return pending follow-up messages from the agent queue."
+  @spec drain_follow_up(GenServer.server()) :: [String.t()]
+  def drain_follow_up(server), do: GenServer.call(server, :agent_drain_follow_up)
+
   @doc "Append a user prompt to the session. Called by the UI before `Agent.prompt/2`."
   @spec add_user_message(GenServer.server(), OctoPi.AI.Message.User.t()) :: {:ok, String.t()}
   def add_user_message(server, %OctoPi.AI.Message.User{} = msg) do
@@ -351,6 +402,72 @@ defmodule OctoPi.Coder.Session do
     OctoPi.Agent.subscribe(agent_pid, self(), :async)
     {:reply, :ok, %{state | agent_pid: agent_pid}}
   end
+
+  # ---- agent-delegation handles -------------------------------------------
+
+  def handle_call({:agent_subscribe, subscriber, mode}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.subscribe(state.agent_pid, subscriber, mode)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_prompt, save_text, send_text}, _from, state) do
+    user_msg = %OctoPi.AI.Message.User{
+      content: [%OctoPi.AI.Content.Text{text: save_text}],
+      timestamp: :os.system_time(:millisecond)
+    }
+
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      message: MessageWriter.from_user(user_msg)
+    }
+
+    {sm, _id} = SessionManager.add_entry(state.session_manager, entry, store: state.store_pid)
+    result = if state.agent_pid, do: OctoPi.Agent.prompt(state.agent_pid, send_text), else: {:error, :no_agent}
+    {:reply, result, %{state | session_manager: sm}}
+  end
+
+  def handle_call(:agent_abort, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.abort(state.agent_pid)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_follow_up, text}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.follow_up(state.agent_pid, text)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_steer, text}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.steer(state.agent_pid, text)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_set_model, model}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.set_model(state.agent_pid, model)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_set_thinking_level, level}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.set_thinking_level(state.agent_pid, level)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:agent_add_tool, tool}, _from, state) do
+    if state.agent_pid, do: OctoPi.Agent.add_tool(state.agent_pid, tool)
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:agent_drain_steering, _from, state) do
+    result = if state.agent_pid, do: OctoPi.Agent.drain_steering(state.agent_pid), else: []
+    {:reply, result, state}
+  end
+
+  def handle_call(:agent_drain_follow_up, _from, state) do
+    result = if state.agent_pid, do: OctoPi.Agent.drain_follow_up(state.agent_pid), else: []
+    {:reply, result, state}
+  end
+
+  # -------------------------------------------------------------------------
 
   def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state)
       when is_pid(agent_pid) do

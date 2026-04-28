@@ -22,8 +22,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
-  alias OctoPi.AI.Content.Text, as: AIText
-  alias OctoPi.AI.Message.User, as: AIUser
   alias OctoPi.Coder
   alias OctoPi.Coder.Session, as: CoderSession
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
@@ -69,7 +67,6 @@ defmodule OctoPi.TUI.Interactive do
 
   @type t :: %__MODULE__{
           session: pid() | nil,
-          coder_session: pid() | nil,
           sup: pid() | nil,
           renderer: pid() | nil,
           terminal: pid() | nil,
@@ -109,7 +106,6 @@ defmodule OctoPi.TUI.Interactive do
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
-            coder_session: nil,
             sup: nil,
             renderer: nil,
             terminal: nil,
@@ -277,7 +273,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:register_extension_tool, spec}) do
-    if state.session, do: OctoPi.Agent.add_tool(state.session, spec)
+    if state.session, do: CoderSession.add_tool(state.session, spec)
     {state, :ok}
   end
 
@@ -390,7 +386,7 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     extensions = load_extensions(opts, cwd)
-    {session, coder_session} = start_sessions(opts, extensions)
+    session = start_sessions(opts, extensions)
 
     terminal_opts = build_terminal_opts(opts, write_fn)
 
@@ -407,7 +403,7 @@ defmodule OctoPi.TUI.Interactive do
     footer_data = child_pid(sup, FooterData)
 
     :ok = Terminal.open(terminal)
-    OctoPi.Agent.subscribe(session, self(), :async)
+    CoderSession.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
 
@@ -424,7 +420,6 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %__MODULE__{
       session: session,
-      coder_session: coder_session,
       sup: sup,
       renderer: renderer,
       terminal: terminal,
@@ -453,6 +448,7 @@ defmodule OctoPi.TUI.Interactive do
 
     register_extension_tools(extensions, session)
     fire_session_start(extensions, cwd, self())
+
 
     {:ok, state, {:continue, :first_render}}
   end
@@ -679,7 +675,7 @@ defmodule OctoPi.TUI.Interactive do
 
     {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
     :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
-    {agent_pid, coder_pid}
+    coder_pid
   end
 
   defp resume_or_new(cwd, model, tools, system_prompt, extensions, opts) do
@@ -716,7 +712,7 @@ defmodule OctoPi.TUI.Interactive do
 
         {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
         :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
-        {agent_pid, coder_pid}
+        coder_pid
     end
   end
 
@@ -782,9 +778,9 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp register_extension_tools(extensions, session) do
+  defp register_extension_tools(extensions, coder_session) do
     for ext <- extensions, tool <- Map.values(ext.tools) do
-      OctoPi.Agent.add_tool(session, tool)
+      CoderSession.add_tool(coder_session, tool)
     end
 
     :ok
@@ -1018,7 +1014,7 @@ defmodule OctoPi.TUI.Interactive do
         %{state | model_selector: nil}
 
       {_new_ms, [{:select_model, model}]} ->
-        if state.session, do: OctoPi.Agent.set_model(state.session, model)
+        if state.session, do: CoderSession.set_model(state.session, model)
 
         %{
           state
@@ -1118,7 +1114,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: OctoPi.Agent.abort(state.session)
+    if state.session, do: CoderSession.abort(state.session)
     state
   end
 
@@ -1128,7 +1124,7 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | input: %{state.input | value: "", cursor: 0}}
 
   defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: OctoPi.Agent.abort(state.session)
+    if state.session, do: CoderSession.abort(state.session)
     state
   end
 
@@ -1143,7 +1139,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.thinking.cycle", state, _key) do
     new_level = next_thinking_level(state.thinking_level)
-    if state.session, do: OctoPi.Agent.set_thinking_level(state.session, new_level)
+    if state.session, do: CoderSession.set_thinking_level(state.session, new_level)
     label = thinking_level_label(new_level)
 
     %{
@@ -1171,8 +1167,8 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
 
   defp dispatch_app_action("app.message.dequeue", state, _key) do
-    steering = OctoPi.Agent.drain_steering(state.session)
-    follow_up = OctoPi.Agent.drain_follow_up(state.session)
+    steering = CoderSession.drain_steering(state.session)
+    follow_up = CoderSession.drain_follow_up(state.session)
     items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
 
     if items == [],
@@ -1186,7 +1182,7 @@ defmodule OctoPi.TUI.Interactive do
     if text == "" do
       state
     else
-      if state.session, do: OctoPi.Agent.follow_up(state.session, text)
+      if state.session, do: CoderSession.follow_up(state.session, text)
       input = %{state.input | value: "", cursor: 0}
       %{state | input: input, notification: "Follow-up queued"}
     end
@@ -1198,7 +1194,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleForward", state, _key) do
     new_model = cycle_model(state.models, state.model, :next)
-    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+    if state.session, do: CoderSession.set_model(state.session, new_model)
 
     %{
       state
@@ -1212,7 +1208,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleBackward", state, _key) do
     new_model = cycle_model(state.models, state.model, :prev)
-    if state.session, do: OctoPi.Agent.set_model(state.session, new_model)
+    if state.session, do: CoderSession.set_model(state.session, new_model)
 
     %{
       state
@@ -1321,14 +1317,8 @@ defmodule OctoPi.TUI.Interactive do
   defp notify_extension_result(_pid, _), do: :ok
 
   defp do_handle_submit(state, new_input, value) do
-    prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-
-    if state.coder_session do
-      user_msg = %AIUser{content: [%AIText{text: value}], timestamp: :os.system_time(:millisecond)}
-      CoderSession.add_user_message(state.coder_session, user_msg)
-    end
-
-    if state.session, do: OctoPi.Agent.prompt(state.session, prompt)
+    send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
+    if state.session, do: CoderSession.prompt(state.session, value, send_text)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
@@ -1354,10 +1344,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_slash_command("compact", state) do
-    if state.coder_session do
-      Task.start(fn -> CoderSession.compact(state.coder_session, []) end)
-    end
-
+    if state.session, do: Task.start(fn -> CoderSession.compact(state.session, []) end)
     state
   end
 
@@ -1611,8 +1598,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
     Enum.each(ov.items, fn
-      {:steering, msg} -> if state.session, do: OctoPi.Agent.steer(state.session, msg)
-      {:follow_up, msg} -> if state.session, do: OctoPi.Agent.follow_up(state.session, msg)
+      {:steering, msg} -> if state.session, do: CoderSession.steer(state.session, msg)
+      {:follow_up, msg} -> if state.session, do: CoderSession.follow_up(state.session, msg)
     end)
 
     %{state | dequeue_overlay: nil}
