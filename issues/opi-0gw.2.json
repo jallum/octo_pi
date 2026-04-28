@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Strengthen OctoPi.Agent.Message with public typed API; wire into MessageLog and Session",
   "type": "task",
-  "updated_at": "2026-04-28T13:22:34.455992Z"
+  "updated_at": "2026-04-28T13:24:49.511453Z"
 }
