@@ -19,8 +19,7 @@ defmodule OctoPi.Agent.Application do
         [:octo_pi_agent, :turn, :stop],
         [:octo_pi_agent, :turn, :exception],
         [:octo_pi_agent, :tool, :start],
-        [:octo_pi_agent, :tool, :stop],
-        [:octo_pi_agent, :tool, :error]
+        [:octo_pi_agent, :tool, :stop]
       ],
       level: :info
     })

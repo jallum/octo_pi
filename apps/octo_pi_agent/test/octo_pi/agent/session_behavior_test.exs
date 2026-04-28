@@ -827,7 +827,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
       assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _}, %{reason: :stop}}
     end
 
-    test "tool :error event fires for error results" do
+    test "tool :stop fires with is_error?: true for error results" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"raise" => "boom"}}
       tool_turn = assistant([tool_call], :tool_use)
       final_turn = assistant([%Text{text: "done"}], :stop)
@@ -848,7 +848,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       :telemetry.attach(
         handler_id,
-        [:octo_pi_agent, :tool, :error],
+        [:octo_pi_agent, :tool, :stop],
         &__MODULE__.telemetry_forward/4,
         %{pid: test_pid}
       )
@@ -859,7 +859,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
       :ok = OctoPi.Agent.prompt(session, "fail")
       :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
 
-      assert_received {:telemetry, [:octo_pi_agent, :tool, :error], _, %{is_error?: true}}
+      assert_received {:telemetry, [:octo_pi_agent, :tool, :stop], _, %{is_error?: true}}
     end
   end
 

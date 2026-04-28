@@ -25,7 +25,7 @@ defmodule OctoPi.TUI.Application do
         [:octo_pi_agent, :turn, :start],
         [:octo_pi_agent, :turn, :stop],
         [:octo_pi_agent, :tool, :start],
-        [:octo_pi_agent, :tool, :end],
+        [:octo_pi_agent, :tool, :stop],
         [:octo_pi_agent, :tool, :error]
       ],
       level: :info

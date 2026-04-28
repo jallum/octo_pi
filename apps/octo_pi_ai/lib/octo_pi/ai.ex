@@ -31,8 +31,16 @@ defmodule OctoPi.AI do
   @spec stream(Model.t(), Context.t(), StreamOptions.t() | nil) :: Enumerable.t()
   def stream(%Model{} = model, %Context{} = context, opts \\ nil) do
     provider = provider_module(model.api)
+    start_mono = System.monotonic_time()
     emit_stream_open(model, provider, :stream)
-    provider.stream(model, context, opts || %StreamOptions{})
+
+    model
+    |> provider.stream(context, opts || %StreamOptions{})
+    |> Stream.transform(
+      fn -> start_mono end,
+      fn ev, acc -> {[ev], acc} end,
+      fn acc -> emit_stream_close(model, provider, :stream, acc) end
+    )
   end
 
   @doc """
@@ -43,14 +51,30 @@ defmodule OctoPi.AI do
   @spec stream_simple(Model.t(), Context.t(), StreamOptions.t() | nil) :: Enumerable.t()
   def stream_simple(%Model{} = model, %Context{} = context, opts \\ nil) do
     provider = provider_module(model.api)
+    start_mono = System.monotonic_time()
     emit_stream_open(model, provider, :stream_simple)
-    provider.stream_simple(model, context, opts || %StreamOptions{})
+
+    model
+    |> provider.stream_simple(context, opts || %StreamOptions{})
+    |> Stream.transform(
+      fn -> start_mono end,
+      fn ev, acc -> {[ev], acc} end,
+      fn acc -> emit_stream_close(model, provider, :stream_simple, acc) end
+    )
   end
 
   defp emit_stream_open(%Model{} = model, provider, entry) do
     :telemetry.execute(
       [:octo_pi_ai, :stream, :open],
       %{system_time: System.system_time()},
+      %{api: model.api, model: model.id, provider: provider, entry: entry}
+    )
+  end
+
+  defp emit_stream_close(%Model{} = model, provider, entry, start_mono) do
+    :telemetry.execute(
+      [:octo_pi_ai, :stream, :close],
+      %{duration: System.monotonic_time() - start_mono},
       %{api: model.api, model: model.id, provider: provider, entry: entry}
     )
   end

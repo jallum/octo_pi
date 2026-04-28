@@ -49,7 +49,8 @@ defmodule OctoPi.Agent.Turn.Worker do
           required(:tools) => [Tool.t()],
           required(:mode) => :parallel | :sequential,
           optional(:before_tool_call) => fun() | nil,
-          optional(:after_tool_call) => fun() | nil
+          optional(:after_tool_call) => fun() | nil,
+          optional(:session_id) => String.t() | nil
         }
 
   # ---------- stream phase ----------
@@ -185,12 +186,12 @@ defmodule OctoPi.Agent.Turn.Worker do
         :telemetry.execute(
           [:octo_pi_agent, :tool, :start],
           %{system_time: System.system_time()},
-          %{tool_call_id: call.id, tool_name: call.name}
+          %{tool_call_id: call.id, tool_name: call.name, session_id: opts[:session_id]}
         )
 
         result = dispatch_with_hooks(parent, ref, opts, tool, call)
         cast_tool_end(parent, ref, call, result)
-        emit_tool_stop(call, result, start_mono)
+        emit_tool_stop(call, result, start_mono, opts[:session_id])
         result
     end
   end
@@ -256,13 +257,11 @@ defmodule OctoPi.Agent.Turn.Worker do
     e -> error_result("after_tool_call raised: #{Exception.message(e)}")
   end
 
-  defp emit_tool_stop(call, %Tool.Result{is_error?: is_error?}, start_mono) do
-    event = if is_error?, do: :error, else: :stop
-
+  defp emit_tool_stop(call, %Tool.Result{is_error?: is_error?}, start_mono, session_id) do
     :telemetry.execute(
-      [:octo_pi_agent, :tool, event],
+      [:octo_pi_agent, :tool, :stop],
       %{duration: System.monotonic_time() - start_mono},
-      %{tool_call_id: call.id, tool_name: call.name, is_error?: is_error?}
+      %{tool_call_id: call.id, tool_name: call.name, is_error?: is_error?, session_id: session_id}
     )
   end
 

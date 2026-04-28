@@ -80,7 +80,8 @@ defmodule OctoPi.Agent.Session.State do
           compaction_auto?: false | :continue | :end_after | :overflow_retry,
           auto_compact_reserve_tokens: non_neg_integer() | nil,
           last_compaction_at_ms: integer() | nil,
-          compaction_overflow_attempted?: boolean()
+          compaction_overflow_attempted?: boolean(),
+          session_id: String.t() | nil
         }
 
   defstruct [
@@ -92,6 +93,7 @@ defmodule OctoPi.Agent.Session.State do
     :turn_ref,
     :abort_ref,
     :run_started_at_mono,
+    :session_id,
     :before_tool_call,
     :after_tool_call,
     :transport,

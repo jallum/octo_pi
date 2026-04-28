@@ -324,11 +324,12 @@ defmodule OctoPi.Agent.Session do
 
   defp start_run(store) do
     abort_ref = AbortRef.new()
+    session_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
 
     :telemetry.execute(
       [:octo_pi_agent, :session, :start],
       %{system_time: System.system_time()},
-      %{model: store.session.model.id}
+      %{model: store.session.model.id, session_id: session_id}
     )
 
     Subscribers.dispatch(self(), %Event.AgentStart{})
@@ -339,6 +340,7 @@ defmodule OctoPi.Agent.Session do
         error_message: nil,
         abort_ref: abort_ref,
         run_started_at_mono: System.monotonic_time(),
+        session_id: session_id,
         turn: Turn.new(),
         compaction_overflow_attempted?: false
     }
@@ -364,7 +366,7 @@ defmodule OctoPi.Agent.Session do
     :telemetry.execute(
       [:octo_pi_agent, :turn, :start],
       %{system_time: System.system_time()},
-      %{turn: t}
+      %{turn: t, session_id: store.session.session_id}
     )
 
     %{store | turn_id: t, turn_started_at_mono: System.monotonic_time()}
@@ -420,7 +422,8 @@ defmodule OctoPi.Agent.Session do
       tools: session.tools,
       mode: mode,
       before_tool_call: session.before_tool_call,
-      after_tool_call: session.after_tool_call
+      after_tool_call: session.after_tool_call,
+      session_id: session.session_id
     }
 
     {:ok, pid} =
@@ -852,17 +855,17 @@ defmodule OctoPi.Agent.Session do
     :telemetry.execute(
       [:octo_pi_agent, :session, :stop],
       %{duration: System.monotonic_time() - state.run_started_at_mono},
-      %{reason: reason, turn_count: turn_count, message_count: message_count}
+      %{reason: reason, turn_count: turn_count, message_count: message_count, session_id: state.session_id}
     )
   end
 
   defp emit_turn_stop(%{turn_started_at_mono: nil}, _reason), do: :ok
 
-  defp emit_turn_stop(%{turn_id: turn_id, turn_started_at_mono: started}, reason) do
+  defp emit_turn_stop(%{turn_id: turn_id, turn_started_at_mono: started, session: %{session_id: session_id}}, reason) do
     :telemetry.execute(
       [:octo_pi_agent, :turn, :stop],
       %{duration: System.monotonic_time() - started},
-      %{turn: turn_id, stop_reason: reason}
+      %{turn: turn_id, stop_reason: reason, session_id: session_id}
     )
   end
 
