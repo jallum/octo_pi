@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:32:29Z",
+  "description": "## What to do\n\nAdapt the upstream tmux doc (tmp/pi-mono/packages/coding-agent/docs/tmux.md, 61 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/tmux.md\n- tmp/pi-mono/packages/tui/src/terminal.ts (tmux integration)\n\n## Output\n\nCreate docs/tmux.md\n\n## How to adapt\n\n1. **Problem Statement**: The tmux modifier stripping issue is terminal-specific, not language-specific. Preserve the explanation verbatim.\n\n2. **Recommended Configuration**: The tmux.conf example is terminal-specific. Preserve verbatim:\n   ```tmux\n   set -g extended-keys on\n   set -g extended-keys-format csi-u\n   ```\n\n3. **Why csi-u**: The csi-u vs xterm format comparison is terminal-specific. Preserve the key sequence examples.\n\n4. **What This Fixes**: The modifier key table is terminal-specific. Preserve verbatim.\n\n5. **Requirements**: Update to note our requirements:\n   - tmux 3.2+\n   - Terminal emulator supporting extended keys\n   - OTP 28+ for raw mode support\n\n## What to preserve verbatim\n\n- All tmux configuration examples\n- The key sequence comparison table\n- The explanation of why csi-u is recommended\n\n## What to add\n\n- Note our `OctoPi.TUI.Terminal` raw mode handling\n- Note our Kitty protocol negotiation\n- Note our `modifyOtherKeys` fallback\n\n## Key upstream references to include\n\n- [terminal.ts](https://github.com/badlogic/pi-mono/blob/main/packages/tui/src/terminal.ts)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All tmux config examples are accurate\n2. The key sequence table is correct\n3. Our raw mode requirements are documented",
+  "id": "opi-tpj.19",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "tmux Setup",
+  "type": "task",
+  "updated_at": "2026-04-28T11:32:29Z"
+}
