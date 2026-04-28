@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "in_review",
+  "status": "closed",
   "title": "Unified Tracer: consolidate all telemetry logging",
   "type": "epic",
-  "updated_at": "2026-04-28T14:26:02.923419Z"
+  "updated_at": "2026-04-28T16:59:52.790351Z"
 }
