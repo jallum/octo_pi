@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-sww",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Convert Renderer from GenServer to pure module",
   "type": "task",
-  "updated_at": "2026-04-28T20:09:34.517290Z"
+  "updated_at": "2026-04-28T20:10:04.060549Z"
 }
