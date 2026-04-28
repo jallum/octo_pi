@@ -545,6 +545,16 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def terminate(_reason, state) do
+    # Move cursor past the last rendered line so the shell prompt appears
+    # on a fresh line below the content (mirrors upstream pi-mono stop()).
+    with pid when is_pid(pid) <- state.renderer,
+         true <- Process.alive?(pid),
+         bytes when bytes != "" <- Renderer.exit_bytes(pid),
+         term when is_pid(term) <- state.terminal,
+         true <- Process.alive?(term) do
+      Terminal.write(term, bytes)
+    end
+
     # Synchronously shut the supervisor down so Terminal.terminate/2
     # (and through it Reader.terminate/2) runs before we return —
     # otherwise the BEAM proceeds to halt while the kitty/MOK disable
@@ -1434,14 +1444,12 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
-    lines = component.render.(width)
-    len = length(lines)
-    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+  def render(%{custom_widget: {_, component}, width: width}, _input_lines) do
+    [""] ++ component.render.(width)
   end
 
   def render(
-        %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width, height: height} = state,
+        %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
         input_lines
       ) do
     banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, width)
@@ -1457,8 +1465,7 @@ defmodule OctoPi.TUI.Interactive do
         resource_lines ++
         transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines
 
-    len = length(all)
-    if len < height, do: List.duplicate("", height - len) ++ all, else: all
+    [""] ++ all
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}

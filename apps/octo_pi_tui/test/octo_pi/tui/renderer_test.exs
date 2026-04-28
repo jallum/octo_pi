@@ -13,11 +13,12 @@ defmodule OctoPi.TUI.RendererTest do
   end
 
   describe "first render" do
-    test "clears screen and outputs all lines" do
+    test "does not clear screen (matches upstream pi-mono)" do
       pid = new()
       {:ok, bytes} = Renderer.render(pid, ["hello", "world"])
 
-      assert bytes =~ "\e[2J"
+      refute bytes =~ "\e[2J"
+      refute bytes =~ "\e[H"
       text = strip_csi(bytes)
       assert text =~ "hello"
       assert text =~ "world"

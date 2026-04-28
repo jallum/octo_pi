@@ -60,6 +60,14 @@ defmodule OctoPi.TUI.Renderer do
   def full_redraws(pid), do: GenServer.call(pid, :full_redraws)
 
   @doc """
+  Return bytes that move the cursor to just past the last rendered line.
+  Write these to the terminal before exit so the shell prompt appears on
+  a fresh line below the content.
+  """
+  @spec exit_bytes(GenServer.server()) :: binary()
+  def exit_bytes(pid), do: GenServer.call(pid, :exit_bytes)
+
+  @doc """
   Pure diff helper exposed for unit tests.
   Returns `{first_changed, last_changed}` or `{-1, -1}` when identical.
   """
@@ -96,7 +104,7 @@ defmodule OctoPi.TUI.Renderer do
       hardware_cursor_row: 0,
       max_lines_rendered: 0,
       previous_viewport_top: 0,
-      needs_clear: true,
+      needs_clear: false,
       csi_2026?: Keyword.get(opts, :csi_2026?, false),
       termux?: termux?(),
       full_redraws: 0,
@@ -128,6 +136,15 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   def handle_call(:full_redraws, _from, state), do: {:reply, state.full_redraws, state}
+
+  def handle_call(:exit_bytes, _from, %{previous: nil} = state), do: {:reply, "", state}
+
+  def handle_call(:exit_bytes, _from, state) do
+    target_row = length(state.previous)
+    line_diff = target_row - state.hardware_cursor_row
+    bytes = IO.iodata_to_binary([move_cursor_v(line_diff), "\r\n"])
+    {:reply, bytes, state}
+  end
 
   # --- compute dispatch ---
 
