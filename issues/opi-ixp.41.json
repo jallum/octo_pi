@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "H2. interactive-mode-compaction.test.ts parity",
   "type": "task",
-  "updated_at": "2026-04-26T20:02:17Z"
+  "updated_at": "2026-04-28T00:26:07.185550Z"
 }
