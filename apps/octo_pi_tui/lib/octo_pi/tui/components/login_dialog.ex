@@ -88,6 +88,7 @@ defmodule OctoPi.TUI.Components.LoginDialog do
     Box.render(box, width)
   end
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

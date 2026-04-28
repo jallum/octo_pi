@@ -39,6 +39,7 @@ defmodule OctoPi.TUI.Components.Container do
     Enum.flat_map(children, &render_child(&1, width))
   end
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

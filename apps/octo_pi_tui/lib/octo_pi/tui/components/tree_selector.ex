@@ -131,6 +131,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

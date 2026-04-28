@@ -93,6 +93,7 @@ defmodule OctoPi.TUI.Components.SettingsSelector do
     end)
   end
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

@@ -167,6 +167,7 @@ defmodule OctoPi.TUI.Components.SelectList do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

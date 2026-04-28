@@ -89,6 +89,7 @@ defmodule OctoPi.TUI.Components.SessionSelector do
     |> Enum.map(&render_item(&1, s))
   end
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

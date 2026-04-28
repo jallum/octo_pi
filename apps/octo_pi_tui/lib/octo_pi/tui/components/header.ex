@@ -61,6 +61,7 @@ defmodule OctoPi.TUI.Components.Header do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
+  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 
