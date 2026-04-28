@@ -104,22 +104,16 @@ defmodule OctoPi.TUI.RenderLoopTest do
     end
   end
 
+  @doc false
+  def __telemetry_forward__(_event, measurements, metadata, pid), do: send(pid, {:telemetry, measurements, metadata})
+
   describe "telemetry" do
     test "emits [:octo_pi_tui, :renderer, :render] on each tick" do
       test_pid = self()
+      handler_id = "render-loop-test-#{inspect(test_pid)}"
 
-      :telemetry.attach(
-        "render-loop-test-#{inspect(self())}",
-        [:octo_pi_tui, :renderer, :render],
-        fn _event, measurements, metadata, _config ->
-          send(test_pid, {:telemetry, measurements, metadata})
-        end,
-        nil
-      )
-
-      on_exit(fn ->
-        :telemetry.detach("render-loop-test-#{inspect(test_pid)}")
-      end)
+      :telemetry.attach(handler_id, [:octo_pi_tui, :renderer, :render], &__MODULE__.__telemetry_forward__/4, test_pid)
+      on_exit(fn -> :telemetry.detach(handler_id) end)
 
       pid = start()
       send(pid, {:render, ["hello"], ""})
@@ -135,27 +129,18 @@ defmodule OctoPi.TUI.RenderLoopTest do
 
     test "frame increments on each tick" do
       test_pid = self()
+      handler_id = "render-loop-frame-test-#{inspect(test_pid)}"
 
-      :telemetry.attach(
-        "render-loop-frame-test-#{inspect(self())}",
-        [:octo_pi_tui, :renderer, :render],
-        fn _event, _measurements, metadata, _config ->
-          send(test_pid, {:frame, metadata.frame})
-        end,
-        nil
-      )
-
-      on_exit(fn ->
-        :telemetry.detach("render-loop-frame-test-#{inspect(test_pid)}")
-      end)
+      :telemetry.attach(handler_id, [:octo_pi_tui, :renderer, :render], &__MODULE__.__telemetry_forward__/4, test_pid)
+      on_exit(fn -> :telemetry.detach(handler_id) end)
 
       pid = start()
       send(pid, {:render, ["a"], ""})
-      assert_receive {:frame, 0}, 200
+      assert_receive {:telemetry, _, %{frame: 0}}, 200
       send(pid, {:render, ["b"], ""})
-      assert_receive {:frame, 1}, 200
+      assert_receive {:telemetry, _, %{frame: 1}}, 200
       send(pid, {:render, ["c"], ""})
-      assert_receive {:frame, 2}, 200
+      assert_receive {:telemetry, _, %{frame: 2}}, 200
     end
   end
 end

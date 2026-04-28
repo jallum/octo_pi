@@ -89,8 +89,28 @@ defmodule OctoPi.Tracer do
     Enum.each(registered(), fn spec ->
       hid = handler_id(spec.id)
       :telemetry.detach(hid)
-      :telemetry.attach_many(hid, flat_events(spec), build_handler(spec), base_mono)
+
+      :telemetry.attach_many(
+        hid,
+        flat_events(spec),
+        &__MODULE__.handle_event/4,
+        build_config(spec, base_mono)
+      )
     end)
+  end
+
+  @doc false
+  def handle_event(event, measurements, metadata, {base_mono, level}) when is_atom(level) do
+    line = Formatter.format(event, measurements, metadata, base_mono)
+    Logger.log(level, line, domain: [:octo_pi_tracer])
+  end
+
+  @doc false
+  def handle_event(event, measurements, metadata, {base_mono, event_to_level})
+      when is_map(event_to_level) do
+    level = Map.fetch!(event_to_level, event)
+    line = Formatter.format(event, measurements, metadata, base_mono)
+    Logger.log(level, line, domain: [:octo_pi_tracer])
   end
 
   @doc """
@@ -108,23 +128,15 @@ defmodule OctoPi.Tracer do
     Enum.flat_map(events_by_level, fn {_level, evts} -> evts end)
   end
 
-  defp build_handler(%{events: events, level: default_level}) when is_list(events) do
-    fn event, measurements, metadata, base_mono ->
-      line = Formatter.format(event, measurements, metadata, base_mono)
-      Logger.log(default_level, line, domain: [:octo_pi_tracer])
-    end
-  end
+  defp build_config(%{events: events, level: default_level}, base_mono) when is_list(events),
+    do: {base_mono, default_level}
 
-  defp build_handler(%{events: events_by_level}) when is_map(events_by_level) do
+  defp build_config(%{events: events_by_level}, base_mono) when is_map(events_by_level) do
     event_to_level =
       Enum.flat_map(events_by_level, fn {level, evts} -> Enum.map(evts, &{&1, level}) end)
       |> Map.new()
 
-    fn event, measurements, metadata, base_mono ->
-      level = Map.fetch!(event_to_level, event)
-      line = Formatter.format(event, measurements, metadata, base_mono)
-      Logger.log(level, line, domain: [:octo_pi_tracer])
-    end
+    {base_mono, event_to_level}
   end
 
   defp handler_id(id), do: "octo_pi_tracer_#{id}"
