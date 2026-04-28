@@ -102,7 +102,7 @@ defmodule OctoPi.Coder.CLI do
   # and "pattern can never match" warnings for every mode clause.
   @dialyzer [
     {:no_match, run: 1},
-    {:no_unused, [run_interactive: 1, run_rpc: 1, rpc_loop: 1]}
+    {:no_unused, [dispatch: 1, run_interactive: 1, run_rpc: 1, rpc_loop: 1]}
   ]
 
   @spec run([String.t()]) :: integer()
