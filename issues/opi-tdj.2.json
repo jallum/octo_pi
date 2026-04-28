@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-tdj.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T13:53:49.712574Z",
+  "description": "Replace all existing Logger-bridge and direct-Logger handlers with thin `OctoPi.Tracer.register/1` registrations.\n\nModules to port:\n- `apps/octo_pi_ai/lib/octo_pi/telemetry/core_handler.ex` → `:ai_core`\n- `apps/octo_pi_agent/lib/octo_pi/telemetry/agent_handler.ex` → `:agent`\n- `apps/octo_pi_ai_openai/lib/octo_pi/telemetry/open_ai_handler.ex` → `:openai`\n- `apps/octo_pi_ai_anthropic/lib/octo_pi/telemetry/anthropic_handler.ex` → `:anthropic`\n- `apps/octo_pi_coder/lib/octo_pi/coder/extension/telemetry_handler.ex` → `:coder_extension`\n\nEach registration: call `OctoPi.Tracer.register/1` from the owning app's `Application.start/2`. The handler callback logs via `Logger` with `[domain: :octo_pi_tracer]` metadata using `OctoPi.Tracer.Formatter`.\n\nRetire `apps/octo_pi_ai/lib/octo_pi/telemetry/logger.ex` (the old bridge) once all handlers are ported.\n\nAdd `{:octo_pi_tracer, in_umbrella: true}` to each affected app's deps.",
+  "id": "opi-tdj.2",
+  "labels": [],
+  "parent": "opi-tdj",
+  "priority": 2,
+  "status": "open",
+  "title": "Port AI-layer and extension telemetry handlers to Tracer",
+  "type": "task",
+  "updated_at": "2026-04-28T13:53:49.712574Z"
+}

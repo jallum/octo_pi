@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-tdj.1"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T13:53:49.712574Z",
+  "description": "Replace the three TUI-specific handlers with registered Tracer handlers and remove their dedicated CLI flags.\n\nModules to fold:\n- `apps/octo_pi_tui/lib/octo_pi/tui/event_logger.ex` → `:tui_events` (stdin bytes, key events)\n- `apps/octo_pi_tui/lib/octo_pi/tui/agent_telemetry_logger.ex` → `:tui_agent` (session/turn/tool lifecycle)\n- `apps/octo_pi_tui/lib/octo_pi/tui/tracer.ex` → `:tui_raw` (15 TTY pipeline events: reader, raw_mode, drain)\n\nIn `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`:\n- Remove `--debug-events`, `--trace=PATH`, `--telemetry=PATH` flag handling\n- The unified `--log-telemetry=PATH` / `--no-telemetry` / `--list-telemetry` flags (wired in task 1) replace all three\n\nNote: `:tui_raw` is high-frequency (stdin byte level). Its description should call this out so users know to expect volume.",
+  "id": "opi-tdj.3",
+  "labels": [],
+  "parent": "opi-tdj",
+  "priority": 2,
+  "status": "open",
+  "title": "Fold TUI telemetry handlers into Tracer",
+  "type": "task",
+  "updated_at": "2026-04-28T13:53:49.712574Z"
+}

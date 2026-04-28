@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-tdj.2",
+    "opi-tdj.3"
+  ],
+  "comments": [],
+  "created": "2026-04-28T13:53:49.712574Z",
+  "description": "Create the new `octo_pi_tracer` umbrella app. It must have no internal umbrella dependencies so it can sit at the bottom of the dep graph.\n\n- `mix new apps/octo_pi_tracer --sup`\n- `OctoPi.Tracer` module with `register/1` (stores handler spec in ETS on `Application.start/2`) and `registered/0` (enumerates all specs)\n- Handler spec: `%{id: atom, description: String.t(), events: [[atom]], level: Logger.level()}`\n- `OctoPi.Tracer.Formatter` — single log-line format: `monotonic_us wall_time_iso [app.subsystem.action] key=value ...`\n- `OctoPi.Tracer.FileBackend` — Logger backend (or OTP `:logger` handler) that filters on `domain: :octo_pi_tracer` and writes to a configured path\n- CLI integration in `octo_pi_tui`: `--log-telemetry=PATH` installs the file backend; `--no-telemetry=id1,id2` detaches named handlers after startup; `--list-telemetry` calls `OctoPi.Tracer.registered/0` and prints id + description",
+  "id": "opi-tdj.1",
+  "labels": [],
+  "parent": "opi-tdj",
+  "priority": 2,
+  "status": "open",
+  "title": "Scaffold octo_pi_tracer umbrella app",
+  "type": "task",
+  "updated_at": "2026-04-28T13:53:49.712574Z"
+}

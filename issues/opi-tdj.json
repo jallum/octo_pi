@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T13:53:49.712574Z",
+  "description": "## Problem\n\nTelemetry logging is fragmented across the codebase: four Logger-bridge handlers activated via config flags, three TUI-specific file loggers activated via separate CLI flags, and one always-on Logger-direct handler. There is no way to get a unified timeline of events for debugging.\n\n## Goal\n\nA single `octo_pi_tracer` umbrella app that owns all telemetry handler registrations. All handlers log via `Logger` with `domain: :octo_pi_tracer` metadata. A single `--log-telemetry=PATH` CLI flag diverts that Logger domain to a file. All handlers are enabled by default; `--no-telemetry=id1,id2` disables specific ones. `--list-telemetry` prints all registered handlers with their one-line descriptions.\n\n## Approach\n\n- `octo_pi_tracer` sits at the bottom of the dependency graph (no internal deps), so all other apps can depend on it\n- `OctoPi.Tracer.register/1` accepts `%{id:, description:, events:, level:}` and stores in ETS at `Application.start/2`\n- `OctoPi.Tracer.registered/0` enumerates the registry — used by `--list-telemetry`\n- All existing handlers become thin registrations; no handler owns file I/O or custom formatting\n- Log line format: `monotonic_us wall_time_iso [app.subsystem.action] key=value ...`\n- The three TUI-specific handlers (EventLogger, AgentTelemetryLogger, TUI.Tracer) are folded in as `:tui_events`, `:tui_agent`, `:tui_raw` registrations; their dedicated CLI flags are removed",
+  "id": "opi-tdj",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Unified Tracer: consolidate all telemetry logging",
+  "type": "epic",
+  "updated_at": "2026-04-28T13:53:49.712574Z"
+}
