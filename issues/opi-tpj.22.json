@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:34:03Z",
+  "description": "## What to do\n\nAdapt the upstream shell aliases doc (tmp/pi-mono/packages/coding-agent/docs/shell-aliases.md, 13 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/shell-aliases.md\n- tmp/pi-mono/packages/coding-agent/src/core/shell.ts (reference)\n\n## Output\n\nCreate docs/shell-aliases.md\n\n## How to adapt\n\n1. Problem: bash non-interactive mode does not expand aliases by default. Preserve this explanation.\n\n2. Configuration: Update the settings.json path. Show our equivalent shellCommandPrefix setting.\n\n3. Notes: Add notes about:\n   - Our bash tool uses bash -c by default\n   - The shellCommandPrefix is prepended to every bash execution\n   - For zsh users, reference ~/.zshrc; for bash users, reference ~/.bashrc\n\n## What to preserve verbatim\n\n- The problem statement (bash non-interactive mode)\n- The shellCommandPrefix concept\n- The general approach to enabling aliases\n\n## Key upstream references to include\n\n- shell.ts from pi-mono\n\n## Testing the doc\n\nAfter writing, verify:\n1. The shellCommandPrefix format is correct\n2. All paths match our config directory\n3. The example is accurate for our system",
+  "id": "opi-tpj.22",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Shell Aliases",
+  "type": "task",
+  "updated_at": "2026-04-28T11:34:03Z"
+}
