@@ -83,7 +83,7 @@ defmodule OctoPi.TUI.Interactive do
   @type t :: %__MODULE__{
           session: pid() | nil,
           sup: pid() | nil,
-          renderer: pid() | nil,
+          renderer: Renderer.t() | nil,
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
           skip_raw_mode: boolean(),
@@ -413,14 +413,13 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: Renderer, start: {Renderer, :start_link, [build_renderer_opts(opts, w, h)]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
 
     {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
 
     terminal = child_pid(sup, Terminal)
-    renderer = child_pid(sup, Renderer)
+    renderer = Renderer.new(build_renderer_opts(opts, w, h))
     footer_data = child_pid(sup, FooterData)
 
     :ok = Terminal.open(terminal)
@@ -481,7 +480,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
-    Renderer.resize(state.renderer, w, h)
+    state = %{state | renderer: Renderer.resize(state.renderer, w, h)}
 
     state
     |> handle_event(event)
@@ -576,9 +575,8 @@ defmodule OctoPi.TUI.Interactive do
   def terminate(_reason, state) do
     # Move cursor past the last rendered line so the shell prompt appears
     # on a fresh line below the content (mirrors upstream pi-mono stop()).
-    with pid when is_pid(pid) <- state.renderer,
-         true <- Process.alive?(pid),
-         bytes when bytes != "" <- Renderer.exit_bytes(pid),
+    with %Renderer{} = r <- state.renderer,
+         bytes when bytes != "" <- Renderer.exit_bytes(r),
          term when is_pid(term) <- state.terminal,
          true <- Process.alive?(term) do
       Terminal.write(term, bytes)
@@ -836,13 +834,8 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  defp build_renderer_opts(opts, w, h) do
-    base = [width: w, height: h, csi_2026?: true]
-
-    case Keyword.fetch(opts, :min_interval_ms) do
-      {:ok, ms} -> Keyword.put(base, :min_interval_ms, ms)
-      :error -> base
-    end
+  defp build_renderer_opts(_opts, w, h) do
+    [width: w, height: h, csi_2026?: true]
   end
 
   defp build_terminal_opts(opts, write_fn) do
@@ -918,10 +911,10 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     cursor_seq = cursor_position(state, input_lines, lines, layout)
-    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)
+    {bytes, renderer} = Renderer.render(state.renderer, lines, cursor_seq)
 
     if bytes != "", do: Terminal.write(state.terminal, bytes)
-    state
+    %{state | renderer: renderer}
   end
 
   defp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do
@@ -1255,8 +1248,8 @@ defmodule OctoPi.TUI.Interactive do
           end
 
         cell_dims =
-          if is_pid(state.renderer),
-            do: Renderer.get_cell_dims(state.renderer),
+          if is_struct(state.renderer, Renderer),
+            do: state.renderer.cell_dims,
             else: %{width_px: 9, height_px: 18}
 
         case Image.render_image(base64_data, image_dims, cell_dims: cell_dims, mime_type: mime_type) do
