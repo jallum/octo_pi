@@ -23,6 +23,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
   alias OctoPi.Coder
+  alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
@@ -37,6 +38,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.ModelSelector
+  alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.EventLogger
@@ -971,6 +973,15 @@ defmodule OctoPi.TUI.Interactive do
         footer: update_footer(state.footer, event)
     }
   end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do
+    theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())
+    coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.utc_now() |> DateTime.to_iso8601())
+    csm = TUICSM.new(coder_msg, theme)
+    %{state | transcript: [csm]}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{}}), do: state
 
   def handle_event(state, {:octo_pi_agent_event, event}) do
     %{
