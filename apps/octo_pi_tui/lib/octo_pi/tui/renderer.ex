@@ -462,5 +462,4 @@ defmodule OctoPi.TUI.Renderer do
   defp wrap_sync(body, %{csi_2026?: false}), do: body
 
   defp termux?, do: System.get_env("TERMUX_VERSION") != nil
-
 end
