@@ -2969,8 +2969,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert is_struct(s2, Interactive)
     end
 
-    test "ctrl+v does not crash when renderer is nil" do
-      s = %Interactive{renderer: nil}
+    test "ctrl+v does not crash when render_loop is nil" do
+      s = %Interactive{render_loop: nil}
       s2 = Interactive.handle_event(s, %Key{key: ?v, modifiers: [:ctrl]})
       assert is_struct(s2, Interactive)
     end

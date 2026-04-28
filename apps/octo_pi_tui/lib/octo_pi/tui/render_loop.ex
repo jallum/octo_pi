@@ -40,24 +40,25 @@ defmodule OctoPi.TUI.RenderLoop do
         loop(renderer, terminal, tick_ms, deadline, drain_latest(lines, cursor_seq))
 
       {:resize, w, h} ->
-        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, deadline, pending)
+        renderer
+        |> Renderer.resize(w, h)
+        |> loop(terminal, tick_ms, deadline, pending)
 
       :stop ->
         :ok
     after
       wait ->
-        renderer =
-          case pending do
-            nil ->
-              renderer
+        pending
+        |> case do
+          nil ->
+            renderer
 
-            {lines, cursor_seq} ->
-              {bytes, r} = Renderer.render(renderer, lines, cursor_seq)
-              if bytes != "", do: do_write(terminal, bytes)
-              r
-          end
-
-        loop(renderer, terminal, tick_ms, deadline + tick_ms, nil)
+          {lines, cursor_seq} ->
+            {bytes, r} = Renderer.render(renderer, lines, cursor_seq)
+            if bytes != "", do: do_write(terminal, bytes)
+            r
+        end
+        |> loop(terminal, tick_ms, deadline + tick_ms, nil)
     end
   end
 
