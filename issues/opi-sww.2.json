@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-sww",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Implement RenderLoop Task with fixed-interval 16ms tick and pending-frame guarantee",
   "type": "task",
-  "updated_at": "2026-04-28T20:09:34.517290Z"
+  "updated_at": "2026-04-28T20:30:38.734427Z"
 }
