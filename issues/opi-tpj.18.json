@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:32:04Z",
+  "description": "## What to do\n\nAdapt the upstream terminal setup doc (tmp/pi-mono/packages/coding-agent/docs/terminal-setup.md, 106 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/terminal-setup.md\n- tmp/pi-mono/packages/tui/src/terminal.ts (raw mode, Kitty protocol)\n\n## Output\n\nCreate docs/terminal-setup.md\n\n## How to adapt\n\n1. **Kitty Keyboard Protocol**: The Kitty protocol is terminal-level, not language-level. Preserve the protocol description verbatim.\n\n2. **Terminal Support Table**: Update the table to show which terminals work out of the box vs need configuration:\n   - **Out of the box**: Kitty, Ghostty, iTerm2, WezTerm, Windows Terminal, Alacritty (compiled with Kitty support)\n   - **Needs config**: tmux (extended-keys-format csi-u), VS Code, xfce4-terminal, terminator, IntelliJ IDEA\n\n3. **Ghostty Config**: The Ghostty config example is terminal-specific. Preserve verbatim.\n\n4. **WezTerm Config**: The WezTerm Lua config is terminal-specific. Preserve verbatim.\n\n5. **VS Code Config**: The keybindings.json config is IDE-specific. Preserve verbatim but note it is for VS Code.\n\n6. **Windows Terminal Config**: The settings.json config is terminal-specific. Preserve verbatim.\n\n7. **Alacritty Config**: The alacritty.yml config is terminal-specific. Preserve verbatim.\n\n8. **IntelliJ IDEA Config**: The keymap config is IDE-specific. Preserve verbatim.\n\n## What to preserve verbatim\n\n- All terminal configuration examples (they are terminal-specific, not language-specific)\n- The Kitty keyboard protocol description\n- The terminal compatibility information\n\n## What to add\n\n- Note our raw mode implementation (OTP 28 raw submode)\n- Note our `OctoPi.TUI.Terminal` GenServer\n- Update config paths to our config directory\n\n## Key upstream references to include\n\n- [terminal.ts](https://github.com/badlogic/pi-mono/blob/main/packages/tui/src/terminal.ts)\n- [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All terminal config examples are accurate and current\n2. The terminal compatibility table is correct\n3. Our config paths are documented",
+  "id": "opi-tpj.18",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Terminal Setup",
+  "type": "task",
+  "updated_at": "2026-04-28T11:32:04Z"
+}
