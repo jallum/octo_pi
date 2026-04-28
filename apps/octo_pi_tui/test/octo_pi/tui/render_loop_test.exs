@@ -130,6 +130,32 @@ defmodule OctoPi.TUI.RenderLoopTest do
       assert is_integer(measurements.lines_changed)
       assert metadata.mode in [:first, :full, :diff, :noop]
       assert metadata.line_count == 1
+      assert metadata.frame == 0
+    end
+
+    test "frame increments on each tick" do
+      test_pid = self()
+
+      :telemetry.attach(
+        "render-loop-frame-test-#{inspect(self())}",
+        [:octo_pi_tui, :renderer, :render],
+        fn _event, _measurements, metadata, _config ->
+          send(test_pid, {:frame, metadata.frame})
+        end,
+        nil
+      )
+
+      on_exit(fn ->
+        :telemetry.detach("render-loop-frame-test-#{inspect(test_pid)}")
+      end)
+
+      pid = start()
+      send(pid, {:render, ["a"], ""})
+      assert_receive {:frame, 0}, 200
+      send(pid, {:render, ["b"], ""})
+      assert_receive {:frame, 1}, 200
+      send(pid, {:render, ["c"], ""})
+      assert_receive {:frame, 2}, 200
     end
   end
 end

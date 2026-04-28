@@ -27,11 +27,11 @@ defmodule OctoPi.TUI.RenderLoop do
         )
 
       tick_ms = Keyword.get(opts, :tick_ms, @default_tick_ms)
-      loop(renderer, opts[:terminal], tick_ms, nil)
+      loop(renderer, opts[:terminal], tick_ms, nil, 0)
     end)
   end
 
-  defp loop(renderer, terminal, tick_ms, pending) do
+  defp loop(renderer, terminal, tick_ms, pending, frame) do
     wait =
       case pending do
         nil -> :infinity
@@ -41,10 +41,10 @@ defmodule OctoPi.TUI.RenderLoop do
     receive do
       {:render, lines, cursor_seq} ->
         deadline = pending_deadline(pending, tick_ms)
-        loop(renderer, terminal, tick_ms, {deadline, drain_latest(lines, cursor_seq)})
+        loop(renderer, terminal, tick_ms, {deadline, drain_latest(lines, cursor_seq)}, frame)
 
       {:resize, w, h} ->
-        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, pending)
+        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, pending, frame)
 
       :stop ->
         :ok
@@ -53,9 +53,18 @@ defmodule OctoPi.TUI.RenderLoop do
         {_deadline, {lines, cursor_seq}} = pending
         start_mono = System.monotonic_time()
         {bytes, new_renderer} = Renderer.render(renderer, lines, cursor_seq)
-        emit_render_telemetry(renderer, new_renderer, lines, System.monotonic_time() - start_mono, byte_size(bytes))
+
+        emit_render_telemetry(
+          renderer,
+          new_renderer,
+          lines,
+          System.monotonic_time() - start_mono,
+          byte_size(bytes),
+          frame
+        )
+
         if bytes != "", do: do_write(terminal, bytes)
-        loop(new_renderer, terminal, tick_ms, nil)
+        loop(new_renderer, terminal, tick_ms, nil, frame + 1)
     end
   end
 
@@ -70,13 +79,13 @@ defmodule OctoPi.TUI.RenderLoop do
     end
   end
 
-  defp emit_render_telemetry(old_r, new_r, lines, duration, byte_count) do
+  defp emit_render_telemetry(old_r, new_r, lines, duration, byte_count, frame) do
     {mode, lines_changed} = render_mode(old_r, new_r, lines)
 
     :telemetry.execute(
       [:octo_pi_tui, :renderer, :render],
       %{duration: duration, byte_count: byte_count, lines_changed: lines_changed},
-      %{mode: mode, line_count: length(lines)}
+      %{mode: mode, line_count: length(lines), frame: frame}
     )
   end
 
