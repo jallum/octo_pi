@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-sww.2"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T20:09:34.517290Z",
+  "description": "## Context\n\nWith `RenderLoop` in place (child 2), `Interactive` no longer calls `render_frame/1` → `Renderer.render` → `Terminal.write` directly. Instead it computes the render state and hands it to the Task.\n\n## Implementation\n\n### Step 1 — Start RenderLoop from Interactive.run/1\n\nIn `run/1`, after the terminal and renderer setup, start `RenderLoop` and store the pid in state:\n\n```elixir\n{:ok, render_loop} = RenderLoop.start_link(\n  width: width,\n  height: height,\n  terminal: terminal\n)\n```\n\nAdd `render_loop: pid()` to the `Interactive` struct and `@type t`.\n\n### Step 2 — Replace render_frame/1 with send_render/1\n\nReplace:\n```elixir\ndefp render_frame(state) do\n  ...\n  {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)\n  if bytes != \"\", do: Terminal.write(state.terminal, bytes)\n  state\nend\n```\n\nWith:\n```elixir\ndefp send_render(state) do\n  input = Components.Input.update_scroll(state.input, state.width)\n  state = %{state | input: input}\n  input_lines = Components.Input.render(input, state.width)\n  {lines, layout} = build_screen(state, input_lines)\n  lines = composite_active_overlay(state, lines)\n  cursor_seq = cursor_position(state, input_lines, lines, layout)\n  send(state.render_loop, {:render, lines, cursor_seq})\n  state\nend\n```\n\nAll call sites of `render_frame` become `send_render`.\n\n### Step 3 — Resize\n\nIn the `%Resize{}` handler, send `{:resize, w, h}` to the RenderLoop after updating Interactive state:\n\n```elixir\nsend(state.render_loop, {:resize, w, h})\n```\n\n### Step 4 — Shutdown\n\nIn `terminate/2`, send `:stop` to the RenderLoop:\n\n```elixir\nsend(state.render_loop, :stop)\n```\n\n### Step 5 — Remove renderer field\n\n`state.renderer` (the old Renderer GenServer pid) is no longer needed in `Interactive`. Remove it from the struct, `@type t`, and `run/1` setup.\n\n## Acceptance criteria\n\n- `render_frame/1` deleted from `Interactive`\n- `send_render/1` sends `{:render, lines, cursor_seq}` to the RenderLoop Task\n- `state.renderer` field removed; `state.render_loop` added\n- Resize sends `{:resize, w, h}` to RenderLoop\n- `terminate/2` sends `:stop` to RenderLoop\n- All existing Interactive tests pass (tests that call `build_screen/1` directly are unaffected)\n- Verified in tmux: thinking spinner clears immediately when agent finishes, confirming the final-frame bug is resolved",
+  "id": "opi-sww.3",
+  "labels": [],
+  "parent": "opi-sww",
+  "priority": 2,
+  "status": "open",
+  "title": "Wire Interactive to RenderLoop; remove render_frame/1",
+  "type": "task",
+  "updated_at": "2026-04-28T20:09:34.517290Z"
+}

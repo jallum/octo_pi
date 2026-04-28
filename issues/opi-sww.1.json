@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-sww.2"
+  ],
+  "comments": [],
+  "created": "2026-04-28T20:09:34.517290Z",
+  "description": "## Context\n\n`Renderer` is currently a GenServer that wraps its computation state (`previous`, `width`, `height`, `full_redraws`, `throttle`) and exposes `render/4`, `resize/3`, `full_redraws/1`, `render_count/1` via `GenServer.call`. Making it a pure module removes the process hop on every frame and simplifies the test surface significantly.\n\n## Implementation\n\n### Step 1 — Define the struct\n\nReplace the GenServer with a plain struct:\n\n```elixir\ndefstruct width: 80, height: 24, previous: nil, full_redraws: 0\n\n@type t :: %__MODULE__{\n  width: pos_integer(),\n  height: pos_integer(),\n  previous: [binary()] | nil,\n  full_redraws: non_neg_integer()\n}\n```\n\n### Step 2 — Convert public API\n\n- `Renderer.new(opts)` — replaces `start_link/1`\n- `Renderer.render(r, lines, cursor_seq \\\\ \"\")` — returns `{bytes, new_r}` instead of `{:ok, bytes}`\n- `Renderer.resize(r, width, height)` — returns `new_r` instead of `:ok`\n- `Renderer.find_diff_range/2` — stays public (used in tests)\n- Remove `start_link/1`, `full_redraws/1`, `render_count/1`, `handle_call` callbacks\n\nMove `check_width_overflow/2` from `RenderThrottle` into `Renderer` since it belongs with the renderer's width-awareness.\n\n### Step 3 — Update renderer_test.exs\n\nReplace all `start_link` + `GenServer.call` patterns with direct struct calls:\n\n```elixir\nr = Renderer.new(width: 40, height: 10)\n{bytes, r} = Renderer.render(r, [\"Line 0\", \"Line 1\"])\n{bytes2, _r} = Renderer.render(r, [\"Line 0\", \"Line 1\"])\nassert bytes2 == \"\"\n```\n\n`full_redraws` becomes a field on the struct, readable directly in tests.\n\n### Step 4 — Remove from supervision\n\nRemove `Renderer` from the `OctoPi.TUI.Application` supervisor (it is currently started there or by `Interactive.run/1` — verify and remove whichever).\n\n## Acceptance criteria\n\n- `Renderer` has no `use GenServer`, no `start_link`, no `handle_*` callbacks\n- `Renderer.render/3` returns `{bytes, new_renderer}` (pure)\n- `Renderer.resize/3` returns `new_renderer` (pure)\n- `check_width_overflow/2` moved from `RenderThrottle` into `Renderer`\n- All renderer tests pass using direct struct calls — no process setup/teardown\n- `Renderer` removed from any supervision tree\n- `tui_render` tracer spec events for `[:octo_pi_tui, :renderer, :render]` still emitted (telemetry call moves into the pure `render/3` function)",
+  "id": "opi-sww.1",
+  "labels": [],
+  "parent": "opi-sww",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert Renderer from GenServer to pure module",
+  "type": "task",
+  "updated_at": "2026-04-28T20:09:34.517290Z"
+}

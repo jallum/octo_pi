@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-sww.1"
+  ],
+  "blocks": [
+    "opi-sww.3"
+  ],
+  "comments": [],
+  "created": "2026-04-28T20:09:34.517290Z",
+  "description": "## Context\n\nWith `Renderer` as a pure module (child 1), the `RenderLoop` Task owns the renderer struct directly and drives it on a fixed-interval clock. This replaces `RenderThrottle` entirely.\n\n## Implementation\n\n### Module: `OctoPi.TUI.RenderLoop`\n\n```elixir\ndefmodule OctoPi.TUI.RenderLoop do\n  alias OctoPi.TUI.{Renderer, Terminal}\n\n  @tick_ms 16\n\n  def start_link(opts) do\n    Task.start_link(fn ->\n      renderer = Renderer.new(width: opts[:width], height: opts[:height])\n      deadline = System.monotonic_time(:millisecond) + @tick_ms\n      loop(renderer, opts[:terminal], deadline, nil)\n    end)\n  end\n\n  defp loop(renderer, terminal, deadline, pending) do\n    wait = max(0, deadline - System.monotonic_time(:millisecond))\n\n    receive do\n      {:render, lines, cursor_seq} ->\n        loop(renderer, terminal, deadline, drain_latest(lines, cursor_seq))\n\n      {:resize, w, h} ->\n        loop(Renderer.resize(renderer, w, h), terminal, deadline, pending)\n\n      :stop ->\n        :ok\n    after wait ->\n      renderer =\n        case pending do\n          nil ->\n            renderer\n\n          {lines, cursor_seq} ->\n            {bytes, r} = Renderer.render(renderer, lines, cursor_seq)\n            if bytes != \"\", do: Terminal.write(terminal, bytes)\n            r\n        end\n\n      loop(renderer, terminal, deadline + @tick_ms, nil)\n    end\n  end\n\n  defp drain_latest(lines, cursor_seq) do\n    receive do\n      {:render, l, c} -> drain_latest(l, c)\n    after 0 ->\n      {lines, cursor_seq}\n    end\n  end\nend\n```\n\n### Fixed-interval clock\n\n`deadline + @tick_ms` (not `now + @tick_ms`) prevents drift. If a burst renders at t=3 within a t=0..16 window, the next tick is still t=32, giving `pending` a guaranteed slot at t=16 and another at t=32.\n\n### Resize handling\n\n`Renderer.resize/3` sets `previous: nil`, so the next render will be a full redraw — no explicit `force:` flag needed.\n\n## Acceptance criteria\n\n- `RenderLoop.start_link/1` starts a linked Task\n- Render messages arriving between ticks collapse to their last frame via `drain_latest`\n- Final-frame guarantee: a state sent as `pending` always renders on the next tick boundary even if no further messages arrive\n- Resize message triggers `Renderer.resize/3` and next render is full redraw\n- `RenderThrottle` module deleted (telemetry events for `render_throttle.skip` and `tui_render` spec updated accordingly)\n- Tests cover: burst collapse, final-frame tick, resize-then-render full-redraw",
+  "id": "opi-sww.2",
+  "labels": [],
+  "parent": "opi-sww",
+  "priority": 2,
+  "status": "open",
+  "title": "Implement RenderLoop Task with fixed-interval 16ms tick and pending-frame guarantee",
+  "type": "task",
+  "updated_at": "2026-04-28T20:09:34.517290Z"
+}

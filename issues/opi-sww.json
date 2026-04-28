@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T20:09:34.517290Z",
+  "description": "## Motivation\n\nThe current rendering path is synchronous: every `advance/1` call in `Interactive` drives `render_frame/1` → `Renderer.render/4` (GenServer call) → `Terminal.write`. The `RenderThrottle` inside the `Renderer` GenServer skips frames that arrive within the 16ms window, but those skipped frames are silently dropped — they are never retried. This produces a concrete bug: the frame that clears the \"Thinking…\" spinner arrives within the throttle window of the preceding loader tick and never reaches the screen, leaving the spinner visible until the next event.\n\n## Design\n\nReplace the synchronous render path with a dedicated `RenderLoop` Task that owns a fixed-interval 16ms tick loop:\n\n- `Interactive` sends `{:render, lines, cursor_seq}` to the Task on every `advance/1` instead of calling `render_frame`. Messages are cheap — line binaries >64 bytes are heap references, not copies.\n- The Task loop holds a `pending` slot. Incoming render messages replace `pending` (latest wins). A zero-timeout `drain_latest` call at receive time collapses any queued burst to its last frame.\n- On each tick boundary (`deadline + 16` fixed-interval clock), the Task renders `pending` if non-nil and clears it.\n- `pending` carrying state across the tick boundary is the final-frame guarantee: the last state before any quiet period always renders on the next tick, regardless of where it fell within the previous window.\n\n## Consequences\n\n- `Renderer` becomes a pure module (struct + functions). No GenServer, no process, no supervision entry. Tests call `Renderer.render/3` directly on a struct.\n- `RenderThrottle` is deleted. Throttle logic lives in the Task loop's tick clock.\n- `Interactive.render_frame/1` is removed. `build_screen/2`, `composite_active_overlay/2`, and `cursor_position/4` remain — their output is sent to the Task rather than driven into the renderer synchronously.\n\n## Child ordering\n\nChild 1 (Renderer pure module) must land before Child 2 (RenderLoop Task), which must land before Child 3 (Interactive wiring). Child 4 (RenderThrottle removal) can follow Child 2.",
+  "id": "opi-sww",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Move rendering to a dedicated RenderLoop Task with fixed-interval tick",
+  "type": "epic",
+  "updated_at": "2026-04-28T20:09:34.517290Z"
+}
