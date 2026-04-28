@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:28:07Z",
+  "description": "## What to do\n\nAdapt the upstream skills doc (tmp/pi-mono/packages/coding-agent/docs/skills.md, 232 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/skills.md\n- tmp/pi-mono/packages/coding-agent/src/core/skills.ts (reference)\n- Agent Skills standard: https://agentskills.io/specification\n\n## Output\n\nCreate docs/skills.md\n\n## How to adapt\n\n1. **Locations**: Update all paths from `~/.pi/agent/skills/` to our paths. Document our skill discovery hierarchy:\n   - Global: `~/.octo_pi/skills/`, `~/.agents/skills/`\n   - Project: `.pi/skills/`, `.agents/skills/` in cwd and ancestors\n   - Settings: `skills` array\n   - CLI: `--skill \u003cpath\u003e`\n\n2. **How Skills Work**: The progressive disclosure concept is the same. Document our skill loading in the ResourceLoader.\n\n3. **Skill Commands**: Document our `/skill:name` command format.\n\n4. **Skill Structure**: The SKILL.md format is the same (per Agent Skills standard). Preserve the directory structure example.\n\n5. **Frontmatter**: Document our YAML frontmatter parsing:\n   - `name` — skill name (required)\n   - `description` — description (required)\n   - `preferred` — whether to prefer this skill\n   - `disable_model_invocation` — whether to disable model invocation\n\n6. **Validation**: Document our SKILL.md validation rules.\n\n7. **Example**: Convert the example to reference our paths.\n\n8. **Skill Repositories**: Document how to discover and install skill repositories.\n\n## What to preserve verbatim\n\n- The Agent Skills standard reference\n- The SKILL.md directory structure\n- The frontmatter schema\n- The progressive disclosure concept\n- The security warning about skill content\n\n## Key upstream references to include\n\n- [Agent Skills spec](https://agentskills.io/specification)\n- [skills.ts](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/skills.ts)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All paths match our actual config directories\n2. The frontmatter fields match our parser\n3. The skill command format is accurate",
+  "id": "opi-tpj.11",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Skills",
+  "type": "task",
+  "updated_at": "2026-04-28T11:28:07Z"
+}
