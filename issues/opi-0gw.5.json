@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Integrate OctoPi.TUI.RenderThrottle into the Renderer GenServer",
   "type": "task",
-  "updated_at": "2026-04-28T15:01:39.393539Z"
+  "updated_at": "2026-04-28T15:16:11.492847Z"
 }
