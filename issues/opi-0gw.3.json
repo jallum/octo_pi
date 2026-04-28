@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T13:12:55.133409Z",
+  "description": "## Context\n\n`OctoPi.AI.Providers.Anthropic.Auth.MacKeychain` (`apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/auth/mac_keychain.ex`) is a **fully implemented** module (93 lines). It:\n- Guards for macOS via `:os.type() == {:unix, :darwin}`\n- Calls `security find-generic-password -w -a $USER -s \"Claude Code-credentials\"`\n- Parses JSON output to extract `[\"claudeAiOauth\"][\"accessToken\"]`\n- Returns `nil` on any failure — never raises\n\n`Auth.resolve/1` (`apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/auth.ex`) has a fallback slot for a keychain reader configured via `Application.get_env(:octo_pi_ai_anthropic, :keychain_reader)`, defaulting to a no-op.\n\n**This ticket is verification + config wiring, not new implementation.**\n\nUpstream does NOT use a keychain. This is an intentional Elixir extension ahead of the TypeScript. The auth priority chain in `tmp/pi-mono/packages/ai/src/auth-storage.ts` L424-482 uses: runtime override → auth.json OAuth → auth.json API key → env vars. The Elixir chain mirrors this: opts.api_key → ANTHROPIC_OAUTH_TOKEN → ANTHROPIC_API_KEY → keychain.\n\n## Implementation steps\n\n### 1. Verify Auth.resolve/1 call path\n\nRead `apps/octo_pi_ai_anthropic/lib/octo_pi/ai/providers/anthropic/auth.ex` in full. Confirm:\n- `resolve/1` calls `keychain_reader().read()` (or similar) as its last fallback\n- The returned token is accepted by `Credentials.new/1`\n\nGrep for `Auth.resolve` in `apps/octo_pi_ai_anthropic/` to confirm it is called from the producer or request layer. If it is NOT being called, find where auth credentials are obtained and wire in `Auth.resolve/1`.\n\n### 2. Add macOS runtime configuration\n\nFind the project's `config/runtime.exs` (could be at repo root or inside `apps/octo_pi_ai_anthropic/config/`). Add:\n\n```elixir\nimport Config\nif :os.type() == {:unix, :darwin} do\n  config :octo_pi_ai_anthropic,\n    keychain_reader: OctoPi.AI.Providers.Anthropic.Auth.MacKeychain\nend\n```\n\n### 3. Verify KeychainReader behaviour compliance\n\nConfirm `MacKeychain` implements the correct behaviour (whatever `Auth.resolve/1` expects). Check that the callback name and return type match. If the behaviour module name or callback signature has drifted, reconcile.\n\n### 4. Write tests\n\nFile: `apps/octo_pi_ai_anthropic/test/octo_pi/ai/providers/anthropic/auth/mac_keychain_test.exs`\n\nUsing Mox or `System.cmd` patching:\n- Valid JSON blob returned by security → token extracted correctly\n- Invalid JSON → returns `nil` (no exception)\n- Missing USER env var → returns `nil`\n- Non-darwin `:os.type()` → returns `nil`\n- Exit code 44 (security item not found) → returns `nil`\n\n## Notes\n- This module's docstring already has the canonical `config/runtime.exs` snippet — use it.\n- Do NOT add token refresh logic — deferred per gap analysis.\n- Upstream reference for the auth priority chain: `tmp/pi-mono/packages/coding-agent/src/core/auth-storage.ts` L424-482.",
+  "id": "opi-0gw.3",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Verify MacKeychain auth wiring and add macOS runtime configuration",
+  "type": "task",
+  "updated_at": "2026-04-28T13:12:55.133409Z"
+}

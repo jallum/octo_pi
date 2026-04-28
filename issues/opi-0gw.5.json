@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-0gw.6"
+  ],
+  "comments": [],
+  "created": "2026-04-28T13:12:55.133409Z",
+  "description": "## Context\n\n`OctoPi.TUI.RenderThrottle` (`apps/octo_pi_tui/lib/octo_pi/tui/render_throttle.ex`) is a pure functional module:\n- `new(opts)` — struct with `min_interval_ms: 16` (matches upstream `MIN_RENDER_INTERVAL_MS = 16`)\n- `should_render?(t)` — true if elapsed ≥ min_interval or first render\n- `record_render(t)` — returns updated struct with monotonic timestamp\n- `metrics(t)` — returns `{render_count, skip_count}`\n- `check_width_overflow(lines, width)` — ANSI-aware line width validation\n\nUpstream embeds throttle logic directly in the TUI class (`tmp/pi-mono/packages/tui/src/tui.ts` lines 230, 472-519). The Elixir `Renderer` GenServer (`apps/octo_pi_tui/lib/octo_pi/tui/renderer.ex`) renders on every call with no rate limiting.\n\n## Implementation steps\n\n### 1. Read Renderer before all changes\n\nRead `apps/octo_pi_tui/lib/octo_pi/tui/renderer.ex` in full. Understand: state struct fields, how `render/3` or equivalent is called, whether any throttling already exists.\n\n### 2. Add throttle to Renderer state\n\n```elixir\nthrottle: RenderThrottle.new()\n```\n\nAdd `alias OctoPi.TUI.RenderThrottle`.\n\n### 3. Gate render on throttle decision\n\nIn the render handler:\n```elixir\nif RenderThrottle.should_render?(state.throttle) do\n  do_render(lines, width)\n  throttle = RenderThrottle.record_render(state.throttle)\n  %{state | throttle: throttle}\nelse\n  %{state | throttle: %{state.throttle | skip_count: state.throttle.skip_count + 1}}\nend\n```\n\n### 4. Add force-render bypass\n\nAccept a `force: boolean` option on the render call. Resize events and first-render must set `force: true` to bypass the throttle. Find the resize/SIGWINCH handler in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` and update its render call accordingly.\n\n### 5. Wire metrics to telemetry\n\n```elixir\n{render_count, skip_count} = RenderThrottle.metrics(throttle)\nif rem(render_count, 100) == 0 do\n  :telemetry.execute([:octo_pi, :tui, :renderer], %{renders: render_count, skips: skip_count}, %{})\nend\n```\n\n### 6. Wire width overflow check\n\nIn `do_render/2`, call `RenderThrottle.check_width_overflow(lines, width)` and `Logger.warning/1` on overflow (should not occur in production; indicates a renderer bug).\n\n### 7. Tests\n\n- Rapid calls within 16ms result in increasing `skip_count`\n- `force: true` bypasses throttle regardless of elapsed time\n- `render_count` increments correctly after each render\n- Existing Renderer tests still pass\n\n## Notes\n- Pure functional design — no `Process.send_after` or timer process needed. The decision happens at call time.\n- 16ms default matches upstream exactly.",
+  "id": "opi-0gw.5",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Integrate OctoPi.TUI.RenderThrottle into the Renderer GenServer",
+  "type": "task",
+  "updated_at": "2026-04-28T13:12:55.133409Z"
+}

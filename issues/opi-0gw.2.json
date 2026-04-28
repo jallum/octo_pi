@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-0gw.4"
+  ],
+  "comments": [],
+  "created": "2026-04-28T13:12:55.133409Z",
+  "description": "## Context\n\n`OctoPi.Agent.Message` (`apps/octo_pi_agent/lib/octo_pi/agent/message.ex`, 24 lines) is a pure `@type` union module. It is aliased and type-annotated in several places but provides no runtime functions.\n\n`Coder.Session` has a private `normalize/1` (around line 884-891) that accepts **any struct silently** — a type-safety hole (`defp normalize(%{__struct__: _} = m), do: m`).\n\n`MessageLog` (`apps/octo_pi_agent/lib/octo_pi/agent/message_log.ex`, line 21) stores `[term()]` instead of `[Message.t()]`.\n\nUpstream `defaultConvertToLlm` in `tmp/pi-mono/packages/agent/src/agent-loop.ts` L27-30 filters to only User/Assistant/ToolResult messages.\n\n## Implementation steps\n\n### 1. Add functions to Message module\n\n`apps/octo_pi_agent/lib/octo_pi/agent/message.ex` — add these three public functions:\n\n```elixir\n@spec normalize(String.t() | t() | [String.t() | t()]) :: t() | [t()]\ndef normalize(msgs) when is_list(msgs), do: Enum.map(msgs, &normalize/1)\ndef normalize(str) when is_binary(str),\n  do: %User{content: str, timestamp: :os.system_time(:millisecond)}\ndef normalize(%User{} = m), do: m\ndef normalize(%Assistant{} = m), do: m\ndef normalize(%ToolResult{} = m), do: m\ndef normalize(invalid),\n  do: raise(ArgumentError, \"Expected Message.t() or String.t(), got: #{inspect(invalid)}\")\n\n@spec role(t()) :: :user | :assistant | :tool_result\ndef role(%User{}), do: :user\ndef role(%Assistant{}), do: :assistant\ndef role(%ToolResult{}), do: :tool_result\n\n@spec convert_to_llm([t()]) :: [t()]\ndef convert_to_llm(messages), do: messages\n```\n\n### 2. Update MessageLog type\n\n`apps/octo_pi_agent/lib/octo_pi/agent/message_log.ex`, line 21:\n```elixir\n# Before:\n@opaque t :: %__MODULE__{rev: [term()], count: non_neg_integer()}\n# After:\n@opaque t :: %__MODULE__{rev: [Message.t()], count: non_neg_integer()}\n```\nAdd `alias OctoPi.Agent.Message` at top if not already present.\n\n### 3. Replace private normalize in Session\n\n`apps/octo_pi_agent/lib/octo_pi/agent/session.ex`: remove the private `normalize/1` definitions around lines 884-891 (the catch-all `%{__struct__: _}` clause is the bug). Search for all `normalize(` calls and replace with `Message.normalize(`.\n\n### 4. Tests\n\nAdd tests (new file or extend `apps/octo_pi_agent/test/octo_pi/agent_test.exs`):\n- `Message.normalize/1` wraps bare string in `%User{}`\n- `Message.normalize/1` accepts `%User{}`, `%Assistant{}`, `%ToolResult{}` unchanged\n- `Message.normalize/1` raises `ArgumentError` on an unrecognized struct\n- `Message.role/1` returns correct atom for each variant\n- `Message.convert_to_llm/1` is identity for all three variants\n\n## Notes\n- Read `session.ex` before modifying — find all `normalize/1` call sites.\n- The `%{__struct__: _}` catch-all is intentionally the bug being fixed — removing it is the point.\n- Do NOT modify User, Assistant, or ToolResult structs.",
+  "id": "opi-0gw.2",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Strengthen OctoPi.Agent.Message with public typed API; wire into MessageLog and Session",
+  "type": "task",
+  "updated_at": "2026-04-28T13:12:55.133409Z"
+}

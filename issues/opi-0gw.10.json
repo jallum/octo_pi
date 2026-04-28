@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-0gw.9"
+  ],
+  "blocks": [
+    "opi-0gw.11"
+  ],
+  "comments": [],
+  "created": "2026-04-28T13:12:55.133409Z",
+  "description": "## Context\n\nFive render-only (no `handle_key`) component modules are implemented but unused:\n\n1. `OctoPi.TUI.Components.Container` — hollow composition: flattens children's render output\n2. `OctoPi.TUI.Components.TruncatedText` — single-line truncation with ANSI-safe width calculation\n3. `OctoPi.TUI.Components.Header` — banner with logo, version, keybinding hints (compact/expanded modes)\n4. `OctoPi.TUI.Components.Diff` — diff rendering with add/remove line colouring\n5. `OctoPi.TUI.Components.CustomMessage` — renders messages with optional custom renderers from extensions\n\n**Depends on opi-component-dispatch** (invalidate stubs must be in place).\n\nUpstream reference: `tmp/pi-mono/packages/tui/src/components/` for each component.\n\n## Implementation steps\n\n### 1. Read each component module in full\n\nBefore wiring, read:\n- All 5 component files listed above\n- The corresponding upstream TypeScript in `tmp/pi-mono/packages/tui/src/components/`\n- The current header/diff/custom rendering sections of `interactive.ex`\n\nUnderstand constructor arguments and render output shape for each.\n\n### 2. Wire Header into interactive.ex\n\nFind the header rendering section in `render_frame/1` (currently producing banner/logo lines). Replace with:\n```elixir\n# In State struct, add:\nheader: Header.t()\n\n# In init/2:\nheader: Header.new(version: Application.spec(:octo_pi, :vsn), keybindings: kb)\n\n# In render_frame/1:\nheader_lines = Header.render(state.header, width)\n```\n\nOn theme change, call `Header.invalidate(state.header)` and store updated state.\n\n### 3. Wire TruncatedText for width-bounded output\n\nFind all raw `String.slice(text, 0, width)` or equivalent truncations in the render pipeline. Replace with `TruncatedText.render(%TruncatedText{text: text, padding: 1}, width)`.\n\nPriority candidates: footer path display, notification messages.\n\n### 4. Wire Diff for diff rendering\n\nFind where diffs are rendered in the transcript loop (`render_entry/3` or similar). Replace or augment with `Diff.render(diff_state, width)`.\n\nIf no diff entries exist in the transcript yet, add the wiring point with a comment and note it awaits content.\n\n### 5. Wire CustomMessage for extension entries\n\nIn the transcript render loop, handle `:custom` entries:\n```elixir\n{:custom, entry} when not is_nil(entry.renderer) ->\n  CustomMessage.render(%CustomMessage{entry: entry}, width)\n```\n\n### 6. Tests\n\n- `Header.render/2` returns non-empty line list within width\n- `Header.render/2` switches compact/expanded based on width\n- `TruncatedText.render/2` truncates at boundary, preserves ANSI codes\n- `Diff.render/2` applies correct colours for add/remove lines\n- `CustomMessage.render/2` calls entry's custom renderer when set\n- Existing render_frame tests pass\n\n## Notes\n- Do NOT remove hardcoded rendering unless you've confirmed the component fully replaces it — add the wiring alongside and verify first.\n- Read `interactive.ex` render pipeline for each section before replacing.\n- `Container` is a composition primitive — verify it by using it in at least one of the above contexts.",
+  "id": "opi-0gw.10",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Wire render-only TUI components (Container, TruncatedText, Header, Diff, CustomMessage) into Interactive rendering pipeline",
+  "type": "task",
+  "updated_at": "2026-04-28T13:12:55.133409Z"
+}

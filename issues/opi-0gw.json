@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T13:12:55.133409Z",
+  "description": "21 modules were identified by `mix xref graph` as having no incoming references. After triage, 3 are intentional type/façade surfaces (no action needed) and 18 are fully implemented ports waiting to be integrated.\n\nThis epic tracks wiring all 18 into the live system. Children are ordered by dependency; agents must complete blockers before starting blocked tickets.\n\n**Skipped (intentional):** `OctoPi.AI.Content`, `OctoPi.AI.Message`, `OctoPi.TUI` — pure type declarations or empty façades with no runtime code.",
+  "id": "opi-0gw",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Wire all ported-but-unwired modules into the running system",
+  "type": "epic",
+  "updated_at": "2026-04-28T13:12:55.133409Z"
+}
