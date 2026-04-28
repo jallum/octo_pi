@@ -8,6 +8,7 @@ defmodule OctoPi.Coder.SessionTest do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
+  alias OctoPi.Coder.SettingsManager
 
   defp tmp_session_opts(ctx) do
     id = "test-#{System.unique_integer([:positive])}"
@@ -65,12 +66,12 @@ defmodule OctoPi.Coder.SessionTest do
       end
     end
 
-    test "default settings_provider returns Settings.default()", ctx do
+    test "default settings_manager returns Settings.default() for compaction", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Session.state(pid).settings_provider.() == Settings.default()
+      assert Session.get_compaction_settings(pid) == Settings.default()
     end
 
     test "default model_provider returns nil", ctx do
@@ -81,11 +82,15 @@ defmodule OctoPi.Coder.SessionTest do
       assert Session.state(pid).model_provider.() == nil
     end
 
-    test "honors caller-supplied model_provider and settings_provider", ctx do
+    test "honors caller-supplied model_provider and settings_manager", ctx do
       store = open_store!(ctx)
       model_fn = fn -> :my_model end
-      settings = %Settings{enabled: false, reserve_tokens: 99, keep_recent_tokens: 99}
-      settings_fn = fn -> settings end
+      expected = %Settings{enabled: false, reserve_tokens: 99, keep_recent_tokens: 99}
+
+      {:ok, sm} =
+        SettingsManager.in_memory(%{
+          "compaction" => %{"enabled" => false, "reserveTokens" => 99, "keepRecentTokens" => 99}
+        })
 
       {:ok, pid} =
         Session.start_link(
@@ -93,14 +98,13 @@ defmodule OctoPi.Coder.SessionTest do
           session_manager: empty_sm(),
           store_pid: store,
           model_provider: model_fn,
-          settings_provider: settings_fn
+          settings_manager: sm
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      state = Session.state(pid)
-      assert state.model_provider.() == :my_model
-      assert state.settings_provider.() == settings
+      assert Session.state(pid).model_provider.() == :my_model
+      assert Session.get_compaction_settings(pid) == expected
     end
   end
 
@@ -214,15 +218,18 @@ defmodule OctoPi.Coder.SessionTest do
     defp populated_session(ctx, extensions \\ []) do
       store = open_store!(ctx)
 
+      {:ok, sm} =
+        SettingsManager.in_memory(%{
+          "compaction" => %{"enabled" => true, "reserveTokens" => 1000, "keepRecentTokens" => 0}
+        })
+
       {:ok, pid} =
         Session.start_link(
           extensions: extensions,
           session_manager: empty_sm(),
           store_pid: store,
           model_provider: fn -> test_model() end,
-          settings_provider: fn ->
-            %Settings{enabled: true, reserve_tokens: 1000, keep_recent_tokens: 0}
-          end
+          settings_manager: sm
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -321,15 +328,18 @@ defmodule OctoPi.Coder.SessionTest do
     test "{:error, :no_model} when model_provider returns nil", ctx do
       store = open_store!(ctx)
 
+      {:ok, sm} =
+        SettingsManager.in_memory(%{
+          "compaction" => %{"enabled" => true, "reserveTokens" => 1000, "keepRecentTokens" => 0}
+        })
+
       {:ok, pid} =
         Session.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: store,
           model_provider: fn -> nil end,
-          settings_provider: fn ->
-            %Settings{enabled: true, reserve_tokens: 1000, keep_recent_tokens: 0}
-          end
+          settings_manager: sm
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)

@@ -175,50 +175,50 @@ defmodule OctoPi.Coder.SettingsManagerTest do
 
   describe "get_compaction_settings/1" do
     test "returns struct defaults when compaction key absent" do
-      sm = SettingsManager.in_memory(%{})
+      {:ok, sm} = SettingsManager.in_memory(%{})
       s = SettingsManager.get_compaction_settings(sm)
       assert %CompactionSettings{enabled: true, reserve_tokens: 16_384, keep_recent_tokens: 20_000} = s
     end
 
     test "reads enabled=false from merged map" do
-      sm = SettingsManager.in_memory(%{"compaction" => %{"enabled" => false}})
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"enabled" => false}})
       s = SettingsManager.get_compaction_settings(sm)
       assert s.enabled == false
       assert s.reserve_tokens == 16_384
     end
 
     test "reads reserveTokens (camelCase JSON key)" do
-      sm = SettingsManager.in_memory(%{"compaction" => %{"reserveTokens" => 8_192}})
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"reserveTokens" => 8_192}})
       s = SettingsManager.get_compaction_settings(sm)
       assert s.reserve_tokens == 8_192
     end
 
     test "reads keepRecentTokens (camelCase JSON key)" do
-      sm = SettingsManager.in_memory(%{"compaction" => %{"keepRecentTokens" => 10_000}})
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"keepRecentTokens" => 10_000}})
       s = SettingsManager.get_compaction_settings(sm)
       assert s.keep_recent_tokens == 10_000
     end
 
     test "non-integer value for token count falls back to default" do
-      sm = SettingsManager.in_memory(%{"compaction" => %{"reserveTokens" => "big"}})
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"reserveTokens" => "big"}})
       s = SettingsManager.get_compaction_settings(sm)
       assert s.reserve_tokens == 16_384
     end
 
     test "non-boolean for enabled falls back to default" do
-      sm = SettingsManager.in_memory(%{"compaction" => %{"enabled" => "yes"}})
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"enabled" => "yes"}})
       s = SettingsManager.get_compaction_settings(sm)
       assert s.enabled == true
     end
 
-    test "project compaction overrides global via load/2", %{
+    test "project compaction overrides global via create/2", %{
       project_dir: project_dir,
       global_dir: global_dir,
       pi_dir: pi_dir
     } do
       File.write!(Path.join(global_dir, "settings.json"), ~s|{"compaction": {"enabled": false, "reserveTokens": 4096}}|)
       File.write!(Path.join(pi_dir, "settings.json"), ~s|{"compaction": {"reserveTokens": 32768}}|)
-      sm = SettingsManager.load(project_dir, global_dir: global_dir)
+      {:ok, sm} = SettingsManager.create(project_dir, global_dir: global_dir)
       s = SettingsManager.get_compaction_settings(sm)
       assert s.enabled == false
       assert s.reserve_tokens == 32_768
@@ -228,16 +228,89 @@ defmodule OctoPi.Coder.SettingsManagerTest do
   # ── in_memory/1 ───────────────────────────────────────────────────────────
 
   describe "in_memory/1" do
-    test "wraps map as merged with no errors" do
-      settings = %{"theme" => "dark"}
-      sm = SettingsManager.in_memory(settings)
-      assert sm.merged == settings
-      assert sm.errors == []
+    test "starts a GenServer and exposes settings via accessors" do
+      {:ok, sm} = SettingsManager.in_memory(%{"theme" => "light"})
+      assert SettingsManager.get_theme(sm) == "light"
+      assert SettingsManager.drain_errors(sm) == []
     end
 
-    test "defaults to empty map" do
-      sm = SettingsManager.in_memory()
-      assert sm.merged == %{}
+    test "defaults to empty map — compaction uses defaults" do
+      {:ok, sm} = SettingsManager.in_memory()
+
+      assert SettingsManager.get_compaction_settings(sm) == %CompactionSettings{
+               enabled: true,
+               reserve_tokens: 16_384,
+               keep_recent_tokens: 20_000
+             }
+    end
+  end
+
+  # ── GenServer API ─────────────────────────────────────────────────────────
+
+  describe "drain_errors/1" do
+    test "returns empty list for in_memory" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.drain_errors(sm) == []
+    end
+
+    test "returns load errors for a file with bad JSON", %{project_dir: project_dir, global_dir: global_dir} do
+      File.write!(Path.join(global_dir, "settings.json"), "{ bad")
+      {:ok, sm} = SettingsManager.create(project_dir, global_dir: global_dir)
+      errors = SettingsManager.drain_errors(sm)
+      assert length(errors) == 1
+      assert hd(errors).scope == :global
+    end
+
+    test "clears errors after drain" do
+      {:ok, sm} = SettingsManager.create("/nonexistent", global_dir: "/nonexistent")
+      assert SettingsManager.drain_errors(sm) == []
+    end
+  end
+
+  describe "flush/1" do
+    test "returns :ok" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.flush(sm) == :ok
+    end
+  end
+
+  describe "Phase B accessors" do
+    test "get/set default model" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.get_default_model(sm) == nil
+      :ok = SettingsManager.set_default_model(sm, "claude-opus-4-7")
+      assert SettingsManager.get_default_model(sm) == "claude-opus-4-7"
+    end
+
+    test "get theme default" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.get_theme(sm) == "dark"
+    end
+
+    test "get/set theme" do
+      {:ok, sm} = SettingsManager.in_memory()
+      :ok = SettingsManager.set_theme(sm, "light")
+      assert SettingsManager.get_theme(sm) == "light"
+    end
+
+    test "get extension_paths default" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.get_extension_paths(sm) == []
+    end
+
+    test "get steering_mode default" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.get_steering_mode(sm) == "queue"
+    end
+
+    test "get retry_enabled default" do
+      {:ok, sm} = SettingsManager.in_memory()
+      assert SettingsManager.get_retry_enabled(sm) == false
+    end
+
+    test "get_compaction_enabled from nested map" do
+      {:ok, sm} = SettingsManager.in_memory(%{"compaction" => %{"enabled" => false}})
+      assert SettingsManager.get_compaction_enabled(sm) == false
     end
   end
 end

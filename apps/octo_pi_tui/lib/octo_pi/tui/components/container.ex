@@ -39,5 +39,9 @@ defmodule OctoPi.TUI.Components.Container do
     Enum.flat_map(children, &render_child(&1, width))
   end
 
+  @impl true
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp render_child(%mod{} = child, width), do: mod.render(child, width)
 end

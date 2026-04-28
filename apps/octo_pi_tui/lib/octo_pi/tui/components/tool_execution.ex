@@ -261,11 +261,11 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defp build_content(_te), do: []
 
   defp preview_collapsed(result, theme) do
-    lines = String.split(result, "\n")
+    lines = result |> String.trim_trailing("\n") |> String.split("\n")
     total = length(lines)
 
     if total <= @preview_lines do
-      [%Text{content: Theme.fg(theme, :tool_output, result)}]
+      [%Text{content: Theme.fg(theme, :tool_output, Enum.join(lines, "\n"))}]
     else
       preview = lines |> Enum.take(-@preview_lines) |> Enum.join("\n")
       skipped = total - @preview_lines

@@ -93,6 +93,10 @@ defmodule OctoPi.TUI.Components.SettingsSelector do
     end)
   end
 
+  @impl true
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp cycle_value(options, current) do
     idx = Enum.find_index(options, &(&1 == current)) || 0
     Enum.at(options, rem(idx + 1, length(options)))

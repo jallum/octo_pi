@@ -220,6 +220,143 @@ defmodule OctoPi.TUI.Terminal.ImageTest do
     end
   end
 
+  describe "get_jpeg_dimensions/1" do
+    test "extracts width and height from minimal JPEG with SOF0 marker" do
+      # SOI(FF D8) + SOF0(FF C0) + length(00 0B) + precision(08) + height(00 64) + width(00 32) + ncomp(01 01 11 00)
+      jpeg =
+        <<0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x64, 0x00, 0x32, 0x01, 0x01, 0x11,
+          0x00>>
+
+      assert {:ok, %{width: 50, height: 100}} = Image.get_jpeg_dimensions(Base.encode64(jpeg))
+    end
+
+    test "skips APP0 marker before SOF0" do
+      # APP0(FF E0) + length(00 10 = 16) + 14 bytes junk + SOF0 with 200x100
+      app0 = <<0xFF, 0xE0, 0x00, 0x10>> <> String.duplicate(<<0x00>>, 14)
+
+      sof0 =
+        <<0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0xC8, 0x00, 0x64, 0x01, 0x01, 0x11, 0x00>>
+
+      jpeg = <<0xFF, 0xD8>> <> app0 <> sof0
+      assert {:ok, %{width: 100, height: 200}} = Image.get_jpeg_dimensions(Base.encode64(jpeg))
+    end
+
+    test "returns error for non-JPEG data" do
+      assert :error = Image.get_jpeg_dimensions(Base.encode64("not a jpeg"))
+    end
+  end
+
+  describe "get_gif_dimensions/1" do
+    test "extracts width and height from GIF89a header" do
+      gif = <<"GIF89a", 100::little-16, 50::little-16, 0x00>>
+      assert {:ok, %{width: 100, height: 50}} = Image.get_gif_dimensions(Base.encode64(gif))
+    end
+
+    test "extracts width and height from GIF87a header" do
+      gif = <<"GIF87a", 320::little-16, 240::little-16, 0x00>>
+      assert {:ok, %{width: 320, height: 240}} = Image.get_gif_dimensions(Base.encode64(gif))
+    end
+
+    test "returns error for non-GIF data" do
+      assert :error = Image.get_gif_dimensions(Base.encode64("not a gif"))
+    end
+  end
+
+  describe "get_webp_dimensions/1" do
+    test "extracts width and height from VP8 (lossy) WebP" do
+      # RIFF(4) + size(4) + WEBP(4) + "VP8 "(4) + chunk_size(4) = 20 bytes header
+      # Then VP8 bitstream: frame_tag(3) + magic(3) + w_bits(2 LE) + h_bits(2 LE)
+      webp =
+        "RIFF" <>
+          <<0, 0, 0, 0>> <>
+          "WEBP" <>
+          "VP8 " <>
+          <<0, 0, 0, 0>> <>
+          <<0, 0, 0, 0x9D, 0x01, 0x2A>> <>
+          <<100::little-16, 50::little-16>>
+
+      assert {:ok, %{width: 100, height: 50}} = Image.get_webp_dimensions(Base.encode64(webp))
+    end
+
+    test "extracts width and height from VP8L (lossless) WebP" do
+      # VP8L bitstream at offset 21: width-1 in bits 0-13, height-1 in bits 14-27 (LSB-first packing)
+      # width=100 → width-1=99=0x63, height=50 → height-1=49=0x31
+      # Byte 0: bits 0-7 of width-1 = 0x63
+      # Byte 1: bits 8-13 of width-1 (all 0) + bits 0-1 of height-1 (01 in pos 6-7) = 0x40
+      # Byte 2: bits 2-7 of height-1 = 0b001100 in pos 0-5 = 0x0C
+      # decoded: bits = 0x63 | (0x40 << 8) | (0x0C << 16) = 0xC4063
+      #          width = (0xC4063 & 0x3FFF) + 1 = 99 + 1 = 100
+      #          height = ((0xC4063 >> 14) & 0x3FFF) + 1 = 49 + 1 = 50
+      webp =
+        "RIFF" <>
+          <<0, 0, 0, 0>> <>
+          "WEBP" <>
+          "VP8L" <>
+          <<0, 0, 0, 0>> <>
+          <<0x2F, 0x63, 0x40, 0x0C, 0x00>>
+
+      assert {:ok, %{width: 100, height: 50}} = Image.get_webp_dimensions(Base.encode64(webp))
+    end
+
+    test "returns error for non-WebP data" do
+      assert :error = Image.get_webp_dimensions(Base.encode64("not a webp"))
+    end
+  end
+
+  describe "get_image_dimensions/2" do
+    test "dispatches to PNG parser" do
+      header =
+        <<0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+          0x44, 0x52, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x32>>
+
+      assert {:ok, %{width: 100, height: 50}} =
+               Image.get_image_dimensions(Base.encode64(header), "image/png")
+    end
+
+    test "dispatches to GIF parser" do
+      gif = <<"GIF89a", 10::little-16, 5::little-16, 0x00>>
+      assert {:ok, %{width: 10, height: 5}} = Image.get_image_dimensions(Base.encode64(gif), "image/gif")
+    end
+
+    test "returns error for unknown mime type" do
+      assert :error = Image.get_image_dimensions(Base.encode64("data"), "image/tiff")
+    end
+  end
+
+  describe "render_image/3" do
+    test "returns fallback when no image capability" do
+      with_env(%{}, fn ->
+        result = Image.render_image(Base.encode64("data"), %{width: 800, height: 600})
+        assert {:fallback, text} = result
+        assert is_binary(text)
+      end)
+    end
+
+    test "returns kitty-encoded bytes when kitty capability present" do
+      with_env(%{"KITTY_WINDOW_ID" => "1"}, fn ->
+        data = Base.encode64(String.duplicate("x", 10))
+        {:ok, encoded, rows} = Image.render_image(data, %{width: 800, height: 600})
+        assert encoded =~ "\e_G"
+        assert is_integer(rows) and rows >= 1
+      end)
+    end
+  end
+
+  describe "delete_kitty_image/1 and delete_all_kitty_images/0" do
+    test "delete_kitty_image builds correct escape sequence" do
+      result = Image.delete_kitty_image(42)
+      assert result =~ "\e_G"
+      assert result =~ "a=d"
+      assert result =~ "i=42"
+    end
+
+    test "delete_all_kitty_images builds correct escape sequence" do
+      result = Image.delete_all_kitty_images()
+      assert result =~ "\e_G"
+      assert result =~ "a=d"
+    end
+  end
+
   describe "detect_capabilities/0 — upstream terminal-image.test.ts env-based coverage" do
     test "unknown terminal: hyperlinks false, images nil" do
       with_env(%{}, fn ->

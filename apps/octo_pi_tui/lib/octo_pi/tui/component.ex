@@ -20,5 +20,7 @@ defmodule OctoPi.TUI.Component do
   @callback handle_key(state :: struct(), key :: Key.t()) ::
               struct() | {struct(), [term()]}
 
-  @optional_callbacks handle_key: 2
+  @callback invalidate(state :: struct()) :: struct()
+
+  @optional_callbacks handle_key: 2, invalidate: 1
 end

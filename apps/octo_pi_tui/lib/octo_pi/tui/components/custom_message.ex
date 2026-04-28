@@ -43,6 +43,10 @@ defmodule OctoPi.TUI.Components.CustomMessage do
   @impl true
   def handle_key(%__MODULE__{} = msg, _key), do: msg
 
+  @impl true
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp try_custom_render(msg, width) do
     msg.renderer.(msg, [expanded: msg.expanded], msg.theme)
   rescue

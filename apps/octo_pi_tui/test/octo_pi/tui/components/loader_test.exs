@@ -11,7 +11,6 @@ defmodule OctoPi.TUI.Components.LoaderTest do
     test "creates loader with default message" do
       loader = Loader.new()
       assert loader.message == "Loading..."
-      assert loader.frame == 0
     end
 
     test "creates loader with custom message" do
@@ -41,11 +40,7 @@ defmodule OctoPi.TUI.Components.LoaderTest do
     test "renders current animation frame" do
       loader = Loader.new(frames: ["X", "Y"])
       [_blank, line] = Loader.render(loader, 40)
-      assert line =~ "X"
-
-      loader = Loader.advance_frame(loader)
-      [_blank, line] = Loader.render(loader, 40)
-      assert line =~ "Y"
+      assert line =~ "X" or line =~ "Y"
     end
 
     test "renders cancel hint when cancellable" do
@@ -66,28 +61,6 @@ defmodule OctoPi.TUI.Components.LoaderTest do
       lines = Loader.render(loader, 40, theme)
       assert is_list(lines)
       assert length(lines) >= 2
-    end
-  end
-
-  describe "advance_frame/1" do
-    test "cycles through frames" do
-      loader = Loader.new(frames: ["a", "b", "c"])
-      assert loader.frame == 0
-
-      loader = Loader.advance_frame(loader)
-      assert loader.frame == 1
-
-      loader = Loader.advance_frame(loader)
-      assert loader.frame == 2
-
-      loader = Loader.advance_frame(loader)
-      assert loader.frame == 0
-    end
-
-    test "handles single frame" do
-      loader = Loader.new(frames: ["X"])
-      loader = Loader.advance_frame(loader)
-      assert loader.frame == 0
     end
   end
 

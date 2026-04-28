@@ -36,23 +36,39 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
   alias OctoPi.TUI.Autocomplete
+  alias OctoPi.TUI.Autocomplete.CombinedProvider
+  alias OctoPi.TUI.Autocomplete.ExtensionCommandProvider
+  alias OctoPi.TUI.Autocomplete.FilePathProvider
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+  alias OctoPi.TUI.Clipboard
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
+  alias OctoPi.TUI.Components.Container
+  alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.Header
+  alias OctoPi.TUI.Components.LoginDialog
   alias OctoPi.TUI.Components.ModelSelector
+  alias OctoPi.TUI.Components.SelectList
+  alias OctoPi.TUI.Components.SessionSelector
+  alias OctoPi.TUI.Components.SettingsList
+  alias OctoPi.TUI.Components.SettingsSelector
+  alias OctoPi.TUI.Components.SummarizePrompt
   alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.TreeSelector
+  alias OctoPi.TUI.Components.TruncatedText
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Paste
-  alias OctoPi.TUI.Renderer
+  alias OctoPi.TUI.RenderLoop
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Terminal.Image
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
@@ -67,7 +83,7 @@ defmodule OctoPi.TUI.Interactive do
   @type t :: %__MODULE__{
           session: pid() | nil,
           sup: pid() | nil,
-          renderer: pid() | nil,
+          render_loop: pid() | nil,
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
           skip_raw_mode: boolean(),
@@ -87,6 +103,13 @@ defmodule OctoPi.TUI.Interactive do
           model: Model.t() | nil,
           models: [Model.t()],
           model_selector: ModelSelector.t() | nil,
+          login_dialog: LoginDialog.t() | nil,
+          settings_selector: SettingsSelector.t() | nil,
+          settings_list: SettingsList.t() | nil,
+          session_selector: SessionSelector.t() | nil,
+          tree_selector: TreeSelector.t() | nil,
+          summarize_prompt: SummarizePrompt.t() | nil,
+          select_list: SelectList.t() | nil,
           dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -94,19 +117,21 @@ defmodule OctoPi.TUI.Interactive do
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
+          header: Header.t(),
           loaded_resources: resource_data() | nil,
           expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
-          extensions: [Extension.t()]
+          extensions: [Extension.t()],
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
             sup: nil,
-            renderer: nil,
+            render_loop: nil,
             terminal: nil,
             raw_mode_fn: nil,
             skip_raw_mode: false,
@@ -118,6 +143,7 @@ defmodule OctoPi.TUI.Interactive do
             footer_data: nil,
             theme: nil,
             banner: nil,
+            header: %Header{},
             loaded_resources: nil,
             expand_prompt_fn: nil,
             width: 80,
@@ -129,6 +155,13 @@ defmodule OctoPi.TUI.Interactive do
             model: nil,
             models: [],
             model_selector: nil,
+            login_dialog: nil,
+            settings_selector: nil,
+            settings_list: nil,
+            session_selector: nil,
+            tree_selector: nil,
+            summarize_prompt: nil,
+            select_list: nil,
             dequeue_overlay: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -139,7 +172,8 @@ defmodule OctoPi.TUI.Interactive do
             dialog: nil,
             custom_widget: nil,
             extension_shortcuts: [],
-            extensions: []
+            extensions: [],
+            focused_component: :input
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -256,7 +290,10 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:select, options, opts}) do
-    {%{state | dialog: {:select, nil, options, opts}}, :pending}
+    items = Enum.map(options, &select_list_item/1)
+    sl = %SelectList{items: items, selected: Keyword.get(opts, :initial, 0)}
+    new_state = focus(%{state | dialog: {:select, nil, options, opts}, select_list: sl}, {:dialog, :select_list})
+    {new_state, :pending}
   end
 
   def handle_ui_request(state, {:confirm, prompt, opts}) do
@@ -376,14 +413,16 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: Renderer, start: {Renderer, :start_link, [[width: w, height: h, csi_2026?: true]]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
 
     {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
 
     terminal = child_pid(sup, Terminal)
-    renderer = child_pid(sup, Renderer)
+
+    {:ok, render_loop} =
+      RenderLoop.start_link(width: w, height: h, terminal: terminal, csi_2026?: true)
+
     footer_data = child_pid(sup, FooterData)
 
     :ok = Terminal.open(terminal)
@@ -405,7 +444,7 @@ defmodule OctoPi.TUI.Interactive do
     state = %__MODULE__{
       session: session,
       sup: sup,
-      renderer: renderer,
+      render_loop: render_loop,
       terminal: terminal,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
@@ -438,13 +477,13 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def handle_continue(:first_render, state) do
-    state = render_frame(state)
+    state = send_render(state)
     {:noreply, state, loader_timeout(state)}
   end
 
   @impl GenServer
   def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
-    Renderer.resize(state.renderer, w, h)
+    send(state.render_loop, {:resize, w, h})
 
     state
     |> handle_event(event)
@@ -508,22 +547,24 @@ defmodule OctoPi.TUI.Interactive do
     theme = build_custom_theme(state)
     done = fn result -> send(interactive_pid, {:custom_done, from, result}) end
     component = factory.(tui, theme, done)
-    new_state = render_frame(%{state | custom_widget: {from, component}})
+    new_state = send_render(%{state | custom_widget: {from, component}})
     {:noreply, new_state, loader_timeout(new_state)}
   end
 
   def handle_call({:ui_request, msg}, from, state) do
     {new_state, reply} = handle_ui_request(state, msg)
 
-    case reply do
-      :pending ->
-        new_state = put_dialog_from(new_state, from)
-        new_state = render_frame(new_state)
-        {:noreply, new_state, loader_timeout(new_state)}
+    new_state =
+      case reply do
+        :pending -> put_dialog_from(new_state, from)
+        _ -> new_state
+      end
 
-      val ->
-        new_state = render_frame(new_state)
-        {:reply, val, new_state, loader_timeout(new_state)}
+    new_state = send_render(new_state)
+
+    case reply do
+      :pending -> {:noreply, new_state, loader_timeout(new_state)}
+      val -> {:reply, val, new_state, loader_timeout(new_state)}
     end
   end
 
@@ -537,13 +578,7 @@ defmodule OctoPi.TUI.Interactive do
   def terminate(_reason, state) do
     # Move cursor past the last rendered line so the shell prompt appears
     # on a fresh line below the content (mirrors upstream pi-mono stop()).
-    with pid when is_pid(pid) <- state.renderer,
-         true <- Process.alive?(pid),
-         bytes when bytes != "" <- Renderer.exit_bytes(pid),
-         term when is_pid(term) <- state.terminal,
-         true <- Process.alive?(term) do
-      Terminal.write(term, bytes)
-    end
+    if pid = state.render_loop, do: send(pid, :stop)
 
     # Synchronously shut the supervisor down so Terminal.terminate/2
     # (and through it Reader.terminate/2) runs before we return —
@@ -595,9 +630,9 @@ defmodule OctoPi.TUI.Interactive do
   defp advance(%{exit: true} = state), do: {:stop, :normal, state}
 
   defp advance(state) do
-    state = maybe_suspend(state)
+    state = handle_suspend(state)
     state = maybe_launch_editor(state)
-    state = render_frame(state)
+    state = send_render(state)
     {:noreply, state, loader_timeout(state)}
   end
 
@@ -706,7 +741,7 @@ defmodule OctoPi.TUI.Interactive do
   defp put_if_present(kw, k, v), do: Keyword.put(kw, k, v)
 
   @doc false
-  @spec build_autocomplete_provider(map() | nil, [Extension.t()]) :: SlashCommandProvider.t()
+  @spec build_autocomplete_provider(map() | nil, [Extension.t()]) :: CombinedProvider.t()
   def build_autocomplete_provider(loaded_resources, extensions \\ []) do
     template_commands =
       case loaded_resources do
@@ -719,15 +754,26 @@ defmodule OctoPi.TUI.Interactive do
           []
       end
 
+    registered = Dispatcher.get_registered_commands(extensions)
+
     extension_commands =
-      Enum.map(Dispatcher.get_registered_commands(extensions), fn entry ->
+      Enum.map(registered, fn entry ->
         %Autocomplete.SlashCommand{
           name: entry.invocation_name,
           description: entry.cmd.description
         }
       end)
 
-    SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands ++ extension_commands)
+    slash_provider =
+      SlashCommandProvider.new(Autocomplete.builtin_commands() ++ template_commands ++ extension_commands)
+
+    builtin_names = MapSet.new(Autocomplete.builtin_commands(), & &1.name)
+    ext_cmd_tuples = Enum.map(registered, fn entry -> {entry.invocation_name, entry.cmd, entry.ext_id} end)
+    ext_cmd_provider = ExtensionCommandProvider.new(ext_cmd_tuples, builtin_names)
+
+    file_provider = FilePathProvider.new(cwd: File.cwd!(), max_results: 50)
+
+    CombinedProvider.new([slash_provider, ext_cmd_provider, file_provider])
   end
 
   defp build_loaded_resources(opts) do
@@ -810,14 +856,14 @@ defmodule OctoPi.TUI.Interactive do
 
   # Suspend cycles the Terminal: close (deactivates → cooked mode for
   # the parent shell) → SIGTSTP → open (re-activates after fg).
-  defp maybe_suspend(%{suspend_pending: true} = state) do
+  defp handle_suspend(%{suspend_pending: true} = state) do
     Terminal.close(state.terminal)
     state.send_sigtstp_fn.()
     Terminal.open(state.terminal)
     %{state | suspend_pending: false}
   end
 
-  defp maybe_suspend(state), do: state
+  defp handle_suspend(state), do: state
 
   @doc false
   def default_send_sigtstp do
@@ -846,44 +892,65 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp render_frame(state) do
+  defp send_render(state) do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
-    lines = render(state, input_lines)
-    lines = maybe_composite_model_selector(state, lines)
-    lines = maybe_composite_dequeue_overlay(state, lines)
+    {lines, layout} = build_screen(state, input_lines)
+    lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
       nil -> :ok
       fd -> log_overwide(fd, lines, state.width)
     end
 
-    post_input_h = post_input_height(state)
-    cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
-    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)
-
-    if bytes != "", do: Terminal.write(state.terminal, bytes)
+    cursor_seq = cursor_position(state, input_lines, lines, layout)
+    send(state.render_loop, {:render, lines, cursor_seq})
     state
   end
 
-  defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
-
-  defp maybe_composite_model_selector(%{model_selector: ms, width: w, height: h}, lines) do
+  defp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do
     ov_w = min(60, w)
     ov_lines = ModelSelector.render(ms, ov_w)
     ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [ov], w, h)
   end
 
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: nil}, lines), do: lines
-
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) do
+  defp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do
     ov_w = min(70, w)
     ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
     overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [overlay], w, h)
   end
+
+  defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
+    ov_w = min(70, w)
+
+    case render_dialog_overlay(state, key, ov_w) do
+      nil -> lines
+      ov_lines -> Overlay.composite(lines, [%Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}], w, h)
+    end
+  end
+
+  defp composite_active_overlay(_state, lines), do: lines
+
+  defp render_dialog_overlay(%{login_dialog: d}, :login, w) when not is_nil(d), do: LoginDialog.render(d, w)
+
+  defp render_dialog_overlay(%{settings_selector: d}, :settings, w) when not is_nil(d),
+    do: SettingsSelector.render(d, w)
+
+  defp render_dialog_overlay(%{settings_list: d}, :settings_list, w) when not is_nil(d), do: SettingsList.render(d, w)
+
+  defp render_dialog_overlay(%{session_selector: d}, :session_selector, w) when not is_nil(d),
+    do: SessionSelector.render(d, w)
+
+  defp render_dialog_overlay(%{tree_selector: d}, :tree_selector, w) when not is_nil(d), do: TreeSelector.render(d, w)
+
+  defp render_dialog_overlay(%{summarize_prompt: d}, :summarize_prompt, w) when not is_nil(d),
+    do: SummarizePrompt.render(d, w)
+
+  defp render_dialog_overlay(%{select_list: d}, :select_list, w) when not is_nil(d), do: SelectList.render(d, w)
+  defp render_dialog_overlay(_, _, _), do: nil
 
   defp render_dequeue_items(items, selected, _width, theme) do
     Enum.with_index(items, fn {type, msg}, idx ->
@@ -913,29 +980,15 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp post_input_height(%__MODULE__{input: input, width: width, notification: notification}) do
-    length(Components.Input.render_dropdown(input, width)) +
-      length(render_notification(notification, width))
-  end
+  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _layout) when not is_nil(cw), do: "\e[?25l"
 
-  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _post_input_h) when not is_nil(cw),
-    do: "\e[?25l"
-
-  defp cursor_position(
-         %__MODULE__{
-           input: input,
-           width: width,
-           height: height,
-           footer: footer,
-           ui_overrides: ui_overrides,
-           footer_data: footer_data_pid
-         },
-         input_lines,
-         lines,
-         post_input_h
-       ) do
+  defp cursor_position(%__MODULE__{input: input, width: width, height: height}, input_lines, lines, %{
+         footer_height: footer_height,
+         dropdown_height: dropdown_height,
+         notification_height: notification_height
+       }) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, footer_data_pid, width))
+    post_input_h = dropdown_height + notification_height
     input_end = length(lines) - footer_height - post_input_h
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
@@ -988,38 +1041,7 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  def handle_event(%{model_selector: ms} = state, %Key{} = key) when not is_nil(ms) do
-    case ModelSelector.handle_key(ms, key) do
-      {_new_ms, [:cancel]} ->
-        %{state | model_selector: nil}
-
-      {_new_ms, [{:select_model, model}]} ->
-        if state.session, do: CoderSession.set_model(state.session, model)
-
-        %{
-          state
-          | model_selector: nil,
-            model: model,
-            footer: %{state.footer | model_id: model.id, provider: model.provider}
-        }
-
-      new_ms ->
-        %{state | model_selector: new_ms}
-    end
-  end
-
-  def handle_event(%{dequeue_overlay: ov} = state, %Key{} = key) when not is_nil(ov) do
-    handle_dequeue_key(state, ov, key)
-  end
-
-  def handle_event(state, %Key{} = key) do
-    kb = get_keybindings(state)
-
-    case find_app_action(kb, key) do
-      nil -> handle_event_after_app(state, key)
-      action -> dispatch_app_action(action, state, key)
-    end
-  end
+  def handle_event(state, %Key{} = key), do: dispatch_key_to_focused(state, key)
 
   def handle_event(%{input: input} = state, %Paste{content: content}) when is_binary(content),
     do: %{state | input: Components.Input.paste(input, content)}
@@ -1061,8 +1083,7 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, %Resize{width: w, height: h}),
     do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
 
-  def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
-    do: %{state | loader: Components.Loader.advance_frame(loader)}
+  def handle_event(%{loader: %Components.Loader{}} = state, :loader_tick), do: state
 
   def handle_event(state, {:bash_done, id, output, exit_code}) do
     transcript =
@@ -1139,7 +1160,9 @@ defmodule OctoPi.TUI.Interactive do
         other -> other
       end
 
-    %{state | tools_expanded: expanded, banner: banner}
+    header = if is_nil(state.banner), do: %{state.header | expanded: expanded}, else: state.header
+
+    %{state | tools_expanded: expanded, banner: banner, header: header}
   end
 
   defp dispatch_app_action("app.editor.external", state, _key), do: %{state | editor_pending: true}
@@ -1153,7 +1176,7 @@ defmodule OctoPi.TUI.Interactive do
 
     if items == [],
       do: %{state | notification: "No queued messages"},
-      else: %{state | dequeue_overlay: %{items: items, selected: 0}}
+      else: focus(%{state | dequeue_overlay: %{items: items, selected: 0}}, {:overlay, :dequeue})
   end
 
   defp dispatch_app_action("app.message.followUp", %{loader: %Components.Loader{}} = state, _key) do
@@ -1203,7 +1226,28 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_app_action("app.model.select", state, _key) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
-    %{state | model_selector: ms}
+    focus(%{state | model_selector: ms}, {:dialog, :model_selector})
+  end
+
+  defp dispatch_app_action("app.clipboard.pasteImage", state, _key) do
+    case Clipboard.paste_image_from_clipboard() do
+      {:ok, %{data: base64_data, mime_type: mime_type}} ->
+        image_dims =
+          case Image.get_image_dimensions(base64_data, mime_type) do
+            {:ok, dims} -> dims
+            :error -> %{width: 100, height: 100}
+          end
+
+        cell_dims = %{width_px: 9, height_px: 18}
+
+        case Image.render_image(base64_data, image_dims, cell_dims: cell_dims, mime_type: mime_type) do
+          {:ok, encoded, _rows} -> %{state | input: Components.Input.paste(state.input, encoded)}
+          {:fallback, text} -> %{state | input: Components.Input.paste(state.input, text)}
+        end
+
+      :error ->
+        state
+    end
   end
 
   defp dispatch_app_action(_action, state, _key), do: state
@@ -1212,6 +1256,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
+
+  defp handle_event_key(
+         %{input: %{value: ""}, banner: nil, header: header} = state,
+         %Key{key: ??, modifiers: []} = key
+       ), do: %{state | header: Header.handle_key(header, key)}
 
   defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
     do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
@@ -1258,7 +1307,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
 
-  defp dispatch_slash(cmd, state, new_input, _value) when cmd in ~w(help clear compact cost model theme config) do
+  defp dispatch_slash(cmd, state, new_input, _value)
+       when cmd in ~w(help clear compact cost login model sessions settings theme config) do
     dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
   end
 
@@ -1308,7 +1358,7 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
-    %{state | model_selector: ms}
+    focus(%{state | model_selector: ms}, {:dialog, :model_selector})
   end
 
   defp dispatch_slash_command("help", state),
@@ -1331,6 +1381,32 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 
   defp dispatch_slash_command("config", state), do: %{state | notification: "Config: use --help for startup options"}
+
+  defp dispatch_slash_command("login", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open login dialog"}
+
+  defp dispatch_slash_command("login", state) do
+    ld = LoginDialog.new(state.theme)
+    focus(%{state | login_dialog: ld}, {:dialog, :login})
+  end
+
+  defp dispatch_slash_command("settings", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open settings"}
+
+  defp dispatch_slash_command("settings", state) do
+    ss = SettingsSelector.new(state.theme)
+    focus(%{state | settings_selector: ss}, {:dialog, :settings})
+  end
+
+  defp dispatch_slash_command("sessions", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open session selector"}
+
+  defp dispatch_slash_command("sessions", state) do
+    sessions = list_recent_sessions(state)
+    current_id = state.session && inspect(state.session)
+    ss = SessionSelector.new(sessions, state.theme, current: current_id)
+    focus(%{state | session_selector: ss}, {:dialog, :session_selector})
+  end
 
   defp try_extension_shortcut([], _key, _state), do: :pass
 
@@ -1501,40 +1577,48 @@ defmodule OctoPi.TUI.Interactive do
   # --- rendering helpers (pure) ---
 
   @doc """
-  Render the current state into a flat list of lines ready for the
+  Build the current state into a flat list of lines ready for the
   Renderer. Components are concatenated in layout order — the
   Renderer handles terminal mechanics (scrolling, cursor, clearing).
   """
-  @spec render(t()) :: [binary()]
-  def render(%{input: input, width: width} = state) do
-    render(state, Components.Input.render(input, width))
+  @spec build_screen(t()) :: [binary()]
+  def build_screen(%{input: input, width: width} = state) do
+    {lines, _layout} = build_screen(state, Components.Input.render(input, width))
+    lines
   end
 
-  @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
+  @spec build_screen(t(), [binary()]) :: {[binary()], map()}
+  def build_screen(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
-    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    lines = if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    {lines, %{footer_height: 0, dropdown_height: 0, notification_height: 0}}
   end
 
-  def render(
+  def build_screen(
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
         input_lines
       ) do
-    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, width)
+    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
-    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
+    footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
     all =
       banner_lines ++
         resource_lines ++
-        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines
+        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
 
-    [""] ++ all
+    layout = %{
+      footer_height: length(footer_lines_val),
+      dropdown_height: length(dropdown_lines),
+      notification_height: length(notification_lines)
+    }
+
+    {[""] ++ all, layout}
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}
@@ -1546,7 +1630,10 @@ defmodule OctoPi.TUI.Interactive do
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_notification(nil, _width), do: []
-  defp render_notification(text, _width), do: [dim(text)]
+
+  defp render_notification(text, width) do
+    [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
+  end
 
   defp next_thinking_level(:off), do: :low
   defp next_thinking_level(:low), do: :medium
@@ -1568,7 +1655,7 @@ defmodule OctoPi.TUI.Interactive do
     new_items = List.delete_at(ov.items, ov.selected)
 
     if new_items == [] do
-      %{state | dequeue_overlay: nil}
+      unfocus(%{state | dequeue_overlay: nil})
     else
       max_sel = max(0, length(new_items) - 1)
       %{state | dequeue_overlay: %{ov | items: new_items, selected: min(ov.selected, max_sel)}}
@@ -1581,10 +1668,188 @@ defmodule OctoPi.TUI.Interactive do
       {:follow_up, msg} -> if state.session, do: CoderSession.follow_up(state.session, msg)
     end)
 
-    %{state | dequeue_overlay: nil}
+    unfocus(%{state | dequeue_overlay: nil})
   end
 
   defp handle_dequeue_key(state, _ov, _key), do: state
+
+  defp dispatch_key_to_focused(state, key) do
+    case state.focused_component do
+      :input -> handle_input_key(state, key)
+      {:dialog, dialog_key} -> dispatch_dialog_key(state, dialog_key, key)
+      {:overlay, :dequeue} -> handle_dequeue_key(state, state.dequeue_overlay, key)
+      nil -> state
+    end
+  end
+
+  defp dispatch_dialog_key(state, :model_selector, key), do: handle_model_selector_key(state, key)
+  defp dispatch_dialog_key(state, :login, key), do: handle_login_dialog_key(state, key)
+  defp dispatch_dialog_key(state, :settings, key), do: handle_settings_selector_key(state, key)
+  defp dispatch_dialog_key(state, :settings_list, key), do: handle_settings_list_key(state, key)
+  defp dispatch_dialog_key(state, :session_selector, key), do: handle_session_selector_key(state, key)
+  defp dispatch_dialog_key(state, :tree_selector, key), do: handle_tree_selector_key(state, key)
+  defp dispatch_dialog_key(state, :summarize_prompt, key), do: handle_summarize_prompt_key(state, key)
+  defp dispatch_dialog_key(state, :select_list, key), do: handle_select_list_key(state, key)
+  defp dispatch_dialog_key(state, _unknown, _key), do: state
+
+  defp handle_input_key(state, key) do
+    kb = get_keybindings(state)
+
+    case find_app_action(kb, key) do
+      nil -> handle_event_after_app(state, key)
+      action -> dispatch_app_action(action, state, key)
+    end
+  end
+
+  defp handle_model_selector_key(%{model_selector: ms} = state, key) do
+    case ModelSelector.handle_key(ms, key) do
+      {_new_ms, [:cancel]} ->
+        unfocus(%{state | model_selector: nil})
+
+      {_new_ms, [{:select_model, model}]} ->
+        if state.session, do: CoderSession.set_model(state.session, model)
+
+        unfocus(%{
+          state
+          | model_selector: nil,
+            model: model,
+            footer: %{state.footer | model_id: model.id, provider: model.provider}
+        })
+
+      result ->
+        apply_component_result(state, :model_selector, result)
+    end
+  end
+
+  defp handle_login_dialog_key(%{login_dialog: ld} = state, key) do
+    case LoginDialog.handle_key(ld, key) do
+      {_new_ld, [:cancel]} -> unfocus(%{state | login_dialog: nil})
+      {_new_ld, [{:api_key_entered, api_key}]} -> apply_api_key(unfocus(%{state | login_dialog: nil}), api_key)
+      result -> apply_component_result(state, :login_dialog, result)
+    end
+  end
+
+  defp handle_settings_selector_key(%{settings_selector: ss} = state, key) do
+    case SettingsSelector.handle_key(ss, key) do
+      {_new_ss, [:cancel]} ->
+        unfocus(%{state | settings_selector: nil})
+
+      {new_ss, [{:setting_changed, setting_key, value}]} ->
+        apply_setting(unfocus(%{state | settings_selector: new_ss}), setting_key, value)
+
+      result ->
+        apply_component_result(state, :settings_selector, result)
+    end
+  end
+
+  defp handle_settings_list_key(%{settings_list: sl} = state, key) do
+    case SettingsList.handle_key(sl, key) do
+      {_new_sl, [:cancel]} ->
+        unfocus(%{state | settings_list: nil})
+
+      {new_sl, [{:setting_changed, item_id, value}]} ->
+        apply_setting(unfocus(%{state | settings_list: new_sl}), item_id, value)
+
+      result ->
+        apply_component_result(state, :settings_list, result)
+    end
+  end
+
+  defp handle_session_selector_key(%{session_selector: ss} = state, key) do
+    case SessionSelector.handle_key(ss, key) do
+      {_new_ss, [:cancel]} -> unfocus(%{state | session_selector: nil})
+      {_new_ss, [{:resume_session, session}]} -> resume_session(unfocus(%{state | session_selector: nil}), session)
+      {new_ss, [{:delete_session, session}]} -> delete_session(%{state | session_selector: new_ss}, session)
+      result -> apply_component_result(state, :session_selector, result)
+    end
+  end
+
+  defp handle_tree_selector_key(%{tree_selector: ts} = state, key) do
+    case TreeSelector.handle_key(ts, key) do
+      {_new_ts, [:cancel]} ->
+        unfocus(%{state | tree_selector: nil})
+
+      {_new_ts, [{:select, _entry_id}]} ->
+        sp = SummarizePrompt.new()
+        focus(%{state | tree_selector: nil, summarize_prompt: sp}, {:dialog, :summarize_prompt})
+
+      result ->
+        apply_component_result(state, :tree_selector, result)
+    end
+  end
+
+  defp handle_summarize_prompt_key(%{summarize_prompt: sp} = state, key) do
+    case SummarizePrompt.handle_key(sp, key) do
+      {_sp, [:cancel]} -> unfocus(%{state | summarize_prompt: nil})
+      {_sp, [{:result, _choice}]} -> unfocus(%{state | summarize_prompt: nil})
+      {_sp, [:awaiting_custom_instructions]} -> unfocus(%{state | summarize_prompt: nil, editor_pending: true})
+      result -> apply_component_result(state, :summarize_prompt, result)
+    end
+  end
+
+  defp handle_select_list_key(%{select_list: sl} = state, key) do
+    case SelectList.handle_key(sl, key) do
+      {_new_sl, [:cancel]} -> resolve_select_list(state, nil)
+      {_new_sl, [{:select, value}]} -> resolve_select_list(state, value)
+      result -> apply_component_result(state, :select_list, result)
+    end
+  end
+
+  defp apply_api_key(state, _api_key), do: state
+
+  defp apply_setting(state, _key, _value), do: state
+
+  defp resume_session(state, _session), do: state
+
+  defp delete_session(state, _session), do: state
+
+  defp resolve_select_list(%{dialog: {:select, from, _options, _opts}} = state, value) when not is_nil(from) do
+    GenServer.reply(from, value)
+    unfocus(%{state | select_list: nil, dialog: nil})
+  end
+
+  defp resolve_select_list(state, _value) do
+    unfocus(%{state | select_list: nil, dialog: nil})
+  end
+
+  defp list_recent_sessions(%{footer: %Footer{cwd: cwd}}) do
+    session_dir = SessionStore.session_dir(cwd)
+
+    case File.ls(session_dir) do
+      {:ok, names} ->
+        names
+        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+        |> Enum.map(fn name ->
+          id = String.replace_suffix(name, ".jsonl", "")
+          %{id: id, name: id, message_count: 0}
+        end)
+        |> Enum.sort_by(& &1.name, :desc)
+
+      _ ->
+        []
+    end
+  end
+
+  defp select_list_item(%SelectList.Item{} = item), do: item
+
+  defp select_list_item(%{value: v, label: l} = m),
+    do: %SelectList.Item{value: v, label: l, description: Map.get(m, :description)}
+
+  defp select_list_item(s) when is_binary(s), do: s
+
+  defp focus(state, target), do: %{state | focused_component: target}
+  defp unfocus(state), do: %{state | focused_component: :input}
+
+  defp apply_component_result(state, field, {new_component, events}) do
+    Enum.reduce(events, Map.put(state, field, new_component), &handle_component_event(&2, &1))
+  end
+
+  defp apply_component_result(state, field, new_component) do
+    Map.put(state, field, new_component)
+  end
+
+  defp handle_component_event(state, {:cancel}), do: unfocus(state)
+  defp handle_component_event(state, _event), do: state
 
   defp cycle_model(models, current, dir) do
     idx = Enum.find_index(models, &(&1 == current)) || -1
@@ -1608,8 +1873,9 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp header_lines(render_fn, _banner, width) when is_function(render_fn, 1), do: render_fn.(width)
-  defp header_lines(nil, banner, width), do: render_banner(banner, width)
+  defp header_lines(render_fn, _banner, _header, width) when is_function(render_fn, 1), do: render_fn.(width)
+  defp header_lines(nil, nil, header, width), do: Header.render(header, width)
+  defp header_lines(nil, banner, _header, width), do: render_banner(banner, width)
 
   defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2),
     do: render_fn.(width, build_footer_context(footer, footer_data_pid))
@@ -1703,6 +1969,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_entry(%AssistantMessage{} = msg, width, thinking_visible) do
     AssistantMessage.render(%{msg | hide_thinking: not thinking_visible}, width)
+  end
+
+  # Diff does not implement Component.render/2 — route explicitly.
+  defp render_entry(%Diff{diff_text: diff_text, theme: theme}, _width, _thinking_visible) do
+    Diff.render_diff(diff_text, theme)
   end
 
   defp render_entry(%mod{} = component, width, _thinking_visible), do: mod.render(component, width)

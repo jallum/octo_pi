@@ -26,6 +26,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   alias OctoPi.AI.Providers.Anthropic.Auth
   alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
   alias OctoPi.AI.Providers.Anthropic.ToolNames
+  alias OctoPi.AI.SanitizeUnicode
   alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
@@ -192,7 +193,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
 
   defp system_field(nil, false), do: nil
   defp system_field("", false), do: nil
-  defp system_field(prompt, false), do: [%{"type" => "text", "text" => prompt}]
+  defp system_field(prompt, false), do: [%{"type" => "text", "text" => SanitizeUnicode.sanitize(prompt)}]
 
   defp system_field(nil, true), do: [%{"type" => "text", "text" => @oauth_identity_prompt}]
   defp system_field("", true), do: [%{"type" => "text", "text" => @oauth_identity_prompt}]
@@ -200,7 +201,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   defp system_field(prompt, true) do
     [
       %{"type" => "text", "text" => @oauth_identity_prompt},
-      %{"type" => "text", "text" => prompt}
+      %{"type" => "text", "text" => SanitizeUnicode.sanitize(prompt)}
     ]
   end
 
@@ -269,12 +270,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   end
 
   @spec convert_user_content(binary() | [Content.user_block()]) :: [map()]
-  defp convert_user_content(text) when is_binary(text), do: [%{"type" => "text", "text" => text}]
+  defp convert_user_content(text) when is_binary(text),
+    do: [%{"type" => "text", "text" => SanitizeUnicode.sanitize(text)}]
 
   defp convert_user_content(blocks) when is_list(blocks), do: Enum.map(blocks, &user_block/1)
 
   @spec user_block(Content.user_block()) :: map()
-  defp user_block(%Content.Text{text: text}), do: %{"type" => "text", "text" => text}
+  defp user_block(%Content.Text{text: text}), do: %{"type" => "text", "text" => SanitizeUnicode.sanitize(text)}
 
   defp user_block(%Content.Image{data: data, mime_type: mime}) do
     %{
@@ -284,7 +286,8 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   end
 
   @spec assistant_block(Content.assistant_block(), boolean()) :: map()
-  defp assistant_block(%Content.Text{text: text}, _oauth?), do: %{"type" => "text", "text" => text}
+  defp assistant_block(%Content.Text{text: text}, _oauth?),
+    do: %{"type" => "text", "text" => SanitizeUnicode.sanitize(text)}
 
   defp assistant_block(%Content.Thinking{redacted?: true} = block, _oauth?) do
     %{"type" => "redacted_thinking", "data" => block.signature || ""}
@@ -293,7 +296,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   defp assistant_block(%Content.Thinking{} = block, _oauth?) do
     %{
       "type" => "thinking",
-      "thinking" => block.thinking,
+      "thinking" => SanitizeUnicode.sanitize(block.thinking),
       "signature" => block.signature || ""
     }
   end

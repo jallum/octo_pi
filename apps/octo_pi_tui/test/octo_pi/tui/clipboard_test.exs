@@ -82,4 +82,19 @@ defmodule OctoPi.TUI.ClipboardTest do
       assert Clipboard.extract_code_blocks("no code here") == []
     end
   end
+
+  describe "paste_image_from_clipboard/0" do
+    test "never raises; returns :error or {:ok, map} with binary data and mime_type" do
+      result = Clipboard.paste_image_from_clipboard()
+
+      case result do
+        :error ->
+          assert true
+
+        {:ok, %{data: data, mime_type: mime}} ->
+          assert is_binary(data)
+          assert is_binary(mime)
+      end
+    end
+  end
 end

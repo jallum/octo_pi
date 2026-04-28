@@ -21,11 +21,11 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
 
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Compaction.Result
-  alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
+  alias OctoPi.Coder.SettingsManager
 
   # Evaluated at compile time — skip the entire module when no auth is set.
   # Run with: ANTHROPIC_API_KEY=sk-... mix test --only integration <path>
@@ -74,14 +74,14 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   # Use a tiny keep_recent_tokens so even a short conversation triggers a
   # real LLM summarization call (rather than the "No prior history." shortcut).
   defp tight_settings do
-    %Settings{reserve_tokens: 16_384, keep_recent_tokens: 1}
+    %{"compaction" => %{"reserveTokens" => 16_384, "keepRecentTokens" => 1}}
   end
 
   defp open_session(ctx, model, settings \\ nil) do
     id = "think-compact-#{ctx.test}-#{System.unique_integer([:positive])}"
     root = Path.join(System.tmp_dir!(), id)
     cwd = System.tmp_dir!()
-    settings = settings || tight_settings()
+    {:ok, sm} = SettingsManager.in_memory(settings || tight_settings())
 
     {:ok, store} = SessionStore.start_link(id: id, cwd: cwd, root: root)
     on_exit(fn -> if Process.alive?(store), do: SessionStore.close(store) end)
@@ -92,7 +92,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
         session_manager: %SessionManager{cwd: cwd, session_id: id},
         store_pid: store,
         model_provider: fn -> model end,
-        settings_provider: fn -> settings end
+        settings_manager: sm
       )
 
     on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session) end)

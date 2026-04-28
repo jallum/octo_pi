@@ -89,6 +89,10 @@ defmodule OctoPi.TUI.Components.SessionSelector do
     |> Enum.map(&render_item(&1, s))
   end
 
+  @impl true
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp render_item({session, idx}, %{selected: sel, current_id: current_id, theme: theme}) do
     prefix = if idx == sel, do: "→ ", else: "  "
     check = if to_string(session.id) == to_string(current_id), do: " ✓", else: ""

@@ -53,6 +53,19 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth.MacKeychainTest do
     end
   end
 
+  describe "read/0 — missing USER env var" do
+    test "returns nil when USER is not set" do
+      original = System.get_env("USER")
+
+      try do
+        System.delete_env("USER")
+        assert MacKeychain.read() == nil
+      after
+        if original, do: System.put_env("USER", original)
+      end
+    end
+  end
+
   describe "read/0 — integration (macOS, Claude Code logged in)" do
     # Gated on env var + macOS + real entry. Skipped by default.
     @tag :integration
