@@ -125,8 +125,7 @@ defmodule OctoPi.TUI.Interactive do
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
-          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
-          force_next_render: boolean()
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
@@ -174,8 +173,7 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
-            focused_component: :input,
-            force_next_render: false
+            focused_component: :input
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -486,7 +484,6 @@ defmodule OctoPi.TUI.Interactive do
     Renderer.resize(state.renderer, w, h)
 
     state
-    |> Map.put(:force_next_render, true)
     |> handle_event(event)
     |> advance()
   end
@@ -921,10 +918,10 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     cursor_seq = cursor_position(state, input_lines, lines, layout)
-    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq, force: state.force_next_render)
+    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq)
 
     if bytes != "", do: Terminal.write(state.terminal, bytes)
-    %{state | force_next_render: false}
+    state
   end
 
   defp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do
