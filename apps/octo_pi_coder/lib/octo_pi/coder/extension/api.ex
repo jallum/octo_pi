@@ -36,7 +36,9 @@ defmodule OctoPi.Coder.Extension.API do
           exec: (String.t(), [String.t()] -> term()),
           get_commands: (-> [map()]),
           get_context_usage: (-> map() | nil),
-          get_compaction_settings: (-> OctoPi.Coder.Compaction.Settings.t())
+          get_compaction_settings: (-> OctoPi.Coder.Compaction.Settings.t()),
+          navigate_tree: (keyword() -> term()),
+          get_entries: (-> [term()])
         }
 
   @one_arity_actions [
@@ -49,7 +51,8 @@ defmodule OctoPi.Coder.Extension.API do
     :set_active_tools,
     :set_session_name,
     :set_label,
-    :register_tool
+    :register_tool,
+    :navigate_tree
   ]
 
   @zero_arity_actions [
@@ -62,7 +65,8 @@ defmodule OctoPi.Coder.Extension.API do
     :get_session_name,
     :get_commands,
     :get_context_usage,
-    :get_compaction_settings
+    :get_compaction_settings,
+    :get_entries
   ]
 
   @two_arity_actions [:exec]
