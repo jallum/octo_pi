@@ -913,9 +913,7 @@ defmodule OctoPi.TUI.Interactive do
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
     lines = render(state, input_lines)
-    lines = maybe_composite_model_selector(state, lines)
-    lines = maybe_composite_dequeue_overlay(state, lines)
-    lines = maybe_composite_focused_dialog(state, lines)
+    lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
       nil -> :ok
@@ -930,38 +928,30 @@ defmodule OctoPi.TUI.Interactive do
     %{state | force_next_render: false}
   end
 
-  defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
-
-  defp maybe_composite_model_selector(%{model_selector: ms, width: w, height: h}, lines) do
+  defp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do
     ov_w = min(60, w)
     ov_lines = ModelSelector.render(ms, ov_w)
     ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [ov], w, h)
   end
 
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: nil}, lines), do: lines
-
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) do
+  defp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do
     ov_w = min(70, w)
     ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
     overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [overlay], w, h)
   end
 
-  defp maybe_composite_focused_dialog(%{focused_component: {:dialog, key}} = state, lines) do
-    ov_w = min(70, state.width)
+  defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
+    ov_w = min(70, w)
 
     case render_dialog_overlay(state, key, ov_w) do
-      nil ->
-        lines
-
-      ov_lines ->
-        ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
-        Overlay.composite(lines, [ov], state.width, state.height)
+      nil -> lines
+      ov_lines -> Overlay.composite(lines, [%Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}], w, h)
     end
   end
 
-  defp maybe_composite_focused_dialog(_state, lines), do: lines
+  defp composite_active_overlay(_state, lines), do: lines
 
   defp render_dialog_overlay(%{login_dialog: d}, :login, w) when not is_nil(d), do: LoginDialog.render(d, w)
 
