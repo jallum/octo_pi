@@ -31,45 +31,62 @@ defmodule OctoPi.TUI.RenderLoop do
     end)
   end
 
-  defp loop(renderer, terminal, tick_ms, nil) do
+  defp loop(renderer, terminal, tick_ms, pending) do
+    wait =
+      case pending do
+        nil -> :infinity
+        {deadline, _} -> max(0, deadline - System.monotonic_time(:millisecond))
+      end
+
     receive do
       {:render, lines, cursor_seq} ->
-        deadline = System.monotonic_time(:millisecond) + tick_ms
+        deadline = pending_deadline(pending, tick_ms)
         loop(renderer, terminal, tick_ms, {deadline, drain_latest(lines, cursor_seq)})
 
       {:resize, w, h} ->
-        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, nil)
-
-      :stop ->
-        :ok
-    end
-  end
-
-  defp loop(renderer, terminal, tick_ms, {deadline, {lines, cursor_seq}}) do
-    wait = max(0, deadline - System.monotonic_time(:millisecond))
-
-    receive do
-      {:render, new_lines, new_cursor_seq} ->
-        loop(renderer, terminal, tick_ms, {deadline, drain_latest(new_lines, new_cursor_seq)})
-
-      {:resize, w, h} ->
-        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, {deadline, {lines, cursor_seq}})
+        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, pending)
 
       :stop ->
         :ok
     after
       wait ->
-        {bytes, renderer} = Renderer.render(renderer, lines, cursor_seq)
+        {_deadline, {lines, cursor_seq}} = pending
+        start_mono = System.monotonic_time()
+        {bytes, new_renderer} = Renderer.render(renderer, lines, cursor_seq)
+        emit_render_telemetry(renderer, new_renderer, lines, System.monotonic_time() - start_mono, byte_size(bytes))
         if bytes != "", do: do_write(terminal, bytes)
-        loop(renderer, terminal, tick_ms, nil)
+        loop(new_renderer, terminal, tick_ms, nil)
     end
   end
+
+  defp pending_deadline(nil, tick_ms), do: System.monotonic_time(:millisecond) + tick_ms
+  defp pending_deadline({deadline, _}, _tick_ms), do: deadline
 
   defp drain_latest(lines, cursor_seq) do
     receive do
       {:render, l, c} -> drain_latest(l, c)
     after
       0 -> {lines, cursor_seq}
+    end
+  end
+
+  defp emit_render_telemetry(old_r, new_r, lines, duration, byte_count) do
+    {mode, lines_changed} = render_mode(old_r, new_r, lines)
+
+    :telemetry.execute(
+      [:octo_pi_tui, :renderer, :render],
+      %{duration: duration, byte_count: byte_count, lines_changed: lines_changed},
+      %{mode: mode, line_count: length(lines)}
+    )
+  end
+
+  defp render_mode(%{previous: nil}, _new_r, lines), do: {:first, length(lines)}
+  defp render_mode(%{full_redraws: n}, %{full_redraws: m}, lines) when m > n, do: {:full, length(lines)}
+
+  defp render_mode(old_r, _new_r, lines) do
+    case Renderer.find_diff_range(lines, old_r.previous) do
+      {-1, _} -> {:noop, 0}
+      {first, last} -> {:diff, last - first + 1}
     end
   end
 

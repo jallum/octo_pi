@@ -103,4 +103,33 @@ defmodule OctoPi.TUI.RenderLoopTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 200
     end
   end
+
+  describe "telemetry" do
+    test "emits [:octo_pi_tui, :renderer, :render] on each tick" do
+      test_pid = self()
+
+      :telemetry.attach(
+        "render-loop-test-#{inspect(self())}",
+        [:octo_pi_tui, :renderer, :render],
+        fn _event, measurements, metadata, _config ->
+          send(test_pid, {:telemetry, measurements, metadata})
+        end,
+        nil
+      )
+
+      on_exit(fn ->
+        :telemetry.detach("render-loop-test-#{inspect(test_pid)}")
+      end)
+
+      pid = start()
+      send(pid, {:render, ["hello"], ""})
+
+      assert_receive {:telemetry, measurements, metadata}, 200
+      assert is_integer(measurements.duration)
+      assert is_integer(measurements.byte_count)
+      assert is_integer(measurements.lines_changed)
+      assert metadata.mode in [:first, :full, :diff, :noop]
+      assert metadata.line_count == 1
+    end
+  end
 end

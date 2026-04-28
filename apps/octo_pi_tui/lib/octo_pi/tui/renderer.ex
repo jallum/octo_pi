@@ -100,21 +100,7 @@ defmodule OctoPi.TUI.Renderer do
         :ok
     end
 
-    start_mono = System.monotonic_time()
-    {bytes, new_r} = compute(lines, cursor_seq, r)
-    {mode, lines_changed} = render_telemetry_fields(r, new_r, lines)
-
-    :telemetry.execute(
-      [:octo_pi_tui, :renderer, :render],
-      %{
-        duration: System.monotonic_time() - start_mono,
-        byte_count: byte_size(bytes),
-        lines_changed: lines_changed
-      },
-      %{mode: mode, line_count: length(lines)}
-    )
-
-    {bytes, new_r}
+    compute(lines, cursor_seq, r)
   end
 
   @doc "Update the terminal dimensions. Returns a new renderer; next render is a full redraw."
@@ -477,18 +463,4 @@ defmodule OctoPi.TUI.Renderer do
 
   defp termux?, do: System.get_env("TERMUX_VERSION") != nil
 
-  defp render_telemetry_fields(%{previous: nil}, _new_r, lines) do
-    {:first, length(lines)}
-  end
-
-  defp render_telemetry_fields(r, new_r, lines) do
-    if new_r.full_redraws > r.full_redraws do
-      {:full, length(lines)}
-    else
-      {first, last} = find_diff_range(lines, r.previous)
-      changed = if first == -1, do: 0, else: last - first + 1
-      mode = if first == -1, do: :noop, else: :diff
-      {mode, changed}
-    end
-  end
 end
