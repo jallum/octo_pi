@@ -376,4 +376,34 @@ defmodule OctoPi.TUI.RendererTest do
       assert bytes != ""
     end
   end
+
+  describe "cell_dims" do
+    test "default cell dims are 9x18" do
+      pid = new()
+      assert %{width_px: 9, height_px: 18} = Renderer.get_cell_dims(pid)
+    end
+
+    test "set_cell_dims updates stored dimensions" do
+      pid = new()
+      :ok = Renderer.set_cell_dims(pid, %{width_px: 12, height_px: 24})
+      assert %{width_px: 12, height_px: 24} = Renderer.get_cell_dims(pid)
+    end
+  end
+
+  describe "image line passthrough" do
+    test "kitty image line passes through to bytes without being suppressed" do
+      pid = new(width: 10)
+      kitty_line = "\e_Ga=T,f=100,q=2;" <> Base.encode64("tiny") <> "\e\\"
+      {:ok, bytes} = Renderer.render(pid, [kitty_line])
+      assert bytes =~ "\e_G"
+    end
+
+    test "image line does not trigger width overflow warning" do
+      pid = new(width: 5)
+      kitty_line = "\e_Ga=T,f=100,q=2;" <> Base.encode64(String.duplicate("x", 1000)) <> "\e\\"
+      # Should not raise or warn — image lines are excluded from the width check
+      {:ok, bytes} = Renderer.render(pid, [kitty_line])
+      assert is_binary(bytes)
+    end
+  end
 end

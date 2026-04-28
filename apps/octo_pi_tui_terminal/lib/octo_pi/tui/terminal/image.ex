@@ -26,6 +26,8 @@ defmodule OctoPi.TUI.Terminal.Image do
   decision; no Elixir tests are ported.
   """
 
+  import Bitwise
+
   @kitty_prefix "\e_G"
   @iterm2_prefix "\e]1337;File="
   @chunk_size 4096
@@ -86,6 +88,17 @@ defmodule OctoPi.TUI.Terminal.Image do
     "\e]1337;File=#{params}:#{base64_data}\a"
   end
 
+  @spec get_image_dimensions(String.t(), String.t()) :: {:ok, dimensions()} | :error
+  def get_image_dimensions(base64_data, mime_type) do
+    case mime_type do
+      "image/png" -> get_png_dimensions(base64_data)
+      "image/jpeg" -> get_jpeg_dimensions(base64_data)
+      "image/gif" -> get_gif_dimensions(base64_data)
+      "image/webp" -> get_webp_dimensions(base64_data)
+      _ -> :error
+    end
+  end
+
   @spec get_png_dimensions(String.t()) :: {:ok, dimensions()} | :error
   def get_png_dimensions(base64_data) do
     case Base.decode64(base64_data) do
@@ -96,6 +109,58 @@ defmodule OctoPi.TUI.Terminal.Image do
         :error
     end
   end
+
+  @spec get_jpeg_dimensions(String.t()) :: {:ok, dimensions()} | :error
+  def get_jpeg_dimensions(base64_data) do
+    with {:ok, data} <- Base.decode64(base64_data),
+         {:ok, h, w} <- parse_jpeg_sof(data, 2) do
+      {:ok, %{width: w, height: h}}
+    else
+      _ -> :error
+    end
+  end
+
+  @spec get_gif_dimensions(String.t()) :: {:ok, dimensions()} | :error
+  def get_gif_dimensions(base64_data) do
+    case Base.decode64(base64_data) do
+      {:ok, <<"GIF", _ver::binary-size(3), width::little-16, height::little-16, _::binary>>} ->
+        {:ok, %{width: width, height: height}}
+
+      _ ->
+        :error
+    end
+  end
+
+  @spec get_webp_dimensions(String.t()) :: {:ok, dimensions()} | :error
+  def get_webp_dimensions(base64_data) do
+    case Base.decode64(base64_data) do
+      {:ok, <<"RIFF", _size::32, "WEBP", chunk_type::binary-size(4), _::binary>> = data} ->
+        parse_webp_chunk(data, chunk_type)
+
+      _ ->
+        :error
+    end
+  end
+
+  @spec render_image(String.t(), dimensions(), keyword()) ::
+          {:ok, String.t(), pos_integer()} | {:fallback, String.t()}
+  def render_image(base64_data, image_dims, opts \\ []) do
+    target_width = Keyword.get(opts, :width, 80)
+    cell_dims = Keyword.get(opts, :cell_dims, @default_cell_dims)
+    rows = calculate_image_rows(image_dims, target_width, cell_dims)
+
+    case detect_capabilities() do
+      %{images: :kitty} -> {:ok, encode_kitty(base64_data, Keyword.put(opts, :rows, rows)), rows}
+      %{images: :iterm2} -> {:ok, encode_iterm2(base64_data, Keyword.put(opts, :rows, rows)), rows}
+      %{images: nil} -> {:fallback, image_fallback(Keyword.get(opts, :mime_type, "image"), opts)}
+    end
+  end
+
+  @spec delete_kitty_image(pos_integer()) :: String.t()
+  def delete_kitty_image(image_id), do: "\e_Ga=d,d=I,i=#{image_id}\e\\"
+
+  @spec delete_all_kitty_images() :: String.t()
+  def delete_all_kitty_images, do: "\e_Ga=d\e\\"
 
   @spec calculate_image_rows(dimensions(), pos_integer(), cell_dims()) :: pos_integer()
   def calculate_image_rows(image_dims, target_width_cells, cell_dims \\ @default_cell_dims) do
@@ -150,6 +215,57 @@ defmodule OctoPi.TUI.Terminal.Image do
   defp iterm2_terminal?(term_program) do
     System.get_env("ITERM_SESSION_ID") != nil or term_program == "iterm.app"
   end
+
+  defp parse_jpeg_sof(data, i) do
+    data_len = byte_size(data)
+
+    if i + 3 >= data_len do
+      :error
+    else
+      marker = :binary.at(data, i)
+      type = :binary.at(data, i + 1)
+
+      cond do
+        marker != 0xFF ->
+          :error
+
+        type in [0xC0, 0xC2] and i + 8 < data_len ->
+          h = :binary.decode_unsigned(binary_part(data, i + 5, 2), :big)
+          w = :binary.decode_unsigned(binary_part(data, i + 7, 2), :big)
+          {:ok, h, w}
+
+        i + 3 < data_len ->
+          length = :binary.decode_unsigned(binary_part(data, i + 2, 2), :big)
+          parse_jpeg_sof(data, i + 2 + length)
+
+        true ->
+          :error
+      end
+    end
+  end
+
+  defp parse_webp_chunk(data, "VP8 ") do
+    case data do
+      <<_::binary-size(23), 0x9D, 0x01, 0x2A, w_bits::little-16, h_bits::little-16, _::binary>> ->
+        {:ok, %{width: w_bits &&& 0x3FFF, height: h_bits &&& 0x3FFF}}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp parse_webp_chunk(data, "VP8L") do
+    case data do
+      <<_::binary-size(21), b0, b1, b2, b3, _::binary>> ->
+        bits = b0 ||| b1 <<< 8 ||| b2 <<< 16 ||| b3 <<< 24
+        {:ok, %{width: (bits &&& 0x3FFF) + 1, height: (bits >>> 14 &&& 0x3FFF) + 1}}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp parse_webp_chunk(_data, _type), do: :error
 
   defp build_kitty_params(opts) do
     base = "a=T,f=100,q=2"

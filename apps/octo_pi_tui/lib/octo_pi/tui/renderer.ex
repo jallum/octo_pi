@@ -30,6 +30,7 @@ defmodule OctoPi.TUI.Renderer do
   use GenServer
 
   alias OctoPi.TUI.RenderThrottle
+  alias OctoPi.TUI.Terminal.Image
 
   require Logger
 
@@ -66,6 +67,14 @@ defmodule OctoPi.TUI.Renderer do
   @doc "Return the number of full-redraw passes performed since start."
   @spec full_redraws(GenServer.server()) :: non_neg_integer()
   def full_redraws(pid), do: GenServer.call(pid, :full_redraws)
+
+  @doc "Update terminal cell pixel dimensions (used to size images in rows)."
+  @spec set_cell_dims(GenServer.server(), %{width_px: non_neg_integer(), height_px: non_neg_integer()}) :: :ok
+  def set_cell_dims(pid, dims), do: GenServer.call(pid, {:set_cell_dims, dims})
+
+  @doc "Return current terminal cell pixel dimensions."
+  @spec get_cell_dims(GenServer.server()) :: %{width_px: non_neg_integer(), height_px: non_neg_integer()}
+  def get_cell_dims(pid), do: GenServer.call(pid, :get_cell_dims)
 
   @doc "Return the number of frames rendered (not skipped) since start."
   @spec render_count(GenServer.server()) :: non_neg_integer()
@@ -125,7 +134,8 @@ defmodule OctoPi.TUI.Renderer do
       termux?: termux?(),
       full_redraws: 0,
       clear_on_shrink: System.get_env("PI_CLEAR_ON_SHRINK") == "1",
-      throttle: RenderThrottle.new(Keyword.take(opts, [:min_interval_ms]))
+      throttle: RenderThrottle.new(Keyword.take(opts, [:min_interval_ms])),
+      cell_dims: %{width_px: 9, height_px: 18}
     }
 
     {:ok, state}
@@ -141,7 +151,9 @@ defmodule OctoPi.TUI.Renderer do
         else: RenderThrottle.should_render?(state.throttle)
 
     if should? do
-      case RenderThrottle.check_width_overflow(lines, state.width) do
+      text_lines = Enum.reject(lines, &Image.image_line?/1)
+
+      case RenderThrottle.check_width_overflow(text_lines, state.width) do
         {:overflow, overflows} ->
           Logger.warning("Renderer: #{length(overflows)} line(s) exceed terminal width #{state.width}")
 
@@ -188,6 +200,9 @@ defmodule OctoPi.TUI.Renderer do
   def handle_call(:full_redraws, _from, state), do: {:reply, state.full_redraws, state}
   def handle_call(:render_count, _from, state), do: {:reply, state.throttle.render_count, state}
   def handle_call(:skip_count, _from, state), do: {:reply, state.throttle.skip_count, state}
+  def handle_call(:get_cell_dims, _from, state), do: {:reply, state.cell_dims, state}
+
+  def handle_call({:set_cell_dims, dims}, _from, state), do: {:reply, :ok, %{state | cell_dims: dims}}
 
   def handle_call(:exit_bytes, _from, %{previous: nil} = state), do: {:reply, "", state}
 
