@@ -124,6 +124,23 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       assert Enum.any?(stripped, &(&1 =~ "15 earlier lines"))
     end
 
+    test "trailing newline does not count as a preview line or render as blank" do
+      # 20 real lines with trailing \n — the \n is a terminator, not a 21st blank line
+      long_result = Enum.map_join(1..20, "\n", &"line #{&1}") <> "\n"
+
+      te =
+        "Bash"
+        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.set_result(long_result, false)
+        |> ToolExecution.set_expanded(false)
+
+      lines = ToolExecution.render(te, 80)
+      stripped = Enum.map(lines, &strip_ansi/1)
+      assert Enum.any?(stripped, &(&1 =~ "line 20"))
+      assert Enum.any?(stripped, &(&1 =~ "line 16"))
+      assert Enum.any?(stripped, &(&1 =~ "15 earlier lines"))
+    end
+
     test "expanded shows full result text" do
       te =
         "Read"
