@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-613",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Collapse three overlay compositing passes in render_frame/1 into one",
   "type": "task",
-  "updated_at": "2026-04-28T19:13:50.363819Z"
+  "updated_at": "2026-04-28T19:15:13.309289Z"
 }
