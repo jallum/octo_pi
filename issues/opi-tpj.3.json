@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-28T11:16:07Z",
+  "description": "## What to do\n\nAdapt the upstream settings doc (tmp/pi-mono/packages/coding-agent/docs/settings.md, 248 lines) for our Elixir system.\n\n## Upstream source\n\n- tmp/pi-mono/packages/coding-agent/docs/settings.md\n- tmp/pi-mono/packages/coding-agent/src/core/settings.ts (reference)\n\n## Output\n\nCreate docs/settings.md\n\n## How to adapt\n\n1. **Location table**: Update paths from `~/.pi/agent/settings.json` and `.pi/settings.json` to our paths. Check our `OctoPi.Coder.SettingsManager` for actual paths.\n\n2. **All Settings tables**: Convert each setting category:\n   - **Model \u0026 Thinking**: defaultProvider, defaultModel, defaultThinkingLevel, hideThinkingBlock, thinkingBudgets\n   - **UI \u0026 Display**: theme, quietStartup, collapseChangelog, enableInstallTelemetry, doubleEscapeAction, treeFilterMode, editorPaddingX, autocompleteMaxVisible, showHardwareCursor\n   - **Compaction**: compaction.enabled, compaction.reserveTokens, compaction.keepRecentTokens\n   - **Branch Summary**: branchSummary.reserveTokens, branchSummary.skipPrompt\n   - **Retry**: retry.enabled, retry.maxRetries, retry.baseDelayMs, retry.maxDelayMs\n   - **Message Delivery**: steering mode, followUp mode\n   - **Extensions**: extension sources, extension paths\n   - **Skills**: enableSkillCommands, skill locations\n   - **Prompt Templates**: prompt template sources\n   - **Themes**: theme discovery\n   - **Shell**: shellCommandPrefix, shellPath\n\n3. **thinkingBudgets**: Show our equivalent config. Check if our SettingsManager supports nested keys.\n\n4. **Retry settings**: Update the exponential backoff description (2s, 4s, 8s) — verify it matches our implementation.\n\n5. **Message Delivery**: Document steering_mode and follow_up_mode settings.\n\n6. **Extensions**: Document extension source configuration.\n\n7. **Skills**: Document skill discovery paths.\n\n8. **Prompt Templates**: Document prompt template discovery.\n\n## What to preserve verbatim\n\n- The settings JSON schema (keys and values)\n- The compaction settings example\n- The retry settings example\n- The description of each setting\n\n## Key upstream references to include\n\n- [settings.ts](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/settings.ts)\n- [settings-manager.ts](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/settings-manager.ts)\n\n## Testing the doc\n\nAfter writing, verify:\n1. All setting names match our actual SettingsManager\n2. All defaults match our actual defaults\n3. All paths are correct for our config directory\n4. The nested key syntax (compaction.enabled) matches our SettingsManager API",
+  "id": "opi-tpj.3",
+  "labels": [],
+  "parent": "opi-tpj",
+  "priority": 2,
+  "status": "open",
+  "title": "Settings",
+  "type": "task",
+  "updated_at": "2026-04-28T11:16:07Z"
+}
