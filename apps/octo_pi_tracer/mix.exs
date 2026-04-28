@@ -26,6 +26,6 @@ defmodule OctoPi.Tracer.MixProject do
   end
 
   defp deps do
-    []
+    [{:telemetry, "~> 1.4"}]
   end
 end

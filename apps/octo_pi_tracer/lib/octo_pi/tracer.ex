@@ -33,10 +33,12 @@ defmodule OctoPi.Tracer do
 
   @spec attach_all() :: :ok
   def attach_all do
+    base_mono = System.monotonic_time(:microsecond)
+
     Enum.each(registered(), fn spec ->
       hid = handler_id(spec.id)
       :telemetry.detach(hid)
-      :telemetry.attach_many(hid, flat_events(spec), build_handler(spec), nil)
+      :telemetry.attach_many(hid, flat_events(spec), build_handler(spec), base_mono)
     end)
   end
 
@@ -50,8 +52,8 @@ defmodule OctoPi.Tracer do
   end
 
   defp build_handler(%{events: events, level: default_level}) when is_list(events) do
-    fn event, measurements, metadata, _config ->
-      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata)
+    fn event, measurements, metadata, base_mono ->
+      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata, base_mono)
       Logger.log(default_level, line, domain: [:octo_pi_tracer])
     end
   end
@@ -61,9 +63,9 @@ defmodule OctoPi.Tracer do
       Enum.flat_map(events_by_level, fn {level, evts} -> Enum.map(evts, &{&1, level}) end)
       |> Map.new()
 
-    fn event, measurements, metadata, _config ->
+    fn event, measurements, metadata, base_mono ->
       level = Map.fetch!(event_to_level, event)
-      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata)
+      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata, base_mono)
       Logger.log(level, line, domain: [:octo_pi_tracer])
     end
   end
