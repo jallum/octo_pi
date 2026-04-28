@@ -36,10 +36,10 @@ defmodule OctoPi.Coder.Session do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.MessageWriter
   alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SettingsManager
 
   @typedoc "Optional providers default to closures returning sensible nils / defaults."
   @type model_provider :: (-> term() | nil)
-  @type settings_provider :: (-> Settings.t())
 
   @type state :: %__MODULE__.State{
           extensions: [Extension.t()],
@@ -47,20 +47,20 @@ defmodule OctoPi.Coder.Session do
           store_pid: pid(),
           agent_pid: pid() | nil,
           model_provider: model_provider(),
-          settings_provider: settings_provider()
+          settings_manager: pid()
         }
 
   defmodule State do
     @moduledoc false
 
-    @enforce_keys [:extensions, :session_manager, :store_pid, :model_provider, :settings_provider]
+    @enforce_keys [:extensions, :session_manager, :store_pid, :model_provider, :settings_manager]
     defstruct [
       :extensions,
       :session_manager,
       :store_pid,
       :agent_pid,
       :model_provider,
-      :settings_provider
+      :settings_manager
     ]
   end
 
@@ -70,7 +70,7 @@ defmodule OctoPi.Coder.Session do
           | {:store_pid, pid()}
           | {:agent_pid, pid() | nil}
           | {:model_provider, Session.model_provider()}
-          | {:settings_provider, Session.settings_provider()}
+          | {:settings_manager, pid()}
           | {:name, GenServer.name()}
 
   @doc """
@@ -330,7 +330,7 @@ defmodule OctoPi.Coder.Session do
   def get_session_stats(server), do: GenServer.call(server, :get_session_stats)
 
   @doc """
-  Return the current compaction settings from the session's `settings_provider`.
+  Return the current compaction settings from the session's `SettingsManager`.
   """
   @spec get_compaction_settings(GenServer.server()) :: Settings.t()
   def get_compaction_settings(server), do: GenServer.call(server, :get_compaction_settings)
@@ -378,7 +378,7 @@ defmodule OctoPi.Coder.Session do
       store_pid: store_pid,
       agent_pid: agent_pid,
       model_provider: Keyword.get(opts, :model_provider, fn -> nil end),
-      settings_provider: Keyword.get(opts, :settings_provider, &Settings.default/0)
+      settings_manager: resolve_settings_manager(opts)
     }
 
     {:ok, state}
@@ -522,13 +522,14 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call(:get_session_stats, _from, state), do: {:reply, do_get_session_stats(state), state}
 
-  def handle_call(:get_compaction_settings, _from, state), do: {:reply, state.settings_provider.(), state}
+  def handle_call(:get_compaction_settings, _from, state),
+    do: {:reply, SettingsManager.get_compaction_settings(state.settings_manager), state}
 
   def handle_call(:get_entries, _from, state), do: {:reply, SessionManager.get_entries(state.session_manager), state}
 
   defp do_compact(%State{} = state, opts) do
     path_entries = SessionManager.get_branch(state.session_manager)
-    settings = state.settings_provider.()
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
 
     case Preparation.prepare(path_entries, settings) do
       nil ->
@@ -805,7 +806,7 @@ defmodule OctoPi.Coder.Session do
         %State{agent_pid: agent_pid} = state
       ) do
     path_entries = SessionManager.get_branch(state.session_manager)
-    settings = state.settings_provider.()
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
 
     case Preparation.prepare(path_entries, settings) do
       nil ->
@@ -1003,5 +1004,16 @@ defmodule OctoPi.Coder.Session do
       Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}),
       ctx
     )
+  end
+
+  defp resolve_settings_manager(opts) do
+    case Keyword.get(opts, :settings_manager) do
+      nil ->
+        {:ok, pid} = SettingsManager.in_memory()
+        pid
+
+      pid ->
+        pid
+    end
   end
 end

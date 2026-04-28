@@ -8,12 +8,12 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
   alias OctoPi.AI.Model
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.Result
-  alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
+  alias OctoPi.Coder.SettingsManager
   alias OctoPi.Coder.Test.FauxTransport
 
   @faux_model %Model{
@@ -53,15 +53,18 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
     {:ok, agent} = OctoPi.Agent.start_session(model: @faux_model, transport: FauxTransport)
     {:ok, store} = SessionStore.start_link(id: id, cwd: System.tmp_dir!(), root: root)
 
+    {:ok, sm} =
+      SettingsManager.in_memory(%{
+        "compaction" => %{"enabled" => true, "reserveTokens" => 1000, "keepRecentTokens" => 0}
+      })
+
     base = [
       extensions: [],
       session_manager: %SessionManager{cwd: "/tmp", session_id: id},
       store_pid: store,
       agent_pid: agent,
       model_provider: fn -> @test_model end,
-      settings_provider: fn ->
-        %Settings{enabled: true, reserve_tokens: 1000, keep_recent_tokens: 0}
-      end
+      settings_manager: sm
     ]
 
     {:ok, coder} = Session.start_link(Keyword.merge(base, opts))
