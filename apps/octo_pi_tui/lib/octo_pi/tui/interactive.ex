@@ -912,7 +912,7 @@ defmodule OctoPi.TUI.Interactive do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
-    lines = render(state, input_lines)
+    {lines, layout} = build_screen(state, input_lines)
     lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
@@ -920,8 +920,7 @@ defmodule OctoPi.TUI.Interactive do
       fd -> log_overwide(fd, lines, state.width)
     end
 
-    post_input_h = post_input_height(state)
-    cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
+    cursor_seq = cursor_position(state, input_lines, lines, layout)
     {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq, force: state.force_next_render)
 
     if bytes != "", do: Terminal.write(state.terminal, bytes)
@@ -999,29 +998,15 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp post_input_height(%__MODULE__{input: input, width: width, notification: notification}) do
-    length(Components.Input.render_dropdown(input, width)) +
-      length(render_notification(notification, width))
-  end
+  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _layout) when not is_nil(cw), do: "\e[?25l"
 
-  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _post_input_h) when not is_nil(cw),
-    do: "\e[?25l"
-
-  defp cursor_position(
-         %__MODULE__{
-           input: input,
-           width: width,
-           height: height,
-           footer: footer,
-           ui_overrides: ui_overrides,
-           footer_data: footer_data_pid
-         },
-         input_lines,
-         lines,
-         post_input_h
-       ) do
+  defp cursor_position(%__MODULE__{input: input, width: width, height: height}, input_lines, lines, %{
+         footer_height: footer_height,
+         dropdown_height: dropdown_height,
+         notification_height: notification_height
+       }) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, footer_data_pid, width))
+    post_input_h = dropdown_height + notification_height
     input_end = length(lines) - footer_height - post_input_h
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
@@ -1614,23 +1599,25 @@ defmodule OctoPi.TUI.Interactive do
   # --- rendering helpers (pure) ---
 
   @doc """
-  Render the current state into a flat list of lines ready for the
+  Build the current state into a flat list of lines ready for the
   Renderer. Components are concatenated in layout order — the
   Renderer handles terminal mechanics (scrolling, cursor, clearing).
   """
-  @spec render(t()) :: [binary()]
-  def render(%{input: input, width: width} = state) do
-    render(state, Components.Input.render(input, width))
+  @spec build_screen(t()) :: [binary()]
+  def build_screen(%{input: input, width: width} = state) do
+    {lines, _layout} = build_screen(state, Components.Input.render(input, width))
+    lines
   end
 
-  @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
+  @spec build_screen(t(), [binary()]) :: {[binary()], map()}
+  def build_screen(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
-    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    lines = if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    {lines, %{footer_height: 0, dropdown_height: 0, notification_height: 0}}
   end
 
-  def render(
+  def build_screen(
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
         input_lines
       ) do
@@ -1640,14 +1627,20 @@ defmodule OctoPi.TUI.Interactive do
     loader_lines = render_loader(loader, width, state.theme)
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
-    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
+    footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
     all =
       banner_lines ++
         resource_lines ++
-        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines
+        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
 
-    [""] ++ all
+    layout = %{
+      footer_height: length(footer_lines_val),
+      dropdown_height: length(dropdown_lines),
+      notification_height: length(notification_lines)
+    }
+
+    {[""] ++ all, layout}
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}

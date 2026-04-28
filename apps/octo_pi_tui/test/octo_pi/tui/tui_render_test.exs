@@ -237,7 +237,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
   # --- Interactive render integration ---
 
-  describe "Interactive.render end-to-end" do
+  describe "Interactive.build_screen end-to-end" do
     test "input with borders always visible after long transcript" do
       alias OctoPi.TUI.Components.Footer
       alias OctoPi.TUI.Components.Input
@@ -254,7 +254,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
         height: 24
       }
 
-      lines = Interactive.render(state)
+      lines = Interactive.build_screen(state)
 
       # The last lines should be footer, preceded by input with borders
       # Input renders: [border, content, border] = 3 lines

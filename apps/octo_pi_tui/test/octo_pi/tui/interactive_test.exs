@@ -494,7 +494,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         width: 80
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       refute text =~ "my thought"
       assert text =~ "Thinking..."
@@ -511,7 +511,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         width: 80
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       assert text =~ "my thought"
     end
@@ -891,7 +891,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         height: 40
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       assert text =~ "Working..."
     end
@@ -905,7 +905,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         height: 40
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       refute text =~ "Loading..."
     end
@@ -1449,7 +1449,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         width: 80
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
 
       assert text =~ "> hi"
@@ -1476,7 +1476,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         height: 24
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
 
       assert text =~ "/tmp/test"
@@ -1498,7 +1498,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         height: 24
       }
 
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       assert text =~ "octo_pi"
     end
@@ -1527,7 +1527,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "header component" do
     test "renders Header when banner is nil" do
       s = %Interactive{banner: nil, width: 80}
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
       assert text =~ "OctoPi"
     end
@@ -1567,7 +1567,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "notification is rendered and truncated to width" do
       long_text = String.duplicate("x", 200)
       s = %Interactive{notification: long_text, width: 40}
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       notif_line = Enum.find(lines, &String.contains?(&1, "xxx"))
       assert notif_line
       stripped = String.replace(notif_line, ~r/\e\[[0-9;]*m/, "")
@@ -1580,7 +1580,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       diff = %Diff{diff_text: "+1 new line\n-1 old line", theme: theme}
       s = %Interactive{transcript: [diff], width: 80}
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       assert text =~ "new line"
       assert text =~ "old line"
@@ -1590,7 +1590,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       msg = CustomMessage.new("alert", "Something happened", theme)
       s = %Interactive{transcript: [msg], width: 80}
-      lines = Interactive.render(s)
+      lines = Interactive.build_screen(s)
       text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
       assert text =~ "Something happened"
     end
@@ -2084,7 +2084,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         ui_overrides: %{header: render_fn}
       }
 
-      Interactive.render(s)
+      Interactive.build_screen(s)
       assert_receive {:rendered, 80}
     end
 
@@ -2117,7 +2117,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         ui_overrides: %{footer: render_fn}
       }
 
-      Interactive.render(s)
+      Interactive.build_screen(s)
       assert_receive {:rendered, 80, footer_data}
       assert is_function(footer_data.get_git_branch, 0)
       assert is_function(footer_data.get_extension_statuses, 0)
@@ -2141,7 +2141,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         ui_overrides: %{footer: render_fn}
       }
 
-      Interactive.render(s)
+      Interactive.build_screen(s)
       assert_receive %{"ext-a" => "running"}
     end
 
@@ -2378,7 +2378,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "renders component output instead of normal UI when custom_widget is set" do
       component = %{render: fn _w -> ["widget line 1", "widget line 2"] end, handle_input: fn _ -> :ok end}
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 80, height: 5}
-      lines = Interactive.render(state, ["input line"])
+      {lines, _layout} = Interactive.build_screen(state, ["input line"])
       assert "widget line 1" in lines
       assert "widget line 2" in lines
       refute "input line" in lines
@@ -2387,7 +2387,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "custom widget output is padded to height when shorter" do
       component = %{render: fn _w -> ["only line"] end, handle_input: fn _ -> :ok end}
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 80, height: 5}
-      lines = Interactive.render(state, [])
+      {lines, _layout} = Interactive.build_screen(state, [])
       assert length(lines) == 5
       assert "only line" in lines
     end
@@ -2404,7 +2404,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       state = %Interactive{custom_widget: {{self(), make_ref()}, component}, width: 120, height: 5}
-      Interactive.render(state, [])
+      Interactive.build_screen(state, [])
       assert [120] = Agent.get(widths, & &1)
     end
   end
@@ -2833,7 +2833,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
   defp joined_render(state) do
     state
-    |> Interactive.render()
+    |> Interactive.build_screen()
     |> Enum.join("\n")
   end
 
