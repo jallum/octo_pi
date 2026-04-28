@@ -135,7 +135,8 @@ defmodule OctoPi.Coder.CompactionTest do
       p = prep(settings: %Settings{reserve_tokens: 2000})
 
       assert {:ok, _} = Compaction.compact(p, model(), producer: producer)
-      assert_received {:producer_call, _, _, %{max_tokens: 1600}}
+      assert_received {:producer_call, _, _, opts}
+      assert opts[:max_tokens] == 1600
     end
 
     test "threads previous_summary into Summary.generate" do
@@ -171,10 +172,11 @@ defmodule OctoPi.Coder.CompactionTest do
                  thinking_level: :high
                )
 
-      assert_received {:producer_call, _, _, %{reasoning: :high}}
+      assert_received {:producer_call, _, _, opts}
+      assert opts[:reasoning] == :high
     end
 
-    test "threads api_key and headers into StreamOptions" do
+    test "threads api_key and headers into call opts" do
       producer = recording_producer(done_with(""))
       headers = %{"x-trace" => "z"}
 
@@ -186,8 +188,8 @@ defmodule OctoPi.Coder.CompactionTest do
                )
 
       assert_received {:producer_call, _, _, opts}
-      assert opts.api_key == "sk-test"
-      assert opts.headers == headers
+      assert opts[:api_key] == "sk-test"
+      assert opts[:headers] == headers
     end
 
     test "split_turn? with empty turn_prefix_messages still uses single-pass" do
@@ -271,8 +273,10 @@ defmodule OctoPi.Coder.CompactionTest do
       assert {:ok, _} =
                Compaction.compact(split_prep(), model(), producer: dual_producer())
 
-      assert_received {:producer_call, :history, _, _, %{max_tokens: 800}}
-      assert_received {:producer_call, :turn_prefix, _, _, %{max_tokens: 500}}
+      assert_received {:producer_call, :history, _, _, history_opts}
+      assert_received {:producer_call, :turn_prefix, _, _, prefix_opts}
+      assert history_opts[:max_tokens] == 800
+      assert prefix_opts[:max_tokens] == 500
     end
 
     test "appends file-op blocks to the merged summary" do

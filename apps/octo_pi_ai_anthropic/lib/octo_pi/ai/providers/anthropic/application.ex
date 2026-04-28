@@ -11,13 +11,8 @@ defmodule OctoPi.AI.Providers.Anthropic.Application do
 
     OctoPi.Tracer.register(%{
       id: :anthropic,
-      description: "Anthropic API request and auth events",
-      events: [
-        [:octo_pi_ai_anthropic, :request, :start],
-        [:octo_pi_ai_anthropic, :request, :stop],
-        [:octo_pi_ai_anthropic, :request, :exception],
-        [:octo_pi_ai_anthropic, :auth, :resolved]
-      ],
+      description: "Anthropic auth events",
+      events: [[:octo_pi_ai_anthropic, :auth, :resolved]],
       level: :info
     })
 

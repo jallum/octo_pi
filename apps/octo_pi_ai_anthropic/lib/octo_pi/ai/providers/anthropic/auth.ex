@@ -21,26 +21,26 @@ defmodule OctoPi.AI.Providers.Anthropic.Auth do
   `anthropic.ts` L723-725 uses the same substring check.
   """
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
-  alias OctoPi.AI.StreamOptions
 
   @noop_reader OctoPi.AI.Providers.Anthropic.Auth.NoopKeychain
 
   @doc """
   Return a `Credentials` struct or raise if no source is available.
   """
-  @spec resolve(StreamOptions.t() | nil) :: Credentials.t()
+  @spec resolve(CallOptions.t() | nil) :: Credentials.t()
   def resolve(opts \\ nil)
-  def resolve(nil), do: resolve(%StreamOptions{})
+  def resolve(nil), do: resolve(%CallOptions{})
 
-  def resolve(%StreamOptions{api_key: key}) when is_binary(key) and key != "", do: classify(key, :opts)
+  def resolve(%CallOptions{api_key: key}) when is_binary(key) and key != "", do: classify(key, :opts)
 
-  def resolve(%StreamOptions{}) do
+  def resolve(%CallOptions{}) do
     with {:env_oauth, nil} <- {:env_oauth, get_env("ANTHROPIC_OAUTH_TOKEN")},
          {:env_api_key, nil} <- {:env_api_key, get_env("ANTHROPIC_API_KEY")},
          {:keychain, nil} <- {:keychain, keychain_reader().read()} do
       raise RuntimeError,
-            "Anthropic credentials not available. Pass :api_key in StreamOptions, " <>
+            "Anthropic credentials not available. Pass :api_key in CallOptions, " <>
               "export ANTHROPIC_OAUTH_TOKEN or ANTHROPIC_API_KEY, or log in to Claude Code."
     else
       {source, token} -> classify(token, source)

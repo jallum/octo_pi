@@ -63,10 +63,11 @@ defmodule OctoPi.Agent.Turn.Worker do
   """
   @spec stream(pid(), reference(), stream_opts()) :: :ok
   def stream(parent, ref, %{context: ctx, model: model, transport: transport}) do
-    stream = transport.stream(model, ctx, %OctoPi.AI.StreamOptions{})
+    worker_ref = make_ref()
+    {:ok, _producer_pid} = transport.stream_to(model, ctx, [], self(), worker_ref)
 
     assistant =
-      case Enum.reduce(stream, nil, &handle_ai_event(parent, ref, &1, &2)) do
+      case receive_stream(parent, ref, worker_ref, nil) do
         %Assistant{stop_reason: r} = a when not is_nil(r) -> a
         _partial_or_nil -> truncated_stream_assistant(model)
       end
@@ -77,6 +78,16 @@ defmodule OctoPi.Agent.Turn.Worker do
     e ->
       send(parent, {:stream_failed, ref, Exception.message(e)})
       :ok
+  end
+
+  defp receive_stream(parent, ref, worker_ref, acc) do
+    receive do
+      {^worker_ref, :event, event} ->
+        receive_stream(parent, ref, worker_ref, handle_ai_event(parent, ref, event, acc))
+
+      {^worker_ref, :done} ->
+        acc
+    end
   end
 
   defp handle_ai_event(parent, ref, %AIEvent.Start{partial: p}, _acc) do

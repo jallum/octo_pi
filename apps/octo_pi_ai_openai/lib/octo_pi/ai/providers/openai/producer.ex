@@ -14,14 +14,14 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   Ported from `openai-completions.ts` L110-196.
   """
 
-  alias OctoPi.AI.{PartialJson, SSE, StreamOptions}
+  alias OctoPi.AI.{CallOptions, PartialJson, SSE, Telemetry}
   alias OctoPi.AI.Providers.OpenAI.{Auth, Compat, Decoder, Request}
   alias OctoPi.AI.SSE.Event, as: SseEvent
 
   @type start_arg :: %{
           required(:model) => OctoPi.AI.Model.t(),
           required(:context) => OctoPi.AI.Context.t(),
-          required(:opts) => OctoPi.AI.StreamOptions.t(),
+          required(:opts) => OctoPi.AI.CallOptions.t(),
           required(:caller) => pid(),
           required(:ref) => reference(),
           optional(:req_overrides) => keyword()
@@ -40,12 +40,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   def run(%{} = args) do
     caller_mon = Process.monitor(args.caller)
     start_mono = System.monotonic_time()
-
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :start],
-      %{system_time: System.system_time()},
-      %{model: args.model.id}
-    )
+    Telemetry.request_start(args.model)
 
     compat = Compat.resolve(args.model)
     {start_event, decoder_state} = Decoder.new(args.model)
@@ -172,11 +167,11 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   # --- auth ---
 
-  defp ensure_api_key(%StreamOptions{api_key: key} = opts, _model)
+  defp ensure_api_key(%CallOptions{api_key: key} = opts, _model)
        when is_binary(key) and key != "",
        do: opts
 
-  defp ensure_api_key(%StreamOptions{} = opts, model),
+  defp ensure_api_key(%CallOptions{} = opts, model),
     do: %{opts | api_key: Auth.resolve(model, opts)}
 
   # --- callbacks ---
@@ -221,26 +216,19 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   defp emit_request_stop(state, start_mono, extras) do
     usage = state.decoder.message.usage
 
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :stop],
+    Telemetry.request_stop(
+      state.model,
       %{
         duration: System.monotonic_time() - start_mono,
         input_tokens: usage.input,
         output_tokens: usage.output,
         total_tokens: usage.total_tokens
       },
-      Map.merge(
-        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
-        Map.new(extras)
-      )
+      Map.merge(%{stop_reason: state.decoder.message.stop_reason}, Map.new(extras))
     )
   end
 
   defp emit_request_exception(state, start_mono, kind, reason) do
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :exception],
-      %{duration: System.monotonic_time() - start_mono},
-      %{model: state.model.id, kind: kind, reason: reason}
-    )
+    Telemetry.request_exception(state.model, start_mono, kind, reason)
   end
 end

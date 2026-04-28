@@ -5,7 +5,6 @@ defmodule OctoPi.AIStreamTest do
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.TestSupport.FakeAnthropicPlug, as: Fake
 
   setup do
@@ -129,20 +128,6 @@ defmodule OctoPi.AIStreamTest do
     end
   end
 
-  describe "OctoPi.AI.stream_simple/3" do
-    test "matches stream/3 for Phase 1" do
-      install_fake(basic_text_stream())
-
-      events_simple =
-        model()
-        |> OctoPi.AI.stream_simple(user_context(), %StreamOptions{})
-        |> Enum.to_list()
-
-      assert [%Event.Start{} | _] = events_simple
-      assert %Event.Done{} = List.last(events_simple)
-    end
-  end
-
   describe "live Anthropic smoke" do
     # Excluded by default (see test_helper.exs). Opt in with:
     #     ANTHROPIC_API_KEY=sk-... mix test --only integration
@@ -173,7 +158,7 @@ defmodule OctoPi.AIStreamTest do
 
       events =
         real_model
-        |> OctoPi.AI.stream(ctx, %StreamOptions{max_tokens: 20, temperature: 0.0})
+        |> OctoPi.AI.stream(ctx, max_tokens: 20, temperature: 0.0)
         |> Enum.to_list()
 
       assert %Event.Start{} = List.first(events)

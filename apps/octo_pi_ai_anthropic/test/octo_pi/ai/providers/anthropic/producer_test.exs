@@ -1,12 +1,12 @@
 defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Context
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.Anthropic.Producer
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.TestSupport.FakeAnthropicPlug, as: Fake
   alias OctoPi.AI.ToolCall
 
@@ -44,7 +44,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       Producer.start(%{
         model: model(),
         context: user_context(),
-        opts: %StreamOptions{},
+        opts: %CallOptions{},
         caller: caller,
         ref: ref,
         req_overrides: [plug: Fake.serve(chunks, status)]
@@ -246,9 +246,9 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       handler = "producer-telemetry-#{inspect(ref)}"
 
       events = [
-        [:octo_pi_ai_anthropic, :request, :start],
-        [:octo_pi_ai_anthropic, :request, :stop],
-        [:octo_pi_ai_anthropic, :request, :exception]
+        [:octo_pi_ai, :request, :start],
+        [:octo_pi_ai, :request, :stop],
+        [:octo_pi_ai, :request, :exception]
       ]
 
       :telemetry.attach_many(
@@ -278,15 +278,17 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       {_pid, ref} = start_producer(chunks)
       _events = collect_events(ref)
 
-      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :start], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :start], meas, meta}
       assert is_integer(meas.system_time)
+      assert meta.api == :anthropic_messages
       assert meta.model == "claude-haiku-4-5"
       assert meta.auth_type == :api_key
 
-      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], meas, meta}
       assert is_integer(meas.duration) and meas.duration > 0
       assert meas.input_tokens == 5
       assert meas.output_tokens == 2
+      assert meta.api == :anthropic_messages
       assert meta.stop_reason == :stop
       assert meta.http_status == 200
     end
@@ -295,7 +297,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       {_pid, ref} = start_producer([~s({"error":"boom"})], 500)
       _events = collect_events(ref)
 
-      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, meta}
       assert meta.http_status == 500
     end
 
@@ -324,7 +326,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         Producer.start(%{
           model: model(),
           context: user_context(),
-          opts: %StreamOptions{},
+          opts: %CallOptions{},
           caller: caller,
           ref: ref,
           req_overrides: [plug: Fake.serve(chunks)]
@@ -335,7 +337,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       Process.exit(caller, :kill)
       assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
 
-      assert_receive {^tref, [:octo_pi_ai_anthropic, :request, :stop], _meas, %{stop_reason: :aborted}},
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, %{stop_reason: :aborted}},
                      2_000
     end
   end

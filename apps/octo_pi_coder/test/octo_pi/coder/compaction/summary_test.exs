@@ -88,7 +88,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
     test "max_tokens defaults to 0.8 × reserve_tokens" do
       producer = recording_producer(done_with(""))
       assert {:ok, _} = Summary.generate(messages(), model(), 1000, producer: producer)
-      assert_received {:producer_call, _, _, %{max_tokens: 800}}
+      assert_received {:producer_call, _, _, opts}
+      assert opts[:max_tokens] == 800
     end
 
     test "turn_prefix variant uses TURN_PREFIX prompt and 0.5 × reserve_tokens" do
@@ -100,7 +101,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
                  variant: :turn_prefix
                )
 
-      assert_received {:producer_call, _, ctx, %{max_tokens: 500}}
+      assert_received {:producer_call, _, ctx, opts}
+      assert opts[:max_tokens] == 500
       [%User{content: [%Text{text: text}]}] = ctx.messages
       assert String.ends_with?(text, Prompts.turn_prefix())
     end
@@ -148,7 +150,7 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
       refute text =~ "Additional focus:"
     end
 
-    test "api_key and headers thread into StreamOptions" do
+    test "api_key and headers thread into call opts" do
       producer = recording_producer(done_with(""))
       headers = %{"x-trace" => "abc"}
 
@@ -160,8 +162,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
                )
 
       assert_received {:producer_call, _, _, opts}
-      assert opts.api_key == "sk-test"
-      assert opts.headers == headers
+      assert opts[:api_key] == "sk-test"
+      assert opts[:headers] == headers
     end
 
     test "concatenates text blocks in the Done assistant message" do
@@ -187,7 +189,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
     test "no reasoning option is set when thinking_level is omitted" do
       producer = recording_producer(done_with(""))
       assert {:ok, _} = Summary.generate(messages(), model(true), 1000, producer: producer)
-      assert_received {:producer_call, _, _, %{reasoning: nil}}
+      assert_received {:producer_call, _, _, opts}
+      assert opts[:reasoning] == nil
     end
   end
 
@@ -203,8 +206,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
                )
 
       assert_received {:producer_call, _, _, opts}
-      assert opts.reasoning == :medium
-      assert opts.api_key == "test-key"
+      assert opts[:reasoning] == :medium
+      assert opts[:api_key] == "test-key"
     end
 
     test "does not set reasoning when thinking is off" do
@@ -218,8 +221,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
                )
 
       assert_received {:producer_call, _, _, opts}
-      assert opts.reasoning == nil
-      assert opts.api_key == "test-key"
+      assert opts[:reasoning] == nil
+      assert opts[:api_key] == "test-key"
     end
 
     test "does not set reasoning for non-reasoning models" do
@@ -233,8 +236,8 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
                )
 
       assert_received {:producer_call, _, _, opts}
-      assert opts.reasoning == nil
-      assert opts.api_key == "test-key"
+      assert opts[:reasoning] == nil
+      assert opts[:api_key] == "test-key"
     end
   end
 

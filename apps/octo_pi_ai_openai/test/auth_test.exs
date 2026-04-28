@@ -1,7 +1,7 @@
 defmodule OctoPi.AI.Providers.OpenAI.AuthTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{Model, StreamOptions}
+  alias OctoPi.AI.{CallOptions, Model}
   alias OctoPi.AI.Providers.OpenAI.Auth
 
   defp model(provider) do
@@ -21,7 +21,7 @@ defmodule OctoPi.AI.Providers.OpenAI.AuthTest do
       System.put_env("OPENROUTER_API_KEY", "from-env")
       on_exit(fn -> System.delete_env("OPENROUTER_API_KEY") end)
 
-      assert Auth.resolve(model(:openrouter), %StreamOptions{api_key: "from-opts"}) ==
+      assert Auth.resolve(model(:openrouter), %CallOptions{api_key: "from-opts"}) ==
                "from-opts"
     end
 
@@ -29,32 +29,32 @@ defmodule OctoPi.AI.Providers.OpenAI.AuthTest do
       System.put_env("OPENROUTER_API_KEY", "or-key")
       on_exit(fn -> System.delete_env("OPENROUTER_API_KEY") end)
 
-      assert Auth.resolve(model(:openrouter), %StreamOptions{}) == "or-key"
+      assert Auth.resolve(model(:openrouter), %CallOptions{}) == "or-key"
     end
 
     test "falls back to OPENAI_API_KEY for :openai" do
       System.put_env("OPENAI_API_KEY", "oa-key")
       on_exit(fn -> System.delete_env("OPENAI_API_KEY") end)
 
-      assert Auth.resolve(model(:openai), %StreamOptions{}) == "oa-key"
+      assert Auth.resolve(model(:openai), %CallOptions{}) == "oa-key"
     end
 
     test "returns nil for unknown providers (e.g. ollama)" do
-      assert Auth.resolve(model(:ollama), %StreamOptions{}) == nil
+      assert Auth.resolve(model(:ollama), %CallOptions{}) == nil
     end
 
     test "treats empty env var as nil" do
       System.put_env("OPENROUTER_API_KEY", "")
       on_exit(fn -> System.delete_env("OPENROUTER_API_KEY") end)
 
-      assert Auth.resolve(model(:openrouter), %StreamOptions{}) == nil
+      assert Auth.resolve(model(:openrouter), %CallOptions{}) == nil
     end
 
     test "empty opts.api_key falls through to env" do
       System.put_env("OPENROUTER_API_KEY", "or-key")
       on_exit(fn -> System.delete_env("OPENROUTER_API_KEY") end)
 
-      assert Auth.resolve(model(:openrouter), %StreamOptions{api_key: ""}) == "or-key"
+      assert Auth.resolve(model(:openrouter), %CallOptions{api_key: ""}) == "or-key"
     end
   end
 end

@@ -41,11 +41,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   alias OctoPi.AI.Providers.Anthropic.Request
   alias OctoPi.AI.SSE
   alias OctoPi.AI.SSE.Event, as: SseEvent
+  alias OctoPi.AI.Telemetry
 
   @type start_arg :: %{
           required(:model) => OctoPi.AI.Model.t(),
           required(:context) => OctoPi.AI.Context.t(),
-          required(:opts) => OctoPi.AI.StreamOptions.t(),
+          required(:opts) => OctoPi.AI.CallOptions.t(),
           required(:caller) => pid(),
           required(:ref) => reference(),
           optional(:req_overrides) => keyword()
@@ -69,12 +70,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
     caller_mon = Process.monitor(args.caller)
     auth = Auth.resolve(args.opts)
     start_mono = System.monotonic_time()
-
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :start],
-      %{system_time: System.system_time()},
-      %{model: args.model.id, auth_type: auth.type}
-    )
+    Telemetry.request_start(args.model, %{auth_type: auth.type})
 
     {start_event, decoder_state} =
       Decoder.new(args.model, oauth?: auth.type == :oauth, tools: args.context.tools)
@@ -226,26 +222,19 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   defp emit_request_stop(state, start_mono, extras) do
     usage = state.decoder.message.usage
 
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :stop],
+    Telemetry.request_stop(
+      state.model,
       %{
         duration: System.monotonic_time() - start_mono,
         input_tokens: usage.input,
         output_tokens: usage.output,
         total_tokens: usage.total_tokens
       },
-      Map.merge(
-        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
-        Map.new(extras)
-      )
+      Map.merge(%{stop_reason: state.decoder.message.stop_reason}, Map.new(extras))
     )
   end
 
   defp emit_request_exception(state, start_mono, kind, reason) do
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :exception],
-      %{duration: System.monotonic_time() - start_mono},
-      %{model: state.model.id, kind: kind, reason: reason}
-    )
+    Telemetry.request_exception(state.model, start_mono, kind, reason)
   end
 end

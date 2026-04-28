@@ -1,13 +1,13 @@
 defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.OpenAI.Compat
   alias OctoPi.AI.Providers.OpenAI.Request
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
@@ -49,20 +49,20 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
   describe "build/4 — URL" do
     test "constructs URL from model base_url" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
       assert req.url == "https://api.openai.com/v1/chat/completions"
     end
 
     test "trims trailing slash from base_url" do
       m = model(%{base_url: "https://api.openai.com/v1/"})
-      req = Request.build(m, context([]), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context([]), %CallOptions{}, Compat.detect(m))
       assert req.url == "https://api.openai.com/v1/chat/completions"
     end
   end
 
   describe "build/4 — body basics" do
     test "includes model, stream, and max_completion_tokens" do
-      req = Request.build(model(), context([]), %StreamOptions{max_tokens: 4096}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{max_tokens: 4096}, Compat.detect(model()))
 
       assert req.body["model"] == "gpt-4o"
       assert req.body["stream"] == true
@@ -71,36 +71,36 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "uses max_tokens field when compat says so" do
       compat = %{Compat.detect(model()) | max_tokens_field: :max_tokens}
-      req = Request.build(model(), context([]), %StreamOptions{max_tokens: 4096}, compat)
+      req = Request.build(model(), context([]), %CallOptions{max_tokens: 4096}, compat)
 
       assert req.body["max_tokens"] == 4096
       refute Map.has_key?(req.body, "max_completion_tokens")
     end
 
     test "includes stream_options when supported" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
       assert req.body["stream_options"] == %{"include_usage" => true}
     end
 
     test "omits stream_options when not supported" do
       compat = %{Compat.detect(model()) | supports_usage_in_streaming: false}
-      req = Request.build(model(), context([]), %StreamOptions{}, compat)
+      req = Request.build(model(), context([]), %CallOptions{}, compat)
       refute Map.has_key?(req.body, "stream_options")
     end
 
     test "includes store: false when supported" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
       assert req.body["store"] == false
     end
 
     test "omits store for non-standard providers" do
       m = model(%{provider: :xai})
-      req = Request.build(m, context([]), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context([]), %CallOptions{}, Compat.detect(m))
       refute Map.has_key?(req.body, "store")
     end
 
     test "passes temperature" do
-      req = Request.build(model(), context([]), %StreamOptions{temperature: 0.7}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{temperature: 0.7}, Compat.detect(model()))
       assert req.body["temperature"] == 0.7
     end
   end
@@ -108,7 +108,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "system prompt" do
     test "system role for non-reasoning models" do
       ctx = context([], system_prompt: "Be helpful")
-      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), ctx, %CallOptions{}, Compat.detect(model()))
 
       [sys | _] = req.body["messages"]
       assert sys["role"] == "system"
@@ -118,7 +118,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "developer role for reasoning models with supports_developer_role" do
       m = model(%{reasoning: true})
       ctx = context([], system_prompt: "Be helpful")
-      req = Request.build(m, ctx, %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, ctx, %CallOptions{}, Compat.detect(m))
 
       [sys | _] = req.body["messages"]
       assert sys["role"] == "developer"
@@ -127,14 +127,14 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "system role even for reasoning when supports_developer_role is false" do
       m = model(%{reasoning: true, provider: :xai})
       ctx = context([], system_prompt: "Be helpful")
-      req = Request.build(m, ctx, %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, ctx, %CallOptions{}, Compat.detect(m))
 
       [sys | _] = req.body["messages"]
       assert sys["role"] == "system"
     end
 
     test "omits system message when no prompt" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
       roles = Enum.map(req.body["messages"], & &1["role"])
       refute "system" in roles
       refute "developer" in roles
@@ -144,7 +144,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "user messages" do
     test "string content" do
       msgs = [%Message.User{content: "hello", timestamp: 0}]
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
 
       [user] = req.body["messages"]
       assert user == %{"role" => "user", "content" => "hello"}
@@ -161,7 +161,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       [user] = req.body["messages"]
 
       assert [
@@ -178,7 +178,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         assistant_msg([%Content.Text{text: "hello"}])
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       [_user, asst] = req.body["messages"]
 
       assert asst["role"] == "assistant"
@@ -203,7 +203,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       [_user, asst, _tool] = req.body["messages"]
 
       assert [tc] = asst["tool_calls"]
@@ -220,7 +220,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         %Message.User{content: "retry", timestamp: 1}
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       roles = Enum.map(req.body["messages"], & &1["role"])
       assert roles == ["user", "user"]
     end
@@ -240,7 +240,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       [_user, _asst, tool] = req.body["messages"]
 
       assert tool["role"] == "tool"
@@ -282,7 +282,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context(msgs), %CallOptions{}, Compat.detect(m))
       roles = Enum.map(req.body["messages"], & &1["role"])
 
       assert roles == ["user", "assistant", "tool", "tool", "user"]
@@ -310,7 +310,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context(msgs), %CallOptions{}, Compat.detect(m))
       roles = Enum.map(req.body["messages"], & &1["role"])
       refute "user" in Enum.drop(roles, 1)
     end
@@ -327,7 +327,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       ]
 
       ctx = context([], tools: tools)
-      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), ctx, %CallOptions{}, Compat.detect(model()))
 
       [tool] = req.body["tools"]
       assert tool["type"] == "function"
@@ -339,7 +339,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "omits strict when supports_strict_mode is false" do
       tools = [%Tool{name: "read", description: "Read", parameters: %{}}]
       compat = %{Compat.detect(model()) | supports_strict_mode: false}
-      req = Request.build(model(), context([], tools: tools), %StreamOptions{}, compat)
+      req = Request.build(model(), context([], tools: tools), %CallOptions{}, compat)
 
       [tool] = req.body["tools"]
       refute Map.has_key?(tool["function"], "strict")
@@ -349,7 +349,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "thinking/reasoning params" do
     test "openai format: reasoning_effort" do
       compat = Compat.detect(model(%{reasoning: true}))
-      req = Request.build(model(%{reasoning: true}), context([]), %StreamOptions{reasoning: :high}, compat)
+      req = Request.build(model(%{reasoning: true}), context([]), %CallOptions{reasoning: :high}, compat)
 
       assert req.body["reasoning_effort"] == "high"
     end
@@ -357,7 +357,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "openrouter format: reasoning object" do
       m = model(%{reasoning: true, provider: :openrouter})
       compat = Compat.detect(m)
-      req = Request.build(m, context([]), %StreamOptions{reasoning: :high}, compat)
+      req = Request.build(m, context([]), %CallOptions{reasoning: :high}, compat)
 
       assert req.body["reasoning"] == %{"effort" => "high"}
     end
@@ -365,7 +365,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "openrouter: no reasoning sends effort none" do
       m = model(%{reasoning: true, provider: :openrouter})
       compat = Compat.detect(m)
-      req = Request.build(m, context([]), %StreamOptions{}, compat)
+      req = Request.build(m, context([]), %CallOptions{}, compat)
 
       assert req.body["reasoning"] == %{"effort" => "none"}
     end
@@ -373,7 +373,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "zai format: enable_thinking" do
       m = model(%{reasoning: true, provider: :zai})
       compat = Compat.detect(m)
-      req = Request.build(m, context([]), %StreamOptions{reasoning: :high}, compat)
+      req = Request.build(m, context([]), %CallOptions{reasoning: :high}, compat)
 
       assert req.body["enable_thinking"] == true
     end
@@ -381,7 +381,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "zai: no reasoning disables thinking" do
       m = model(%{reasoning: true, provider: :zai})
       compat = Compat.detect(m)
-      req = Request.build(m, context([]), %StreamOptions{}, compat)
+      req = Request.build(m, context([]), %CallOptions{}, compat)
 
       refute Map.get(req.body, "enable_thinking")
     end
@@ -389,13 +389,13 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "reasoning_effort_map remaps levels" do
       m = model(%{reasoning: true, provider: :groq, id: "qwen/qwen3-32b"})
       compat = Compat.detect(m)
-      req = Request.build(m, context([]), %StreamOptions{reasoning: :high}, compat)
+      req = Request.build(m, context([]), %CallOptions{reasoning: :high}, compat)
 
       assert req.body["reasoning_effort"] == "default"
     end
 
     test "no reasoning params when model.reasoning is false" do
-      req = Request.build(model(), context([]), %StreamOptions{reasoning: :high}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{reasoning: :high}, Compat.detect(model()))
 
       refute Map.has_key?(req.body, "reasoning_effort")
       refute Map.has_key?(req.body, "reasoning")
@@ -415,7 +415,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         ])
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, compat)
+      req = Request.build(model(), context(msgs), %CallOptions{}, compat)
       [_user, asst] = req.body["messages"]
 
       assert is_list(asst["content"])
@@ -442,7 +442,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         %Message.User{content: "next", timestamp: 2}
       ]
 
-      req = Request.build(model(), context(msgs), %StreamOptions{}, compat)
+      req = Request.build(model(), context(msgs), %CallOptions{}, compat)
       roles = Enum.map(req.body["messages"], & &1["role"])
 
       assert roles == ["user", "assistant", "tool", "assistant", "user"]
@@ -454,7 +454,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       routing = %{order: ["anthropic"], allow_fallbacks: false}
       m = model(%{base_url: "https://openrouter.ai/api/v1", provider: :openrouter})
       compat = %{Compat.detect(m) | open_router_routing: routing}
-      req = Request.build(m, context([]), %StreamOptions{}, compat)
+      req = Request.build(m, context([]), %CallOptions{}, compat)
 
       assert req.body["provider"] == routing
     end
@@ -463,7 +463,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       routing = %{order: ["anthropic"]}
       m = model(%{base_url: "https://api.openai.com/v1"})
       compat = %{Compat.detect(m) | open_router_routing: routing}
-      req = Request.build(m, context([]), %StreamOptions{}, compat)
+      req = Request.build(m, context([]), %CallOptions{}, compat)
 
       refute Map.has_key?(req.body, "provider")
     end
@@ -472,7 +472,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       routing = %{only: ["openai"], order: ["anthropic", "openai"]}
       m = model(%{base_url: "https://ai-gateway.vercel.sh/v1"})
       compat = %{Compat.detect(m) | vercel_gateway_routing: routing}
-      req = Request.build(m, context([]), %StreamOptions{}, compat)
+      req = Request.build(m, context([]), %CallOptions{}, compat)
 
       assert req.body["providerOptions"] == %{
                "gateway" => %{"only" => ["openai"], "order" => ["anthropic", "openai"]}
@@ -481,7 +481,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "omits Vercel routing when empty" do
       m = model()
-      req = Request.build(m, context([]), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context([]), %CallOptions{}, Compat.detect(m))
       refute Map.has_key?(req.body, "providerOptions")
     end
   end
@@ -489,20 +489,20 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "Authorization header" do
     test "adds Bearer token when api_key set in opts" do
       req =
-        Request.build(model(), context([]), %StreamOptions{api_key: "sk-test"}, Compat.detect(model()))
+        Request.build(model(), context([]), %CallOptions{api_key: "sk-test"}, Compat.detect(model()))
 
       assert {"authorization", "Bearer sk-test"} in req.headers
     end
 
     test "omits authorization when api_key is nil" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "authorization" end)
     end
 
     test "omits authorization when api_key is empty string" do
       req =
-        Request.build(model(), context([]), %StreamOptions{api_key: ""}, Compat.detect(model()))
+        Request.build(model(), context([]), %CallOptions{api_key: ""}, Compat.detect(model()))
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "authorization" end)
     end
@@ -512,7 +512,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "adds X-Initiator user when last message is user" do
       m = model(%{provider: :github_copilot})
       msgs = [%Message.User{content: "hello", timestamp: 0}]
-      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context(msgs), %CallOptions{}, Compat.detect(m))
 
       assert {"x-initiator", "user"} in req.headers
       assert {"openai-intent", "conversation-edits"} in req.headers
@@ -526,7 +526,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         assistant_msg([%Content.Text{text: "hello"}])
       ]
 
-      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context(msgs), %CallOptions{}, Compat.detect(m))
       assert {"x-initiator", "agent"} in req.headers
     end
 
@@ -543,12 +543,12 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         }
       ]
 
-      req = Request.build(m, context(msgs), %StreamOptions{}, Compat.detect(m))
+      req = Request.build(m, context(msgs), %CallOptions{}, Compat.detect(m))
       assert {"copilot-vision-request", "true"} in req.headers
     end
 
     test "omits copilot headers for non-copilot providers" do
-      req = Request.build(model(), context([]), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context([]), %CallOptions{}, Compat.detect(model()))
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "x-initiator" end)
       refute Enum.any?(req.headers, fn {k, _} -> k == "openai-intent" end)
@@ -558,7 +558,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "session affinity headers" do
     test "includes session headers when compat flag set and session_id present" do
       compat = %{Compat.detect(model()) | send_session_affinity_headers: true}
-      opts = %StreamOptions{metadata: %{"session_id" => "sess-123"}}
+      opts = %CallOptions{metadata: %{"session_id" => "sess-123"}}
       req = Request.build(model(), context([]), opts, compat)
 
       assert {"session_id", "sess-123"} in req.headers
@@ -568,14 +568,14 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "omits session headers when compat flag is false" do
       req =
-        Request.build(model(), context([]), %StreamOptions{metadata: %{"session_id" => "s"}}, Compat.detect(model()))
+        Request.build(model(), context([]), %CallOptions{metadata: %{"session_id" => "s"}}, Compat.detect(model()))
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
     end
 
     test "omits session headers when no session_id in metadata" do
       compat = %{Compat.detect(model()) | send_session_affinity_headers: true}
-      req = Request.build(model(), context([]), %StreamOptions{}, compat)
+      req = Request.build(model(), context([]), %CallOptions{}, compat)
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
     end
@@ -583,21 +583,21 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
   describe "OpenAI prompt caching" do
     test "includes prompt_cache_key for api.openai.com with session_id" do
-      opts = %StreamOptions{metadata: %{"session_id" => "sess-abc"}}
+      opts = %CallOptions{metadata: %{"session_id" => "sess-abc"}}
       req = Request.build(model(), context([]), opts, Compat.detect(model()))
 
       assert req.body["prompt_cache_key"] == "sess-abc"
     end
 
     test "includes prompt_cache_retention: 24h when cache_retention is long" do
-      opts = %StreamOptions{metadata: %{"session_id" => "sess-abc", "cache_retention" => "long"}}
+      opts = %CallOptions{metadata: %{"session_id" => "sess-abc", "cache_retention" => "long"}}
       req = Request.build(model(), context([]), opts, Compat.detect(model()))
 
       assert req.body["prompt_cache_retention"] == "24h"
     end
 
     test "omits prompt_cache_key when cache_retention is none" do
-      opts = %StreamOptions{metadata: %{"session_id" => "s", "cache_retention" => "none"}}
+      opts = %CallOptions{metadata: %{"session_id" => "s", "cache_retention" => "none"}}
       req = Request.build(model(), context([]), opts, Compat.detect(model()))
 
       refute Map.has_key?(req.body, "prompt_cache_key")
@@ -605,7 +605,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "omits prompt caching for non-openai hosts" do
       m = model(%{base_url: "https://api.x.ai/v1", provider: :xai})
-      opts = %StreamOptions{metadata: %{"session_id" => "s"}}
+      opts = %CallOptions{metadata: %{"session_id" => "s"}}
       req = Request.build(m, context([]), opts, Compat.detect(m))
 
       refute Map.has_key?(req.body, "prompt_cache_key")
@@ -632,7 +632,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       msgs = [%Message.User{content: "hello", timestamp: 0}]
       ctx = context(msgs, system_prompt: "Be helpful", tools: tools)
       compat = Compat.detect(m)
-      req = Request.build(m, ctx, %StreamOptions{}, compat)
+      req = Request.build(m, ctx, %CallOptions{}, compat)
 
       [sys | rest] = req.body["messages"]
       assert [%{"type" => "text", "cache_control" => %{"type" => "ephemeral"}}] = sys["content"]
@@ -648,7 +648,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "omits cache control when cache_control_format is nil" do
       msgs = [%Message.User{content: "hi", timestamp: 0}]
       ctx = context(msgs, system_prompt: "Be helpful")
-      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), ctx, %CallOptions{}, Compat.detect(model()))
 
       [sys | _] = req.body["messages"]
       assert sys["content"] == "Be helpful"
@@ -658,7 +658,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       m = openrouter_anthropic_model()
       msgs = [%Message.User{content: "hi", timestamp: 0}]
       ctx = context(msgs, system_prompt: "Be helpful")
-      opts = %StreamOptions{metadata: %{"cache_retention" => "none"}}
+      opts = %CallOptions{metadata: %{"cache_retention" => "none"}}
       req = Request.build(m, ctx, opts, Compat.detect(m))
 
       [sys | _] = req.body["messages"]
@@ -672,7 +672,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "system prompt with invalid bytes serializes cleanly" do
       msgs = [%Message.User{content: "hi", timestamp: 0}]
       ctx = context(msgs, system_prompt: @invalid_utf8)
-      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), ctx, %CallOptions{}, Compat.detect(model()))
       [sys | _] = req.body["messages"]
       assert sys["role"] == "system"
       assert sys["content"] == "hello world"
@@ -681,7 +681,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "user message string with invalid bytes serializes cleanly" do
       msgs = [%Message.User{content: @invalid_utf8, timestamp: 0}]
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
       assert user_msg["content"] == "hello world"
       assert String.valid?(user_msg["content"])
@@ -689,7 +689,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "user message text block with invalid bytes serializes cleanly" do
       msgs = [%Message.User{content: [%Content.Text{text: @invalid_utf8}], timestamp: 0}]
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
       [part] = user_msg["content"]
       assert part["text"] == "hello world"
@@ -699,7 +699,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "valid unicode (emoji, CJK) passes through unchanged" do
       text = "Hello 🎉 世界"
       msgs = [%Message.User{content: text, timestamp: 0}]
-      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      req = Request.build(model(), context(msgs), %CallOptions{}, Compat.detect(model()))
       user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
       assert user_msg["content"] == text
     end

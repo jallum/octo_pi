@@ -1,12 +1,12 @@
 defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.Anthropic.Request
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
 
@@ -40,14 +40,14 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
 
   describe "URL + method" do
     test "posts to {base_url}/messages" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       assert r.method == :post
       assert r.url == "https://api.anthropic.com/v1/messages"
     end
 
     test "trims a trailing slash from base_url" do
       r =
-        Request.build(model(base_url: "https://proxy.example/"), user_context(), %StreamOptions{})
+        Request.build(model(base_url: "https://proxy.example/"), user_context(), %CallOptions{})
 
       assert r.url == "https://proxy.example/messages"
     end
@@ -55,12 +55,12 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
 
   describe "headers" do
     test "includes x-api-key from env by default" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       assert {"x-api-key", "test-key-from-env"} in r.headers
     end
 
     test "opts.api_key overrides env" do
-      r = Request.build(model(), user_context(), %StreamOptions{api_key: "override"})
+      r = Request.build(model(), user_context(), %CallOptions{api_key: "override"})
       assert {"x-api-key", "override"} in r.headers
       refute {"x-api-key", "test-key-from-env"} in r.headers
     end
@@ -70,7 +70,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       System.put_env("ANTHROPIC_OAUTH_TOKEN", "oauth-token")
       on_exit(fn -> System.delete_env("ANTHROPIC_OAUTH_TOKEN") end)
 
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       assert {"x-api-key", "oauth-token"} in r.headers
     end
 
@@ -78,12 +78,12 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       System.delete_env("ANTHROPIC_API_KEY")
 
       assert_raise RuntimeError, ~r/credentials not available/, fn ->
-        Request.build(model(), user_context(), %StreamOptions{})
+        Request.build(model(), user_context(), %CallOptions{})
       end
     end
 
     test "includes anthropic-version, content-type, accept" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       assert {"anthropic-version", "2023-06-01"} in r.headers
       assert {"content-type", "application/json"} in r.headers
       assert {"accept", "application/json"} in r.headers
@@ -91,7 +91,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
 
     test "merges opts.headers after defaults" do
       r =
-        Request.build(model(), user_context(), %StreamOptions{
+        Request.build(model(), user_context(), %CallOptions{
           headers: %{"x-custom" => "1", "x-tracing" => "abc"}
         })
 
@@ -102,55 +102,55 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
 
   describe "body basics" do
     test "always sets model, stream, and default max_tokens = floor(model.max_tokens / 3)" do
-      r = Request.build(model(max_tokens: 9999), user_context(), %StreamOptions{})
+      r = Request.build(model(max_tokens: 9999), user_context(), %CallOptions{})
       assert r.body["model"] == "claude-haiku-4-5"
       assert r.body["stream"] == true
       assert r.body["max_tokens"] == div(9999, 3)
     end
 
     test "opts.max_tokens overrides default" do
-      r = Request.build(model(), user_context(), %StreamOptions{max_tokens: 512})
+      r = Request.build(model(), user_context(), %CallOptions{max_tokens: 512})
       assert r.body["max_tokens"] == 512
     end
 
     test "omits temperature by default" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       refute Map.has_key?(r.body, "temperature")
     end
 
     test "includes temperature when set" do
-      r = Request.build(model(), user_context(), %StreamOptions{temperature: 0.2})
+      r = Request.build(model(), user_context(), %CallOptions{temperature: 0.2})
       assert r.body["temperature"] == 0.2
     end
 
     test "omits metadata, tools, system when unset/empty" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       refute Map.has_key?(r.body, "metadata")
       refute Map.has_key?(r.body, "tools")
       refute Map.has_key?(r.body, "system")
     end
 
     test "includes metadata when set" do
-      r = Request.build(model(), user_context(), %StreamOptions{metadata: %{"user_id" => "u1"}})
+      r = Request.build(model(), user_context(), %CallOptions{metadata: %{"user_id" => "u1"}})
       assert r.body["metadata"] == %{"user_id" => "u1"}
     end
   end
 
   describe "system prompt" do
     test "is shaped as a list of text blocks" do
-      r = Request.build(model(), user_context(system_prompt: "be terse"), %StreamOptions{})
+      r = Request.build(model(), user_context(system_prompt: "be terse"), %CallOptions{})
       assert [%{"type" => "text", "text" => "be terse"}] = r.body["system"]
     end
 
     test "empty string is treated as no system prompt" do
-      r = Request.build(model(), user_context(system_prompt: ""), %StreamOptions{})
+      r = Request.build(model(), user_context(system_prompt: ""), %CallOptions{})
       refute Map.has_key?(r.body, "system")
     end
   end
 
   describe "messages — user" do
     test "string content becomes a single text block" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
 
       assert [%{"role" => "user", "content" => [%{"type" => "text", "text" => "hello"}]}] =
                r.body["messages"]
@@ -169,7 +169,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         ]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [msg] = r.body["messages"]
       assert msg["role"] == "user"
 
@@ -202,7 +202,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       }
 
       ctx = %Context{messages: [assistant]}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       assert [msg] = r.body["messages"]
       assert msg["role"] == "assistant"
@@ -234,7 +234,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         ]
       }
 
-      r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+      r = Request.build(model(), %Context{messages: [assistant]}, %CallOptions{})
       [msg] = r.body["messages"]
       assert msg["content"] == [%{"type" => "redacted_thinking", "data" => "opaque-blob"}]
     end
@@ -250,7 +250,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         content: [%ToolCall{id: bad, name: "x", arguments: %{}}]
       }
 
-      r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+      r = Request.build(model(), %Context{messages: [assistant]}, %CallOptions{})
       [msg] = r.body["messages"]
       [block] = msg["content"]
       assert String.length(block["id"]) == 64
@@ -278,7 +278,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
           content: [%ToolCall{id: @input, name: "x", arguments: %{}}]
         }
 
-        r = Request.build(model(), %Context{messages: [assistant]}, %StreamOptions{})
+        r = Request.build(model(), %Context{messages: [assistant]}, %CallOptions{})
         [msg] = r.body["messages"]
         [block] = msg["content"]
         assert block["id"] == @expected
@@ -307,7 +307,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       ]
 
       ctx = %Context{messages: results ++ [%Message.User{content: "next", timestamp: 0}]}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       assert [bundled, next] = r.body["messages"]
       assert bundled["role"] == "user"
@@ -334,7 +334,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       }
 
       ctx = %Context{messages: [%Message.User{content: "do x", timestamp: 0}, result]}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       assert [_user, bundled] = r.body["messages"]
       assert bundled["role"] == "user"
@@ -356,7 +356,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         }
       }
 
-      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %StreamOptions{})
+      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %CallOptions{})
 
       assert [converted] = r.body["tools"]
       assert converted["name"] == "edit"
@@ -376,7 +376,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
     test "missing properties / required default to empties" do
       tool = %Tool{name: "noop", description: "", parameters: %{}}
 
-      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %StreamOptions{})
+      r = Request.build(model(), %Context{messages: [], tools: [tool]}, %CallOptions{})
       [converted] = r.body["tools"]
 
       assert converted["input_schema"] == %{
@@ -391,7 +391,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
     @oauth_token "sk-ant-oat01-foobar"
 
     test "uses Authorization: Bearer, drops x-api-key, adds claude-cli headers" do
-      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+      r = Request.build(model(), user_context(), %CallOptions{api_key: @oauth_token})
 
       assert {"authorization", "Bearer " <> @oauth_token} in r.headers
       refute Enum.any?(r.headers, fn {k, _} -> k == "x-api-key" end)
@@ -402,13 +402,13 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
     end
 
     test "returns resolved credentials on the built request" do
-      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+      r = Request.build(model(), user_context(), %CallOptions{api_key: @oauth_token})
       assert r.auth.type == :oauth
       assert r.auth.token == @oauth_token
     end
 
     test "prepends the Claude Code identity prompt when no user system prompt is set" do
-      r = Request.build(model(), user_context(), %StreamOptions{api_key: @oauth_token})
+      r = Request.build(model(), user_context(), %CallOptions{api_key: @oauth_token})
 
       assert [%{"type" => "text", "text" => "You are Claude Code," <> _}] = r.body["system"]
     end
@@ -418,7 +418,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         Request.build(
           model(),
           user_context(system_prompt: "be terse"),
-          %StreamOptions{api_key: @oauth_token}
+          %CallOptions{api_key: @oauth_token}
         )
 
       assert [
@@ -434,7 +434,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         Request.build(
           model(),
           %Context{messages: [], tools: [tool]},
-          %StreamOptions{api_key: @oauth_token}
+          %CallOptions{api_key: @oauth_token}
         )
 
       assert [%{"name" => "TodoWrite"}] = r.body["tools"]
@@ -453,7 +453,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         Request.build(
           model(),
           %Context{messages: [assistant]},
-          %StreamOptions{api_key: @oauth_token}
+          %CallOptions{api_key: @oauth_token}
         )
 
       [msg] = r.body["messages"]
@@ -469,14 +469,14 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         Request.build(
           model(),
           %Context{messages: [], tools: [tool]},
-          %StreamOptions{api_key: @oauth_token}
+          %CallOptions{api_key: @oauth_token}
         )
 
       assert [%{"name" => "my_custom_tool"}] = r.body["tools"]
     end
 
     test "API-key path still omits OAuth-only headers and identity prompt" do
-      r = Request.build(model(), user_context(system_prompt: "hi"), %StreamOptions{})
+      r = Request.build(model(), user_context(system_prompt: "hi"), %CallOptions{})
 
       refute Enum.any?(r.headers, fn {k, _} -> k == "authorization" end)
       refute Enum.any?(r.headers, fn {k, _} -> k == "user-agent" end)
@@ -495,7 +495,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         tools: [tool]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       cc = %{"type" => "ephemeral"}
       assert [%{"cache_control" => ^cc}] = r.body["system"]
@@ -512,7 +512,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         tools: []
       }
 
-      opts = %StreamOptions{metadata: %{"cache_retention" => "long"}}
+      opts = %CallOptions{metadata: %{"cache_retention" => "long"}}
       r = Request.build(model(), ctx, opts)
 
       cc = %{"type" => "ephemeral", "ttl" => "1h"}
@@ -526,7 +526,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         tools: []
       }
 
-      opts = %StreamOptions{metadata: %{"cache_retention" => "long"}}
+      opts = %CallOptions{metadata: %{"cache_retention" => "long"}}
       r = Request.build(model(base_url: "https://my-proxy.example.com/v1"), ctx, opts)
 
       cc = %{"type" => "ephemeral"}
@@ -540,7 +540,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         tools: []
       }
 
-      opts = %StreamOptions{metadata: %{"cache_retention" => "none"}}
+      opts = %CallOptions{metadata: %{"cache_retention" => "none"}}
       r = Request.build(model(), ctx, opts)
 
       assert [%{"type" => "text", "text" => "be terse"}] = r.body["system"]
@@ -548,12 +548,12 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
     end
 
     test "skips system cache_control when there is no system prompt" do
-      r = Request.build(model(), user_context(), %StreamOptions{})
+      r = Request.build(model(), user_context(), %CallOptions{})
       refute Map.has_key?(r.body, "system")
     end
 
     test "skips tool cache_control when there are no tools" do
-      r = Request.build(model(), user_context(system_prompt: "hi"), %StreamOptions{})
+      r = Request.build(model(), user_context(system_prompt: "hi"), %CallOptions{})
       refute Map.has_key?(r.body, "tools")
     end
 
@@ -564,7 +564,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       ]
 
       ctx = %Context{messages: [%Message.User{content: "hi", timestamp: 0}], tools: tools}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       cc = %{"type" => "ephemeral"}
       [first, last] = r.body["tools"]
@@ -585,7 +585,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         ]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [msg] = r.body["messages"]
       [text_block, image_block] = msg["content"]
 
@@ -607,7 +607,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         ]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
 
       # tool_result bundles into a user message — that is the last user message
       [_first, bundled] = r.body["messages"]
@@ -627,7 +627,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         tools: []
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{api_key: @oauth_token})
+      r = Request.build(model(), ctx, %CallOptions{api_key: @oauth_token})
 
       cc = %{"type" => "ephemeral"}
       [identity, user_sys] = r.body["system"]
@@ -641,7 +641,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
 
     test "user message string with invalid bytes serializes cleanly" do
       ctx = %Context{messages: [%Message.User{content: @invalid_utf8, timestamp: 0}]}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [msg] = r.body["messages"]
       [block] = msg["content"]
       assert block["text"] == "hello world"
@@ -653,7 +653,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         messages: [%Message.User{content: [%Content.Text{text: @invalid_utf8}], timestamp: 0}]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [msg] = r.body["messages"]
       [block] = msg["content"]
       assert block["text"] == "hello world"
@@ -666,7 +666,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
         messages: [%Message.User{content: "hi", timestamp: 0}]
       }
 
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [sys_block] = r.body["system"]
       assert sys_block["text"] == "hello world"
       assert String.valid?(sys_block["text"])
@@ -676,7 +676,7 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       text = "Hello 🎉 世界"
 
       ctx = %Context{messages: [%Message.User{content: text, timestamp: 0}]}
-      r = Request.build(model(), ctx, %StreamOptions{})
+      r = Request.build(model(), ctx, %CallOptions{})
       [msg] = r.body["messages"]
       [block] = msg["content"]
       assert block["text"] == text

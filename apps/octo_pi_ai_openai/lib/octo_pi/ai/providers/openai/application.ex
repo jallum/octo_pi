@@ -9,17 +9,6 @@ defmodule OctoPi.AI.Providers.OpenAI.Application do
   def start(_type, _args) do
     ProviderRegistry.register(:openai_completions, OctoPi.AI.Providers.OpenAI)
 
-    OctoPi.Tracer.register(%{
-      id: :openai,
-      description: "OpenAI/OpenRouter API request events",
-      events: [
-        [:octo_pi_ai_openai, :request, :start],
-        [:octo_pi_ai_openai, :request, :stop],
-        [:octo_pi_ai_openai, :request, :exception]
-      ],
-      level: :info
-    })
-
     children = [
       {Task.Supervisor, name: OctoPi.AI.Providers.OpenAI.TaskSup}
     ]

@@ -5,8 +5,8 @@ defmodule OctoPi.Agent.Transport do
   Two concrete transports are planned:
 
     - `OctoPi.Agent.Transport.Direct` (default) — delegates to
-      `OctoPi.AI.stream/3`, which dispatches via `ProviderRegistry`
-      to whichever Phase 1 provider handles the `Model`'s api atom.
+      `OctoPi.AI.stream_to/5`, which dispatches via `ProviderRegistry`
+      to whichever provider handles the `Model`'s api atom.
     - Proxy (deferred) — tunnels through an HTTP proxy that runs the
       provider call server-side and streams events back; see
       `tmp/pi-mono/packages/agent/src/proxy.ts` for the upstream.
@@ -17,11 +17,11 @@ defmodule OctoPi.Agent.Transport do
   """
 
   alias OctoPi.AI.Context
-  alias OctoPi.AI.Event
   alias OctoPi.AI.Model
-  alias OctoPi.AI.StreamOptions
 
-  @type event_stream :: Enumerable.t(Event.t())
-
-  @callback stream(Model.t(), Context.t(), StreamOptions.t()) :: event_stream()
+  @doc """
+  Spawn a producer task that sends `{ref, :event, event}` messages to
+  `pid` and finishes with `{ref, :done}`. Returns `{:ok, producer_pid}`.
+  """
+  @callback stream_to(Model.t(), Context.t(), keyword(), pid(), reference()) :: {:ok, pid()}
 end
