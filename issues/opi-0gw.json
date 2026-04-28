@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "in_review",
+  "status": "closed",
   "title": "Wire all ported-but-unwired modules into the running system",
   "type": "epic",
-  "updated_at": "2026-04-28T18:25:12.491731Z"
+  "updated_at": "2026-04-28T18:54:54.716811Z"
 }
