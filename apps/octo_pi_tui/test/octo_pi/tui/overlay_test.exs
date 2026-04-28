@@ -199,11 +199,11 @@ defmodule OctoPi.TUI.OverlayTest do
       alias VirtualTerminal, as: VT
 
       width = 20
-      {:ok, r} = Renderer.start_link(width: width, height: 6, min_interval_ms: 0)
+      r = Renderer.new(width: width, height: 6)
       base_line = "\e[3m" <> String.duplicate("X", width) <> "\e[23m"
       lines = [base_line, "INPUT", "", "", "", ""]
 
-      {:ok, bytes} = Renderer.render(r, lines)
+      {bytes, _r} = Renderer.render(r, lines, "")
       vt = width |> VT.new(6) |> VT.write(bytes)
 
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to plain INPUT row"
@@ -298,13 +298,13 @@ defmodule OctoPi.TUI.OverlayTest do
       alias VirtualTerminal, as: VT
 
       width = 20
-      {:ok, r} = Renderer.start_link(width: width, height: 6, min_interval_ms: 0)
+      r = Renderer.new(width: width, height: 6)
       base_line = "\e[3m" <> String.duplicate("X", width) <> "\e[23m"
       base = [base_line, "INPUT", "", "", "", ""]
       overlay = %Overlay{lines: ["OVR"], width: 3, anchor: :top_left, row: 0, col: 5}
       composed = Overlay.composite(base, [overlay], width, 6)
 
-      {:ok, bytes} = Renderer.render(r, composed)
+      {bytes, _r} = Renderer.render(r, composed, "")
       vt = width |> VT.new(6) |> VT.write(bytes)
 
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to INPUT row after overlay slice"
