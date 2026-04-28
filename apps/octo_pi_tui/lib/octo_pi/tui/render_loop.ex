@@ -27,38 +27,41 @@ defmodule OctoPi.TUI.RenderLoop do
         )
 
       tick_ms = Keyword.get(opts, :tick_ms, @default_tick_ms)
-      deadline = System.monotonic_time(:millisecond) + tick_ms
-      loop(renderer, opts[:terminal], tick_ms, deadline, nil)
+      loop(renderer, opts[:terminal], tick_ms, nil)
     end)
   end
 
-  defp loop(renderer, terminal, tick_ms, deadline, pending) do
+  defp loop(renderer, terminal, tick_ms, nil) do
+    receive do
+      {:render, lines, cursor_seq} ->
+        deadline = System.monotonic_time(:millisecond) + tick_ms
+        loop(renderer, terminal, tick_ms, {deadline, drain_latest(lines, cursor_seq)})
+
+      {:resize, w, h} ->
+        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, nil)
+
+      :stop ->
+        :ok
+    end
+  end
+
+  defp loop(renderer, terminal, tick_ms, {deadline, {lines, cursor_seq}}) do
     wait = max(0, deadline - System.monotonic_time(:millisecond))
 
     receive do
-      {:render, lines, cursor_seq} ->
-        loop(renderer, terminal, tick_ms, deadline, drain_latest(lines, cursor_seq))
+      {:render, new_lines, new_cursor_seq} ->
+        loop(renderer, terminal, tick_ms, {deadline, drain_latest(new_lines, new_cursor_seq)})
 
       {:resize, w, h} ->
-        renderer
-        |> Renderer.resize(w, h)
-        |> loop(terminal, tick_ms, deadline, pending)
+        loop(Renderer.resize(renderer, w, h), terminal, tick_ms, {deadline, {lines, cursor_seq}})
 
       :stop ->
         :ok
     after
       wait ->
-        pending
-        |> case do
-          nil ->
-            renderer
-
-          {lines, cursor_seq} ->
-            {bytes, r} = Renderer.render(renderer, lines, cursor_seq)
-            if bytes != "", do: do_write(terminal, bytes)
-            r
-        end
-        |> loop(terminal, tick_ms, deadline + tick_ms, nil)
+        {bytes, renderer} = Renderer.render(renderer, lines, cursor_seq)
+        if bytes != "", do: do_write(terminal, bytes)
+        loop(renderer, terminal, tick_ms, nil)
     end
   end
 
