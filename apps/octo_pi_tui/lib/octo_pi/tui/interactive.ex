@@ -349,31 +349,39 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  @type run_opts :: [
+          model: Model.t(),
+          cwd: String.t(),
+          tools: [OctoPi.Agent.Tool.t()],
+          transport: module(),
+          system_prompt: String.t() | nil,
+          continue: boolean(),
+          models: [Model.t()],
+          extensions: [Extension.t()],
+          resource_loader: OctoPi.Coder.ResourceLoader.t(),
+          keybindings_path: Path.t() | nil,
+          expand_prompt_fn: (String.t() -> String.t()) | nil,
+          dimensions: {pos_integer(), pos_integer()},
+          write_fn: (iodata() -> term()),
+          raw_mode_fn: (:enter | :exit -> term()),
+          skip_raw_mode: boolean(),
+          skip_sigwinch: boolean(),
+          auto_start_reader: boolean(),
+          tty_fn: (-> term()),
+          open_editor_fn: (String.t() -> term()),
+          send_sigtstp_fn: (-> term()),
+          debug_render: boolean(),
+          terminal_name: GenServer.name() | nil,
+          name: GenServer.name()
+        ]
+
   @doc """
   Entry point for the CLI. Starts the Interactive GenServer, then
   blocks until it exits.
 
-  Options:
-
-    * `:model`    — `%OctoPi.AI.Model{}` (required for real runs)
-    * `:tools`    — list of `%OctoPi.Agent.Tool{}` (default `[]`)
-    * `:transport`, `:system_prompt` — forwarded to
-      `OctoPi.Agent.start_session/1`
-    * `:dimensions` — `{w, h}` override for tests
-    * `:write_fn`  — 1-arg fn that receives rendered bytes;
-      default `&IO.write/1`. Tests use this to capture output.
-    * `:skip_raw_mode`, `:skip_sigwinch`, `:auto_start_reader`,
-      `:raw_mode_fn` — Terminal test overrides, passed through.
-    * `:terminal_name` — name under which to register the
-      Terminal GenServer. Pass `nil` to leave it unregistered
-      (useful when multiple Interactive runs share a VM, e.g.
-      tests).
-    * `:name` — name under which to register *this* Interactive
-      GenServer. Tests use it to address Interactive directly
-      (e.g. `send(name, {:hid_event, %Key{...}})`). Default
-      unregistered.
+  Required: `:model`. All others are optional.
   """
-  @spec run(keyword()) :: :ok
+  @spec run(run_opts()) :: :ok
   def run(opts) do
     {:ok, pid} = GenServer.start_link(__MODULE__, opts, gen_opts(opts))
     ref = Process.monitor(pid)

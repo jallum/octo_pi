@@ -64,26 +64,25 @@ defmodule OctoPi.Coder.Session do
     ]
   end
 
-  @type start_opt ::
-          {:extensions, [Extension.t()]}
-          | {:session_manager, SessionManager.t()}
-          | {:store_pid, pid()}
-          | {:agent_pid, pid() | nil}
-          | {:model_provider, Session.model_provider()}
-          | {:settings_manager, pid()}
-          | {:name, GenServer.name()}
+  @type start_opts :: [
+          extensions: [Extension.t()],
+          session_manager: SessionManager.t(),
+          store_pid: pid(),
+          agent_pid: pid() | nil,
+          model_provider: Session.model_provider(),
+          settings_manager: pid(),
+          name: GenServer.name()
+        ]
 
   @doc """
   Start a session under `OctoPi.Coder.Session.Supervisor` (DynamicSupervisor).
   Use this from production callers; tests typically prefer `start_link/1`
   directly with `start_supervised!` so the test owns the lifecycle.
   """
-  @spec start_supervised([start_opt()]) :: DynamicSupervisor.on_start_child()
-  def start_supervised(opts) do
-    DynamicSupervisor.start_child(__MODULE__.Supervisor, {__MODULE__, opts})
-  end
+  @spec start_supervised(start_opts()) :: DynamicSupervisor.on_start_child()
+  def start_supervised(opts), do: DynamicSupervisor.start_child(__MODULE__.Supervisor, {__MODULE__, opts})
 
-  @spec start_link([start_opt()]) :: GenServer.on_start()
+  @spec start_link(start_opts()) :: GenServer.on_start()
   def start_link(opts) do
     # Validate required opts at the call site so a KeyError surfaces to
     # the caller rather than as a `{:EXIT, ...}` from a doomed GenServer.

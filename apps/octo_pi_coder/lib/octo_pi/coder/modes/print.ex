@@ -26,15 +26,17 @@ defmodule OctoPi.Coder.Modes.Print do
   alias OctoPi.AI.Content
   alias OctoPi.Coder.ResourceLoader
 
-  @spec run(map()) :: {:ok, atom()} | {:error, atom()}
-  def run(%{prompt: prompt, model: model} = opts) do
-    cwd = Map.get(opts, :cwd, File.cwd!())
-    tools = Map.get(opts, :tools, OctoPi.Coder.default_tools(cwd))
-    transport = Map.get(opts, :transport)
+  @spec run(OctoPi.Coder.print_opts()) :: {:ok, atom()} | {:error, atom()}
+  def run(opts) do
+    prompt = Keyword.fetch!(opts, :prompt)
+    model = Keyword.fetch!(opts, :model)
+    cwd = Keyword.get(opts, :cwd, File.cwd!())
+    tools = Keyword.get(opts, :tools, OctoPi.Coder.default_tools(cwd))
+    transport = Keyword.get(opts, :transport)
 
     system_prompt =
-      Map.get_lazy(opts, :system_prompt, fn ->
-        loader = Map.get_lazy(opts, :resource_loader, fn -> ResourceLoader.load(cwd, nil) end)
+      Keyword.get_lazy(opts, :system_prompt, fn ->
+        loader = Keyword.get_lazy(opts, :resource_loader, fn -> ResourceLoader.load(cwd, nil) end)
         ResourceLoader.build_system_prompt(loader, cwd, tools)
       end)
 
