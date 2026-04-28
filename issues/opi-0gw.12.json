@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T17:10:58.640130Z",
+  "description": "All 11 component modules that implement `@behaviour OctoPi.TUI.Component` emit a compiler warning at startup:\n\n```\nwarning: module attribute @impl was not set for function invalidate/1 callback\n(specified in OctoPi.TUI.Component). This either means you forgot to add the\n\"@impl true\" annotation before the definition or that you are accidentally\noverriding this callback\n```\n\nObserved in tmux via `mix pi` on branch opi-0gw.\n\n**Root cause:** opi-0gw.9 added `def invalidate(state), do: state` to 12 component files but omitted `@impl true`. The `Component` behaviour now declares `@callback invalidate(state :: struct()) :: struct()` as optional, so all implementing modules should annotate their stub.\n\n**Affected modules (11 that use `@behaviour OctoPi.TUI.Component`):**\n- Container, CustomMessage, Header, LoginDialog, SelectList, SessionSelector, SettingsList, SettingsSelector, SummarizePrompt, TreeSelector, TruncatedText\n\n`Diff` does not implement the behaviour, so it does not need `@impl`.\n\n**Fix:** Add `@impl true` immediately before each `def invalidate(state), do: state` in the 11 affected modules.\n\n**Test:** `mix pi` compiles with zero warnings related to `invalidate/1`.",
+  "id": "opi-0gw.12",
+  "labels": [],
+  "parent": "opi-0gw",
+  "priority": 2,
+  "status": "open",
+  "title": "Add @impl true to invalidate/1 stubs in all Component behaviour modules",
+  "type": "bug",
+  "updated_at": "2026-04-28T17:10:58.640130Z"
+}
