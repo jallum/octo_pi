@@ -37,6 +37,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.UIHost
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
+  alias OctoPi.TUI.Clipboard
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
@@ -53,6 +54,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Renderer
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
+  alias OctoPi.TUI.Terminal.Image
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
@@ -1216,6 +1218,30 @@ defmodule OctoPi.TUI.Interactive do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
     %{state | model_selector: ms}
+  end
+
+  defp dispatch_app_action("app.clipboard.pasteImage", state, _key) do
+    case Clipboard.paste_image_from_clipboard() do
+      {:ok, %{data: base64_data, mime_type: mime_type}} ->
+        image_dims =
+          case Image.get_image_dimensions(base64_data, mime_type) do
+            {:ok, dims} -> dims
+            :error -> %{width: 100, height: 100}
+          end
+
+        cell_dims =
+          if is_pid(state.renderer),
+            do: Renderer.get_cell_dims(state.renderer),
+            else: %{width_px: 9, height_px: 18}
+
+        case Image.render_image(base64_data, image_dims, cell_dims: cell_dims, mime_type: mime_type) do
+          {:ok, encoded, _rows} -> %{state | input: Components.Input.paste(state.input, encoded)}
+          {:fallback, text} -> %{state | input: Components.Input.paste(state.input, text)}
+        end
+
+      :error ->
+        state
+    end
   end
 
   defp dispatch_app_action(_action, state, _key), do: state

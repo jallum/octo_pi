@@ -19,6 +19,15 @@ defmodule OctoPi.TUI.Clipboard do
     {:ok, osc}
   end
 
+  @spec paste_image_from_clipboard() :: {:ok, %{data: binary(), mime_type: String.t()}} | :error
+  def paste_image_from_clipboard do
+    case :os.type() do
+      {:unix, :darwin} -> paste_macos()
+      {:unix, _} -> paste_linux()
+      _ -> :error
+    end
+  end
+
   @spec platform_command() :: {String.t(), [String.t()]} | nil
   def platform_command do
     case :os.type() do
@@ -47,6 +56,63 @@ defmodule OctoPi.TUI.Clipboard do
     end
   rescue
     _ -> :noop
+  end
+
+  defp paste_macos do
+    if System.find_executable("pngpaste") do
+      paste_via_cmd("pngpaste", ["-"])
+    else
+      paste_macos_osascript()
+    end
+  rescue
+    _ -> :error
+  end
+
+  defp paste_macos_osascript do
+    case System.cmd("osascript", ["-e", "the clipboard as «class PNGf»"], stderr_to_stdout: true) do
+      {output, 0} ->
+        case Regex.run(~r/«data PNGf([0-9A-Fa-f]+)»/, String.trim(output)) do
+          [_, hex] -> decode_hex_png(hex)
+          _ -> :error
+        end
+
+      _ ->
+        :error
+    end
+  rescue
+    _ -> :error
+  end
+
+  defp decode_hex_png(hex) do
+    case Base.decode16(hex, case: :mixed) do
+      {:ok, data} -> {:ok, %{data: Base.encode64(data), mime_type: "image/png"}}
+      _ -> :error
+    end
+  end
+
+  defp paste_linux do
+    cond do
+      System.get_env("WAYLAND_DISPLAY") && System.find_executable("wl-paste") ->
+        paste_via_cmd("wl-paste", ["--type", "image/png"])
+
+      System.get_env("DISPLAY") && System.find_executable("xclip") ->
+        paste_via_cmd("xclip", ["-selection", "clipboard", "-t", "image/png", "-o"])
+
+      true ->
+        :error
+    end
+  end
+
+  defp paste_via_cmd(cmd, args) do
+    case System.cmd(cmd, args, stderr_to_stdout: true) do
+      {data, 0} when byte_size(data) > 0 ->
+        {:ok, %{data: Base.encode64(data), mime_type: "image/png"}}
+
+      _ ->
+        :error
+    end
+  rescue
+    _ -> :error
   end
 
   defp detect_linux_clipboard do
