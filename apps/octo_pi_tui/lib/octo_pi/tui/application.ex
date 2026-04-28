@@ -17,21 +17,6 @@ defmodule OctoPi.TUI.Application do
     })
 
     OctoPi.Tracer.register(%{
-      id: :tui_agent,
-      description: "Agent session, turn, and tool lifecycle events (TUI view)",
-      events: [
-        [:octo_pi_agent, :session, :start],
-        [:octo_pi_agent, :session, :stop],
-        [:octo_pi_agent, :turn, :start],
-        [:octo_pi_agent, :turn, :stop],
-        [:octo_pi_agent, :tool, :start],
-        [:octo_pi_agent, :tool, :stop],
-        [:octo_pi_agent, :tool, :error]
-      ],
-      level: :info
-    })
-
-    OctoPi.Tracer.register(%{
       id: :tui_raw,
       description: "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
       events: [
