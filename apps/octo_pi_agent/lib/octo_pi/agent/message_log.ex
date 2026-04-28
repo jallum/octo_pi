@@ -18,7 +18,9 @@ defmodule OctoPi.Agent.MessageLog do
   `new/1`.
   """
 
-  @opaque t :: %__MODULE__{rev: [term()], count: non_neg_integer()}
+  alias OctoPi.Agent.Message
+
+  @opaque t :: %__MODULE__{rev: [Message.t()], count: non_neg_integer()}
 
   defstruct rev: [], count: 0
 
@@ -26,13 +28,13 @@ defmodule OctoPi.Agent.MessageLog do
   Build a log from an oldest-first list (or empty list by default).
   Stored internally as newest-first.
   """
-  @spec new([term()]) :: t()
+  @spec new([Message.t()]) :: t()
   def new(list \\ []) when is_list(list) do
     %__MODULE__{rev: Enum.reverse(list), count: length(list)}
   end
 
   @doc "Append one message to the end of the log. O(1)."
-  @spec push(t(), term()) :: t()
+  @spec push(t(), Message.t()) :: t()
   def push(%__MODULE__{rev: rev, count: count}, msg) do
     %__MODULE__{rev: [msg | rev], count: count + 1}
   end
@@ -42,7 +44,7 @@ defmodule OctoPi.Agent.MessageLog do
   Single pass via the 2-arg form of `Enum.reverse/2`, which reverses
   `msgs` *and* prepends them to `rev` in one walk.
   """
-  @spec append_many(t(), [term()]) :: t()
+  @spec append_many(t(), [Message.t()]) :: t()
   def append_many(%__MODULE__{} = log, []), do: log
 
   def append_many(%__MODULE__{rev: rev, count: count}, msgs) when is_list(msgs) do
@@ -50,7 +52,7 @@ defmodule OctoPi.Agent.MessageLog do
   end
 
   @doc "Return the log as an oldest-first list. O(n) via the BIF."
-  @spec to_list(t()) :: [term()]
+  @spec to_list(t()) :: [Message.t()]
   def to_list(%__MODULE__{rev: rev}), do: :lists.reverse(rev)
 
   @doc "Number of messages in the log. O(1) — reads the cached counter."
@@ -70,6 +72,6 @@ defmodule OctoPi.Agent.MessageLog do
   value produced by `fun/1`, or `nil` if none match. Equivalent to
   `Enum.find_value/2` over `to_list/1` but without the O(n) reversal.
   """
-  @spec find_last_value(t(), (term() -> term() | nil)) :: term() | nil
+  @spec find_last_value(t(), (Message.t() -> term() | nil)) :: term() | nil
   def find_last_value(%__MODULE__{rev: rev}, fun), do: Enum.find_value(rev, fun)
 end

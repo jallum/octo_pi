@@ -30,6 +30,7 @@ defmodule OctoPi.Agent.Session do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Message
   alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Session
@@ -41,7 +42,6 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.TurnTaskSupervisor
   alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Message.Assistant
-  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Model
 
   @type mode :: :sync | :async
@@ -52,16 +52,16 @@ defmodule OctoPi.Agent.Session do
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc false
-  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(normalize(msg_or_msgs))})
+  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(Message.normalize(msg_or_msgs))})
 
   @doc false
   def continue(pid), do: GenServer.call(pid, :continue)
 
   @doc false
-  def steer(pid, msg), do: GenServer.call(pid, {:steer, normalize(msg)})
+  def steer(pid, msg), do: GenServer.call(pid, {:steer, Message.normalize(msg)})
 
   @doc false
-  def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, normalize(msg)})
+  def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, Message.normalize(msg)})
 
   @doc false
   def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
@@ -883,13 +883,4 @@ defmodule OctoPi.Agent.Session do
       parameters: t.parameters
     }
   end
-
-  defp normalize(str) when is_binary(str) do
-    %User{content: str, timestamp: :os.system_time(:millisecond)}
-  end
-
-  defp normalize(msgs) when is_list(msgs), do: Enum.map(msgs, &normalize/1)
-
-  defp normalize(%User{} = m), do: m
-  defp normalize(%{__struct__: _} = m), do: m
 end
