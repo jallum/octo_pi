@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T19:03:56.479461Z",
+  "description": "## Context\n\n`render_frame/1` (`interactive.ex` L913–916) runs three sequential overlay compositing passes:\n\n```elixir\nlines = maybe_composite_model_selector(state, lines)\nlines = maybe_composite_dequeue_overlay(state, lines)\nlines = maybe_composite_focused_dialog(state, lines)\n```\n\nEach function independently checks a different state field, constructs an `%Overlay{}` struct, and calls `Overlay.composite/4` with the same `width`/`height`. In practice at most one overlay is active per frame: `model_selector`, `dequeue_overlay`, and `{:dialog, key}` under `focused_component` are mutually exclusive.\n\n## Implementation\n\nReplace the three passes with a single `composite_active_overlay/2` that pattern-matches state once:\n\n```elixir\ndefp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do\n  ...\nend\ndefp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do\n  ...\nend\ndefp composite_active_overlay(%{focused_component: {:dialog, key}} = state, lines) do\n  ...\nend\ndefp composite_active_overlay(_state, lines), do: lines\n```\n\nMove the overlay construction logic from each `maybe_composite_*` into the matching head. Delete the three old `maybe_composite_*` functions and `render_dialog_overlay/3`.\n\n## Acceptance criteria\n\n- `render_frame/1` contains exactly one overlay compositing call\n- The three `maybe_composite_*` functions and `render_dialog_overlay/3` are deleted\n- All existing Interactive tests pass\n- Model selector, dequeue overlay, and dialog overlays each render correctly (covered by existing tests or new ones if gaps exist)",
+  "id": "opi-613.1",
+  "labels": [],
+  "parent": "opi-613",
+  "priority": 2,
+  "status": "open",
+  "title": "Collapse three overlay compositing passes in render_frame/1 into one",
+  "type": "task",
+  "updated_at": "2026-04-28T19:03:56.479461Z"
+}

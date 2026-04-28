@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-613.3"
+  ],
+  "comments": [],
+  "created": "2026-04-28T19:03:56.479461Z",
+  "description": "## Context\n\nThree functions in `render_frame/1` each re-render sections that `render/2` already built:\n\n1. `post_input_height/1` (`interactive.ex` L1010–1012) re-renders `Components.Input.render_dropdown/2` and `render_notification/2` just to get their heights\n2. `cursor_position/4` (`interactive.ex` L1032) calls `footer_lines/4` a third time to get `footer_height`\n3. The internal composition function is named `render/2`, which collides visually with `Renderer.render/4` called three lines later in `render_frame`\n\n## Implementation\n\n### Step 1 — Rename `render/2` → `build_screen/2`\n\nRename both the 1-arity and 2-arity `render/` functions to `build_screen/`. Update the `@spec`, `@doc`, and the call site in `render_frame`. The public `build_screen/1` arity used in tests stays as-is.\n\n### Step 2 — Return layout metadata from `build_screen/2`\n\nChange `build_screen/2` to return `{lines, layout}` where:\n\n```elixir\n%{\n  footer_height: non_neg_integer(),\n  input_height: non_neg_integer(),\n  dropdown_height: non_neg_integer(),\n  notification_height: non_neg_integer()\n}\n```\n\nCapture the section lengths as they are built (no re-rendering):\n\n```elixir\ndropdown_lines = Components.Input.render_dropdown(state.input, width)\nnotification_lines = render_notification(state.notification, width)\nfooter_lines = footer_lines(...)\n...\nlayout = %{\n  footer_height: length(footer_lines),\n  input_height: length(input_lines),\n  dropdown_height: length(dropdown_lines),\n  notification_height: length(notification_lines)\n}\n{lines, layout}\n```\n\n### Step 3 — Rewrite `post_input_height` and `cursor_position` to use layout\n\nReplace `post_input_height/1` with `post_input_height(layout)` that reads `layout.dropdown_height + layout.notification_height`. Rewrite `cursor_position/4` to take `layout` instead of recomputing `footer_height`. Update `render_frame/1` accordingly:\n\n```elixir\n{lines, layout} = build_screen(state, input_lines)\nlines = composite_active_overlay(state, lines)\ncursor_seq = cursor_position(state, input_lines, lines, layout)\n```\n\n## Acceptance criteria\n\n- `build_screen/2` returns `{lines, layout}` with section heights captured once\n- `footer_lines/4`, `render_dropdown/2`, and `render_notification/2` are each called exactly once per frame\n- `post_input_height/1` is removed; height is derived from layout metadata\n- `render/2` is renamed to `build_screen/2` throughout (specs, docs, call sites)\n- All existing tests pass; update any test that calls `render/2` directly to use `build_screen/2`",
+  "id": "opi-613.2",
+  "labels": [],
+  "parent": "opi-613",
+  "priority": 2,
+  "status": "open",
+  "title": "Thread layout metadata from build_screen/2 to eliminate redundant re-renders; rename render/2",
+  "type": "task",
+  "updated_at": "2026-04-28T19:03:56.479461Z"
+}

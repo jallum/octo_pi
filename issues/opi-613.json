@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T19:03:56.479461Z",
+  "description": "Telemetry-driven analysis (554 unthrottled renders → 269 throttle skips after wiring) revealed several structural issues in the rendering pipeline:\n\n- `render_frame/1` in `Interactive` runs three sequential overlay compositing passes when at most one overlay is ever active\n- `post_input_height/1` and `cursor_position/4` re-render sections already built by `render/2`, causing footer and dropdown to render up to three times per frame\n- The internal composition function is named `render/2`, colliding with `Renderer.render/4` in the same calling context\n- `force_next_render` is a boolean state flag that duplicates work already done by `Renderer`'s internal `needs_clear` flag\n- `advance/1` calls a `maybe_suspend/1` no-op stub on every frame; `handle_call({:ui_request})` calls `render_frame` from two separate branches\n\nChildren are ordered by dependency — the layout metadata refactor (child 2) must land before the `force_next_render` removal (child 3) since both touch `render_frame/1`.",
+  "id": "opi-613",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Simplify and streamline the TUI rendering pipeline",
+  "type": "epic",
+  "updated_at": "2026-04-28T19:03:56.479461Z"
+}

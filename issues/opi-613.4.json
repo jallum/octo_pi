@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T19:03:56.479461Z",
+  "description": "## Context\n\nTwo small structural issues identified in `Interactive`:\n\n### 1. `maybe_suspend/1` is a no-op stub called on every frame\n\n`advance/1` (`interactive.ex` L638) calls `maybe_suspend(state)` before every render. The implementation (`L880`) is:\n\n```elixir\ndefp maybe_suspend(state), do: state\n```\n\nIt does nothing. It runs on every `handle_info`/`handle_call` cycle.\n\n### 2. `handle_call({:ui_request})` calls `render_frame` in two branches\n\n`interactive.ex` L555–567:\n\n```elixir\ncase reply do\n  :pending ->\n    new_state = put_dialog_from(new_state, from)\n    new_state = render_frame(new_state)          # branch A\n    {:noreply, new_state, loader_timeout(new_state)}\n\n  val ->\n    new_state = render_frame(new_state)          # branch B\n    {:reply, val, new_state, loader_timeout(new_state)}\nend\n```\n\nBoth branches call `render_frame` after state mutation. They differ only in whether `put_dialog_from` runs first and whether the reply is `:noreply` or `{:reply, val}`. The structure obscures that render always happens.\n\n## Implementation\n\n### For `maybe_suspend/1`\n\nRemove the call from `advance/1` and delete the `maybe_suspend/1` definition. If suspend is implemented in future it can be re-added at that time with a real body.\n\n### For `handle_call({:ui_request})`\n\nRefactor to make the render unconditional and vary only the response:\n\n```elixir\n{new_state, reply} = handle_ui_request(state, msg)\n\nnew_state =\n  case reply do\n    :pending -> put_dialog_from(new_state, from)\n    _ -> new_state\n  end\n\nnew_state = render_frame(new_state)\n\ncase reply do\n  :pending -> {:noreply, new_state, loader_timeout(new_state)}\n  val -> {:reply, val, new_state, loader_timeout(new_state)}\nend\n```\n\n## Acceptance criteria\n\n- `maybe_suspend/1` definition and its call site in `advance/1` are both deleted\n- `handle_call({:ui_request})` contains exactly one `render_frame` call\n- All existing Interactive tests pass\n- No behaviour change observable from outside `Interactive`",
+  "id": "opi-613.4",
+  "labels": [],
+  "parent": "opi-613",
+  "priority": 2,
+  "status": "open",
+  "title": "Structural cleanup: remove maybe_suspend/1 stub; unify render_frame call in handle_call ui_request",
+  "type": "task",
+  "updated_at": "2026-04-28T19:03:56.479461Z"
+}

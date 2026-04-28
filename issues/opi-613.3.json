@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-613.2"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T19:03:56.479461Z",
+  "description": "## Context\n\n`force_next_render` is a boolean in `Interactive` state (`interactive.ex` L129, 178) set only by the resize handler (`L489`) and consumed once in `render_frame` (`L925, 928`):\n\n```elixir\n{:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq, force: state.force_next_render)\n%{state | force_next_render: false}\n```\n\nHowever, `Renderer.resize/3` already sets `needs_clear: true` and `previous: nil` on the renderer's own state (`renderer.ex` L185–197). The renderer's `handle_call({:render, ...})` already force-renders when `is_nil(state.previous) or state.needs_clear` (`renderer.ex` L146). So `force_next_render: true` in Interactive causes `Renderer` to force a render it would have forced anyway.\n\n## Implementation\n\n- Remove the `force_next_render` field from the `Interactive` `@type t` spec and `defstruct`\n- Remove the `|> Map.put(:force_next_render, true)` in the resize handler\n- Change the `Renderer.render/4` call in `render_frame` to `Renderer.render(state.renderer, lines, cursor_seq)` (no `force:` option)\n- Remove the `%{state | force_next_render: false}` line from `render_frame`\n\nVerify by adding a test: after `Renderer.resize/3`, the next `Renderer.render/4` call (without `force: true`) still produces a full redraw (mode `:full` in telemetry, or `full_redraws/1` increments).\n\n## Acceptance criteria\n\n- `force_next_render` field removed from `Interactive` struct and type\n- No `force:` option passed to `Renderer.render/4` from `Interactive`\n- Resize still triggers a full redraw on the next render (test-verified)\n- `Renderer.render/4` public API retains the `force:` option for external callers (do not remove it from the renderer itself)",
+  "id": "opi-613.3",
+  "labels": [],
+  "parent": "opi-613",
+  "priority": 2,
+  "status": "open",
+  "title": "Eliminate force_next_render state flag — redundant with Renderer's needs_clear",
+  "type": "task",
+  "updated_at": "2026-04-28T19:03:56.479461Z"
+}
