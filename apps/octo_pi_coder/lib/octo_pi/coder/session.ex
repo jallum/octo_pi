@@ -249,6 +249,12 @@ defmodule OctoPi.Coder.Session do
   @spec get_session_stats(GenServer.server()) :: map()
   def get_session_stats(server), do: GenServer.call(server, :get_session_stats)
 
+  @doc """
+  Return the current compaction settings from the session's `settings_provider`.
+  """
+  @spec get_compaction_settings(GenServer.server()) :: Settings.t()
+  def get_compaction_settings(server), do: GenServer.call(server, :get_compaction_settings)
+
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
   # actions this Session actually implements are bound — unimplemented
@@ -261,7 +267,8 @@ defmodule OctoPi.Coder.Session do
     %{
       append_entry: fn entry -> add_entry(server, entry) end,
       compact: fn opts -> compact(server, opts) end,
-      get_context_usage: fn -> get_context_usage(server) end
+      get_context_usage: fn -> get_context_usage(server) end,
+      get_compaction_settings: fn -> get_compaction_settings(server) end
     }
   end
 
@@ -339,6 +346,9 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call(:get_session_stats, _from, state),
     do: {:reply, do_get_session_stats(state), state}
+
+  def handle_call(:get_compaction_settings, _from, state),
+    do: {:reply, state.settings_provider.(), state}
 
   defp do_compact(%State{} = state, opts) do
     path_entries = SessionManager.get_branch(state.session_manager)
