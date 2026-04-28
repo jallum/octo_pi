@@ -106,6 +106,7 @@ defmodule OctoPi.TUI.Interactive do
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
           force_next_render: boolean()
         }
 
@@ -146,6 +147,7 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
+            focused_component: :input,
             force_next_render: false
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
@@ -1016,38 +1018,7 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  def handle_event(%{model_selector: ms} = state, %Key{} = key) when not is_nil(ms) do
-    case ModelSelector.handle_key(ms, key) do
-      {_new_ms, [:cancel]} ->
-        %{state | model_selector: nil}
-
-      {_new_ms, [{:select_model, model}]} ->
-        if state.session, do: CoderSession.set_model(state.session, model)
-
-        %{
-          state
-          | model_selector: nil,
-            model: model,
-            footer: %{state.footer | model_id: model.id, provider: model.provider}
-        }
-
-      new_ms ->
-        %{state | model_selector: new_ms}
-    end
-  end
-
-  def handle_event(%{dequeue_overlay: ov} = state, %Key{} = key) when not is_nil(ov) do
-    handle_dequeue_key(state, ov, key)
-  end
-
-  def handle_event(state, %Key{} = key) do
-    kb = get_keybindings(state)
-
-    case find_app_action(kb, key) do
-      nil -> handle_event_after_app(state, key)
-      action -> dispatch_app_action(action, state, key)
-    end
-  end
+  def handle_event(state, %Key{} = key), do: dispatch_key_to_focused(state, key)
 
   def handle_event(%{input: input} = state, %Paste{content: content}) when is_binary(content),
     do: %{state | input: Components.Input.paste(input, content)}
@@ -1181,7 +1152,7 @@ defmodule OctoPi.TUI.Interactive do
 
     if items == [],
       do: %{state | notification: "No queued messages"},
-      else: %{state | dequeue_overlay: %{items: items, selected: 0}}
+      else: focus(%{state | dequeue_overlay: %{items: items, selected: 0}}, {:overlay, :dequeue})
   end
 
   defp dispatch_app_action("app.message.followUp", %{loader: %Components.Loader{}} = state, _key) do
@@ -1231,7 +1202,7 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_app_action("app.model.select", state, _key) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
-    %{state | model_selector: ms}
+    focus(%{state | model_selector: ms}, {:dialog, :model_selector})
   end
 
   defp dispatch_app_action("app.clipboard.pasteImage", state, _key) do
@@ -1360,7 +1331,7 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
-    %{state | model_selector: ms}
+    focus(%{state | model_selector: ms}, {:dialog, :model_selector})
   end
 
   defp dispatch_slash_command("help", state),
@@ -1620,7 +1591,7 @@ defmodule OctoPi.TUI.Interactive do
     new_items = List.delete_at(ov.items, ov.selected)
 
     if new_items == [] do
-      %{state | dequeue_overlay: nil}
+      unfocus(%{state | dequeue_overlay: nil})
     else
       max_sel = max(0, length(new_items) - 1)
       %{state | dequeue_overlay: %{ov | items: new_items, selected: min(ov.selected, max_sel)}}
@@ -1633,10 +1604,62 @@ defmodule OctoPi.TUI.Interactive do
       {:follow_up, msg} -> if state.session, do: CoderSession.follow_up(state.session, msg)
     end)
 
-    %{state | dequeue_overlay: nil}
+    unfocus(%{state | dequeue_overlay: nil})
   end
 
   defp handle_dequeue_key(state, _ov, _key), do: state
+
+  defp dispatch_key_to_focused(state, key) do
+    case state.focused_component do
+      :input -> handle_input_key(state, key)
+      {:dialog, :model_selector} -> handle_model_selector_key(state, key)
+      {:overlay, :dequeue} -> handle_dequeue_key(state, state.dequeue_overlay, key)
+      nil -> state
+    end
+  end
+
+  defp handle_input_key(state, key) do
+    kb = get_keybindings(state)
+
+    case find_app_action(kb, key) do
+      nil -> handle_event_after_app(state, key)
+      action -> dispatch_app_action(action, state, key)
+    end
+  end
+
+  defp handle_model_selector_key(%{model_selector: ms} = state, key) do
+    case ModelSelector.handle_key(ms, key) do
+      {_new_ms, [:cancel]} ->
+        unfocus(%{state | model_selector: nil})
+
+      {_new_ms, [{:select_model, model}]} ->
+        if state.session, do: CoderSession.set_model(state.session, model)
+
+        unfocus(%{
+          state
+          | model_selector: nil,
+            model: model,
+            footer: %{state.footer | model_id: model.id, provider: model.provider}
+        })
+
+      new_ms ->
+        %{state | model_selector: new_ms}
+    end
+  end
+
+  defp focus(state, target), do: %{state | focused_component: target}
+  defp unfocus(state), do: %{state | focused_component: :input}
+
+  defp apply_component_result(state, field, {new_component, events}) do
+    Enum.reduce(events, Map.put(state, field, new_component), &handle_component_event(&2, &1))
+  end
+
+  defp apply_component_result(state, field, new_component) do
+    Map.put(state, field, new_component)
+  end
+
+  defp handle_component_event(state, {:cancel}), do: unfocus(state)
+  defp handle_component_event(state, _event), do: state
 
   defp cycle_model(models, current, dir) do
     idx = Enum.find_index(models, &(&1 == current)) || -1

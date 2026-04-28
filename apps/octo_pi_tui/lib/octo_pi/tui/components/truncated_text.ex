@@ -37,4 +37,7 @@ defmodule OctoPi.TUI.Components.TruncatedText do
 
     List.duplicate(empty_line, py) ++ [content_line] ++ List.duplicate(empty_line, py)
   end
+
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
 end

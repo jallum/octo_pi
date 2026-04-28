@@ -109,4 +109,7 @@ defmodule OctoPi.TUI.Components.SummarizePrompt do
   end
 
   def handle_key(%__MODULE__{} = state, %Key{}), do: {state, []}
+
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
 end

@@ -61,6 +61,9 @@ defmodule OctoPi.TUI.Components.Header do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp hint(key, desc), do: dim(key) <> muted(" #{desc}")
 
   defp dim(text), do: "\e[2m#{text}\e[22m"

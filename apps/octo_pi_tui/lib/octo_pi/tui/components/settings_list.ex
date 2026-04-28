@@ -88,6 +88,9 @@ defmodule OctoPi.TUI.Components.SettingsList do
     end)
   end
 
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp activate(%__MODULE__{items: items, selected: sel} = s) do
     item = Enum.at(items, sel)
     {new_value, updated_item} = cycle_item(item)

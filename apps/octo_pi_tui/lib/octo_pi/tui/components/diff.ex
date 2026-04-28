@@ -20,6 +20,9 @@ defmodule OctoPi.TUI.Components.Diff do
     |> Enum.reverse()
   end
 
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp render_lines([], _theme, acc), do: acc
 
   defp render_lines([line | rest], theme, acc) do

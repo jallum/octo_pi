@@ -5,6 +5,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Usage
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
@@ -275,11 +276,11 @@ defmodule OctoPi.TUI.InteractiveTest do
     alias Session, as: CoderSession
 
     defp dequeue_state(items, selected) do
-      %Interactive{dequeue_overlay: %{items: items, selected: selected}}
+      %Interactive{dequeue_overlay: %{items: items, selected: selected}, focused_component: {:overlay, :dequeue}}
     end
 
     defp tagged(type, text) do
-      msg = %OctoPi.AI.Message.User{
+      msg = %User{
         content: text,
         timestamp: 0
       }
@@ -386,7 +387,10 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   defp dequeue_state(items, selected, opts) do
-    struct(%Interactive{dequeue_overlay: %{items: items, selected: selected}}, opts)
+    struct(
+      %Interactive{dequeue_overlay: %{items: items, selected: selected}, focused_component: {:overlay, :dequeue}},
+      opts
+    )
   end
 
   describe "handle_event — Alt+Enter follow-up queuing (opi-0g4.15)" do
@@ -2397,7 +2401,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Escape closes model_selector" do
       theme = Theme.load_builtin(:dark, :truecolor)
       ms = ModelSelector.new([make_model("m1")], theme)
-      s = %Interactive{model_selector: ms}
+      s = %Interactive{model_selector: ms, focused_component: {:dialog, :model_selector}}
       s2 = Interactive.handle_event(s, %Key{key: :escape})
       assert s2.model_selector == nil
     end
@@ -2406,7 +2410,16 @@ defmodule OctoPi.TUI.InteractiveTest do
       theme = Theme.load_builtin(:dark, :truecolor)
       m1 = make_model("m1", :anthropic)
       ms = ModelSelector.new([m1], theme)
-      s = %Interactive{model_selector: ms, models: [m1], model: nil, footer: %Footer{}, theme: theme}
+
+      s = %Interactive{
+        model_selector: ms,
+        focused_component: {:dialog, :model_selector},
+        models: [m1],
+        model: nil,
+        footer: %Footer{},
+        theme: theme
+      }
+
       s2 = Interactive.handle_event(s, %Key{key: :enter})
       assert s2.model_selector == nil
       assert s2.model.id == "m1"
@@ -2417,10 +2430,71 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Enter with empty model_selector list closes without change" do
       theme = Theme.load_builtin(:dark, :truecolor)
       ms = ModelSelector.new([], theme)
-      s = %Interactive{model_selector: ms, model: nil, footer: %Footer{}, theme: theme}
+
+      s = %Interactive{
+        model_selector: ms,
+        focused_component: {:dialog, :model_selector},
+        model: nil,
+        footer: %Footer{},
+        theme: theme
+      }
+
       s2 = Interactive.handle_event(s, %Key{key: :enter})
       assert s2.model_selector == nil
       assert s2.model == nil
+    end
+  end
+
+  # ── focused_component dispatch (opi-0gw.9) ────────────────────
+
+  describe "focused_component dispatch" do
+    alias OctoPi.TUI.Components.ModelSelector
+
+    test "default focused_component is :input" do
+      s = %Interactive{}
+      assert s.focused_component == :input
+    end
+
+    test "Ctrl+L sets focused_component to {:dialog, :model_selector}" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      m1 = make_model("m1")
+      s = %Interactive{models: [m1], theme: theme, model: m1}
+      s2 = Interactive.handle_event(s, %Key{key: ?l, modifiers: [:ctrl]})
+      assert s2.focused_component == {:dialog, :model_selector}
+    end
+
+    test "Escape from model_selector resets focused_component to :input" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ms = ModelSelector.new([make_model("m1")], theme)
+      s = %Interactive{model_selector: ms, focused_component: {:dialog, :model_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.focused_component == :input
+    end
+
+    test "Escape from dequeue_overlay resets focused_component to :input" do
+      items = [{:follow_up, %User{content: "x", timestamp: 0}}]
+
+      s = %Interactive{
+        dequeue_overlay: %{items: items, selected: 0},
+        focused_component: {:overlay, :dequeue},
+        session: nil
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.focused_component == :input
+    end
+
+    test "Delete-to-empty from dequeue_overlay resets focused_component to :input" do
+      items = [{:follow_up, %User{content: "x", timestamp: 0}}]
+      s = %Interactive{dequeue_overlay: %{items: items, selected: 0}, focused_component: {:overlay, :dequeue}}
+      s2 = Interactive.handle_event(s, %Key{key: :delete})
+      assert s2.focused_component == :input
+    end
+
+    test "key with focused_component nil is a no-op" do
+      s = %Interactive{focused_component: nil}
+      s2 = Interactive.handle_event(s, %Key{key: ?a})
+      assert s2 == s
     end
   end
 

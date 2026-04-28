@@ -131,6 +131,9 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
+  @spec invalidate(t()) :: t()
+  def invalidate(state), do: state
+
   defp handle_confirm(state) do
     case selected_id(state) do
       nil -> {state, []}
