@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-613",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Structural cleanup: remove maybe_suspend/1 stub; unify render_frame call in handle_call ui_request",
   "type": "task",
-  "updated_at": "2026-04-28T19:08:08.603026Z"
+  "updated_at": "2026-04-28T19:13:44.695762Z"
 }
