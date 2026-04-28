@@ -1,23 +1,22 @@
-defmodule OctoPi.Telemetry.OpenAIHandlerTest do
+defmodule OctoPi.AI.Providers.OpenAI.TracerTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 
-  alias OctoPi.Telemetry.OpenAIHandler
+  @events [
+    [:octo_pi_ai_openai, :request, :start],
+    [:octo_pi_ai_openai, :request, :stop],
+    [:octo_pi_ai_openai, :request, :exception]
+  ]
 
   setup do
-    Application.put_env(:octo_pi_ai, OctoPi.Telemetry.Logger, enabled: true)
-    OpenAIHandler.attach()
-
-    on_exit(fn ->
-      Application.delete_env(:octo_pi_ai, OctoPi.Telemetry.Logger)
-      :telemetry.detach("octo-pi-ai-openai-handler")
-    end)
-
+    OctoPi.Tracer.register(%{id: :openai, description: "", events: @events, level: :info})
+    OctoPi.Tracer.attach_all()
+    on_exit(fn -> OctoPi.Tracer.detach(:openai) end)
     :ok
   end
 
-  describe "attach/0" do
+  describe "handle_event/4" do
     test "forwards :request, :start events to the logger" do
       log =
         capture_log(fn ->

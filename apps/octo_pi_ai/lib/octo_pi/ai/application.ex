@@ -3,11 +3,14 @@ defmodule OctoPi.AI.Application do
 
   use Application
 
-  alias OctoPi.Telemetry.CoreHandler
-
   @impl true
   def start(_type, _args) do
-    CoreHandler.attach()
+    OctoPi.Tracer.register(%{
+      id: :ai_core,
+      description: "AI core events (stream opens)",
+      events: [[:octo_pi_ai, :stream, :open]],
+      level: :info
+    })
 
     children = [
       OctoPi.AI.ProviderRegistry

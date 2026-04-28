@@ -27,10 +27,10 @@ defmodule OctoPi.Coder.CLI do
     cwd: :string,
     help: :boolean,
     debug_render: :boolean,
-    debug_events: :boolean,
-    trace: :string,
-    telemetry: :string,
-    continue: :boolean
+    continue: :boolean,
+    log_telemetry: :string,
+    no_telemetry: :string,
+    list_telemetry: :boolean
   ]
 
   @aliases [p: :print, m: :model, h: :help, c: :continue]
@@ -78,11 +78,17 @@ defmodule OctoPi.Coder.CLI do
       model: resolve_model(switches[:model] || @default_model),
       cwd: switches[:cwd] || File.cwd!(),
       debug_render: switches[:debug_render] || false,
-      debug_events: switches[:debug_events] || false,
-      trace: switches[:trace],
-      telemetry: switches[:telemetry],
-      continue: switches[:continue] || false
+      continue: switches[:continue] || false,
+      log_telemetry: switches[:log_telemetry],
+      no_telemetry: parse_no_telemetry(switches[:no_telemetry]),
+      list_telemetry: switches[:list_telemetry] || false
     }
+  end
+
+  defp parse_no_telemetry(nil), do: []
+
+  defp parse_no_telemetry(csv) do
+    csv |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
   end
 
   @doc """
@@ -105,19 +111,30 @@ defmodule OctoPi.Coder.CLI do
         IO.write(usage)
         0
 
-      {:ok, %{mode: :print} = opts} ->
-        case Print.run(opts) do
-          {:ok, _reason} -> 0
-          {:error, _reason} -> 1
-        end
+      {:ok, %{list_telemetry: true}} ->
+        OctoPi.Tracer.registered()
+        |> Enum.each(fn %{id: id, description: desc} ->
+          IO.puts("#{id}  #{desc}")
+        end)
 
-      {:ok, %{mode: :rpc} = opts} ->
-        run_rpc(opts)
+        0
 
-      {:ok, %{mode: :interactive} = opts} ->
-        run_interactive(opts)
+      {:ok, opts} ->
+        if opts.log_telemetry, do: OctoPi.Tracer.FileBackend.install(opts.log_telemetry)
+        Enum.each(opts.no_telemetry, &:telemetry.detach/1)
+        dispatch(opts)
     end
   end
+
+  defp dispatch(%{mode: :print} = opts) do
+    case Print.run(opts) do
+      {:ok, _reason} -> 0
+      {:error, _reason} -> 1
+    end
+  end
+
+  defp dispatch(%{mode: :rpc} = opts), do: run_rpc(opts)
+  defp dispatch(%{mode: :interactive} = opts), do: run_interactive(opts)
 
   defp run_interactive(opts) do
     # `octo_pi_tui` is an umbrella sibling; depending on it from
@@ -256,11 +273,10 @@ defmodule OctoPi.Coder.CLI do
                      (set OPENROUTER_API_KEY); else → local Ollama)
       --cwd          working dir (default: current dir)
       --help, -h     show this message
-      --debug-events log stdin/key pipeline to debug_events.log
-      --trace=PATH   write a timestamped tty/stdin trace to PATH (use to diagnose
-                     shutdown leaks; install Tracer telemetry handler on startup)
-      --telemetry=PATH  write agent session/turn/tool telemetry to PATH
       --continue, -c    resume the most recent session for this directory
+      --log-telemetry=PATH  write all :octo_pi_tracer domain log events to PATH
+      --no-telemetry=ID1,ID2  detach named telemetry handlers after startup
+      --list-telemetry  print registered handler ids and descriptions, then exit
     """
   end
 end

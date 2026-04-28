@@ -28,6 +28,7 @@ defmodule OctoPi.AI.Providers.OpenAI.MixProject do
 
   defp deps do
     [
+      {:octo_pi_tracer, in_umbrella: true},
       {:octo_pi_ai, in_umbrella: true},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
