@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Add @impl true to invalidate/1 stubs in all Component behaviour modules",
   "type": "bug",
-  "updated_at": "2026-04-28T17:10:58.640130Z"
+  "updated_at": "2026-04-28T17:59:08.934585Z"
 }
