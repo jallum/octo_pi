@@ -23,7 +23,8 @@ defmodule OctoPi.TUI.TerminalTest do
       skip_raw_mode: true,
       skip_sigwinch: true,
       auto_start_reader: false,
-      dimensions: {80, 24}
+      dimensions: {80, 24},
+      name: nil
     ]
 
     {:ok, pid} = Terminal.start_link(Keyword.merge(defaults, opts))

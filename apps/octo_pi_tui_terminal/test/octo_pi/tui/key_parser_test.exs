@@ -358,7 +358,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "ctrl+shift+1 reports keysym 1 + ctrl + shift" do
       result = KeyParser.parse("\e[27;6;49~")
       assert %Key{key: ?1} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
 
     # mok_key/1 lowercases A-Z so binding "shift+e" matches uniformly.
@@ -369,13 +369,13 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "ctrl+shift+e" do
       result = KeyParser.parse("\e[27;6;69~")
       assert %Key{key: ?e} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "ctrl+alt+h" do
       result = KeyParser.parse("\e[27;7;104~")
       assert %Key{key: ?h} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:alt, :ctrl]
+      assert result.modifiers |> Enum.sort() == [:alt, :ctrl]
     end
   end
 
@@ -406,7 +406,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "with Ctrl+Shift: \\e[97;6u" do
       result = KeyParser.parse("\e[97;6u")
       assert %Key{key: ?a} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "with event_type repeat: \\e[97;1:2u" do
@@ -440,7 +440,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "ctrl+shift+1 via CSI-u: keysym + ctrl + shift" do
       result = KeyParser.parse("\e[49;6u")
       assert %Key{key: ?1} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "shift+e via CSI-u (cp uppercase) normalizes to lowercase + shift" do
@@ -460,13 +460,13 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "ctrl+super+k" do
       result = KeyParser.parse("\e[107;13u")
       assert %Key{key: ?k} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :super]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :super]
     end
 
     test "ctrl+shift+super+k" do
       result = KeyParser.parse("\e[107;14u")
       assert %Key{key: ?k} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift, :super]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift, :super]
     end
   end
 
@@ -490,7 +490,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "Cyrillic Ctrl+Shift+P with base 'p'" do
       result = KeyParser.parse("\e[1079::112;6u")
       assert %Key{key: ?p} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
 
     test "Latin Ctrl+C without base (terminal doesn't report it)" do
@@ -527,7 +527,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
       # uppercase shifted_key for callers that want to insert it.
       result = KeyParser.parse("\e[1089:1057:99;6:2u")
       assert %Key{key: ?c, event_type: :repeat, shifted_key: 1057} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
   end
 
@@ -647,7 +647,7 @@ defmodule OctoPi.TUI.Terminal.KeyParserTest do
     test "ctrl+shift+up (\\e[1;6A)" do
       result = KeyParser.parse("\e[1;6A")
       assert %Key{key: :up} = result
-      assert result |> elem(1) |> Map.get(:modifiers) |> Enum.sort() == [:ctrl, :shift]
+      assert result.modifiers |> Enum.sort() == [:ctrl, :shift]
     end
   end
 
