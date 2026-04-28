@@ -1,6 +1,6 @@
 defmodule OctoPi.Agent.Transport.Direct do
   @moduledoc """
-  Default transport: delegates to `OctoPi.AI.stream_to/5` directly.
+  Default transport: delegates to `OctoPi.AI.stream_to/4` directly.
   """
 
   @behaviour OctoPi.Agent.Transport
@@ -8,5 +8,5 @@ defmodule OctoPi.Agent.Transport.Direct do
   alias OctoPi.AI
 
   @impl true
-  def stream_to(model, context, opts, pid, ref), do: AI.stream_to(model, context, opts, pid, ref)
+  def stream_to(model, context, opts, pid), do: AI.stream_to(model, context, opts, pid)
 end

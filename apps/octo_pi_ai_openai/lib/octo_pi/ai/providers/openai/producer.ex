@@ -23,7 +23,6 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
           required(:context) => OctoPi.AI.Context.t(),
           required(:opts) => OctoPi.AI.CallOptions.t(),
           required(:caller) => pid(),
-          required(:ref) => reference(),
           optional(:req_overrides) => keyword()
         }
 
@@ -45,11 +44,10 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
     compat = Compat.resolve(args.model)
     {start_event, decoder_state} = Decoder.new(args.model)
 
-    send(args.caller, {args.ref, :event, start_event})
+    send(args.caller, {self(), :event, start_event})
 
     state = %{
       caller: args.caller,
-      ref: args.ref,
       caller_mon: caller_mon,
       model: args.model,
       sse: SSE.new(),
@@ -99,7 +97,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
           state
       end
 
-    send(state.caller, {state.ref, :done})
+    send(state.caller, {self(), :done})
     :ok
   end
 
@@ -135,29 +133,29 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp process_chunk(chunk, state) do
     {sse_events, sse} = SSE.decode(state.sse, chunk)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
   defp flush_sse(state) do
     {sse_events, sse} = SSE.finalize(state.sse)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
-  defp apply_sse_events(sse_events, decoder, caller, ref) do
+  defp apply_sse_events(sse_events, decoder, caller) do
     Enum.reduce(sse_events, decoder, fn sse_ev, dstate ->
-      handle_sse_event(sse_ev, dstate, caller, ref)
+      handle_sse_event(sse_ev, dstate, caller)
     end)
   end
 
-  defp handle_sse_event(%SseEvent{data: "[DONE]"}, dstate, _caller, _ref), do: dstate
+  defp handle_sse_event(%SseEvent{data: "[DONE]"}, dstate, _caller), do: dstate
 
-  defp handle_sse_event(%SseEvent{data: data}, dstate, caller, ref) do
+  defp handle_sse_event(%SseEvent{data: data}, dstate, caller) do
     case PartialJson.parse_with_repair(data) do
       {:ok, event} when is_map(event) ->
         {events, dstate} = Decoder.handle(dstate, event)
-        Enum.each(events, &send(caller, {ref, :event, &1}))
+        Enum.each(events, &send(caller, {self(), :event, &1}))
         dstate
 
       _ ->
@@ -197,7 +195,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp emit_done_or_error(state) do
     final = Decoder.finalize(state.decoder)
-    send(state.caller, {state.ref, :event, final})
+    send(state.caller, {self(), :event, final})
     state
   end
 
@@ -207,7 +205,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp emit_error(state, message, reason) do
     {error_ev, decoder} = Decoder.error(state.decoder, message, reason)
-    send(state.caller, {state.ref, :event, error_ev})
+    send(state.caller, {self(), :event, error_ev})
     %{state | decoder: decoder}
   end
 

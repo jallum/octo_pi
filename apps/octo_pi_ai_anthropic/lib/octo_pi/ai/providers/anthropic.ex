@@ -9,13 +9,12 @@ defmodule OctoPi.AI.Providers.Anthropic do
   alias OctoPi.AI.Providers.Anthropic.Producer
 
   @impl true
-  def stream_to(model, context, opts, pid, ref) do
+  def stream_to(model, context, opts, pid) do
     Producer.start(%{
       model: model,
       context: context,
       opts: opts,
       caller: pid,
-      ref: ref,
       req_overrides: Application.get_env(:octo_pi_ai, :req_overrides, [])
     })
   end

@@ -5,8 +5,8 @@ defmodule OctoPi.AI do
 
   Public entry points:
 
-      OctoPi.AI.stream(model, context, opts)     # → Stream of Event.t()
-      OctoPi.AI.stream_to(model, context, opts, pid, ref) # push primitive
+      OctoPi.AI.stream(model, context, opts)          # → Stream of Event.t()
+      OctoPi.AI.stream_to(model, context, opts, pid)  # push primitive
 
   The canonical types (`Context`, `Model`, `Message`, `Event`, …) and
   the `Provider` behaviour live in `OctoPi.AI.*` submodules. Provider
@@ -53,19 +53,18 @@ defmodule OctoPi.AI do
 
     Stream.resource(
       fn ->
-        ref = make_ref()
-        {:ok, pid} = provider.stream_to(model, context, call_opts, self(), ref)
+        {:ok, pid} = provider.stream_to(model, context, call_opts, self())
         mon = Process.monitor(pid)
-        {pid, ref, mon}
+        {pid, mon}
       end,
-      fn {_pid, ref, mon} = acc ->
+      fn {pid, mon} = acc ->
         receive do
-          {^ref, :event, event} -> {[event], acc}
-          {^ref, :done} -> {:halt, acc}
+          {^pid, :event, event} -> {[event], acc}
+          {^pid, :done} -> {:halt, acc}
           {:DOWN, ^mon, :process, _, _} -> {:halt, acc}
         end
       end,
-      fn {pid, _ref, mon} ->
+      fn {pid, mon} ->
         Process.demonitor(mon, [:flush])
         if Process.alive?(pid), do: Process.exit(pid, :shutdown)
       end
@@ -73,15 +72,16 @@ defmodule OctoPi.AI do
   end
 
   @doc """
-  Push primitive — spawns a producer task that sends `{ref, :event, event}`
-  messages to `pid` and finishes with `{ref, :done}`. Returns `{:ok, producer_pid}`.
+  Push primitive — spawns a producer task that sends
+  `{producer_pid, :event, event}` messages to `pid` and finishes with
+  `{producer_pid, :done}`. Returns `{:ok, producer_pid}`.
 
   """
-  @spec stream_to(Model.t(), Context.t(), stream_opts(), pid(), reference()) :: {:ok, pid()}
-  def stream_to(%Model{} = model, %Context{} = context, opts \\ [], pid, ref) do
+  @spec stream_to(Model.t(), Context.t(), stream_opts(), pid()) :: {:ok, pid()}
+  def stream_to(%Model{} = model, %Context{} = context, opts \\ [], pid) do
     provider = provider_module(model.api)
     call_opts = build_call_opts(opts)
-    provider.stream_to(model, context, call_opts, pid, ref)
+    provider.stream_to(model, context, call_opts, pid)
   end
 
   defp build_call_opts(opts) when is_list(opts) do

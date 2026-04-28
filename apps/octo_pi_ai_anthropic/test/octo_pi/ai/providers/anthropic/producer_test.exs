@@ -38,7 +38,6 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
 
   defp start_producer(chunks, status \\ 200) do
     caller = self()
-    ref = make_ref()
 
     {:ok, pid} =
       Producer.start(%{
@@ -46,26 +45,25 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         context: user_context(),
         opts: %CallOptions{},
         caller: caller,
-        ref: ref,
         req_overrides: [plug: Fake.serve(chunks, status)]
       })
 
-    {pid, ref}
+    pid
   end
 
-  # Drain everything from our mailbox tagged with the producer's ref.
+  # Drain everything from our mailbox tagged with the producer pid.
   # Returns events in order. Times out after 2s.
-  defp collect_events(ref, timeout \\ 2_000) do
+  defp collect_events(pid, timeout \\ 2_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    do_collect(ref, [], deadline)
+    do_collect(pid, [], deadline)
   end
 
-  defp do_collect(ref, acc, deadline) do
+  defp do_collect(pid, acc, deadline) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
     receive do
-      {^ref, :event, event} -> do_collect(ref, [event | acc], deadline)
-      {^ref, :done} -> Enum.reverse(acc)
+      {^pid, :event, event} -> do_collect(pid, [event | acc], deadline)
+      {^pid, :done} -> Enum.reverse(acc)
     after
       remaining ->
         flunk("timed out after #{remaining}ms; collected: #{inspect(Enum.reverse(acc))}")
@@ -111,8 +109,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         Fake.sse("message_stop", %{"type" => "message_stop"})
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert [
                %Event.Start{},
@@ -155,8 +153,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         })
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert Enum.any?(events, &match?(%Event.ToolCallEnd{}, &1))
       assert %Event.Done{reason: :tool_use, message: msg} = List.last(events)
@@ -169,8 +167,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
   describe "error handling" do
     test "non-2xx HTTP status surfaces as Error event" do
       body = ~s({"type":"error","error":{"message":"overloaded"}})
-      {_pid, ref} = start_producer([body], 529)
-      events = collect_events(ref)
+      pid = start_producer([body], 529)
+      events = collect_events(pid)
 
       assert [%Event.Start{}, %Event.Error{reason: :error, message: msg}] = events
       assert msg.error_message =~ "HTTP 529"
@@ -181,8 +179,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         "event: error\ndata: overloaded_error\n\n"
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert [%Event.Start{}, %Event.Error{reason: :error, message: msg}] = events
       assert msg.error_message =~ "Anthropic SSE error"
@@ -203,8 +201,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         Fake.sse("content_block_stop", %{"type" => "content_block_stop", "index" => 0})
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert %Event.Error{reason: :error, message: msg} = List.last(events)
       assert msg.error_message =~ "stream ended"
@@ -225,12 +223,12 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         })
       ]
 
-      {pid, ref} = start_producer(chunks)
+      pid = start_producer(chunks)
       # Monitor before consuming so we see the DOWN regardless of whether
       # the producer terminates before or after the mailbox drain.
       ref_mon = Process.monitor(pid)
 
-      _events = collect_events(ref)
+      _events = collect_events(pid)
 
       # :normal when we race with termination, :noproc if the process was
       # already gone when we monitored. Either means "clean shutdown".
@@ -275,8 +273,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         })
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      _events = collect_events(ref)
+      pid = start_producer(chunks)
+      _events = collect_events(pid)
 
       assert_receive {^tref, [:octo_pi_ai, :request, :start], meas, meta}
       assert is_integer(meas.system_time)
@@ -294,8 +292,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
     end
 
     test "emits stop with http_status on non-2xx response", %{telemetry_ref: tref} do
-      {_pid, ref} = start_producer([~s({"error":"boom"})], 500)
-      _events = collect_events(ref)
+      pid = start_producer([~s({"error":"boom"})], 500)
+      _events = collect_events(pid)
 
       assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, meta}
       assert meta.http_status == 500
@@ -320,7 +318,6 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
 
       caller = spawn(fn -> Process.sleep(:infinity) end)
       caller_mon = Process.monitor(caller)
-      ref = make_ref()
 
       {:ok, _pid} =
         Producer.start(%{
@@ -328,7 +325,6 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
           context: user_context(),
           opts: %CallOptions{},
           caller: caller,
-          ref: ref,
           req_overrides: [plug: Fake.serve(chunks)]
         })
 
@@ -379,8 +375,8 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
         })
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       text =
         events

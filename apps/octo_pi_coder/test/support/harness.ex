@@ -55,7 +55,7 @@ defmodule OctoPi.Coder.Test.FauxTransport do
   end
 
   @impl true
-  def stream_to(_model, _context, _opts, caller, ref) do
+  def stream_to(_model, _context, _opts, caller) do
     events =
       case Agent.get_and_update(@agent_name, fn
              [] -> {:empty, []}
@@ -67,8 +67,8 @@ defmodule OctoPi.Coder.Test.FauxTransport do
 
     {:ok,
      spawn(fn ->
-       Enum.each(events, &send(caller, {ref, :event, &1}))
-       send(caller, {ref, :done})
+       Enum.each(events, &send(caller, {self(), :event, &1}))
+       send(caller, {self(), :done})
      end)}
   end
 

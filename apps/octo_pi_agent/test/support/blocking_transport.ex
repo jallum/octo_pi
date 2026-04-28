@@ -8,7 +8,7 @@ defmodule OctoPi.Agent.TestSupport.BlockingTransport do
   @behaviour OctoPi.Agent.Transport
 
   @impl true
-  def stream_to(_model, _ctx, _opts, _caller, _ref) do
+  def stream_to(_model, _ctx, _opts, _caller) do
     {:ok,
      spawn(fn ->
        receive do
