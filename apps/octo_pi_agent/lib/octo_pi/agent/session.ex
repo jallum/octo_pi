@@ -113,6 +113,7 @@ defmodule OctoPi.Agent.Session do
         after_tool_call: Keyword.get(opts, :after_tool_call),
         messages_provider: Keyword.get(opts, :messages_provider),
         messages: MessageLog.new(Keyword.get(opts, :messages, [])),
+        auto_compact_reserve_tokens: Keyword.get(opts, :auto_compact_reserve_tokens),
         turn: Turn.new()
       }
       |> maybe_override_queue(:steering_queue, opts[:steering_queue_bound])
@@ -233,13 +234,13 @@ defmodule OctoPi.Agent.Session do
     {:reply, :ok, store}
   end
 
-  # F3: response from a CompactionRequested subscriber. Ref-gates
+  # F3/F4: response from a CompactionRequested subscriber. Ref-gates
   # against the active turn_ref — late or stale responses get
   # {:error, :stale} and don't perturb Turn state.
   def handle_call({:compaction_response, ref, result}, _from, store) do
     if ref == store.session.turn_ref do
       store = advance(store, {:compaction_response, result})
-      {:reply, :ok, flip_compaction_idle(store)}
+      {:reply, :ok, after_compaction(store, result)}
     else
       {:reply, {:error, :stale}, store}
     end
@@ -335,7 +336,8 @@ defmodule OctoPi.Agent.Session do
         error_message: nil,
         abort_ref: abort_ref,
         run_started_at_mono: System.monotonic_time(),
-        turn: Turn.new()
+        turn: Turn.new(),
+        compaction_overflow_attempted?: false
     }
 
     advance(%{store | session: session, turn_id: 0}, :prompt_received)
@@ -479,12 +481,51 @@ defmodule OctoPi.Agent.Session do
 
     case decide_next(reason, store) do
       {:continue, store} ->
-        {turn, actions} = Turn.handle_event(store.session.turn, :prompt_received)
-        store = put_in(store.session.turn, turn)
-        execute_actions(store, actions)
+        if over_threshold?(assistant, store) do
+          store = put_in(store.session.compaction_auto?, :continue)
+          advance(store, {:compact_requested, [auto?: true]})
+        else
+          {turn, actions} = Turn.handle_event(store.session.turn, :prompt_received)
+          store = put_in(store.session.turn, turn)
+          execute_actions(store, actions)
+        end
 
       {:terminate, store} ->
-        end_run(store, reason)
+        cond do
+          # Overflow: context too long for the model — compact and retry.
+          # On second overflow in the same run, emit error and end.
+          overflow_error?(assistant, store) and store.session.compaction_overflow_attempted? ->
+            Subscribers.dispatch(self(), %Event.CompactionEnd{
+              result: {:error, :overflow_recovery_failed}
+            })
+
+            end_run(store, :error)
+
+          overflow_error?(assistant, store) ->
+            store =
+              store
+              |> put_in([Access.key(:session), Access.key(:compaction_overflow_attempted?)], true)
+              |> put_in([Access.key(:session), Access.key(:compaction_auto?)], :overflow_retry)
+              # Remove the overflow error message from the transcript — it's
+              # saved to session history by the Coder, but mustn't appear in
+              # the LLM context on retry.
+              |> put_in(
+                [Access.key(:session), Access.key(:messages)],
+                MessageLog.pop(store.session.messages)
+              )
+
+            advance(store, {:compact_requested, [auto?: true]})
+
+          # Non-overflow error with high estimated context: compact, then end run.
+          # Uses last successful assistant's token count as the estimate when
+          # the current error message carries zero usage data.
+          over_threshold_on_error?(assistant, store) ->
+            store = put_in(store.session.compaction_auto?, :end_after)
+            advance(store, {:compact_requested, [auto?: true]})
+
+          true ->
+            end_run(store, reason)
+        end
     end
   end
 
@@ -577,6 +618,168 @@ defmodule OctoPi.Agent.Session do
     flip_idle(store)
   end
 
+  # F3: manual compaction — update last_compaction_at_ms on success, then flip idle.
+  defp after_compaction(%{session: %{compaction_auto?: false}} = store, {:ok, _}) do
+    store = put_in(store.session.last_compaction_at_ms, System.system_time(:millisecond))
+    flip_compaction_idle(store)
+  end
+
+  defp after_compaction(%{session: %{compaction_auto?: false}} = store, _failure) do
+    flip_compaction_idle(store)
+  end
+
+  # F4/:continue — drain any messages that arrived during compaction, then resume run.
+  defp after_compaction(%{session: %{compaction_auto?: :continue}} = store, {:ok, _}) do
+    store = drain_queues_into_transcript(store)
+
+    store =
+      store
+      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+
+    advance(store, :prompt_received)
+  end
+
+  # F5/:overflow_retry — error message was already popped; resume run to retry.
+  defp after_compaction(%{session: %{compaction_auto?: :overflow_retry}} = store, {:ok, _}) do
+    store = drain_queues_into_transcript(store)
+
+    store =
+      store
+      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+
+    advance(store, :prompt_received)
+  end
+
+  # F5/:end_after — compact was triggered by a high-context error; end the run after.
+  defp after_compaction(%{session: %{compaction_auto?: :end_after}} = store, {:ok, _}) do
+    store =
+      store
+      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+
+    end_run(store, :error)
+  end
+
+  # Any auto-compact failure or cancel — clear flag, end the run.
+  defp after_compaction(store, _failure) do
+    store = put_in(store.session.compaction_auto?, false)
+    end_run(store, :error)
+  end
+
+  # Drain steering + follow-up queues into the transcript. Used when resuming
+  # after auto-compact to pick up messages enqueued during the compaction window.
+  defp drain_queues_into_transcript(store) do
+    {steers, sq} = PendingMessageQueue.drain(store.session.steering_queue)
+    {followups, fq} = PendingMessageQueue.drain(store.session.follow_up_queue)
+
+    store
+    |> put_in([Access.key(:session), Access.key(:steering_queue)], sq)
+    |> put_in([Access.key(:session), Access.key(:follow_up_queue)], fq)
+    |> put_in(
+      [Access.key(:session), Access.key(:messages)],
+      MessageLog.append_many(store.session.messages, steers ++ followups)
+    )
+  end
+
+  # F4: returns true when this assistant's input tokens plus the configured
+  # reserve exceed the model context window.  Used on the :continue path.
+  defp over_threshold?(%Assistant{usage: usage}, %{session: session}) do
+    reserve = session.auto_compact_reserve_tokens
+    ctx = session.model && session.model.context_window
+    input = usage && usage.input
+
+    is_integer(reserve) and is_integer(ctx) and is_integer(input) and
+      input + reserve > ctx
+  end
+
+  # F5: returns true when the current assistant is an error (with no useful
+  # usage) but a prior successful assistant in the transcript is over the
+  # threshold.  Used on the :terminate/:error path so persistent API errors
+  # (e.g. 529 overloaded) can still trigger compaction.
+  defp over_threshold_on_error?(%Assistant{stop_reason: :error}, %{session: session}) do
+    reserve = session.auto_compact_reserve_tokens
+    ctx = session.model && session.model.context_window
+
+    with r when is_integer(r) <- reserve,
+         c when is_integer(c) <- ctx,
+         input when is_integer(input) <-
+           find_last_successful_input(session.messages, session.last_compaction_at_ms) do
+      input + r > c
+    else
+      _ -> false
+    end
+  end
+
+  defp over_threshold_on_error?(_assistant, _store), do: false
+
+  # Walk newest-to-oldest through the message log and return the input token
+  # count of the first successful (non-error, non-aborted) assistant with
+  # non-zero input tokens that is NOT stale (i.e. its timestamp is after the
+  # last compaction).  Returns nil when nothing qualifies.
+  defp find_last_successful_input(messages, last_compaction_at_ms) do
+    MessageLog.find_last_value(messages, fn
+      %Assistant{stop_reason: stop, usage: %{input: input}, timestamp: ts}
+      when stop not in [:error, :aborted] and is_integer(input) and input > 0 ->
+        if is_nil(last_compaction_at_ms) or is_nil(ts) or ts > last_compaction_at_ms do
+          input
+        end
+
+      _ ->
+        nil
+    end)
+  end
+
+  # F5: returns true when the assistant's stop reason is :error with a message
+  # that matches a known context-overflow pattern, the message is from the
+  # current model, and the message is not stale (i.e. it arrived after the
+  # last compaction boundary, if any).
+  defp overflow_error?(
+         %Assistant{stop_reason: :error, error_message: msg, model: model_id, timestamp: ts},
+         %{session: session}
+       )
+       when is_binary(msg) do
+    same_model = session.model != nil and session.model.id == model_id
+    not_stale = is_nil(session.last_compaction_at_ms) or is_nil(ts) or ts > session.last_compaction_at_ms
+    same_model and not_stale and context_overflow_msg?(msg)
+  end
+
+  defp overflow_error?(_assistant, _store), do: false
+
+  @overflow_patterns [
+    ~r/prompt is too long/i,
+    ~r/request_too_large/i,
+    ~r/exceeds the context window/i,
+    ~r/input token count.*exceeds the maximum/i,
+    ~r/maximum prompt length is \d+/i,
+    ~r/reduce the length of the messages/i,
+    ~r/maximum context length is \d+ tokens/i,
+    ~r/exceeds the limit of \d+/i,
+    ~r/exceeds the available context size/i,
+    ~r/greater than the context length/i,
+    ~r/context window exceeds limit/i,
+    ~r/exceeded model token limit/i,
+    ~r/too large for model with \d+ maximum context length/i,
+    ~r/context[_ ]length[_ ]exceeded/i,
+    ~r/too many tokens/i,
+    ~r/token limit exceeded/i
+  ]
+
+  @non_overflow_patterns [
+    ~r/^(Throttling error|Service unavailable):/i,
+    ~r/rate limit/i,
+    ~r/too many requests/i
+  ]
+
+  defp context_overflow_msg?(msg) do
+    not Enum.any?(@non_overflow_patterns, &Regex.match?(&1, msg)) and
+      Enum.any?(@overflow_patterns, &Regex.match?(&1, msg))
+  end
+
   # F3: lighter-weight idle flip for compaction. Doesn't touch
   # abort_ref, run_started_at_mono, or turn_id (those are run-scoped,
   # and compaction isn't a run).
@@ -603,7 +806,8 @@ defmodule OctoPi.Agent.Session do
         turn_pid: nil,
         turn_ref: nil,
         run_started_at_mono: nil,
-        turn: Turn.new()
+        turn: Turn.new(),
+        compaction_overflow_attempted?: false
     }
 
     store = %{store | session: session, turn_id: 0, turn_started_at_mono: nil}

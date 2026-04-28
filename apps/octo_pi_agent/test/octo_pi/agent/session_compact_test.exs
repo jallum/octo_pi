@@ -116,12 +116,15 @@ defmodule OctoPi.Agent.SessionCompactTest do
         usage: %Usage{}
       }
 
-      sleeping_stream = [
+      stream = [
         %AIEvent.Start{partial: %{final | content: [], stop_reason: nil}},
         %AIEvent.Done{reason: :stop, message: final}
       ]
 
-      FakeTransport.set_script([sleeping_stream])
+      # Gate blocks FakeTransport.stream/3 until released, making is_streaming?
+      # deterministically true when Agent.compact is called.
+      FakeTransport.set_gate()
+      FakeTransport.set_script([stream])
 
       session = start_session()
       Agent.subscribe(session, self(), :async)
@@ -129,6 +132,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
       :ok = Agent.prompt(session, "hi")
       assert {:error, :busy} = Agent.compact(session)
 
+      FakeTransport.release_gate()
       :ok = Agent.wait_for_idle(session, 2_000)
     end
 

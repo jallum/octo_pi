@@ -76,7 +76,11 @@ defmodule OctoPi.Agent.Session.State do
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
           transport: module(),
-          messages_provider: (t() -> [term()]) | nil
+          messages_provider: (t() -> [term()]) | nil,
+          compaction_auto?: false | :continue | :end_after | :overflow_retry,
+          auto_compact_reserve_tokens: non_neg_integer() | nil,
+          last_compaction_at_ms: integer() | nil,
+          compaction_overflow_attempted?: boolean()
         }
 
   defstruct [
@@ -92,6 +96,8 @@ defmodule OctoPi.Agent.Session.State do
     :after_tool_call,
     :transport,
     :messages_provider,
+    :auto_compact_reserve_tokens,
+    :last_compaction_at_ms,
     turn: %Turn{},
     thinking_level: :off,
     tools: [],
@@ -99,6 +105,8 @@ defmodule OctoPi.Agent.Session.State do
     is_streaming?: false,
     pending_tool_calls: MapSet.new(),
     steering_queue: %PendingMessageQueue{items: :queue.new()},
-    follow_up_queue: %PendingMessageQueue{items: :queue.new()}
+    follow_up_queue: %PendingMessageQueue{items: :queue.new()},
+    compaction_auto?: false,
+    compaction_overflow_attempted?: false
   ]
 end
