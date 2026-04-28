@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Refactor Interactive loop to unified component dispatch (focus stack, event aggregation, invalidate stubs)",
   "type": "task",
-  "updated_at": "2026-04-28T16:49:31.879196Z"
+  "updated_at": "2026-04-28T18:06:13.519091Z"
 }
