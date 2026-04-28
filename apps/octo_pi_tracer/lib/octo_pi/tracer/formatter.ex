@@ -1,4 +1,5 @@
 defmodule OctoPi.Tracer.Formatter do
+  @moduledoc false
   @spec format([[atom()]], map(), map(), integer()) :: String.t()
   def format(event_name, measurements, metadata, base_mono) do
     elapsed = System.monotonic_time(:microsecond) - base_mono

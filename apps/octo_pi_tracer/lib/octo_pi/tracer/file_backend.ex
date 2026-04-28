@@ -1,4 +1,5 @@
 defmodule OctoPi.Tracer.FileBackend do
+  @moduledoc false
   @handler_id :octo_pi_tracer_file
 
   def install(path) do

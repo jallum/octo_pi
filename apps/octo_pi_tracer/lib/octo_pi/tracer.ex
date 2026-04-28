@@ -1,7 +1,11 @@
 defmodule OctoPi.Tracer do
+  @moduledoc false
+
   @table __MODULE__
 
   require Logger
+
+  alias OctoPi.Tracer.Formatter
 
   @type events_list :: [[atom()]]
   @type events_by_level :: %{Logger.level() => [[atom()]]}
@@ -53,7 +57,7 @@ defmodule OctoPi.Tracer do
 
   defp build_handler(%{events: events, level: default_level}) when is_list(events) do
     fn event, measurements, metadata, base_mono ->
-      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata, base_mono)
+      line = Formatter.format(event, measurements, metadata, base_mono)
       Logger.log(default_level, line, domain: [:octo_pi_tracer])
     end
   end
@@ -65,7 +69,7 @@ defmodule OctoPi.Tracer do
 
     fn event, measurements, metadata, base_mono ->
       level = Map.fetch!(event_to_level, event)
-      line = OctoPi.Tracer.Formatter.format(event, measurements, metadata, base_mono)
+      line = Formatter.format(event, measurements, metadata, base_mono)
       Logger.log(level, line, domain: [:octo_pi_tracer])
     end
   end

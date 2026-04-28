@@ -12,6 +12,7 @@ defmodule OctoPi.Coder.CLI do
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
   alias OctoPi.Coder.ResourceLoader
+  alias OctoPi.Tracer.FileBackend
 
   # Matches upstream pi-mono's per-provider default for Anthropic
   # (see `tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`
@@ -119,7 +120,7 @@ defmodule OctoPi.Coder.CLI do
         0
 
       {:ok, opts} ->
-        if opts.log_telemetry, do: OctoPi.Tracer.FileBackend.install(opts.log_telemetry)
+        if opts.log_telemetry, do: FileBackend.install(opts.log_telemetry)
         Enum.each(opts.no_telemetry, &:telemetry.detach/1)
         dispatch(opts)
     end
