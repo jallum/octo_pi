@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-0gw",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire render-only TUI components (Container, TruncatedText, Header, Diff, CustomMessage) into Interactive rendering pipeline",
   "type": "task",
-  "updated_at": "2026-04-28T18:06:37.658135Z"
+  "updated_at": "2026-04-28T18:15:13.466076Z"
 }
