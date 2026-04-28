@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-613",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Eliminate force_next_render state flag — redundant with Renderer's needs_clear",
   "type": "task",
-  "updated_at": "2026-04-28T19:19:05.623185Z"
+  "updated_at": "2026-04-28T19:20:39.343887Z"
 }
