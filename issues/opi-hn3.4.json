@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T11:42:28.518723Z",
+  "description": "## Context\n\nThe module docstring of `OctoPi.TUI.Interactive` (L10–15) establishes that `handle_event/2` is the canonical pure state machine that can be driven directly in tests without a tty. Three `handle_info` clauses currently bypass it, mutating state inline:\n\n**A. `:force_render` (L502–504)**:\n```elixir\ndef handle_info(:force_render, state) do\n  advance(state)\nend\n```\n\n**B. `{:extension_result, text}` (L493–495)**:\n```elixir\ndef handle_info({:extension_result, text}, state) do\n  advance(%{state | notification: text})\nend\n```\n\n**C. `{:custom_done, from, result}` (L497–499)**:\n```elixir\ndef handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do\n  GenServer.reply(from, result)\n  advance(%{state | custom_widget: nil})\nend\n```\n\nNote on C: `GenServer.reply/2` is a side effect that cannot live in the pure `handle_event` function — it must remain in `handle_info`. Only the state mutation moves.\n\n## Changes\n\nIn `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`:\n\n### 1. Update the three `handle_info` clauses\n\n**A. `:force_render`** — replace L502–504:\n```elixir\ndef handle_info(:force_render, state) do\n  state |> handle_event(:force_render) |> advance()\nend\n```\n\n**B. `{:extension_result, text}`** — replace L493–495:\n```elixir\ndef handle_info({:extension_result, text}, state) do\n  state |> handle_event({:extension_result, text}) |> advance()\nend\n```\n\n**C. `{:custom_done, from, result}`** — replace L497–499:\n```elixir\ndef handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do\n  GenServer.reply(from, result)   # side effect stays here\n  state |> handle_event(:custom_done) |> advance()\nend\n```\n\n### 2. Add three new `handle_event` clauses\n\nInsert these in the `handle_event` section, in the \"internal events\" group alongside `:loader_tick` (near L1100), and **before** the catch-all `def handle_event(state, _), do: state` at L1116:\n\n```elixir\ndef handle_event(state, :force_render), do: state\n\ndef handle_event(state, {:extension_result, text}), do: %{state | notification: text}\n\ndef handle_event(state, :custom_done), do: %{state | custom_widget: nil}\n```\n\n## Verification\n\n- Add or verify unit tests for each new `handle_event` clause:\n  - `handle_event(state, :force_render)` returns `state` unchanged.\n  - `handle_event(state, {:extension_result, \"msg\"})` sets `state.notification == \"msg\"`.\n  - `handle_event(%{state | custom_widget: {ref, comp}}, :custom_done)` sets `custom_widget: nil`.\n- Run `mix test apps/octo_pi_tui/`.",
+  "id": "opi-hn3.4",
+  "labels": [],
+  "parent": "opi-hn3",
+  "priority": 2,
+  "status": "open",
+  "title": "Route `:force_render`, `{:extension_result}`, `{:custom_done}` through `handle_event`",
+  "type": "task",
+  "updated_at": "2026-04-28T11:42:28.518723Z"
+}

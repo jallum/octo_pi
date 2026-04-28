@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-hn3.3"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T11:42:28.518723Z",
+  "description": "## Context\n\n**Depends on ticket 3** (extract `flush_effects/1` from `advance/1`) — `flush_effects/1` must exist before this change.\n\nIn `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`:\n\n`handle_cast({:ui_fire, ui_msg})` (L557–560) calls `advance(new_state)`, which runs `flush_effects` (i.e., `maybe_suspend` + `maybe_launch_editor`) before rendering. But `handle_call({:ui_request, msg})` (L541–554) calls `render_frame` directly — it skips `flush_effects` entirely:\n\n```elixir\n# handle_cast path — flush_effects runs (inside advance):\ndef handle_cast({:ui_fire, ui_msg}, state) do\n  {new_state, _reply} = handle_ui_request(state, ui_msg)\n  advance(new_state)\nend\n\n# handle_call path — flush_effects does NOT run:\ndef handle_call({:ui_request, msg}, from, state) do\n  {new_state, reply} = handle_ui_request(state, msg)\n  case reply do\n    :pending ->\n      new_state = put_dialog_from(new_state, from)\n      new_state = render_frame(new_state)           # ← no flush_effects\n      {:noreply, new_state, loader_timeout(new_state)}\n    val ->\n      new_state = render_frame(new_state)           # ← no flush_effects\n      {:reply, val, new_state, loader_timeout(new_state)}\n  end\nend\n```\n\nBoth go through `handle_ui_request`. Only the cast path drains pending side effects. This is not observable today — `suspend_pending` and `editor_pending` are only set by `dispatch_app_action(\"app.suspend\")` (L1152) and `dispatch_app_action(\"app.editor.external\")` (L1181), which are exclusively reachable through the key-event `handle_info` path. But it is a latent correctness trap: any future `handle_ui_request` clause that sets those flags would silently fail to fire through the call path.\n\n## Changes\n\n### 1. `handle_call({:ui_request, msg})` — insert `flush_effects` after `handle_ui_request`\n\nReplace L541–554:\n```elixir\ndef handle_call({:ui_request, msg}, from, state) do\n  {new_state, reply} = handle_ui_request(state, msg)\n  new_state = flush_effects(new_state)              # ← added\n\n  case reply do\n    :pending ->\n      new_state = put_dialog_from(new_state, from)\n      new_state = render_frame(new_state)\n      {:noreply, new_state, loader_timeout(new_state)}\n\n    val ->\n      new_state = render_frame(new_state)\n      {:reply, val, new_state, loader_timeout(new_state)}\n  end\nend\n```\n\n### 2. `handle_call({:ui_request, {:custom, factory, _kw}})` — also insert `flush_effects`\n\nReplace L531–539:\n```elixir\ndef handle_call({:ui_request, {:custom, factory, _kw}}, from, state) do\n  interactive_pid = self()\n  tui = %{request_render: fn -> send(interactive_pid, :force_render) end}\n  theme = build_custom_theme(state)\n  done = fn result -> send(interactive_pid, {:custom_done, from, result}) end\n  component = factory.(tui, theme, done)\n  new_state = flush_effects(%{state | custom_widget: {from, component}})  # ← flush_effects replaces direct struct update\n  new_state = render_frame(new_state)\n  {:noreply, new_state, loader_timeout(new_state)}\nend\n```\n\n## Verification\n\n- Run `mix test apps/octo_pi_tui/`. All existing tests must pass — behavior is identical in all current usage scenarios.\n- If Interactive integration tests exercise `handle_call({:ui_request, ...})`, confirm they still pass.",
+  "id": "opi-hn3.5",
+  "labels": [],
+  "parent": "opi-hn3",
+  "priority": 2,
+  "status": "open",
+  "title": "Apply `flush_effects/1` in `handle_call` ui_request paths",
+  "type": "task",
+  "updated_at": "2026-04-28T11:42:28.518723Z"
+}

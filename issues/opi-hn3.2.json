@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-hn3.6"
+  ],
+  "comments": [],
+  "created": "2026-04-28T11:42:28.518723Z",
+  "description": "## Context\n\nIn `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`, resize events arrive as `{:hid_event, %Resize{}}`. There are two `handle_info` clauses that match `{:hid_event, ...}`:\n\n```elixir\n# L472–478 — special-case clause, matches Resize first:\ndef handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do\n  Renderer.resize(state.renderer, w, h)\n  state |> handle_event(event) |> advance()\nend\n\n# L480–485 — generic clause, matches all other hid_events:\ndef handle_info({:hid_event, event}, state) do\n  state\n  |> Map.put(:notification, nil)    # ← notification cleared here\n  |> handle_event(event)\n  |> advance()\nend\n```\n\nBecause the special-case clause at L472 intercepts `%Resize{}` before the generic clause at L480, the `Map.put(:notification, nil)` at L482 is **never reached for resize events**. A notification shown to the user (e.g., \"Model: qwen3.5:latest\", \"/cost: $0.001\") will persist through a terminal resize — a visible bug.\n\n## Change\n\nMove notification clearing into `handle_event(%Resize{})` at lines 1097–1098:\n\n**Before:**\n```elixir\ndef handle_event(state, %Resize{width: w, height: h}),\n  do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}\n```\n\n**After:**\n```elixir\ndef handle_event(state, %Resize{width: w, height: h}),\n  do: %{state | width: w, height: h, notification: nil, input: %{state.input | width: w, height: h}}\n```\n\nDo **not** remove the special-case `handle_info` resize clause yet — that structural change is in a separate ticket (ticket 6, which depends on this one).\n\n## Verification\n\n- Add or verify a test that:\n  1. Sets `state.notification` to a non-nil string.\n  2. Calls `Interactive.handle_event(state, %Resize{width: 100, height: 40})`.\n  3. Asserts `result.notification == nil`.\n- Run `mix test apps/octo_pi_tui/`.",
+  "id": "opi-hn3.2",
+  "labels": [],
+  "parent": "opi-hn3",
+  "priority": 2,
+  "status": "open",
+  "title": "Clear `notification` on resize — move into `handle_event(%Resize{})`",
+  "type": "bug",
+  "updated_at": "2026-04-28T11:42:28.518723Z"
+}

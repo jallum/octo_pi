@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-28T11:42:28.518723Z",
+  "description": "## Context\n\n`OctoPi.TUI.Interactive` (`apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`) has a dead clause in `handle_ui_request/2` at lines 282–284:\n\n```elixir\ndef handle_ui_request(state, {:custom, _factory, _opts}) do\n  {state, :pending}\nend\n```\n\nThis clause is unreachable. `handle_call/3` at lines 531–539 has a dedicated clause for `{:ui_request, {:custom, factory, _kw}}` that always intercepts `:custom` requests before `handle_ui_request` is ever invoked:\n\n```elixir\ndef handle_call({:ui_request, {:custom, factory, _kw}}, from, state) do\n  interactive_pid = self()\n  tui = %{request_render: fn -> send(interactive_pid, :force_render) end}\n  theme = build_custom_theme(state)\n  done = fn result -> send(interactive_pid, {:custom_done, from, result}) end\n  component = factory.(tui, theme, done)\n  new_state = render_frame(%{state | custom_widget: {from, component}})\n  {:noreply, new_state, loader_timeout(new_state)}\nend\n```\n\nThe dead clause gives a false impression that there is an alternate `:custom` handling path available to future non-Interactive `UIHost` implementations (e.g., a future RPC UIHost). If that were actually intended it would be in the `@callback` contract in `apps/octo_pi_coder/lib/octo_pi/coder/ui_host.ex`, not silently present only in Interactive.\n\n## Change\n\nDelete lines 282–284 in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`:\n\n```elixir\n# DELETE this entire clause:\ndef handle_ui_request(state, {:custom, _factory, _opts}) do\n  {state, :pending}\nend\n```\n\nNo other files need to change.\n\n## Verification\n\n- Run `mix test apps/octo_pi_tui/`.\n- Confirm `{:ui_request, {:custom, ...}}` still works end-to-end by tracing through the `handle_call` clause at L531.",
+  "id": "opi-hn3.1",
+  "labels": [],
+  "parent": "opi-hn3",
+  "priority": 2,
+  "status": "open",
+  "title": "Remove unreachable `:custom` clause from `handle_ui_request`",
+  "type": "task",
+  "updated_at": "2026-04-28T11:42:28.518723Z"
+}

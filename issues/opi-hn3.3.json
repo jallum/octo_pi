@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-hn3.5"
+  ],
+  "comments": [],
+  "created": "2026-04-28T11:42:28.518723Z",
+  "description": "## Context\n\n`advance/1` in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` (lines 631–638) bundles three distinct responsibilities into one private function:\n\n```elixir\ndefp advance(%{exit: true} = state), do: {:stop, :normal, state}\n\ndefp advance(state) do\n  state = maybe_suspend(state)       # (1) flush pending TTY side effects\n  state = maybe_launch_editor(state) # (1) continued\n  state = render_frame(state)        # (2) render\n  {:noreply, state, loader_timeout(state)}  # (3) OTP return tuple\nend\n```\n\n`handle_call({:ui_request, msg})` (L541–554) calls `render_frame` directly, bypassing `maybe_suspend` and `maybe_launch_editor`. To fix that inconsistency (ticket 5, which depends on this ticket), `flush_effects` must exist as a separately callable function.\n\n## Change\n\nExtract `flush_effects/1` and update `advance/1` to use it. In `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`, replace the `advance` definition at L631–638 with:\n\n```elixir\ndefp flush_effects(state) do\n  state |> maybe_suspend() |> maybe_launch_editor()\nend\n\ndefp advance(%{exit: true} = state), do: {:stop, :normal, state}\n\ndefp advance(state) do\n  state = flush_effects(state)\n  state = render_frame(state)\n  {:noreply, state, loader_timeout(state)}\nend\n```\n\n`flush_effects/1` should be placed near `advance/1` in the private helpers section (around L620–640), before `maybe_suspend/1` and `maybe_launch_editor/1`.\n\nThis is a **pure refactoring** — `advance` behavior is identical. `flush_effects` is private (`defp`).\n\n## Verification\n\n- Run `mix test apps/octo_pi_tui/`. No behavior change; all existing tests must pass unchanged.",
+  "id": "opi-hn3.3",
+  "labels": [],
+  "parent": "opi-hn3",
+  "priority": 2,
+  "status": "open",
+  "title": "Extract `flush_effects/1` from `advance/1`",
+  "type": "task",
+  "updated_at": "2026-04-28T11:42:28.518723Z"
+}
