@@ -352,8 +352,28 @@ defmodule OctoPi.Coder.Session do
     {:reply, :ok, %{state | agent_pid: agent_pid}}
   end
 
+  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state)
+      when is_pid(agent_pid) do
+    # Route through the agent FSM: Agent emits CompactionRequested, our
+    # handle_info handler runs the LLM, calls finish_compaction (which
+    # writes the entry + compaction_response). Reply immediately so we
+    # don't deadlock waiting for an event that flows back through us.
+    GenServer.reply(from, :ok)
+    OctoPi.Agent.compact(agent_pid)
+    {:noreply, state}
+  end
+
   def handle_call({:compact, opts}, _from, state) do
-    {:reply, do_compact(state, opts), state}
+    case do_compact(state, opts) do
+      {:ok, %{result: result, from_extension?: from_ext?}} ->
+        session_pid = self()
+        extensions = state.extensions
+        spawn(fn -> persist_compaction(session_pid, result, from_ext?, extensions) end)
+        {:reply, {:ok, %{result: result, from_extension?: from_ext?}}, state}
+
+      other ->
+        {:reply, other, state}
+    end
   end
 
   def handle_call({:fork, opts}, _from, state) do
@@ -828,6 +848,18 @@ defmodule OctoPi.Coder.Session do
   end
 
   defp finish_compaction(session_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
+    persist_compaction(session_pid, result, from_ext?, extensions)
+
+    OctoPi.Agent.compaction_response(agent_pid, ref, {:ok, %{
+      summary: result.summary,
+      first_kept_entry_id: result.first_kept_entry_id,
+      tokens_before: result.tokens_before,
+      details: result.details,
+      from_extension?: from_ext?
+    }})
+  end
+
+  defp persist_compaction(session_pid, %Result{} = result, from_ext?, extensions) do
     entry = %Entry.Compaction{
       id: nil,
       timestamp: nil,
@@ -843,13 +875,5 @@ defmodule OctoPi.Coder.Session do
     stored = Map.fetch!(sm.by_id, id)
     ctx = %Context{cwd: sm.cwd} |> Context.bind_session_manager(fn -> sm end)
     Dispatcher.emit(extensions, Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}), ctx)
-
-    OctoPi.Agent.compaction_response(agent_pid, ref, {:ok, %{
-      summary: result.summary,
-      first_kept_entry_id: result.first_kept_entry_id,
-      tokens_before: result.tokens_before,
-      details: result.details,
-      from_extension?: from_ext?
-    }})
   end
 end
