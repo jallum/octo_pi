@@ -635,4 +635,51 @@ defmodule OctoPi.AI.Providers.Anthropic.RequestTest do
       assert user_sys["cache_control"] == cc
     end
   end
+
+  describe "SanitizeUnicode — invalid UTF-8 bytes are stripped at serialization" do
+    @invalid_utf8 "hello" <> <<0xFF>> <> " world"
+
+    test "user message string with invalid bytes serializes cleanly" do
+      ctx = %Context{messages: [%Message.User{content: @invalid_utf8, timestamp: 0}]}
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [msg] = r.body["messages"]
+      [block] = msg["content"]
+      assert block["text"] == "hello world"
+      assert String.valid?(block["text"])
+    end
+
+    test "user message text block with invalid bytes serializes cleanly" do
+      ctx = %Context{
+        messages: [%Message.User{content: [%Content.Text{text: @invalid_utf8}], timestamp: 0}]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [msg] = r.body["messages"]
+      [block] = msg["content"]
+      assert block["text"] == "hello world"
+      assert String.valid?(block["text"])
+    end
+
+    test "system prompt with invalid bytes serializes cleanly" do
+      ctx = %Context{
+        system_prompt: @invalid_utf8,
+        messages: [%Message.User{content: "hi", timestamp: 0}]
+      }
+
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [sys_block] = r.body["system"]
+      assert sys_block["text"] == "hello world"
+      assert String.valid?(sys_block["text"])
+    end
+
+    test "valid unicode (emoji, CJK) passes through unchanged" do
+      text = "Hello 🎉 世界"
+
+      ctx = %Context{messages: [%Message.User{content: text, timestamp: 0}]}
+      r = Request.build(model(), ctx, %StreamOptions{})
+      [msg] = r.body["messages"]
+      [block] = msg["content"]
+      assert block["text"] == text
+    end
+  end
 end

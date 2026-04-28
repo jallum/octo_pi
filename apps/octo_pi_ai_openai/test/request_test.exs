@@ -1,8 +1,16 @@
 defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{Content, Context, Message, Model, StreamOptions, Tool, ToolCall, Usage}
-  alias OctoPi.AI.Providers.OpenAI.{Compat, Request}
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Providers.OpenAI.Compat
+  alias OctoPi.AI.Providers.OpenAI.Request
+  alias OctoPi.AI.StreamOptions
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.Usage
 
   defp model(attrs \\ %{}) do
     %Model{
@@ -157,9 +165,9 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       [user] = req.body["messages"]
 
       assert [
-        %{"type" => "text", "text" => "look at this"},
-        %{"type" => "image_url", "image_url" => %{"url" => "data:image/png;base64,abc123"}}
-      ] = user["content"]
+               %{"type" => "text", "text" => "look at this"},
+               %{"type" => "image_url", "image_url" => %{"url" => "data:image/png;base64,abc123"}}
+             ] = user["content"]
     end
   end
 
@@ -180,13 +188,18 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     test "tool calls in assistant message" do
       msgs = [
         %Message.User{content: "read it", timestamp: 0},
-        assistant_msg([
-          %ToolCall{id: "call_1", name: "read", arguments: %{"path" => "foo.txt"}}
-        ], %{stop_reason: :tool_use}),
+        assistant_msg(
+          [
+            %ToolCall{id: "call_1", name: "read", arguments: %{"path" => "foo.txt"}}
+          ],
+          %{stop_reason: :tool_use}
+        ),
         %Message.ToolResult{
-          tool_call_id: "call_1", tool_name: "read",
+          tool_call_id: "call_1",
+          tool_name: "read",
           content: [%Content.Text{text: "file contents"}],
-          is_error?: false, timestamp: 1
+          is_error?: false,
+          timestamp: 1
         }
       ]
 
@@ -240,25 +253,32 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
       msgs = [
         %Message.User{content: "Read the images", timestamp: 0},
-        assistant_msg([
-          %ToolCall{id: "tool-1", name: "read", arguments: %{}},
-          %ToolCall{id: "tool-2", name: "read", arguments: %{}}
-        ], %{stop_reason: :tool_use}),
+        assistant_msg(
+          [
+            %ToolCall{id: "tool-1", name: "read", arguments: %{}},
+            %ToolCall{id: "tool-2", name: "read", arguments: %{}}
+          ],
+          %{stop_reason: :tool_use}
+        ),
         %Message.ToolResult{
-          tool_call_id: "tool-1", tool_name: "read",
+          tool_call_id: "tool-1",
+          tool_name: "read",
           content: [
             %Content.Text{text: "Read image file"},
             %Content.Image{data: "ZmFrZQ==", mime_type: "image/png"}
           ],
-          is_error?: false, timestamp: 1
+          is_error?: false,
+          timestamp: 1
         },
         %Message.ToolResult{
-          tool_call_id: "tool-2", tool_name: "read",
+          tool_call_id: "tool-2",
+          tool_name: "read",
           content: [
             %Content.Text{text: "Read image file"},
             %Content.Image{data: "ZmFrZQ==", mime_type: "image/png"}
           ],
-          is_error?: false, timestamp: 2
+          is_error?: false,
+          timestamp: 2
         }
       ]
 
@@ -279,12 +299,14 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         %Message.User{content: "read it", timestamp: 0},
         assistant_msg([%ToolCall{id: "tc1", name: "read", arguments: %{}}], %{stop_reason: :tool_use}),
         %Message.ToolResult{
-          tool_call_id: "tc1", tool_name: "read",
+          tool_call_id: "tc1",
+          tool_name: "read",
           content: [
             %Content.Text{text: "content"},
             %Content.Image{data: "abc", mime_type: "image/png"}
           ],
-          is_error?: false, timestamp: 1
+          is_error?: false,
+          timestamp: 1
         }
       ]
 
@@ -297,7 +319,11 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
   describe "tool conversion" do
     test "converts tools to function type" do
       tools = [
-        %Tool{name: "read", description: "Read a file", parameters: %{"properties" => %{"path" => %{"type" => "string"}}, "required" => ["path"]}}
+        %Tool{
+          name: "read",
+          description: "Read a file",
+          parameters: %{"properties" => %{"path" => %{"type" => "string"}}, "required" => ["path"]}
+        }
       ]
 
       ctx = context([], tools: tools)
@@ -407,9 +433,11 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
         %Message.User{content: "do it", timestamp: 0},
         assistant_msg([%ToolCall{id: "tc1", name: "read", arguments: %{}}], %{stop_reason: :tool_use}),
         %Message.ToolResult{
-          tool_call_id: "tc1", tool_name: "read",
+          tool_call_id: "tc1",
+          tool_name: "read",
           content: [%Content.Text{text: "done"}],
-          is_error?: false, timestamp: 1
+          is_error?: false,
+          timestamp: 1
         },
         %Message.User{content: "next", timestamp: 2}
       ]
@@ -447,8 +475,8 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       req = Request.build(m, context([]), %StreamOptions{}, compat)
 
       assert req.body["providerOptions"] == %{
-        "gateway" => %{"only" => ["openai"], "order" => ["anthropic", "openai"]}
-      }
+               "gateway" => %{"only" => ["openai"], "order" => ["anthropic", "openai"]}
+             }
     end
 
     test "omits Vercel routing when empty" do
@@ -492,6 +520,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "adds X-Initiator agent when last message is not user" do
       m = model(%{provider: :github_copilot})
+
       msgs = [
         %Message.User{content: "hi", timestamp: 0},
         assistant_msg([%Content.Text{text: "hello"}])
@@ -503,6 +532,7 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "adds Copilot-Vision-Request when images present" do
       m = model(%{provider: :github_copilot})
+
       msgs = [
         %Message.User{
           content: [
@@ -537,7 +567,8 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
     end
 
     test "omits session headers when compat flag is false" do
-      req = Request.build(model(), context([]), %StreamOptions{metadata: %{"session_id" => "s"}}, Compat.detect(model()))
+      req =
+        Request.build(model(), context([]), %StreamOptions{metadata: %{"session_id" => "s"}}, Compat.detect(model()))
 
       refute Enum.any?(req.headers, fn {k, _} -> k == "session_id" end)
     end
@@ -592,10 +623,12 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
     test "adds cache_control to system prompt, last tool, last conversation message" do
       m = openrouter_anthropic_model()
+
       tools = [
         %Tool{name: "read", description: "Read", parameters: %{}},
         %Tool{name: "write", description: "Write", parameters: %{}}
       ]
+
       msgs = [%Message.User{content: "hello", timestamp: 0}]
       ctx = context(msgs, system_prompt: "Be helpful", tools: tools)
       compat = Compat.detect(m)
@@ -630,6 +663,45 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
 
       [sys | _] = req.body["messages"]
       assert sys["content"] == "Be helpful"
+    end
+  end
+
+  describe "SanitizeUnicode — invalid UTF-8 bytes are stripped at serialization" do
+    @invalid_utf8 "hello" <> <<0xFF>> <> " world"
+
+    test "system prompt with invalid bytes serializes cleanly" do
+      msgs = [%Message.User{content: "hi", timestamp: 0}]
+      ctx = context(msgs, system_prompt: @invalid_utf8)
+      req = Request.build(model(), ctx, %StreamOptions{}, Compat.detect(model()))
+      [sys | _] = req.body["messages"]
+      assert sys["role"] == "system"
+      assert sys["content"] == "hello world"
+      assert String.valid?(sys["content"])
+    end
+
+    test "user message string with invalid bytes serializes cleanly" do
+      msgs = [%Message.User{content: @invalid_utf8, timestamp: 0}]
+      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
+      assert user_msg["content"] == "hello world"
+      assert String.valid?(user_msg["content"])
+    end
+
+    test "user message text block with invalid bytes serializes cleanly" do
+      msgs = [%Message.User{content: [%Content.Text{text: @invalid_utf8}], timestamp: 0}]
+      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
+      [part] = user_msg["content"]
+      assert part["text"] == "hello world"
+      assert String.valid?(part["text"])
+    end
+
+    test "valid unicode (emoji, CJK) passes through unchanged" do
+      text = "Hello 🎉 世界"
+      msgs = [%Message.User{content: text, timestamp: 0}]
+      req = Request.build(model(), context(msgs), %StreamOptions{}, Compat.detect(model()))
+      user_msg = Enum.find(req.body["messages"], &(&1["role"] == "user"))
+      assert user_msg["content"] == text
     end
   end
 end

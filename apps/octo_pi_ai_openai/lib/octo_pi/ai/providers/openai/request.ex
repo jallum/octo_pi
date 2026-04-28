@@ -11,18 +11,16 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   Ported from `openai-completions.ts` L460-933.
   """
 
-  alias OctoPi.AI.{
-    Content,
-    Context,
-    Message,
-    Model,
-    StreamOptions,
-    Tool,
-    ToolCall,
-    TransformMessages
-  }
-
+  alias OctoPi.AI.Content
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.OpenAI.Compat
+  alias OctoPi.AI.SanitizeUnicode
+  alias OctoPi.AI.StreamOptions
+  alias OctoPi.AI.Tool
+  alias OctoPi.AI.ToolCall
+  alias OctoPi.AI.TransformMessages
 
   @type built :: %{
           url: binary(),
@@ -43,8 +41,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   # --- URL / headers ---
 
-  defp url(%Model{base_url: base}),
-    do: String.trim_trailing(base, "/") <> "/chat/completions"
+  defp url(%Model{base_url: base}), do: String.trim_trailing(base, "/") <> "/chat/completions"
 
   defp headers(model, context, opts, compat) do
     base = [{"content-type", "application/json"}, {"accept", "application/json"}]
@@ -56,9 +53,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     |> extra_headers(opts)
   end
 
-  defp auth_header(hdrs, %StreamOptions{api_key: key})
-       when is_binary(key) and key != "",
-       do: hdrs ++ [{"authorization", "Bearer " <> key}]
+  defp auth_header(hdrs, %StreamOptions{api_key: key}) when is_binary(key) and key != "",
+    do: hdrs ++ [{"authorization", "Bearer " <> key}]
 
   defp auth_header(hdrs, _opts), do: hdrs
 
@@ -135,16 +131,14 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp put_max_tokens(body, %StreamOptions{max_tokens: max}, %Compat{max_tokens_field: :max_tokens}),
     do: Map.put(body, "max_tokens", max)
 
-  defp put_max_tokens(body, %StreamOptions{max_tokens: max}, _compat),
-    do: Map.put(body, "max_completion_tokens", max)
+  defp put_max_tokens(body, %StreamOptions{max_tokens: max}, _compat), do: Map.put(body, "max_completion_tokens", max)
 
   defp put_stream_options(body, %Compat{supports_usage_in_streaming: true}),
     do: Map.put(body, "stream_options", %{"include_usage" => true})
 
   defp put_stream_options(body, _compat), do: body
 
-  defp put_store(body, %Compat{supports_store: true}),
-    do: Map.put(body, "store", false)
+  defp put_store(body, %Compat{supports_store: true}), do: Map.put(body, "store", false)
 
   defp put_store(body, _compat), do: body
 
@@ -203,9 +197,9 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
       gateway = if routing[:only], do: Map.put(gateway, "only", routing[:only]), else: gateway
       gateway = if routing[:order], do: Map.put(gateway, "order", routing[:order]), else: gateway
 
-      if gateway != %{},
-        do: Map.put(body, "providerOptions", %{"gateway" => gateway}),
-        else: body
+      if gateway == %{},
+        do: body,
+        else: Map.put(body, "providerOptions", %{"gateway" => gateway})
     else
       body
     end
@@ -215,12 +209,14 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   # --- Caching ---
 
-  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"], do: r
+  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
+    do: r
+
   defp resolve_cache_retention(_opts), do: "short"
 
   defp put_prompt_cache(body, %Model{base_url: base_url}, opts, cache_retention) do
     if String.contains?(base_url, "api.openai.com") do
-      session_id = get_in((opts.metadata || %{}), ["session_id"])
+      session_id = get_in(opts.metadata || %{}, ["session_id"])
 
       body
       |> maybe_put_cache_key(session_id, cache_retention)
@@ -230,15 +226,13 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     end
   end
 
-  defp maybe_put_cache_key(body, session_id, cache_retention)
-       when cache_retention != "none" and session_id != nil do
+  defp maybe_put_cache_key(body, session_id, cache_retention) when cache_retention != "none" and session_id != nil do
     Map.put(body, "prompt_cache_key", session_id)
   end
 
   defp maybe_put_cache_key(body, _session_id, _cache_retention), do: body
 
-  defp maybe_put_cache_retention(body, "long"),
-    do: Map.put(body, "prompt_cache_retention", "24h")
+  defp maybe_put_cache_retention(body, "long"), do: Map.put(body, "prompt_cache_retention", "24h")
 
   defp maybe_put_cache_retention(body, _cache_retention), do: body
 
@@ -248,8 +242,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp apply_cache_control(body, model, %Compat{cache_control_format: :anthropic}, cache_retention) do
     ttl =
       if cache_retention == "long" and String.contains?(model.base_url, "api.anthropic.com"),
-        do: "1h",
-        else: nil
+        do: "1h"
 
     cc = if ttl, do: %{"type" => "ephemeral", "ttl" => ttl}, else: %{"type" => "ephemeral"}
 
@@ -324,19 +317,16 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp convert_tools(tools, compat) do
     Enum.map(tools, fn %Tool{} = tool ->
       func =
-        %{
-          "name" => tool.name,
-          "description" => tool.description,
-          "parameters" => tool.parameters
-        }
-        |> maybe_put_strict(compat)
+        maybe_put_strict(
+          %{"name" => tool.name, "description" => tool.description, "parameters" => tool.parameters},
+          compat
+        )
 
       %{"type" => "function", "function" => func}
     end)
   end
 
-  defp maybe_put_strict(func, %Compat{supports_strict_mode: true}),
-    do: Map.put(func, "strict", false)
+  defp maybe_put_strict(func, %Compat{supports_strict_mode: true}), do: Map.put(func, "strict", false)
 
   defp maybe_put_strict(func, _compat), do: func
 
@@ -360,10 +350,10 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   defp system_messages(nil, _model, _compat), do: []
 
   defp system_messages(prompt, %Model{reasoning: true}, %Compat{supports_developer_role: true}),
-    do: [%{"role" => "developer", "content" => prompt}]
+    do: [%{"role" => "developer", "content" => SanitizeUnicode.sanitize(prompt)}]
 
   defp system_messages(prompt, _model, _compat),
-    do: [%{"role" => "system", "content" => prompt}]
+    do: [%{"role" => "system", "content" => SanitizeUnicode.sanitize(prompt)}]
 
   # --- Per-message conversion ---
 
@@ -418,7 +408,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   # --- User ---
 
   defp convert_user(%Message.User{content: text}) when is_binary(text) do
-    %{"role" => "user", "content" => text}
+    %{"role" => "user", "content" => SanitizeUnicode.sanitize(text)}
   end
 
   defp convert_user(%Message.User{content: blocks}) when is_list(blocks) do
@@ -426,8 +416,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     if parts == [], do: nil, else: %{"role" => "user", "content" => parts}
   end
 
-  defp user_content_part(%Content.Text{text: text}),
-    do: %{"type" => "text", "text" => text}
+  defp user_content_part(%Content.Text{text: text}), do: %{"type" => "text", "text" => SanitizeUnicode.sanitize(text)}
 
   defp user_content_part(%Content.Image{data: data, mime_type: mime}),
     do: %{"type" => "image_url", "image_url" => %{"url" => "data:#{mime};base64,#{data}"}}
@@ -454,18 +443,20 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     msg = put_assistant_content(msg, text_blocks, thinking_blocks, text, compat)
     msg = put_assistant_tool_calls(msg, tool_calls)
 
-    if has_content?(msg) or Map.has_key?(msg, "tool_calls"), do: msg, else: nil
+    if has_content?(msg) or Map.has_key?(msg, "tool_calls"), do: msg
   end
 
   defp put_assistant_content(msg, text_blocks, thinking_blocks, _text, %Compat{requires_thinking_as_text: true})
        when thinking_blocks != [] do
-    thinking_parts = Enum.map(thinking_blocks, fn b -> %{"type" => "text", "text" => b.thinking} end)
-    text_parts = Enum.map(text_blocks, fn b -> %{"type" => "text", "text" => b.text} end)
+    thinking_parts =
+      Enum.map(thinking_blocks, fn b -> %{"type" => "text", "text" => SanitizeUnicode.sanitize(b.thinking)} end)
+
+    text_parts = Enum.map(text_blocks, fn b -> %{"type" => "text", "text" => SanitizeUnicode.sanitize(b.text)} end)
     Map.put(msg, "content", thinking_parts ++ text_parts)
   end
 
   defp put_assistant_content(msg, _text_blocks, _thinking_blocks, text, _compat) when text != "" do
-    Map.put(msg, "content", text)
+    Map.put(msg, "content", SanitizeUnicode.sanitize(text))
   end
 
   defp put_assistant_content(msg, _text_blocks, _thinking_blocks, _text, _compat) do
@@ -505,7 +496,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
       |> Enum.map(& &1.text)
 
     text_result = Enum.join(text_parts, "\n")
-    content = if text_result != "", do: text_result, else: "(see attached image)"
+    content = if text_result == "", do: "(see attached image)", else: text_result
 
     tool_msg = %{
       "role" => "tool",
