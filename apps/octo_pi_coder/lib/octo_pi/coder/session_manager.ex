@@ -75,6 +75,48 @@ defmodule OctoPi.Coder.SessionManager do
     end
   end
 
+  @doc """
+  Find the most recent valid session file in `session_dir`, sorted by
+  mtime descending. Returns the path or `nil` when none exists.
+
+  Mirrors upstream `findMostRecentSession`
+  (`tmp/pi-mono/.../core/session-manager.ts:481-494`).
+  """
+  @spec find_recent(Path.t()) :: Path.t() | nil
+  def find_recent(session_dir) do
+    case File.ls(session_dir) do
+      {:error, _} ->
+        nil
+
+      {:ok, names} ->
+        names
+        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+        |> Enum.map(&Path.join(session_dir, &1))
+        |> Enum.filter(&valid_session_file?/1)
+        |> Enum.sort_by(&mtime/1, :desc)
+        |> List.first()
+    end
+  end
+
+  defp valid_session_file?(path) do
+    case File.open(path, [:read, :utf8]) do
+      {:ok, io} ->
+        line = IO.read(io, :line)
+        File.close(io)
+        is_binary(line) and match?({:ok, %{"type" => "session"}}, Jason.decode(line))
+
+      _ ->
+        false
+    end
+  end
+
+  defp mtime(path) do
+    case File.stat(path) do
+      {:ok, %{mtime: mtime}} -> mtime
+      _ -> {{0, 0, 0}, {0, 0, 0}}
+    end
+  end
+
   defp from_entries([], _path), do: {:error, :empty}
 
   defp from_entries([%Header{} = header | body], path) do

@@ -25,7 +25,7 @@ defmodule OctoPi.Coder.Session.Messages do
 
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.User
-  alias OctoPi.Coder.Session.{BranchSummaryMessage, CompactionSummaryMessage}
+  alias OctoPi.Coder.Session.{BranchSummaryMessage, CompactionSummaryMessage, MessageReader}
 
   # Verbatim from `messages.ts:13-27`.
   @compaction_prefix "The conversation history before this point was compacted into the following summary:\n\n<summary>\n"
@@ -34,13 +34,17 @@ defmodule OctoPi.Coder.Session.Messages do
   @branch_suffix "</summary>"
 
   @spec to_llm([term()]) :: [term()]
-  def to_llm(messages) when is_list(messages), do: Enum.map(messages, &convert/1)
+  def to_llm(messages) when is_list(messages) do
+    messages |> Enum.map(&convert/1) |> Enum.reject(&is_nil/1)
+  end
 
   defp convert(%CompactionSummaryMessage{summary: s, timestamp: ts}),
     do: wrap_user(@compaction_prefix <> s <> @compaction_suffix, ts)
 
   defp convert(%BranchSummaryMessage{summary: s, timestamp: ts}),
     do: wrap_user(@branch_prefix <> s <> @branch_suffix, ts)
+
+  defp convert(%{"role" => _} = map), do: MessageReader.from_map(map)
 
   defp convert(other), do: other
 

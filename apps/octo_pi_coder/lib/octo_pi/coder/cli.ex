@@ -28,10 +28,12 @@ defmodule OctoPi.Coder.CLI do
     help: :boolean,
     debug_render: :boolean,
     debug_events: :boolean,
-    trace: :string
+    trace: :string,
+    telemetry: :string,
+    continue: :boolean
   ]
 
-  @aliases [p: :print, m: :model, h: :help]
+  @aliases [p: :print, m: :model, h: :help, c: :continue]
 
   @type opts :: %{
           mode: :print | :rpc | :interactive,
@@ -77,7 +79,9 @@ defmodule OctoPi.Coder.CLI do
       cwd: switches[:cwd] || File.cwd!(),
       debug_render: switches[:debug_render] || false,
       debug_events: switches[:debug_events] || false,
-      trace: switches[:trace]
+      trace: switches[:trace],
+      telemetry: switches[:telemetry],
+      continue: switches[:continue] || false
     }
   end
 
@@ -253,6 +257,8 @@ defmodule OctoPi.Coder.CLI do
       --debug-events log stdin/key pipeline to debug_events.log
       --trace=PATH   write a timestamped tty/stdin trace to PATH (use to diagnose
                      shutdown leaks; install Tracer telemetry handler on startup)
+      --telemetry=PATH  write agent session/turn/tool telemetry to PATH
+      --continue, -c    resume the most recent session for this directory
     """
   end
 end

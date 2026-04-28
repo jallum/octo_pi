@@ -22,8 +22,14 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
+  alias OctoPi.AI.Content.Text, as: AIText
+  alias OctoPi.AI.Message.User, as: AIUser
   alias OctoPi.Coder
+  alias OctoPi.Coder.Session, as: CoderSession
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
+  alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
@@ -41,6 +47,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
+  alias OctoPi.TUI.AgentTelemetryLogger
   alias OctoPi.TUI.EventLogger
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
@@ -62,6 +69,7 @@ defmodule OctoPi.TUI.Interactive do
 
   @type t :: %__MODULE__{
           session: pid() | nil,
+          coder_session: pid() | nil,
           sup: pid() | nil,
           renderer: pid() | nil,
           terminal: pid() | nil,
@@ -101,6 +109,7 @@ defmodule OctoPi.TUI.Interactive do
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
+            coder_session: nil,
             sup: nil,
             renderer: nil,
             terminal: nil,
@@ -371,8 +380,17 @@ defmodule OctoPi.TUI.Interactive do
         Process.put(:tracer_fd, fd)
     end
 
+    case Keyword.get(opts, :telemetry) do
+      nil ->
+        :ok
+
+      telemetry_path ->
+        fd = AgentTelemetryLogger.attach(telemetry_path)
+        Process.put(:telemetry_fd, fd)
+    end
+
     extensions = load_extensions(opts, cwd)
-    session = start_agent_session(opts)
+    {session, coder_session} = start_sessions(opts, extensions)
 
     terminal_opts = build_terminal_opts(opts, write_fn)
 
@@ -406,6 +424,7 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %__MODULE__{
       session: session,
+      coder_session: coder_session,
       sup: sup,
       renderer: renderer,
       terminal: terminal,
@@ -569,6 +588,11 @@ defmodule OctoPi.TUI.Interactive do
       Process.delete(:tracer_fd)
     end
 
+    if fd = Process.get(:telemetry_fd) do
+      AgentTelemetryLogger.detach(fd)
+      Process.delete(:telemetry_fd)
+    end
+
     :ok
   end
 
@@ -616,8 +640,9 @@ defmodule OctoPi.TUI.Interactive do
   defp default_raw_mode(:enter), do: RawMode.enter()
   defp default_raw_mode(:exit), do: RawMode.exit()
 
-  defp start_agent_session(opts) do
+  defp start_sessions(opts, extensions) do
     cwd = Keyword.get(opts, :cwd, File.cwd!())
+    model = Keyword.fetch!(opts, :model)
     tools = Keyword.get_lazy(opts, :tools, fn -> Coder.default_tools(cwd) end)
 
     system_prompt =
@@ -625,15 +650,81 @@ defmodule OctoPi.TUI.Interactive do
         Coder.SystemPrompt.render(cwd: cwd, tools: tools)
       end)
 
-    session_opts =
+    if Keyword.get(opts, :continue, false) do
+      resume_or_new(cwd, model, tools, system_prompt, extensions, opts)
+    else
+      new_session(cwd, model, tools, system_prompt, extensions, opts)
+    end
+  end
+
+  defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
+    session_id = new_session_id()
+    {:ok, store_pid} = SessionStore.start_link(id: session_id, cwd: cwd)
+    sm = %SessionManager{cwd: cwd, session_id: session_id}
+
+    {:ok, coder_pid} =
+      CoderSession.start_link(
+        extensions: extensions,
+        session_manager: sm,
+        store_pid: store_pid,
+        model_provider: fn -> model end
+      )
+
+    agent_opts =
       put_if_present(
-        [model: Keyword.fetch!(opts, :model), tools: tools, system_prompt: system_prompt],
+        [model: model, tools: tools, system_prompt: system_prompt],
         :transport,
         opts[:transport]
       )
 
-    {:ok, pid} = OctoPi.Agent.start_session(session_opts)
-    pid
+    {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
+    :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+    {agent_pid, coder_pid}
+  end
+
+  defp resume_or_new(cwd, model, tools, system_prompt, extensions, opts) do
+    session_dir = SessionStore.session_dir(cwd)
+
+    case SessionManager.find_recent(session_dir) do
+      nil ->
+        new_session(cwd, model, tools, system_prompt, extensions, opts)
+
+      path ->
+        {:ok, sm} = SessionManager.load(path)
+        {:ok, store_pid} = SessionStore.start_link(id: sm.session_id, path: path)
+
+        {:ok, coder_pid} =
+          CoderSession.start_link(
+            extensions: extensions,
+            session_manager: sm,
+            store_pid: store_pid,
+            model_provider: fn -> model end
+          )
+
+        messages_provider = fn _session ->
+          ctx = CoderSession.build_session_context(coder_pid)
+          SessionMessages.to_llm(ctx.messages)
+        end
+
+        agent_opts =
+          put_if_present(
+            [model: model, tools: tools, system_prompt: system_prompt,
+             messages_provider: messages_provider],
+            :transport,
+            opts[:transport]
+          )
+
+        {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
+        :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+        {agent_pid, coder_pid}
+    end
+  end
+
+  defp new_session_id do
+    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
+
+    :io_lib.format("~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b", [a, b, c, d, e])
+    |> IO.iodata_to_binary()
   end
 
   defp put_if_present(kw, _k, nil), do: kw
@@ -1231,6 +1322,12 @@ defmodule OctoPi.TUI.Interactive do
 
   defp do_handle_submit(state, new_input, value) do
     prompt = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
+
+    if state.coder_session do
+      user_msg = %AIUser{content: [%AIText{text: value}], timestamp: :os.system_time(:millisecond)}
+      CoderSession.add_user_message(state.coder_session, user_msg)
+    end
+
     if state.session, do: OctoPi.Agent.prompt(state.session, prompt)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
@@ -1256,7 +1353,13 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: msg}
   end
 
-  defp dispatch_slash_command("compact", state), do: %{state | notification: "Compaction not yet implemented"}
+  defp dispatch_slash_command("compact", state) do
+    if state.coder_session do
+      Task.start(fn -> CoderSession.compact(state.coder_session, []) end)
+    end
+
+    state
+  end
 
   defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 

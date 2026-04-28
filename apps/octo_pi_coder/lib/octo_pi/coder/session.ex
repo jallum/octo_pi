@@ -24,6 +24,7 @@ defmodule OctoPi.Coder.Session do
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.MessageWriter
   alias OctoPi.Coder.SessionManager
 
   @typedoc "Optional providers default to closures returning sensible nils / defaults."
@@ -125,6 +126,30 @@ defmodule OctoPi.Coder.Session do
   @spec add_entry(GenServer.server(), Entry.t(), keyword()) :: {:ok, String.t()}
   def add_entry(server, entry, opts \\ []),
     do: GenServer.call(server, {:add_entry, entry, opts})
+
+  @doc """
+  Wire an agent pid into the session after init. Subscribes to agent
+  events and stores the pid for compaction responses.
+
+  Used during resumption where `Coder.Session` must start before
+  `Agent.Session` (so its `messages_provider` can close over the
+  coder session pid).
+  """
+  @spec set_agent_pid(GenServer.server(), pid()) :: :ok
+  def set_agent_pid(server, agent_pid),
+    do: GenServer.call(server, {:set_agent_pid, agent_pid})
+
+  @doc "Append a user prompt to the session. Called by the UI before `Agent.prompt/2`."
+  @spec add_user_message(GenServer.server(), OctoPi.AI.Message.User.t()) :: {:ok, String.t()}
+  def add_user_message(server, %OctoPi.AI.Message.User{} = msg) do
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      message: MessageWriter.from_user(msg)
+    }
+
+    add_entry(server, entry)
+  end
 
   @doc """
   Run the compaction orchestrator. Port of upstream `AgentSession.compact`
@@ -320,6 +345,11 @@ defmodule OctoPi.Coder.Session do
     forward_opts = Keyword.put(opts, :store, state.store_pid)
     {sm, id} = SessionManager.add_entry(state.session_manager, entry, forward_opts)
     {:reply, {:ok, id}, %{state | session_manager: sm}}
+  end
+
+  def handle_call({:set_agent_pid, agent_pid}, _from, state) do
+    OctoPi.Agent.subscribe(agent_pid, self(), :async)
+    {:reply, :ok, %{state | agent_pid: agent_pid}}
   end
 
   def handle_call({:compact, opts}, _from, state) do
@@ -597,6 +627,48 @@ defmodule OctoPi.Coder.Session do
   # ---- agent event handling ----
 
   @impl true
+  def handle_info(
+        {:octo_pi_agent_event, %OctoPi.Agent.Event.MessageEnd{message: msg}},
+        state
+      ) do
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      message: MessageWriter.from_assistant(msg)
+    }
+
+    {sm, _id} = SessionManager.add_entry(state.session_manager, entry, store: state.store_pid)
+    {:noreply, %{state | session_manager: sm}}
+  end
+
+  def handle_info(
+        {:octo_pi_agent_event,
+         %OctoPi.Agent.Event.ToolExecutionEnd{
+           tool_call_id: call_id,
+           tool_name: name,
+           result: result
+         }},
+        state
+      ) do
+    tool_result = %OctoPi.AI.Message.ToolResult{
+      tool_call_id: call_id,
+      tool_name: name,
+      content: result.content,
+      is_error?: result.is_error?,
+      details: result.details,
+      timestamp: :os.system_time(:millisecond)
+    }
+
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      message: MessageWriter.from_tool_result(tool_result)
+    }
+
+    {sm, _id} = SessionManager.add_entry(state.session_manager, entry, store: state.store_pid)
+    {:noreply, %{state | session_manager: sm}}
+  end
+
   def handle_info(
         {:octo_pi_agent_event, %OctoPi.Agent.Event.CompactionRequested{ref: ref, opts: opts}},
         %State{agent_pid: agent_pid} = state

@@ -2,7 +2,7 @@ defmodule OctoPi.Coder.SessionStore do
   @moduledoc """
   Per-session JSONL writer. Opens a file at
 
-      <root>/sessions/--<encoded-cwd>--/<id>.jsonl
+      <root>/sessions/--<encoded-cwd>--/<timestamp>_<id>.jsonl
 
   writes a v3 `SessionHeader` as the first line, then appends typed
   entries via `append/2`. One GenServer per session id, supervised
@@ -24,6 +24,14 @@ defmodule OctoPi.Coder.SessionStore do
   both encode to `a-b` and would share the same session directory.
   This matches upstream pi exactly — changing it would break
   cross-tool session sharing.
+
+  ## Filename format
+
+  New sessions: `{iso8601-timestamp}_{id}.jsonl` with `:` and `.`
+  replaced by `-`, matching upstream pi-mono exactly.
+
+  Resumed sessions: pass `:path` explicitly. The file is opened in
+  append mode and no header is written.
   """
 
   use GenServer, restart: :temporary
@@ -33,6 +41,7 @@ defmodule OctoPi.Coder.SessionStore do
           | {:cwd, String.t()}
           | {:root, String.t()}
           | {:parent_session, String.t() | nil}
+          | {:path, String.t()}
 
   @default_root Path.expand("~/.pi/agent")
 
@@ -43,6 +52,8 @@ defmodule OctoPi.Coder.SessionStore do
     * `:cwd` (required) — absolute working directory
     * `:root` — base dir (default `~/.pi/agent`)
     * `:parent_session` — optional parent session id
+    * `:path` — use this exact path instead of computing one; opens in
+      append mode without writing a header (for resumption)
   """
   @spec open([open_opt()]) :: {:ok, pid()}
   def open(opts) do
@@ -63,6 +74,17 @@ defmodule OctoPi.Coder.SessionStore do
   @doc "Flush and shut down."
   @spec close(pid()) :: :ok
   def close(pid), do: GenServer.call(pid, :close)
+
+  @doc """
+  Compute the session directory for a given cwd.
+
+      SessionStore.session_dir(cwd)
+      #=> "~/.pi/agent/sessions/--home-alice-proj--"
+  """
+  @spec session_dir(String.t(), String.t()) :: String.t()
+  def session_dir(cwd, root \\ @default_root) do
+    Path.join([root, "sessions", "--" <> encode_cwd(cwd) <> "--"])
+  end
 
   @doc """
   Stream a session JSONL file as decoded entries (header + body).
@@ -97,16 +119,24 @@ defmodule OctoPi.Coder.SessionStore do
   @impl true
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
-    cwd = Keyword.fetch!(opts, :cwd)
-    root = Keyword.get(opts, :root, @default_root)
-    parent = Keyword.get(opts, :parent_session)
 
-    path = build_path(root, cwd, id)
-    File.mkdir_p!(Path.dirname(path))
-    io = File.open!(path, [:write, :utf8])
-    write_header(io, id, cwd, parent)
+    case Keyword.get(opts, :path) do
+      nil ->
+        cwd = Keyword.fetch!(opts, :cwd)
+        root = Keyword.get(opts, :root, @default_root)
+        parent = Keyword.get(opts, :parent_session)
 
-    {:ok, %{id: id, path: path, io: io}}
+        path = build_path(root, cwd, id)
+        File.mkdir_p!(Path.dirname(path))
+        io = File.open!(path, [:write, :utf8])
+        write_header(io, id, cwd, parent)
+        {:ok, %{id: id, path: path, io: io}}
+
+      existing_path ->
+        File.mkdir_p!(Path.dirname(existing_path))
+        io = File.open!(existing_path, [:append, :utf8])
+        {:ok, %{id: id, path: existing_path, io: io}}
+    end
   end
 
   @impl true
@@ -126,13 +156,23 @@ defmodule OctoPi.Coder.SessionStore do
 
   defp build_path(root, cwd, id) do
     encoded = encode_cwd(cwd)
-    Path.join([root, "sessions", "--" <> encoded <> "--", id <> ".jsonl"])
+    ts = timestamp_prefix()
+    Path.join([root, "sessions", "--" <> encoded <> "--", ts <> "_" <> id <> ".jsonl"])
   end
 
   # Upstream encodes absolute paths by replacing `/` with `-`.
   # `/home/alice/proj` → `home-alice-proj`.
   defp encode_cwd("/" <> rest), do: String.replace(rest, "/", "-")
   defp encode_cwd(cwd), do: String.replace(cwd, "/", "-")
+
+  # Upstream filename timestamp: ISO 8601 with `:` and `.` replaced by `-`.
+  # e.g. `2026-04-28T01-58-51-657Z`
+  defp timestamp_prefix do
+    DateTime.utc_now()
+    |> DateTime.to_iso8601()
+    |> String.replace(":", "-")
+    |> String.replace(".", "-")
+  end
 
   defp write_header(io, id, cwd, parent) do
     header = [
