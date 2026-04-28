@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-ixp",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "G5b. Tree-selector: keybinds + selection state + filter cycling",
   "type": "task",
-  "updated_at": "2026-04-28T00:05:09.435263Z"
+  "updated_at": "2026-04-28T00:09:03.650346Z"
 }
