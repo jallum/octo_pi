@@ -4,13 +4,26 @@ defmodule OctoPi.Agent.Application do
   use Application
 
   alias OctoPi.Agent.AbortRef
-  alias OctoPi.Telemetry.AgentHandler
 
   @impl true
   def start(_type, _args) do
     :ets.new(AbortRef.table_name(), [:named_table, :public, :set, read_concurrency: true])
 
-    AgentHandler.attach()
+    OctoPi.Tracer.register(%{
+      id: :agent,
+      description: "Agent session, turn, and tool lifecycle events",
+      events: [
+        [:octo_pi_agent, :session, :start],
+        [:octo_pi_agent, :session, :stop],
+        [:octo_pi_agent, :turn, :start],
+        [:octo_pi_agent, :turn, :stop],
+        [:octo_pi_agent, :turn, :exception],
+        [:octo_pi_agent, :tool, :start],
+        [:octo_pi_agent, :tool, :stop],
+        [:octo_pi_agent, :tool, :error]
+      ],
+      level: :info
+    })
 
     children = [
       {Task.Supervisor, name: OctoPi.Agent.TurnTaskSupervisor},

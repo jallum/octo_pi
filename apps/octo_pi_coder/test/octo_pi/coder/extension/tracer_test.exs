@@ -1,4 +1,4 @@
-defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
+defmodule OctoPi.Coder.Extension.TracerTest do
   use ExUnit.Case
 
   import ExUnit.CaptureLog
@@ -6,11 +6,28 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
-  alias OctoPi.Coder.Extension.TelemetryHandler
 
   setup do
-    TelemetryHandler.attach()
-    on_exit(fn -> TelemetryHandler.detach() end)
+    OctoPi.Tracer.register(%{
+      id: :coder_extension,
+      description: "",
+      events: %{
+        info: [
+          [:octo_pi_coder, :extension, :loaded],
+          [:octo_pi_coder, :extension, :handler_cancel]
+        ],
+        warning: [
+          [:octo_pi_coder, :extension, :load_error],
+          [:octo_pi_coder, :extension, :handler_error]
+        ],
+        debug: [
+          [:octo_pi_coder, :extension, :emit]
+        ]
+      }
+    })
+
+    OctoPi.Tracer.attach_all()
+    on_exit(fn -> OctoPi.Tracer.detach(:coder_extension) end)
     :ok
   end
 
@@ -32,10 +49,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
           Dispatcher.emit([e], event, ctx())
         end)
 
-      assert log =~ "Dispatched session_start"
-      assert log =~ "fire_and_forget"
-      assert log =~ "1 handlers"
-      assert log =~ "µs"
+      assert log =~ "octo_pi_coder.extension.emit"
+      assert log =~ "event_type=session_start"
+      assert log =~ "handler_count=1"
     end
   end
 
@@ -48,8 +64,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
           Dispatcher.emit([e], %{type: :session_start}, ctx())
         end)
 
-      assert log =~ "Extension a error on session_start"
-      assert log =~ "test boom"
+      assert log =~ "octo_pi_coder.extension.handler_error"
+      assert log =~ "extension_id=a"
+      assert log =~ "event_type=session_start"
     end
   end
 
@@ -62,8 +79,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
           Dispatcher.emit([e], %{type: :session_before_switch}, ctx())
         end)
 
-      assert log =~ "Extension a cancelled session_before_switch"
-      assert log =~ "dirty"
+      assert log =~ "octo_pi_coder.extension.handler_cancel"
+      assert log =~ "extension_id=a"
+      assert log =~ "event_type=session_before_switch"
     end
   end
 
@@ -78,7 +96,9 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
           )
         end)
 
-      assert log =~ "Extension test-ext loaded (3 handlers, 1 tools)"
+      assert log =~ "octo_pi_coder.extension.loaded"
+      assert log =~ "id=test-ext"
+      assert log =~ "handler_count=3"
     end
 
     test "logs load error at warning level" do
@@ -91,13 +111,14 @@ defmodule OctoPi.Coder.Extension.TelemetryHandlerTest do
           )
         end)
 
-      assert log =~ "Failed to load extension at /ext/broken"
+      assert log =~ "octo_pi_coder.extension.load_error"
+      assert log =~ "path=/ext/broken"
     end
   end
 
-  describe "attach/detach" do
+  describe "detach" do
     test "detach stops logging" do
-      TelemetryHandler.detach()
+      OctoPi.Tracer.detach(:coder_extension)
 
       log =
         capture_log([level: :info], fn ->

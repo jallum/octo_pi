@@ -5,16 +5,28 @@ defmodule OctoPi.Coder.Application do
 
   @impl true
   def start(_type, _args) do
+    OctoPi.Tracer.register(%{
+      id: :coder_extension,
+      description: "Coder extension load, dispatch, and error events",
+      events: %{
+        info: [
+          [:octo_pi_coder, :extension, :loaded],
+          [:octo_pi_coder, :extension, :handler_cancel]
+        ],
+        warning: [
+          [:octo_pi_coder, :extension, :load_error],
+          [:octo_pi_coder, :extension, :handler_error]
+        ],
+        debug: [
+          [:octo_pi_coder, :extension, :emit]
+        ]
+      }
+    })
+
     children = [
-      # Lookup registry for per-path file-mutex workers. Entries are
-      # added/removed lazily by `OctoPi.Coder.FileMutex`.
       {Registry, keys: :unique, name: OctoPi.Coder.FileMutex.Registry},
-      # DynamicSupervisor hosting the per-path lock GenServers.
       {DynamicSupervisor, name: OctoPi.Coder.FileMutex.Supervisor, strategy: :one_for_one},
-      # DynamicSupervisor hosting per-session-id SessionStore GenServers.
       {DynamicSupervisor, name: OctoPi.Coder.SessionStore.Supervisor, strategy: :one_for_one},
-      # DynamicSupervisor hosting per-session orchestrator GenServers
-      # (`OctoPi.Coder.Session`). One child per active session.
       {DynamicSupervisor, name: OctoPi.Coder.Session.Supervisor, strategy: :one_for_one}
     ]
 

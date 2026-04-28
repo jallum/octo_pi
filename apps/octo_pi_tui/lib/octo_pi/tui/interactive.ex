@@ -35,7 +35,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
-  alias OctoPi.TUI.AgentTelemetryLogger
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Components
@@ -46,7 +45,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.ModelSelector
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
-  alias OctoPi.TUI.EventLogger
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
@@ -58,7 +56,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
-  alias OctoPi.TUI.Tracer
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -372,29 +369,6 @@ defmodule OctoPi.TUI.Interactive do
       Process.put(:debug_render_log, fd)
     end
 
-    if Keyword.get(opts, :debug_events, false) do
-      path = Path.join(cwd, "debug_events.log")
-      EventLogger.attach(path)
-    end
-
-    case Keyword.get(opts, :trace) do
-      nil ->
-        :ok
-
-      trace_path ->
-        fd = Tracer.attach(trace_path)
-        Process.put(:tracer_fd, fd)
-    end
-
-    case Keyword.get(opts, :telemetry) do
-      nil ->
-        :ok
-
-      telemetry_path ->
-        fd = AgentTelemetryLogger.attach(telemetry_path)
-        Process.put(:telemetry_fd, fd)
-    end
-
     extensions = load_extensions(opts, cwd)
     session = start_sessions(opts, extensions)
 
@@ -589,16 +563,6 @@ defmodule OctoPi.TUI.Interactive do
     if fd = Process.get(:debug_render_log) do
       File.close(fd)
       Process.delete(:debug_render_log)
-    end
-
-    if fd = Process.get(:tracer_fd) do
-      Tracer.detach(fd)
-      Process.delete(:tracer_fd)
-    end
-
-    if fd = Process.get(:telemetry_fd) do
-      AgentTelemetryLogger.detach(fd)
-      Process.delete(:telemetry_fd)
     end
 
     :ok

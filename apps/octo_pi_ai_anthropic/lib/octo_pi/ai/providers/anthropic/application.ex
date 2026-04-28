@@ -4,12 +4,22 @@ defmodule OctoPi.AI.Providers.Anthropic.Application do
   use Application
 
   alias OctoPi.AI.ProviderRegistry
-  alias OctoPi.Telemetry.AnthropicHandler
 
   @impl true
   def start(_type, _args) do
     ProviderRegistry.register(:anthropic_messages, OctoPi.AI.Providers.Anthropic)
-    AnthropicHandler.attach()
+
+    OctoPi.Tracer.register(%{
+      id: :anthropic,
+      description: "Anthropic API request and auth events",
+      events: [
+        [:octo_pi_ai_anthropic, :request, :start],
+        [:octo_pi_ai_anthropic, :request, :stop],
+        [:octo_pi_ai_anthropic, :request, :exception],
+        [:octo_pi_ai_anthropic, :auth, :resolved]
+      ],
+      level: :info
+    })
 
     children = [
       {Task.Supervisor, name: OctoPi.AI.Providers.Anthropic.TaskSup}

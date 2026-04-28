@@ -1,9 +1,9 @@
-defmodule OctoPi.Coder.MixProject do
+defmodule OctoPi.Tracer.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :octo_pi_coder,
+      app: :octo_pi_tracer,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",
@@ -16,22 +16,16 @@ defmodule OctoPi.Coder.MixProject do
     ]
   end
 
+  defp elixirc_paths(_), do: ["lib"]
+
   def application do
     [
-      extra_applications: [:logger, :erlexec],
-      mod: {OctoPi.Coder.Application, []}
+      extra_applications: [:logger],
+      mod: {OctoPi.Tracer.Application, []}
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
-
   defp deps do
-    [
-      {:octo_pi_tracer, in_umbrella: true},
-      {:octo_pi_agent, in_umbrella: true},
-      {:octo_pi_ai_openai, in_umbrella: true},
-      {:erlexec, "~> 2.3"}
-    ]
+    [{:telemetry, "~> 1.4"}]
   end
 end

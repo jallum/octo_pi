@@ -59,6 +59,24 @@ defmodule OctoPi.Coder.CLITest do
     test "no args defaults to interactive mode" do
       assert {:ok, %{mode: :interactive, prompt: nil}} = CLI.parse_args([])
     end
+
+    test "--log-telemetry=PATH is parsed into opts" do
+      assert {:ok, %{log_telemetry: "/tmp/tracer.log"}} =
+               CLI.parse_args(["--log-telemetry=/tmp/tracer.log"])
+    end
+
+    test "--list-telemetry sets list_telemetry: true" do
+      assert {:ok, %{list_telemetry: true}} = CLI.parse_args(["--list-telemetry"])
+    end
+
+    test "--no-telemetry splits comma-separated ids into a list" do
+      assert {:ok, %{no_telemetry: ["agent", "tui_events"]}} =
+               CLI.parse_args(["--no-telemetry=agent,tui_events"])
+    end
+
+    test "--no-telemetry with no value defaults to empty list" do
+      assert {:ok, %{no_telemetry: []}} = CLI.parse_args([])
+    end
   end
 
   describe "safe_emit/1" do

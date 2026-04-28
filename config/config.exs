@@ -9,6 +9,8 @@
 # move said applications out of the umbrella.
 import Config
 
+config :logger, :default_formatter, metadata: [:domain]
+
 # Sample configuration:
 #
 #     config :logger, :default_handler,

@@ -28,6 +28,7 @@ defmodule OctoPi.AI.MixProject do
 
   defp deps do
     [
+      {:octo_pi_tracer, in_umbrella: true},
       {:jason, "~> 1.4"},
       {:telemetry, "~> 1.4"}
     ]
