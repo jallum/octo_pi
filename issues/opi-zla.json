@@ -2,13 +2,14 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-28T00:34:09Z",
   "created": "2026-04-28T00:30:50Z",
   "description": "The upstream pi-mono TUI does not clear the screen on first render — it assumes a clean terminal and skips the clear entirely.\n\nChange: In renderer.ex, initialize needs_clear to false so the first render calls full_render(lines, cursor_seq, state, false) instead of full_render(lines, cursor_seq, state, true).\n\nEffect: Removes the \\e[2J\\e[H\\e[3J escape sequence from the first render output, matching upstream behavior.\n\nFiles changed:\n- apps/octo_pi_tui/lib/octo_pi/tui/renderer.ex (init/1: needs_clear default)\n- apps/octo_pi_tui/test/octo_pi/tui/renderer_test.exs (update test assertion)",
   "id": "opi-zla",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Stop clearing screen on first render (match upstream)",
   "type": "task",
-  "updated_at": "2026-04-28T00:30:50Z"
+  "updated_at": "2026-04-28T00:34:09Z"
 }
