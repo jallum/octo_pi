@@ -555,15 +555,17 @@ defmodule OctoPi.TUI.Interactive do
   def handle_call({:ui_request, msg}, from, state) do
     {new_state, reply} = handle_ui_request(state, msg)
 
-    case reply do
-      :pending ->
-        new_state = put_dialog_from(new_state, from)
-        new_state = render_frame(new_state)
-        {:noreply, new_state, loader_timeout(new_state)}
+    new_state =
+      case reply do
+        :pending -> put_dialog_from(new_state, from)
+        _ -> new_state
+      end
 
-      val ->
-        new_state = render_frame(new_state)
-        {:reply, val, new_state, loader_timeout(new_state)}
+    new_state = render_frame(new_state)
+
+    case reply do
+      :pending -> {:noreply, new_state, loader_timeout(new_state)}
+      val -> {:reply, val, new_state, loader_timeout(new_state)}
     end
   end
 
@@ -635,7 +637,7 @@ defmodule OctoPi.TUI.Interactive do
   defp advance(%{exit: true} = state), do: {:stop, :normal, state}
 
   defp advance(state) do
-    state = maybe_suspend(state)
+    state = handle_suspend(state)
     state = maybe_launch_editor(state)
     state = render_frame(state)
     {:noreply, state, loader_timeout(state)}
@@ -870,14 +872,14 @@ defmodule OctoPi.TUI.Interactive do
 
   # Suspend cycles the Terminal: close (deactivates → cooked mode for
   # the parent shell) → SIGTSTP → open (re-activates after fg).
-  defp maybe_suspend(%{suspend_pending: true} = state) do
+  defp handle_suspend(%{suspend_pending: true} = state) do
     Terminal.close(state.terminal)
     state.send_sigtstp_fn.()
     Terminal.open(state.terminal)
     %{state | suspend_pending: false}
   end
 
-  defp maybe_suspend(state), do: state
+  defp handle_suspend(state), do: state
 
   @doc false
   def default_send_sigtstp do
