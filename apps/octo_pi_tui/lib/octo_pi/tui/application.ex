@@ -41,10 +41,9 @@ defmodule OctoPi.TUI.Application do
 
     OctoPi.Tracer.register(%{
       id: :tui_render,
-      description: "TUI renderer frame timing and throttle skips",
+      description: "TUI renderer frame timing",
       events: [
-        [:octo_pi_tui, :renderer, :render],
-        [:octo_pi_tui, :render_throttle, :skip]
+        [:octo_pi_tui, :renderer, :render]
       ],
       level: :debug
     })

@@ -27,7 +27,6 @@ defmodule OctoPi.TUI.Renderer do
   `:csi_2026?` at construction time.
   """
 
-  alias OctoPi.TUI.RenderThrottle
   alias OctoPi.TUI.Terminal.Image
 
   require Logger
@@ -93,7 +92,7 @@ defmodule OctoPi.TUI.Renderer do
   def render(r, lines, cursor_seq, _opts) when is_list(lines) do
     text_lines = Enum.reject(lines, &Image.image_line?/1)
 
-    case RenderThrottle.check_width_overflow(text_lines, r.width) do
+    case check_width_overflow(text_lines, r.width) do
       {:overflow, overflows} ->
         Logger.warning("Renderer: #{length(overflows)} line(s) exceed terminal width #{r.width}")
 
@@ -441,6 +440,24 @@ defmodule OctoPi.TUI.Renderer do
   end
 
   # --- helpers ---
+
+  defp check_width_overflow(lines, width) do
+    overflows =
+      lines
+      |> Enum.with_index()
+      |> Enum.reduce([], fn {line, idx}, acc ->
+        visible_len = line |> strip_ansi() |> String.length()
+        if visible_len > width, do: [{idx, visible_len} | acc], else: acc
+      end)
+      |> Enum.reverse()
+
+    case overflows do
+      [] -> :ok
+      list -> {:overflow, list}
+    end
+  end
+
+  defp strip_ansi(text), do: Regex.replace(~r/\e\[[0-9;]*[A-Za-z]/, text, "")
 
   defp move_cursor_v(0), do: ""
   defp move_cursor_v(n) when n > 0, do: "\e[#{n}B"
