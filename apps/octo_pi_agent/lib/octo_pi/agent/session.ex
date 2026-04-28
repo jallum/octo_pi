@@ -596,7 +596,7 @@ defmodule OctoPi.Agent.Session do
       messages: MessageLog.to_list(store.session.messages)
     })
 
-    emit_session_stop(store.session, reason, MessageLog.count(store.session.messages))
+    emit_session_stop(store.session, reason, store.turn_id, MessageLog.count(store.session.messages))
     flip_idle(store)
   end
 
@@ -614,7 +614,7 @@ defmodule OctoPi.Agent.Session do
       messages: MessageLog.to_list(messages)
     })
 
-    emit_session_stop(store.session, :aborted, MessageLog.count(messages))
+    emit_session_stop(store.session, :aborted, store.turn_id, MessageLog.count(messages))
 
     store = put_in(store.session.messages, messages)
     store = put_in(store.session.error_message, "aborted by caller")
@@ -846,13 +846,13 @@ defmodule OctoPi.Agent.Session do
     }
   end
 
-  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _turn_count), do: :ok
+  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _turn_count, _message_count), do: :ok
 
-  defp emit_session_stop(%Session.State{} = state, reason, turn_count) do
+  defp emit_session_stop(%Session.State{} = state, reason, turn_count, message_count) do
     :telemetry.execute(
       [:octo_pi_agent, :session, :stop],
       %{duration: System.monotonic_time() - state.run_started_at_mono},
-      %{reason: reason, turn_count: turn_count}
+      %{reason: reason, turn_count: turn_count, message_count: message_count}
     )
   end
 
