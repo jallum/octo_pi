@@ -18,7 +18,14 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
+  alias OctoPi.TUI.Components.LoginDialog
+  alias OctoPi.TUI.Components.SelectList
+  alias OctoPi.TUI.Components.SessionSelector
+  alias OctoPi.TUI.Components.SettingsList
+  alias OctoPi.TUI.Components.SettingsSelector
+  alias OctoPi.TUI.Components.SummarizePrompt
   alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.WelcomeBanner
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
@@ -1586,6 +1593,177 @@ defmodule OctoPi.TUI.InteractiveTest do
       lines = Interactive.render(s)
       text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
       assert text =~ "Something happened"
+    end
+  end
+
+  describe "interactive component dispatch — LoginDialog" do
+    test "/login slash command opens LoginDialog with theme" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{input: %Input{value: "/login", cursor: 6}, theme: theme}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %LoginDialog{} = s2.login_dialog
+      assert s2.focused_component == {:dialog, :login}
+    end
+
+    test "/login with nil theme shows notification instead" do
+      s = %Interactive{input: %Input{value: "/login", cursor: 6}, theme: nil}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.login_dialog == nil
+      assert s2.notification
+    end
+
+    test "Escape from LoginDialog unfocuses and clears dialog" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ld = LoginDialog.new(theme)
+      s = %Interactive{login_dialog: ld, focused_component: {:dialog, :login}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.login_dialog == nil
+      assert s2.focused_component == :input
+    end
+
+    test "Enter with valid API key clears dialog" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      valid_key = "sk-ant-" <> String.duplicate("x", 25)
+      ld = LoginDialog.new(theme)
+      ld = Enum.reduce(String.graphemes(valid_key), ld, &LoginDialog.handle_char(&2, &1))
+      s = %Interactive{login_dialog: ld, focused_component: {:dialog, :login}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.login_dialog == nil
+      assert s2.focused_component == :input
+    end
+  end
+
+  describe "interactive component dispatch — SettingsSelector" do
+    test "/settings slash command opens SettingsSelector with theme" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{input: %Input{value: "/settings", cursor: 9}, theme: theme}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %SettingsSelector{} = s2.settings_selector
+      assert s2.focused_component == {:dialog, :settings}
+    end
+
+    test "Escape from SettingsSelector unfocuses" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ss = SettingsSelector.new(theme)
+      s = %Interactive{settings_selector: ss, focused_component: {:dialog, :settings}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.settings_selector == nil
+      assert s2.focused_component == :input
+    end
+
+    test "Enter on SettingsSelector cycles setting and keeps dialog open" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ss = SettingsSelector.new(theme)
+      s = %Interactive{settings_selector: ss, focused_component: {:dialog, :settings}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.focused_component == :input
+    end
+  end
+
+  describe "interactive component dispatch — SessionSelector" do
+    test "/sessions slash command opens SessionSelector with theme" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{input: %Input{value: "/sessions", cursor: 9}, theme: theme, footer: %Footer{cwd: "/tmp"}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %SessionSelector{} = s2.session_selector
+      assert s2.focused_component == {:dialog, :session_selector}
+    end
+
+    test "Escape from SessionSelector unfocuses" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ss = SessionSelector.new([], theme)
+      s = %Interactive{session_selector: ss, focused_component: {:dialog, :session_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.session_selector == nil
+      assert s2.focused_component == :input
+    end
+
+    test "Enter with no sessions cancels" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ss = SessionSelector.new([], theme)
+      s = %Interactive{session_selector: ss, focused_component: {:dialog, :session_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.focused_component == :input
+    end
+  end
+
+  describe "interactive component dispatch — TreeSelector" do
+    test "Escape from TreeSelector unfocuses" do
+      entries = []
+      ts = TreeSelector.new(entries)
+      s = %Interactive{tree_selector: ts, focused_component: {:dialog, :tree_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.tree_selector == nil
+      assert s2.focused_component == :input
+    end
+  end
+
+  describe "interactive component dispatch — SummarizePrompt" do
+    test "Escape from SummarizePrompt unfocuses" do
+      sp = SummarizePrompt.new()
+      s = %Interactive{summarize_prompt: sp, focused_component: {:dialog, :summarize_prompt}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.summarize_prompt == nil
+      assert s2.focused_component == :input
+    end
+
+    test "Enter on SummarizePrompt selects choice and unfocuses" do
+      sp = SummarizePrompt.new()
+      s = %Interactive{summarize_prompt: sp, focused_component: {:dialog, :summarize_prompt}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.summarize_prompt == nil
+      assert s2.focused_component == :input
+    end
+
+    test "TreeSelector Enter transitions to SummarizePrompt" do
+      alias OctoPi.Coder.Session.Entry
+
+      entry = %Entry.Message{id: "e1", parent_id: nil, message: nil, timestamp: 0}
+      ts = TreeSelector.new([entry])
+      s = %Interactive{tree_selector: ts, focused_component: {:dialog, :tree_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %SummarizePrompt{} = s2.summarize_prompt
+      assert s2.focused_component == {:dialog, :summarize_prompt}
+    end
+  end
+
+  describe "interactive component dispatch — SelectList (UIHost :select)" do
+    test "handle_ui_request :select creates a SelectList and sets focus" do
+      options = [%{label: "A", value: :a}, %{label: "B", value: :b}]
+      {s, :pending} = Interactive.handle_ui_request(%Interactive{}, {:select, options, []})
+      assert %SelectList{} = s.select_list
+      assert s.focused_component == {:dialog, :select_list}
+    end
+
+    test "Escape from SelectList clears dialog and select_list" do
+      sl = %SelectList{items: ["option 1", "option 2"]}
+      s = %Interactive{select_list: sl, focused_component: {:dialog, :select_list}, dialog: nil}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.select_list == nil
+      assert s2.focused_component == :input
+    end
+
+    test "Up/Down moves SelectList selection" do
+      sl = %SelectList{items: ["a", "b", "c"], selected: 0}
+      s = %Interactive{select_list: sl, focused_component: {:dialog, :select_list}}
+      s2 = Interactive.handle_event(s, %Key{key: :down})
+      assert s2.select_list.selected == 1
+    end
+  end
+
+  describe "interactive component dispatch — SettingsList" do
+    test "Escape from SettingsList unfocuses" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+
+      items = [
+        SettingsList.Item.checkbox("show_line_numbers", "Show line numbers", false)
+      ]
+
+      sl = SettingsList.new(items, theme)
+      s = %Interactive{settings_list: sl, focused_component: {:dialog, :settings_list}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.settings_list == nil
+      assert s2.focused_component == :input
     end
   end
 

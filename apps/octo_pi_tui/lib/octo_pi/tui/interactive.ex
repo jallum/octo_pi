@@ -46,12 +46,18 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.Container
-  alias OctoPi.TUI.Components.CustomMessage
   alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.Header
+  alias OctoPi.TUI.Components.LoginDialog
   alias OctoPi.TUI.Components.ModelSelector
+  alias OctoPi.TUI.Components.SelectList
+  alias OctoPi.TUI.Components.SessionSelector
+  alias OctoPi.TUI.Components.SettingsList
+  alias OctoPi.TUI.Components.SettingsSelector
+  alias OctoPi.TUI.Components.SummarizePrompt
   alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.TruncatedText
   alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.FooterData
@@ -97,6 +103,13 @@ defmodule OctoPi.TUI.Interactive do
           model: Model.t() | nil,
           models: [Model.t()],
           model_selector: ModelSelector.t() | nil,
+          login_dialog: LoginDialog.t() | nil,
+          settings_selector: SettingsSelector.t() | nil,
+          settings_list: SettingsList.t() | nil,
+          session_selector: SessionSelector.t() | nil,
+          tree_selector: TreeSelector.t() | nil,
+          summarize_prompt: SummarizePrompt.t() | nil,
+          select_list: SelectList.t() | nil,
           dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
@@ -143,6 +156,13 @@ defmodule OctoPi.TUI.Interactive do
             model: nil,
             models: [],
             model_selector: nil,
+            login_dialog: nil,
+            settings_selector: nil,
+            settings_list: nil,
+            session_selector: nil,
+            tree_selector: nil,
+            summarize_prompt: nil,
+            select_list: nil,
             dequeue_overlay: nil,
             tools_expanded: false,
             thinking_visible: true,
@@ -272,7 +292,10 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:select, options, opts}) do
-    {%{state | dialog: {:select, nil, options, opts}}, :pending}
+    items = Enum.map(options, &select_list_item/1)
+    sl = %SelectList{items: items, selected: Keyword.get(opts, :initial, 0)}
+    new_state = focus(%{state | dialog: {:select, nil, options, opts}, select_list: sl}, {:dialog, :select_list})
+    {new_state, :pending}
   end
 
   def handle_ui_request(state, {:confirm, prompt, opts}) do
@@ -890,6 +913,7 @@ defmodule OctoPi.TUI.Interactive do
     lines = render(state, input_lines)
     lines = maybe_composite_model_selector(state, lines)
     lines = maybe_composite_dequeue_overlay(state, lines)
+    lines = maybe_composite_focused_dialog(state, lines)
 
     case Process.get(:debug_render_log) do
       nil -> :ok
@@ -921,6 +945,39 @@ defmodule OctoPi.TUI.Interactive do
     overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [overlay], w, h)
   end
+
+  defp maybe_composite_focused_dialog(%{focused_component: {:dialog, key}} = state, lines) do
+    ov_w = min(70, state.width)
+
+    case render_dialog_overlay(state, key, ov_w) do
+      nil ->
+        lines
+
+      ov_lines ->
+        ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
+        Overlay.composite(lines, [ov], state.width, state.height)
+    end
+  end
+
+  defp maybe_composite_focused_dialog(_state, lines), do: lines
+
+  defp render_dialog_overlay(%{login_dialog: d}, :login, w) when not is_nil(d), do: LoginDialog.render(d, w)
+
+  defp render_dialog_overlay(%{settings_selector: d}, :settings, w) when not is_nil(d),
+    do: SettingsSelector.render(d, w)
+
+  defp render_dialog_overlay(%{settings_list: d}, :settings_list, w) when not is_nil(d), do: SettingsList.render(d, w)
+
+  defp render_dialog_overlay(%{session_selector: d}, :session_selector, w) when not is_nil(d),
+    do: SessionSelector.render(d, w)
+
+  defp render_dialog_overlay(%{tree_selector: d}, :tree_selector, w) when not is_nil(d), do: TreeSelector.render(d, w)
+
+  defp render_dialog_overlay(%{summarize_prompt: d}, :summarize_prompt, w) when not is_nil(d),
+    do: SummarizePrompt.render(d, w)
+
+  defp render_dialog_overlay(%{select_list: d}, :select_list, w) when not is_nil(d), do: SelectList.render(d, w)
+  defp render_dialog_overlay(_, _, _), do: nil
 
   defp render_dequeue_items(items, selected, _width, theme) do
     Enum.with_index(items, fn {type, msg}, idx ->
@@ -1295,7 +1352,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
 
-  defp dispatch_slash(cmd, state, new_input, _value) when cmd in ~w(help clear compact cost model theme config) do
+  defp dispatch_slash(cmd, state, new_input, _value)
+       when cmd in ~w(help clear compact cost login model sessions settings theme config) do
     dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
   end
 
@@ -1368,6 +1426,32 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 
   defp dispatch_slash_command("config", state), do: %{state | notification: "Config: use --help for startup options"}
+
+  defp dispatch_slash_command("login", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open login dialog"}
+
+  defp dispatch_slash_command("login", state) do
+    ld = LoginDialog.new(state.theme)
+    focus(%{state | login_dialog: ld}, {:dialog, :login})
+  end
+
+  defp dispatch_slash_command("settings", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open settings"}
+
+  defp dispatch_slash_command("settings", state) do
+    ss = SettingsSelector.new(state.theme)
+    focus(%{state | settings_selector: ss}, {:dialog, :settings})
+  end
+
+  defp dispatch_slash_command("sessions", %{theme: nil} = state),
+    do: %{state | notification: "No theme loaded — cannot open session selector"}
+
+  defp dispatch_slash_command("sessions", state) do
+    sessions = list_recent_sessions(state)
+    current_id = state.session && inspect(state.session)
+    ss = SessionSelector.new(sessions, state.theme, current: current_id)
+    focus(%{state | session_selector: ss}, {:dialog, :session_selector})
+  end
 
   defp try_extension_shortcut([], _key, _state), do: :pass
 
@@ -1629,11 +1713,21 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_key_to_focused(state, key) do
     case state.focused_component do
       :input -> handle_input_key(state, key)
-      {:dialog, :model_selector} -> handle_model_selector_key(state, key)
+      {:dialog, dialog_key} -> dispatch_dialog_key(state, dialog_key, key)
       {:overlay, :dequeue} -> handle_dequeue_key(state, state.dequeue_overlay, key)
       nil -> state
     end
   end
+
+  defp dispatch_dialog_key(state, :model_selector, key), do: handle_model_selector_key(state, key)
+  defp dispatch_dialog_key(state, :login, key), do: handle_login_dialog_key(state, key)
+  defp dispatch_dialog_key(state, :settings, key), do: handle_settings_selector_key(state, key)
+  defp dispatch_dialog_key(state, :settings_list, key), do: handle_settings_list_key(state, key)
+  defp dispatch_dialog_key(state, :session_selector, key), do: handle_session_selector_key(state, key)
+  defp dispatch_dialog_key(state, :tree_selector, key), do: handle_tree_selector_key(state, key)
+  defp dispatch_dialog_key(state, :summarize_prompt, key), do: handle_summarize_prompt_key(state, key)
+  defp dispatch_dialog_key(state, :select_list, key), do: handle_select_list_key(state, key)
+  defp dispatch_dialog_key(state, _unknown, _key), do: state
 
   defp handle_input_key(state, key) do
     kb = get_keybindings(state)
@@ -1663,6 +1757,122 @@ defmodule OctoPi.TUI.Interactive do
         apply_component_result(state, :model_selector, result)
     end
   end
+
+  defp handle_login_dialog_key(%{login_dialog: ld} = state, key) do
+    case LoginDialog.handle_key(ld, key) do
+      {_new_ld, [:cancel]} -> unfocus(%{state | login_dialog: nil})
+      {_new_ld, [{:api_key_entered, api_key}]} -> apply_api_key(unfocus(%{state | login_dialog: nil}), api_key)
+      result -> apply_component_result(state, :login_dialog, result)
+    end
+  end
+
+  defp handle_settings_selector_key(%{settings_selector: ss} = state, key) do
+    case SettingsSelector.handle_key(ss, key) do
+      {_new_ss, [:cancel]} ->
+        unfocus(%{state | settings_selector: nil})
+
+      {new_ss, [{:setting_changed, setting_key, value}]} ->
+        apply_setting(unfocus(%{state | settings_selector: new_ss}), setting_key, value)
+
+      result ->
+        apply_component_result(state, :settings_selector, result)
+    end
+  end
+
+  defp handle_settings_list_key(%{settings_list: sl} = state, key) do
+    case SettingsList.handle_key(sl, key) do
+      {_new_sl, [:cancel]} ->
+        unfocus(%{state | settings_list: nil})
+
+      {new_sl, [{:setting_changed, item_id, value}]} ->
+        apply_setting(unfocus(%{state | settings_list: new_sl}), item_id, value)
+
+      result ->
+        apply_component_result(state, :settings_list, result)
+    end
+  end
+
+  defp handle_session_selector_key(%{session_selector: ss} = state, key) do
+    case SessionSelector.handle_key(ss, key) do
+      {_new_ss, [:cancel]} -> unfocus(%{state | session_selector: nil})
+      {_new_ss, [{:resume_session, session}]} -> resume_session(unfocus(%{state | session_selector: nil}), session)
+      {new_ss, [{:delete_session, session}]} -> delete_session(%{state | session_selector: new_ss}, session)
+      result -> apply_component_result(state, :session_selector, result)
+    end
+  end
+
+  defp handle_tree_selector_key(%{tree_selector: ts} = state, key) do
+    case TreeSelector.handle_key(ts, key) do
+      {_new_ts, [:cancel]} ->
+        unfocus(%{state | tree_selector: nil})
+
+      {_new_ts, [{:select, _entry_id}]} ->
+        sp = SummarizePrompt.new()
+        focus(%{state | tree_selector: nil, summarize_prompt: sp}, {:dialog, :summarize_prompt})
+
+      result ->
+        apply_component_result(state, :tree_selector, result)
+    end
+  end
+
+  defp handle_summarize_prompt_key(%{summarize_prompt: sp} = state, key) do
+    case SummarizePrompt.handle_key(sp, key) do
+      {_sp, [:cancel]} -> unfocus(%{state | summarize_prompt: nil})
+      {_sp, [{:result, _choice}]} -> unfocus(%{state | summarize_prompt: nil})
+      {_sp, [:awaiting_custom_instructions]} -> unfocus(%{state | summarize_prompt: nil, editor_pending: true})
+      result -> apply_component_result(state, :summarize_prompt, result)
+    end
+  end
+
+  defp handle_select_list_key(%{select_list: sl} = state, key) do
+    case SelectList.handle_key(sl, key) do
+      {_new_sl, [:cancel]} -> resolve_select_list(state, nil)
+      {_new_sl, [{:select, value}]} -> resolve_select_list(state, value)
+      result -> apply_component_result(state, :select_list, result)
+    end
+  end
+
+  defp apply_api_key(state, _api_key), do: state
+
+  defp apply_setting(state, _key, _value), do: state
+
+  defp resume_session(state, _session), do: state
+
+  defp delete_session(state, _session), do: state
+
+  defp resolve_select_list(%{dialog: {:select, from, _options, _opts}} = state, value) when not is_nil(from) do
+    GenServer.reply(from, value)
+    unfocus(%{state | select_list: nil, dialog: nil})
+  end
+
+  defp resolve_select_list(state, _value) do
+    unfocus(%{state | select_list: nil, dialog: nil})
+  end
+
+  defp list_recent_sessions(%{footer: %Footer{cwd: cwd}}) do
+    session_dir = SessionStore.session_dir(cwd)
+
+    case File.ls(session_dir) do
+      {:ok, names} ->
+        names
+        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+        |> Enum.map(fn name ->
+          id = String.replace_suffix(name, ".jsonl", "")
+          %{id: id, name: id, message_count: 0}
+        end)
+        |> Enum.sort_by(& &1.name, :desc)
+
+      _ ->
+        []
+    end
+  end
+
+  defp select_list_item(%SelectList.Item{} = item), do: item
+
+  defp select_list_item(%{value: v, label: l} = m),
+    do: %SelectList.Item{value: v, label: l, description: Map.get(m, :description)}
+
+  defp select_list_item(s) when is_binary(s), do: s
 
   defp focus(state, target), do: %{state | focused_component: target}
   defp unfocus(state), do: %{state | focused_component: :input}
