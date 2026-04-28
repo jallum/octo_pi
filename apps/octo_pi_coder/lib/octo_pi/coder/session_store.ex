@@ -196,11 +196,23 @@ defmodule OctoPi.Coder.SessionStore do
   # normal encoder which is hash-ordered; callers that care about key
   # order should pass an ordered list of pairs.
   defp encode_line(entry) when is_list(entry) do
-    normalized = Enum.map(entry, fn {k, v} -> {to_string(k), v} end)
+    normalized = Enum.map(entry, fn {k, v} -> {to_string(k), scrub_utf8(v)} end)
     Jason.encode!(Jason.OrderedObject.new(normalized)) <> "\n"
   end
 
-  defp encode_line(entry) when is_map(entry), do: Jason.encode!(entry) <> "\n"
+  defp encode_line(entry) when is_map(entry), do: Jason.encode!(scrub_utf8(entry)) <> "\n"
+
+  defp scrub_utf8(v) when is_binary(v) do
+    case :unicode.characters_to_binary(v) do
+      s when is_binary(s) -> s
+      {:error, good, _} -> good
+      {:incomplete, good, _} -> good
+    end
+  end
+
+  defp scrub_utf8(v) when is_list(v), do: Enum.map(v, &scrub_utf8/1)
+  defp scrub_utf8(%{} = v), do: Map.new(v, fn {k, val} -> {scrub_utf8(k), scrub_utf8(val)} end)
+  defp scrub_utf8(v), do: v
 
   defp iso8601_now, do: DateTime.to_iso8601(DateTime.utc_now())
 end

@@ -63,6 +63,17 @@ defmodule OctoPi.TUI.WrapAnsiTest do
       assert WrapAnsi.visible_width("\t") == 3
       assert WrapAnsi.visible_width("\t\e[31m界\e[0m") == 5
     end
+
+    test "truncated multi-byte UTF-8 followed by ANSI code does not crash" do
+      # 0xE2 0x94 = first two bytes of a 3-byte box-drawing char (e.g. ─ = 0xE2 0x94 0x80),
+      # followed immediately by an ESC SGR code — the incomplete sequence must be dropped.
+      bad = <<0xE2, 0x94, 0x1B, 0x5B, 0x33, 0x39, 0x6D>>
+      assert is_integer(WrapAnsi.visible_width(bad))
+    end
+
+    test "arbitrary invalid UTF-8 bytes do not crash" do
+      assert is_integer(WrapAnsi.visible_width(<<0xFF, 0xFE, 0x80>>))
+    end
   end
 
   describe "truncate_to_width/4" do

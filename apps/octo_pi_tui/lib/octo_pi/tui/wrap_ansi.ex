@@ -399,6 +399,7 @@ defmodule OctoPi.TUI.WrapAnsi do
   defp do_strip(<<"\e_", rest::binary>>, acc), do: do_strip(skip_osc(rest), acc)
   defp do_strip(<<"\e", _::8, rest::binary>>, acc), do: do_strip(rest, acc)
   defp do_strip(<<c::utf8, rest::binary>>, acc), do: do_strip(rest, acc <> <<c::utf8>>)
+  defp do_strip(<<_::8, rest::binary>>, acc), do: do_strip(rest, acc)
 
   defp skip_csi(<<>>), do: ""
   defp skip_csi(<<b::8, rest::binary>>) when b >= 0x40 and b <= 0x7E, do: rest

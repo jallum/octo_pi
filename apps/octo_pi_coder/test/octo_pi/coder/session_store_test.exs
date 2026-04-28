@@ -86,6 +86,38 @@ defmodule OctoPi.Coder.SessionStoreTest do
     end
   end
 
+  describe "append/2 — invalid UTF-8 in text content" do
+    test "survives a map with a truncated multi-byte UTF-8 sequence in a text field", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "utf8", cwd: tmp, root: tmp)
+
+      # 0xE2 0x94 is the start of a 3-byte box-drawing char sequence; the third
+      # continuation byte is missing — Jason.encode! would raise without sanitization.
+      bad_text = "prefix" <> <<0xE2, 0x94>> <> "suffix"
+      :ok = SessionStore.append(pid, %{"type" => "message", "text" => bad_text})
+
+      path = SessionStore.path(pid)
+      :ok = SessionStore.close(pid)
+
+      lines = path |> File.read!() |> String.split("\n", trim: true)
+      assert length(lines) == 2
+      decoded = Jason.decode!(Enum.at(lines, 1))
+      assert is_binary(decoded["text"])
+    end
+
+    test "survives deeply nested invalid UTF-8 in content blocks", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "nested", cwd: tmp, root: tmp)
+
+      bad_content = [%{"type" => "text", "text" => <<0xFF, 0xFE>>}]
+      :ok = SessionStore.append(pid, %{"type" => "message", "content" => bad_content})
+
+      path = SessionStore.path(pid)
+      :ok = SessionStore.close(pid)
+
+      lines = path |> File.read!() |> String.split("\n", trim: true)
+      assert length(lines) == 2
+    end
+  end
+
   describe "close/1" do
     test "flushes and the file is readable after close", %{tmp: tmp} do
       {:ok, pid} = SessionStore.open(id: "cl", cwd: tmp, root: tmp)
