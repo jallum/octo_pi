@@ -7,16 +7,15 @@ defmodule OctoPi.TUI.Components.Loader do
   alias OctoPi.TUI.Theme
 
   @default_frames ~w(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+  @frame_interval_ms 80
 
   defstruct message: "Loading...",
             frames: @default_frames,
-            frame: 0,
             cancellable: false
 
   @type t :: %__MODULE__{
           message: String.t(),
           frames: [String.t()],
-          frame: non_neg_integer(),
           cancellable: boolean()
         }
 
@@ -25,14 +24,8 @@ defmodule OctoPi.TUI.Components.Loader do
     %__MODULE__{
       message: Keyword.get(opts, :message, "Loading..."),
       frames: Keyword.get(opts, :frames, @default_frames),
-      frame: 0,
       cancellable: Keyword.get(opts, :cancellable, false)
     }
-  end
-
-  @spec advance_frame(t()) :: t()
-  def advance_frame(%__MODULE__{frame: f, frames: frames} = loader) do
-    %{loader | frame: rem(f + 1, length(frames))}
   end
 
   @spec set_message(t(), String.t()) :: t()
@@ -44,8 +37,9 @@ defmodule OctoPi.TUI.Components.Loader do
   def render(%__MODULE__{} = loader, width), do: render(loader, width, nil)
 
   @spec render(t(), pos_integer(), Theme.t() | nil) :: [String.t()]
-  def render(%__MODULE__{} = loader, width, theme) do
-    spinner = Enum.at(loader.frames, loader.frame, "")
+  def render(%__MODULE__{frames: frames} = loader, width, theme) do
+    frame = :millisecond |> System.monotonic_time() |> div(@frame_interval_ms) |> rem(length(frames))
+    spinner = Enum.at(frames, frame, "")
 
     line =
       case theme do

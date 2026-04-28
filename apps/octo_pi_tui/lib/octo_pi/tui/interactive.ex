@@ -1083,8 +1083,7 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, %Resize{width: w, height: h}),
     do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
 
-  def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
-    do: %{state | loader: Components.Loader.advance_frame(loader)}
+  def handle_event(%{loader: %Components.Loader{}} = state, :loader_tick), do: state
 
   def handle_event(state, {:bash_done, id, output, exit_code}) do
     transcript =

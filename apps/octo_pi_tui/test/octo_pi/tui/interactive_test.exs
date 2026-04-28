@@ -860,16 +860,11 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — loader tick" do
-    test "loader_tick advances the frame" do
+    test "loader_tick is a no-op on state" do
       loader = Loader.new(frames: ["a", "b", "c"])
       s = %Interactive{loader: loader}
-      assert s.loader.frame == 0
-
-      s = Interactive.handle_event(s, :loader_tick)
-      assert s.loader.frame == 1
-
-      s = Interactive.handle_event(s, :loader_tick)
-      assert s.loader.frame == 2
+      s2 = Interactive.handle_event(s, :loader_tick)
+      assert s2 == s
     end
 
     test "loader_tick is a no-op when loader is nil" do
