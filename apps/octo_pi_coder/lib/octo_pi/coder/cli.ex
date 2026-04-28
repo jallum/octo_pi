@@ -146,7 +146,7 @@ defmodule OctoPi.Coder.CLI do
 
   defp setup_telemetry(%{log_telemetry: path, no_telemetry: excluded}) do
     if path, do: FileBackend.install(path)
-    Enum.each(excluded, &:telemetry.detach/1)
+    Enum.each(excluded, &OctoPi.Tracer.detach/1)
   end
 
   defp dispatch(%{mode: :print} = opts) do
