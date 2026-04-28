@@ -102,7 +102,16 @@ defmodule OctoPi.Coder.CLI do
   # and "pattern can never match" warnings for every mode clause.
   @dialyzer [
     {:no_match, run: 1},
-    {:no_unused, [dispatch: 1, run_interactive: 1, run_rpc: 1, rpc_loop: 1]}
+    {:no_unused,
+     [
+       dispatch: 1,
+       run_interactive: 1,
+       run_rpc: 1,
+       rpc_loop: 1,
+       silence_console_for_tui: 0,
+       setup_telemetry: 1,
+       ensure_tui_available: 0
+     ]}
   ]
 
   @spec run([String.t()]) :: integer()
@@ -119,11 +128,25 @@ defmodule OctoPi.Coder.CLI do
 
         0
 
+      {:ok, %{mode: :interactive} = opts} ->
+        silence_console_for_tui()
+        setup_telemetry(opts)
+        dispatch(opts)
+
       {:ok, opts} ->
-        if opts.log_telemetry, do: FileBackend.install(opts.log_telemetry)
-        Enum.each(opts.no_telemetry, &:telemetry.detach/1)
+        setup_telemetry(opts)
         dispatch(opts)
     end
+  end
+
+  defp silence_console_for_tui do
+    :logger.remove_handler(:default)
+    Logger.remove_backend(:console, flush: true)
+  end
+
+  defp setup_telemetry(%{log_telemetry: path, no_telemetry: excluded}) do
+    if path, do: FileBackend.install(path)
+    Enum.each(excluded, &:telemetry.detach/1)
   end
 
   defp dispatch(%{mode: :print} = opts) do
@@ -137,15 +160,8 @@ defmodule OctoPi.Coder.CLI do
   defp dispatch(%{mode: :interactive} = opts), do: run_interactive(opts)
 
   defp run_interactive(opts) do
-    # `octo_pi_tui` is an umbrella sibling; depending on it from
-    # `octo_pi_coder` would create a cycle with the TUI's dep on
-    # us. Instead, resolve the module at runtime — if the TUI app
-    # wasn't built into this release, gracefully tell the user.
-    case Code.ensure_loaded(OctoPi.TUI.Interactive) do
+    case ensure_tui_available() do
       {:module, mod} ->
-        # Ensure the TUI app's supervision tree (Events Registry
-        # etc.) is up before Interactive.run/1 tries to register
-        # subscribers against it.
         {:ok, _} = Application.ensure_all_started(:octo_pi_tui)
         if opts.log_telemetry, do: OctoPi.Tracer.attach_all()
         tools = OctoPi.Coder.default_tools(opts.cwd)
@@ -171,6 +187,8 @@ defmodule OctoPi.Coder.CLI do
         1
     end
   end
+
+  defp ensure_tui_available, do: Code.ensure_loaded(OctoPi.TUI.Interactive)
 
   defp run_rpc(opts) do
     tools = OctoPi.Coder.default_tools(opts.cwd)
