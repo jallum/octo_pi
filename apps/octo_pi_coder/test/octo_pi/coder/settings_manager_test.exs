@@ -1,8 +1,8 @@
 defmodule OctoPi.Coder.SettingsManagerTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.Coder.SettingsManager
   alias OctoPi.Coder.Compaction.Settings, as: CompactionSettings
+  alias OctoPi.Coder.SettingsManager
 
   @moduletag :tmp_dir
 
@@ -50,14 +50,22 @@ defmodule OctoPi.Coder.SettingsManagerTest do
       assert sm.merged["foo"] == "global"
     end
 
-    test "project array replaces global array wholesale", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "project array replaces global array wholesale", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(global_dir, "settings.json"), ~s|{"extensions": ["/a.ts", "/b.ts"]}|)
       File.write!(Path.join(pi_dir, "settings.json"), ~s|{"extensions": ["/c.ts"]}|)
       sm = SettingsManager.load(project_dir, global_dir: global_dir)
       assert sm.merged["extensions"] == ["/c.ts"]
     end
 
-    test "project nested map merges with global nested map", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "project nested map merges with global nested map", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(global_dir, "settings.json"), ~s|{"compaction": {"enabled": false, "reserveTokens": 8192}}|)
       File.write!(Path.join(pi_dir, "settings.json"), ~s|{"compaction": {"enabled": true}}|)
       sm = SettingsManager.load(project_dir, global_dir: global_dir)
@@ -66,7 +74,11 @@ defmodule OctoPi.Coder.SettingsManagerTest do
       assert comp["reserveTokens"] == 8192
     end
 
-    test "global_settings and project_settings preserved separately", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "global_settings and project_settings preserved separately", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(global_dir, "settings.json"), ~s|{"x": 1}|)
       File.write!(Path.join(pi_dir, "settings.json"), ~s|{"y": 2}|)
       sm = SettingsManager.load(project_dir, global_dir: global_dir)
@@ -88,7 +100,11 @@ defmodule OctoPi.Coder.SettingsManagerTest do
       assert sm.global_settings == %{}
     end
 
-    test "invalid project JSON collected as :project error", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "invalid project JSON collected as :project error", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(pi_dir, "settings.json"), "{ invalid")
       sm = SettingsManager.load(project_dir, global_dir: global_dir)
       assert length(sm.errors) == 1
@@ -96,12 +112,16 @@ defmodule OctoPi.Coder.SettingsManagerTest do
       assert sm.project_settings == %{}
     end
 
-    test "both files invalid → two errors collected", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "both files invalid → two errors collected", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(global_dir, "settings.json"), "{ bad global")
       File.write!(Path.join(pi_dir, "settings.json"), "{ bad project")
       sm = SettingsManager.load(project_dir, global_dir: global_dir)
       assert length(sm.errors) == 2
-      assert Enum.map(sm.errors, & &1.scope) |> Enum.sort() == [:global, :project]
+      assert sm.errors |> Enum.map(& &1.scope) |> Enum.sort() == [:global, :project]
     end
 
     test "non-object JSON (array) collected as error", %{project_dir: project_dir, global_dir: global_dir} do
@@ -191,7 +211,11 @@ defmodule OctoPi.Coder.SettingsManagerTest do
       assert s.enabled == true
     end
 
-    test "project compaction overrides global via load/2", %{project_dir: project_dir, global_dir: global_dir, pi_dir: pi_dir} do
+    test "project compaction overrides global via load/2", %{
+      project_dir: project_dir,
+      global_dir: global_dir,
+      pi_dir: pi_dir
+    } do
       File.write!(Path.join(global_dir, "settings.json"), ~s|{"compaction": {"enabled": false, "reserveTokens": 4096}}|)
       File.write!(Path.join(pi_dir, "settings.json"), ~s|{"compaction": {"reserveTokens": 32768}}|)
       sm = SettingsManager.load(project_dir, global_dir: global_dir)

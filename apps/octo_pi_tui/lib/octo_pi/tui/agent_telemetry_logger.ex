@@ -55,7 +55,11 @@ defmodule OctoPi.TUI.AgentTelemetryLogger do
 
   defp handle_event([:octo_pi_agent, :tool, event], %{duration: dur}, meta, fd) do
     ms = System.convert_time_unit(dur, :native, :millisecond)
-    IO.write(fd, "[tool.#{event}] duration=#{ms}ms name=#{meta[:tool_name]} id=#{meta[:tool_call_id]} error=#{meta[:is_error?]}\n")
+
+    IO.write(
+      fd,
+      "[tool.#{event}] duration=#{ms}ms name=#{meta[:tool_name]} id=#{meta[:tool_call_id]} error=#{meta[:is_error?]}\n"
+    )
   end
 
   defp handle_event(event, _measurements, _meta, fd) do
@@ -65,7 +69,7 @@ defmodule OctoPi.TUI.AgentTelemetryLogger do
   defp fmt(system_time) do
     system_time
     |> System.convert_time_unit(:native, :microsecond)
-    |> then(&DateTime.from_unix!(&1, :microsecond))
+    |> DateTime.from_unix!(:microsecond)
     |> Calendar.strftime("%H:%M:%S.%f")
   end
 end

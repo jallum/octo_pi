@@ -12,8 +12,12 @@ defmodule OctoPi.Coder.Session.MessageWriter do
   messages.ts in pi-mono).
   """
 
-  alias OctoPi.AI.Content.{Image, Text, Thinking}
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Content.Image
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
 
   @doc "Convert a `%User{}` to an Entry.Message.message map."
@@ -65,8 +69,7 @@ defmodule OctoPi.Coder.Session.MessageWriter do
 
   defp user_block(%Text{text: t}), do: %{"type" => "text", "text" => t}
 
-  defp user_block(%Image{data: d, mime_type: mt}),
-    do: %{"type" => "image", "data" => d, "mimeType" => mt}
+  defp user_block(%Image{data: d, mime_type: mt}), do: %{"type" => "image", "data" => d, "mimeType" => mt}
 
   defp assistant_content(blocks), do: Enum.flat_map(blocks, &assistant_block/1)
 

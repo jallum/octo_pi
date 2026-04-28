@@ -54,8 +54,7 @@ defmodule OctoPi.Coder.Extensions.Commands do
 
   defp do_compact(api, ""), do: api.compact.([])
 
-  defp do_compact(api, instructions),
-    do: api.compact.(custom_instructions: instructions)
+  defp do_compact(api, instructions), do: api.compact.(custom_instructions: instructions)
 
   defp do_tree(_api, ""), do: {:error, "usage: /tree <entry_id> [--summarize [instructions]]"}
 

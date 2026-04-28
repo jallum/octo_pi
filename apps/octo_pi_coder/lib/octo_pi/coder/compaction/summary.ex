@@ -32,10 +32,12 @@ defmodule OctoPi.Coder.Compaction.Summary do
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Event
-  alias OctoPi.AI.Message.{Assistant, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Model
   alias OctoPi.AI.StreamOptions
-  alias OctoPi.Coder.Compaction.{Prompts, Serialize}
+  alias OctoPi.Coder.Compaction.Prompts
+  alias OctoPi.Coder.Compaction.Serialize
 
   @type variant :: :default | :turn_prefix
 
@@ -99,9 +101,8 @@ defmodule OctoPi.Coder.Compaction.Summary do
   # Mirrors `compaction.ts:569-572` —
   # `model.reasoning && thinkingLevel && thinkingLevel !== "off"`.
   # Off / nil / non-reasoning model → omit `reasoning` from StreamOptions.
-  defp resolve_reasoning(%Model{reasoning: true}, level)
-       when level in [:minimal, :low, :medium, :high, :xhigh],
-       do: level
+  defp resolve_reasoning(%Model{reasoning: true}, level) when level in [:minimal, :low, :medium, :high, :xhigh],
+    do: level
 
   defp resolve_reasoning(_model, _level), do: nil
 
@@ -111,6 +112,7 @@ defmodule OctoPi.Coder.Compaction.Summary do
 
   defp append_custom(prompt, nil), do: prompt
   defp append_custom(prompt, ""), do: prompt
+
   defp append_custom(prompt, instructions) when is_binary(instructions) do
     prompt <> "\n\nAdditional focus: " <> instructions
   end
@@ -120,8 +122,12 @@ defmodule OctoPi.Coder.Compaction.Summary do
   end
 
   defp build_prompt(convo, prev, base_prompt) do
-    "<conversation>\n" <> convo <> "\n</conversation>\n\n" <>
-      "<previous-summary>\n" <> prev <> "\n</previous-summary>\n\n" <>
+    "<conversation>\n" <>
+      convo <>
+      "\n</conversation>\n\n" <>
+      "<previous-summary>\n" <>
+      prev <>
+      "\n</previous-summary>\n\n" <>
       base_prompt
   end
 
@@ -134,7 +140,8 @@ defmodule OctoPi.Coder.Compaction.Summary do
   end
 
   defp consume(stream) do
-    Enum.reduce_while(stream, :no_done, fn
+    stream
+    |> Enum.reduce_while(:no_done, fn
       %Event.Done{message: %Assistant{content: content}}, _acc ->
         {:halt, {:ok, extract_text(content)}}
 

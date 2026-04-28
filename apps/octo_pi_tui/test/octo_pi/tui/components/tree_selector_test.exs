@@ -53,7 +53,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     test "builds from flat entries" do
       entries = [user_entry("u1", nil, "hi"), asst_entry("a1", "u1", "hello")]
       sel = TreeSelector.new(entries)
-      assert TreeSelector.selected_id(sel) != nil
+      assert TreeSelector.selected_id(sel)
     end
 
     test "initial filter defaults to :default" do
@@ -67,6 +67,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         asst_entry("a1", "u1", "hello"),
         user_entry("u2", "a1", "bye")
       ]
+
       sel = TreeSelector.new(entries, initial_selected_id: "a1")
       assert TreeSelector.selected_id(sel) == "a1"
     end
@@ -76,6 +77,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         user_entry("u1", nil, "hi"),
         asst_entry("a1", "u1", "hello")
       ]
+
       sel = TreeSelector.new(entries, leaf_id: "a1")
       assert TreeSelector.selected_id(sel) == "a1"
     end
@@ -88,6 +90,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         model_change("m1", "u2"),
         user_entry("u3", "a1", "sibling")
       ]
+
       sel = TreeSelector.new(entries, leaf_id: "m1")
       # model_change is filtered out in :default → should land on u2
       assert TreeSelector.selected_id(sel) == "u2"
@@ -103,6 +106,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         asst_entry("a1", "u1", "2"),
         user_entry("u2", "a1", "3")
       ]
+
       {:ok, sel: TreeSelector.new(entries, leaf_id: "u2")}
     end
 
@@ -163,6 +167,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         flat_nodes: [],
         filtered_nodes: []
       }
+
       {_sel1, events} = press_named(sel, :enter)
       assert events == []
     end
@@ -188,6 +193,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         asst_entry("a1", "u1", "hi"),
         user_entry("u2", "a1", "bye")
       ]
+
       {:ok, sel: TreeSelector.new(entries, leaf_id: "u2")}
     end
 
@@ -225,6 +231,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         asst_entry("a2", "u2", "response"),
         user_entry("u3", "a1", "sibling")
       ]
+
       sel = TreeSelector.new(entries, leaf_id: "a2", initial_selected_id: "a2")
       assert TreeSelector.selected_id(sel) == "a2"
 
@@ -250,6 +257,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
         user_entry("u1", nil, "hello"),
         asst_entry("a1", "u1", "world")
       ]
+
       sel = TreeSelector.new(entries, leaf_id: "a1")
       lines = TreeSelector.render(sel, 80)
       assert length(lines) == length(sel.filtered_nodes)

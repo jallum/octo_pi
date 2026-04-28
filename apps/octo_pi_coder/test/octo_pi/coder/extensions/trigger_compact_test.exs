@@ -180,7 +180,7 @@ defmodule OctoPi.Coder.Extensions.TriggerCompactTest do
       # 105k → compact! (prev=95k ≤ threshold, current > threshold)
       {:ok, state} = Agent.start_link(fn -> %{previous_tokens: nil} end)
       {:ok, compact_calls} = Agent.start_link(fn -> [] end)
-      current_tokens_ref = Agent.start_link(fn -> @threshold + 10_000 end) |> elem(1)
+      current_tokens_ref = fn -> @threshold + 10_000 end |> Agent.start_link() |> elem(1)
 
       factory = fn api ->
         api =

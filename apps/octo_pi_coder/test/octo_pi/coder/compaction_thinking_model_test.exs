@@ -20,7 +20,8 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.AI.Model
-  alias OctoPi.Coder.Compaction.{Result, Settings}
+  alias OctoPi.Coder.Compaction.Result
+  alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
@@ -100,7 +101,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   end
 
   defp add_conversation(session) do
-    ts = DateTime.utc_now() |> DateTime.to_iso8601()
+    ts = DateTime.to_iso8601(DateTime.utc_now())
 
     {:ok, _u_id} =
       Session.add_entry(session, %Entry.Message{
@@ -125,7 +126,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
 
   # Persist the compaction result (mirrors finish_compaction/5 in Session).
   defp persist_compaction(session, %Result{} = r, fallback_first_id) do
-    ts = DateTime.utc_now() |> DateTime.to_iso8601()
+    ts = DateTime.to_iso8601(DateTime.utc_now())
     first_kept = r.first_kept_entry_id || fallback_first_id
 
     {:ok, _} =

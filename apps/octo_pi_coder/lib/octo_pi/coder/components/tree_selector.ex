@@ -58,7 +58,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     defstruct [:entry, :children, :label, :label_timestamp]
 
     @type t :: %__MODULE__{
-            entry: OctoPi.Coder.Session.Entry.t(),
+            entry: Entry.t(),
             children: [t()],
             label: String.t() | nil,
             label_timestamp: String.t() | nil
@@ -131,8 +131,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp rebuild_children(%TreeNode{} = node, by_id) do
     children =
-      node.children
-      |> Enum.map(fn child ->
+      Enum.map(node.children, fn child ->
         by_id
         |> Map.fetch!(child.entry.id)
         |> rebuild_children(by_id)
@@ -155,9 +154,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     contains_active = build_contains_active_map(roots, leaf_id)
     multiple_roots = length(roots) > 1
 
-    ordered_roots =
-      roots
-      |> sort_by_active(contains_active)
+    ordered_roots = sort_by_active(roots, contains_active)
 
     # No Enum.reverse() — Elixir list-as-stack: head is top, so forward
     # order here means the first root is popped first (correct).
@@ -172,8 +169,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     do_flatten(initial_stack, [], contains_active, multiple_roots)
   end
 
-  defp do_flatten([], result, _contains_active, _multiple_roots),
-    do: Enum.reverse(result)
+  defp do_flatten([], result, _contains_active, _multiple_roots), do: Enum.reverse(result)
 
   defp do_flatten([item | rest_stack], result, contains_active, multiple_roots) do
     {node, indent, just_branched, show_connector, is_last, gutters, is_virtual_root_child} = item
@@ -258,7 +254,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           ""
         end
 
-      connector_position = if connector != "", do: display_indent - 1, else: -1
+      connector_position = if connector == "", do: -1, else: display_indent - 1
       prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
 
       path_marker = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
@@ -282,8 +278,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   end
 
   defp build_prefix_chars(total_chars, gutters, connector, connector_position, is_last) do
-    0..(total_chars - 1)//1
-    |> Enum.map(fn i ->
+    Enum.map_join(0..(total_chars - 1)//1, fn i ->
       level = div(i, 3)
       pos_in_level = rem(i, 3)
 
@@ -291,7 +286,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
       cond do
         gutter ->
-          if pos_in_level == 0, do: (if gutter.show, do: "│", else: " "), else: " "
+          if pos_in_level == 0, do: if(gutter.show, do: "│", else: " "), else: " "
 
         connector != "" and level == connector_position ->
           case pos_in_level do
@@ -304,7 +299,6 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           " "
       end
     end)
-    |> Enum.join()
   end
 
   defp entry_display_text(%TreeNode{entry: entry}) do
@@ -316,13 +310,13 @@ defmodule OctoPi.Coder.Components.TreeSelector do
         text = extract_content_text(msg["content"])
         stop = msg["stopReason"] || msg["stop_reason"]
 
-        if text != "" do
-          "assistant: " <> text
-        else
+        if text == "" do
           case stop do
             "aborted" -> "assistant: (aborted)"
             _ -> "assistant: (no content)"
           end
+        else
+          "assistant: " <> text
         end
 
       %Entry.Message{message: %{"role" => "toolResult"} = msg} ->
@@ -483,12 +477,13 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
     flat_node = Map.fetch!(map, node_id)
 
-    updated = %{flat_node |
-      indent: indent,
-      show_connector: show_connector,
-      is_last: is_last,
-      gutters: gutters,
-      is_virtual_root_child: is_virtual_root_child
+    updated = %{
+      flat_node
+      | indent: indent,
+        show_connector: show_connector,
+        is_last: is_last,
+        gutters: gutters,
+        is_virtual_root_child: is_virtual_root_child
     }
 
     map = Map.put(map, node_id, updated)
@@ -574,7 +569,8 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp build_active_path_ids(flat_nodes, leaf_id) do
     entry_map = Map.new(flat_nodes, fn fn_node -> {fn_node.node.entry.id, fn_node} end)
 
-    Stream.unfold(leaf_id, fn
+    leaf_id
+    |> Stream.unfold(fn
       nil ->
         nil
 
@@ -589,8 +585,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp detect_multiple_roots(flat_nodes) do
     root_count =
-      flat_nodes
-      |> Enum.count(fn fn_node -> fn_node.node.entry.parent_id == nil end)
+      Enum.count(flat_nodes, fn fn_node -> fn_node.node.entry.parent_id == nil end)
 
     root_count > 1
   end

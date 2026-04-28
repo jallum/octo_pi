@@ -1,8 +1,12 @@
 defmodule OctoPi.Coder.Compaction.TokensTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.Content.{Image, Text, Thinking}
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Content.Image
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.Settings
@@ -169,6 +173,7 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
 
     test "branchSummary parity with BranchSummaryMessage struct" do
       alias OctoPi.Coder.Session.BranchSummaryMessage
+
       text = "some branch summary text"
       map = %{"role" => "branchSummary", "summary" => text}
       struct = BranchSummaryMessage.new(text, "root", 0)
@@ -177,6 +182,7 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
 
     test "compactionSummary parity with CompactionSummaryMessage struct" do
       alias OctoPi.Coder.Session.CompactionSummaryMessage
+
       text = "some compaction summary text"
       map = %{"role" => "compactionSummary", "summary" => text}
       struct = CompactionSummaryMessage.new(text, 0, 0)

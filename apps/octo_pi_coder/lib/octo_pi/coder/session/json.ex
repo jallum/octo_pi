@@ -10,8 +10,7 @@ defmodule OctoPi.Coder.Session.JSON do
   """
 
   @spec object([{String.t(), term()}]) :: String.t()
-  def object(pairs) when is_list(pairs),
-    do: pairs |> Jason.OrderedObject.new() |> Jason.encode!()
+  def object(pairs) when is_list(pairs), do: pairs |> Jason.OrderedObject.new() |> Jason.encode!()
 
   @doc """
   Append `{key, value}` to `pairs` only when `value` is not nil.
@@ -42,6 +41,5 @@ defmodule OctoPi.Coder.Session.JSON do
   @spec append_extras([{String.t(), term()}], map()) :: [{String.t(), term()}]
   def append_extras(pairs, extras) when extras == %{}, do: pairs
 
-  def append_extras(pairs, extras) when is_map(extras),
-    do: pairs ++ (extras |> Enum.sort_by(fn {k, _} -> k end))
+  def append_extras(pairs, extras) when is_map(extras), do: pairs ++ Enum.sort_by(extras, fn {k, _} -> k end)
 end

@@ -95,9 +95,7 @@ defmodule OctoPi.Coder.Extensions.Tools do
 
     api.set_active_tools.(MapSet.to_list(enabled))
 
-    api.append_entry.(
-      CustomEntry.new("tools_config", %{"enabled_tools" => MapSet.to_list(enabled)})
-    )
+    api.append_entry.(CustomEntry.new("tools_config", %{"enabled_tools" => MapSet.to_list(enabled)}))
   end
 
   defp sync_state(api, ctx, state) do

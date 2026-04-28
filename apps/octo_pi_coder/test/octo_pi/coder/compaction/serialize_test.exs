@@ -1,8 +1,11 @@
 defmodule OctoPi.Coder.Compaction.SerializeTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.Content.{Text, Thinking}
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.Serialize

@@ -31,13 +31,13 @@ defmodule OctoPi.Coder.Session.Entry.Custom do
   def new(custom_type, data \\ nil) when is_binary(custom_type) do
     %__MODULE__{
       id: gen_id(),
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
       custom_type: custom_type,
       data: data
     }
   end
 
-  defp gen_id, do: :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+  defp gen_id, do: 4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do

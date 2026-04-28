@@ -13,8 +13,12 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   stay byte-compatible.
   """
 
-  alias OctoPi.AI.Content.{Image, Text, Thinking}
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Content.Image
+  alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Content.Thinking
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.Settings
@@ -38,8 +42,7 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   @spec calculate_context_tokens(Usage.t()) :: non_neg_integer()
   def calculate_context_tokens(%Usage{total_tokens: t}) when is_integer(t) and t > 0, do: t
 
-  def calculate_context_tokens(%Usage{input: i, output: o, cache_read: cr, cache_write: cw}),
-    do: i + o + cr + cw
+  def calculate_context_tokens(%Usage{input: i, output: o, cache_read: cr, cache_write: cw}), do: i + o + cr + cw
 
   # ---- estimate_tokens (per-message ⌈chars/4⌉) ----------------------------
 
@@ -50,40 +53,33 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   `bash_execution` role is tracked under opi-ixp.43.
   """
   @spec estimate_tokens(struct() | map()) :: non_neg_integer()
-  def estimate_tokens(%BranchSummaryMessage{summary: s}) when is_binary(s),
-    do: ceil_div4(byte_size(s))
+  def estimate_tokens(%BranchSummaryMessage{summary: s}) when is_binary(s), do: ceil_div4(byte_size(s))
 
-  def estimate_tokens(%CompactionSummaryMessage{summary: s}) when is_binary(s),
-    do: ceil_div4(byte_size(s))
+  def estimate_tokens(%CompactionSummaryMessage{summary: s}) when is_binary(s), do: ceil_div4(byte_size(s))
 
   def estimate_tokens(%User{content: content}), do: ceil_div4(user_chars(content))
 
   def estimate_tokens(%Assistant{content: blocks}),
     do: ceil_div4(Enum.reduce(blocks, 0, &(&2 + assistant_block_chars(&1))))
 
-  def estimate_tokens(%ToolResult{content: content}),
-    do: ceil_div4(tool_result_chars(content))
+  def estimate_tokens(%ToolResult{content: content}), do: ceil_div4(tool_result_chars(content))
 
   # Raw decoded-JSON message maps (as held by `Session.Entry.Message`).
   # Mirrors the typed heads above but reads from string-keyed maps so
   # callers don't need a wire→struct converter just to estimate.
-  def estimate_tokens(%{"role" => "user", "content" => content}),
-    do: ceil_div4(map_user_chars(content))
+  def estimate_tokens(%{"role" => "user", "content" => content}), do: ceil_div4(map_user_chars(content))
 
   def estimate_tokens(%{"role" => "assistant", "content" => blocks}) when is_list(blocks),
     do: ceil_div4(Enum.reduce(blocks, 0, &(&2 + map_assistant_block_chars(&1))))
 
-  def estimate_tokens(%{"role" => "toolResult", "content" => content}),
-    do: ceil_div4(map_tool_result_chars(content))
+  def estimate_tokens(%{"role" => "toolResult", "content" => content}), do: ceil_div4(map_tool_result_chars(content))
 
   # Mirrors upstream compaction.ts:278-286.
-  def estimate_tokens(%{"role" => "bashExecution", "command" => c, "output" => o})
-      when is_binary(c) and is_binary(o),
-      do: ceil_div4(byte_size(c) + byte_size(o))
+  def estimate_tokens(%{"role" => "bashExecution", "command" => c, "output" => o}) when is_binary(c) and is_binary(o),
+    do: ceil_div4(byte_size(c) + byte_size(o))
 
   def estimate_tokens(%{"role" => role, "summary" => s})
-      when role in ["branchSummary", "compactionSummary"] and is_binary(s),
-      do: ceil_div4(byte_size(s))
+      when role in ["branchSummary", "compactionSummary"] and is_binary(s), do: ceil_div4(byte_size(s))
 
   def estimate_tokens(_other), do: 0
 
@@ -141,11 +137,9 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   defp map_user_chars(_), do: 0
 
-  defp map_assistant_block_chars(%{"type" => "text", "text" => t}) when is_binary(t),
-    do: byte_size(t)
+  defp map_assistant_block_chars(%{"type" => "text", "text" => t}) when is_binary(t), do: byte_size(t)
 
-  defp map_assistant_block_chars(%{"type" => "thinking", "thinking" => t}) when is_binary(t),
-    do: byte_size(t)
+  defp map_assistant_block_chars(%{"type" => "thinking", "thinking" => t}) when is_binary(t), do: byte_size(t)
 
   defp map_assistant_block_chars(%{"type" => "toolCall", "name" => name, "arguments" => args}) do
     byte_size(name) + byte_size(Jason.encode!(args || %{}))
@@ -226,9 +220,7 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   # token counts. Mirrors the typed-struct heads above so a
   # `build_session_context` output (raw maps) flows through
   # estimate_context_tokens unchanged.
-  defp assistant_usage(%{"role" => "assistant", "stopReason" => r})
-       when r in ["aborted", "error"],
-       do: nil
+  defp assistant_usage(%{"role" => "assistant", "stopReason" => r}) when r in ["aborted", "error"], do: nil
 
   defp assistant_usage(%{"role" => "assistant", "usage" => %{} = u}), do: usage_from_map(u)
   defp assistant_usage(_), do: nil

@@ -36,6 +36,7 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
 
   defp branch_summary_entry(opts) do
     details = Keyword.get(opts, :details)
+
     %Entry.BranchSummary{
       id: Keyword.get(opts, :id, "bs-1"),
       parent_id: nil,
@@ -134,8 +135,11 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
     test "files from branch_summary entries outside token budget are still in file_ops" do
       # Three entries; budget allows only the last one (smallest)
       large = String.duplicate("x", 4_000)
-      e1 = branch_summary_entry(id: "bs-1", summary: large, details: %{"readFiles" => ["old.txt"], "modifiedFiles" => []})
-      e2 = user_msg("a" |> String.duplicate(4_000))
+
+      e1 =
+        branch_summary_entry(id: "bs-1", summary: large, details: %{"readFiles" => ["old.txt"], "modifiedFiles" => []})
+
+      e2 = "a" |> String.duplicate(4_000) |> user_msg()
       e3 = user_msg("tiny")
 
       # Budget: ~1 token (only "tiny" fits)
@@ -169,9 +173,7 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
 
     test "read files that are also modified are moved to modified_files by compute_lists" do
       e1 =
-        branch_summary_entry(
-          details: %{"readFiles" => ["x.txt"], "modifiedFiles" => ["x.txt", "y.txt"]}
-        )
+        branch_summary_entry(details: %{"readFiles" => ["x.txt"], "modifiedFiles" => ["x.txt", "y.txt"]})
 
       result = BranchSummarization.prepare([e1])
       %{read_files: reads, modified_files: modified} = FileOps.compute_lists(result.file_ops)
@@ -199,8 +201,10 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
       # Budget: 100 tokens
       # msgs: two user msgs of 40 tokens each = 80 total
       # summary: 30 tokens → would overflow to 110, but 80 < 90 → include
-      forty = String.duplicate("a", 160)  # 160 bytes / 4 = 40 tokens
-      thirty = String.duplicate("b", 120) # 120 bytes / 4 = 30 tokens
+      # 160 bytes / 4 = 40 tokens
+      forty = String.duplicate("a", 160)
+      # 120 bytes / 4 = 30 tokens
+      thirty = String.duplicate("b", 120)
 
       bs =
         branch_summary_entry(id: "bs-sum", summary: thirty, details: nil)
@@ -258,7 +262,10 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
   end
 
   defp base_assistant(fields) do
-    struct!(Assistant, Keyword.merge([api: :anthropic, provider: :anthropic, model: "claude-3", timestamp: 0, usage: %Usage{}], fields))
+    struct!(
+      Assistant,
+      Keyword.merge([api: :anthropic, provider: :anthropic, model: "claude-3", timestamp: 0, usage: %Usage{}], fields)
+    )
   end
 
   defp done_producer(summary_text) do
@@ -361,12 +368,14 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
     test "custom_instructions is appended when replace_instructions is false" do
       entries = [user_msg("a task")]
       producer = capturing_producer(self())
+
       BranchSummarization.generate(entries,
         model: test_model(),
         producer: producer,
         custom_instructions: "Focus on auth changes",
         replace_instructions: false
       )
+
       assert_received {:producer_called, %{ctx: ctx}}
       [user_message] = ctx.messages
       [%Text{text: prompt}] = user_message.content
@@ -377,12 +386,14 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
     test "custom_instructions replaces base prompt when replace_instructions is true" do
       entries = [user_msg("a task")]
       producer = capturing_producer(self())
+
       BranchSummarization.generate(entries,
         model: test_model(),
         producer: producer,
         custom_instructions: "Custom only",
         replace_instructions: true
       )
+
       assert_received {:producer_called, %{ctx: ctx}}
       [user_message] = ctx.messages
       [%Text{text: prompt}] = user_message.content
@@ -395,9 +406,7 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
 
   describe "generate/2 — file ops block assembly" do
     test "read_files and modified_files are returned in the result" do
-      entry = branch_summary_entry(
-        details: %{"readFiles" => ["a.txt"], "modifiedFiles" => ["b.txt"]}
-      )
+      entry = branch_summary_entry(details: %{"readFiles" => ["a.txt"], "modifiedFiles" => ["b.txt"]})
       {:ok, result} = BranchSummarization.generate([entry], model: test_model(), producer: done_producer("summary"))
       assert "a.txt" in result.read_files
       assert "b.txt" in result.modified_files
@@ -410,9 +419,9 @@ defmodule OctoPi.Coder.Compaction.BranchSummarizationTest do
     end
 
     test "modified_files are excluded from read_files in result" do
-      entry = branch_summary_entry(
-        details: %{"readFiles" => ["shared.ex"], "modifiedFiles" => ["shared.ex", "other.ex"]}
-      )
+      entry =
+        branch_summary_entry(details: %{"readFiles" => ["shared.ex"], "modifiedFiles" => ["shared.ex", "other.ex"]})
+
       {:ok, result} = BranchSummarization.generate([entry], model: test_model(), producer: done_producer("s"))
       assert "shared.ex" in result.modified_files
       refute "shared.ex" in result.read_files

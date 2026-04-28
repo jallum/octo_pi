@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.SessionTest do
 
   alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Extension
+  alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
@@ -177,7 +178,6 @@ defmodule OctoPi.Coder.SessionTest do
     alias OctoPi.AI.Model
     alias OctoPi.AI.Usage
     alias OctoPi.Coder.Compaction.Result
-    alias OctoPi.Coder.Extension
 
     defp test_model do
       %Model{
@@ -265,7 +265,10 @@ defmodule OctoPi.Coder.SessionTest do
 
       pid = populated_session(ctx, [ext])
 
-      producer = fn _, _, _ -> send(test_pid, :producer_called); done_event("") end
+      producer = fn _, _, _ ->
+        send(test_pid, :producer_called)
+        done_event("")
+      end
 
       assert {:cancel, "user said no"} = Session.compact(pid, producer: producer)
       assert_received :cancel_handler_ran
@@ -287,7 +290,11 @@ defmodule OctoPi.Coder.SessionTest do
         end)
 
       pid = populated_session(ctx, [ext])
-      producer = fn _, _, _ -> send(test_pid, :producer_called); done_event("") end
+
+      producer = fn _, _, _ ->
+        send(test_pid, :producer_called)
+        done_event("")
+      end
 
       assert {:ok, %{result: ^override_result, from_extension?: true}} =
                Session.compact(pid, producer: producer)
@@ -350,7 +357,6 @@ defmodule OctoPi.Coder.SessionTest do
       assert match?(%OctoPi.Coder.Compaction.Preparation{}, event.preparation)
       assert event.custom_instructions == "tag this"
     end
-
   end
 
   describe "build_session_context/1" do
@@ -588,8 +594,8 @@ defmodule OctoPi.Coder.SessionTest do
     end
 
     test "wires get_entries / get_branch / get_leaf_entry_id to live SessionManager", %{pid: pid} do
-      ctx = OctoPi.Coder.Extension.Context.new(%{cwd: "/tmp"})
-      bound = OctoPi.Coder.Extension.Context.bind_session(ctx, pid)
+      ctx = Context.new(%{cwd: "/tmp"})
+      bound = Context.bind_session(ctx, pid)
 
       assert bound.get_entries.() == []
       assert bound.get_leaf_entry_id.() == nil
@@ -645,6 +651,7 @@ defmodule OctoPi.Coder.SessionTest do
       :sys.replace_state(pid, fn state ->
         %{state | session_manager: %{state.session_manager | leaf_id: id1}}
       end)
+
       {:ok, id3} = Session.add_entry(pid, message_entry("branch B"))
 
       {pid, id1, id2, id3}
@@ -708,7 +715,12 @@ defmodule OctoPi.Coder.SessionTest do
 
       ext_result = %BranchSummaryResult{summary: "ext summary", read_files: [], modified_files: []}
       ext = ext_with("o", :session_before_tree, fn _e, _c -> {:override, ext_result} end)
-      producer = fn _m, _c, _o -> send(test_pid, :llm_called); [] end
+
+      producer = fn _m, _c, _o ->
+        send(test_pid, :llm_called)
+        []
+      end
+
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
       assert {:ok, nil} =
@@ -723,7 +735,10 @@ defmodule OctoPi.Coder.SessionTest do
       test_pid = self()
       {pid, id1, id2, _id3} = session_with_two_branches(ctx)
 
-      producer = fn _m, _c, _o -> send(test_pid, :llm_called); [] end
+      producer = fn _m, _c, _o ->
+        send(test_pid, :llm_called)
+        []
+      end
 
       assert {:ok, nil} =
                Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
@@ -819,7 +834,7 @@ defmodule OctoPi.Coder.SessionTest do
       assert event.type == :session_tree
       # id2 is a user message → new_leaf = id2's parent = id1
       assert event.new_leaf_id == id1
-      assert event.old_leaf_id != nil
+      assert event.old_leaf_id
     end
 
     test ":session_tree is NOT emitted on cancel", ctx do
@@ -861,7 +876,7 @@ defmodule OctoPi.Coder.SessionTest do
         |> SessionManager.get_entries()
         |> Enum.find(&match?(%Entry.BranchSummary{}, &1))
 
-      assert branch_summary != nil
+      assert branch_summary
       # from_id is the old leaf before navigation (id3)
       assert branch_summary.from_id == id3
     end
@@ -879,6 +894,7 @@ defmodule OctoPi.Coder.SessionTest do
         )
 
       sm = Session.get_session_manager(pid)
+
       branch_summary =
         sm
         |> SessionManager.get_entries()
@@ -914,6 +930,7 @@ defmodule OctoPi.Coder.SessionTest do
         )
 
       sm = Session.get_session_manager(pid)
+
       branch_summary =
         sm
         |> SessionManager.get_entries()
@@ -930,6 +947,7 @@ defmodule OctoPi.Coder.SessionTest do
   describe "get_context_usage/1 and get_session_stats/1" do
     setup ctx do
       store = open_store!(ctx)
+
       model = %OctoPi.AI.Model{
         id: "test-model",
         name: "Test Model",
@@ -939,6 +957,7 @@ defmodule OctoPi.Coder.SessionTest do
         context_window: 200_000,
         max_tokens: 8096
       }
+
       {:ok, pid} =
         Session.start_link(
           extensions: [],
@@ -946,20 +965,23 @@ defmodule OctoPi.Coder.SessionTest do
           store_pid: store,
           model_provider: fn -> model end
         )
+
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid, model: model}
     end
 
     defp user_msg(text) do
       %Entry.Message{
-        id: nil, timestamp: nil,
+        id: nil,
+        timestamp: nil,
         message: %{"role" => "user", "content" => text}
       }
     end
 
     defp assistant_msg(text, total_tokens) do
       %Entry.Message{
-        id: nil, timestamp: nil,
+        id: nil,
+        timestamp: nil,
         message: %{
           "role" => "assistant",
           "content" => [%{"type" => "text", "text" => text}],
@@ -1009,7 +1031,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       stats = Session.get_session_stats(pid)
       assert stats.tokens.input == 195_000
-      assert stats.context_usage != nil
+      assert stats.context_usage
       assert stats.context_usage.tokens == nil
       assert stats.context_usage.percent == nil
     end
@@ -1026,7 +1048,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       stats = Session.get_session_stats(pid)
       assert stats.tokens.input == 220_000
-      assert stats.context_usage != nil
+      assert stats.context_usage
       assert stats.context_usage.tokens == 25_000
       assert_in_delta stats.context_usage.percent, 25_000 / 200_000 * 100, 0.001
     end
@@ -1039,6 +1061,7 @@ defmodule OctoPi.Coder.SessionTest do
           store_pid: self(),
           model_provider: fn -> nil end
         )
+
       on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)
 
       assert Session.get_context_usage(pid2) == nil

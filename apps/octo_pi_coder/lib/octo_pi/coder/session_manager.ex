@@ -217,7 +217,7 @@ defmodule OctoPi.Coder.SessionManager do
 
   def find_common_ancestor(%__MODULE__{} = sm, old_leaf_id, target_id)
       when is_binary(old_leaf_id) and is_binary(target_id) do
-    old_ids = sm |> get_branch(old_leaf_id) |> Enum.map(&entry_id/1) |> MapSet.new()
+    old_ids = sm |> get_branch(old_leaf_id) |> MapSet.new(&entry_id/1)
 
     sm
     |> get_branch(target_id)
@@ -324,8 +324,7 @@ defmodule OctoPi.Coder.SessionManager do
   the compaction layer (which receives `pathEntries` directly).
   """
   @spec build_context_from_path([Entry.t()]) ::
-          %{messages: [term()], thinking_level: String.t(),
-            model: %{provider: String.t(), model_id: String.t()} | nil}
+          %{messages: [term()], thinking_level: String.t(), model: %{provider: String.t(), model_id: String.t()} | nil}
   def build_context_from_path(path) when is_list(path) do
     {thinking_level, model, latest_compaction} = scan_settings(path)
     messages = build_messages(path, latest_compaction)
@@ -346,8 +345,7 @@ defmodule OctoPi.Coder.SessionManager do
   end
 
   defp model_from_assistant(%{"provider" => provider, "model" => model_id}, _prev)
-       when is_binary(provider) and is_binary(model_id),
-       do: %{provider: provider, model_id: model_id}
+       when is_binary(provider) and is_binary(model_id), do: %{provider: provider, model_id: model_id}
 
   defp model_from_assistant(_msg, prev), do: prev
 
@@ -380,8 +378,7 @@ defmodule OctoPi.Coder.SessionManager do
   @spec entry_to_messages(Entry.t()) :: [map() | struct()]
   def entry_to_messages(%Entry.Message{message: msg}), do: [msg]
 
-  def entry_to_messages(%Entry.BranchSummary{summary: s, from_id: f, timestamp: ts})
-      when is_binary(s) and s != "" do
+  def entry_to_messages(%Entry.BranchSummary{summary: s, from_id: f, timestamp: ts}) when is_binary(s) and s != "" do
     [BranchSummaryMessage.new(s, f, ts)]
   end
 
@@ -509,7 +506,8 @@ defmodule OctoPi.Coder.SessionManager do
   defp create_session_id do
     <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
 
-    :io_lib.format("~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b", [a, b, c, d, e])
+    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b"
+    |> :io_lib.format([a, b, c, d, e])
     |> IO.iodata_to_binary()
   end
 
@@ -566,10 +564,10 @@ defmodule OctoPi.Coder.SessionManager do
   # ------- id helpers -------
 
   defp unique_short_id(taken) do
-    Stream.repeatedly(&short_id/0) |> Enum.find(&(not MapSet.member?(taken, &1)))
+    (&short_id/0) |> Stream.repeatedly() |> Enum.find(&(not MapSet.member?(taken, &1)))
   end
 
-  defp short_id, do: :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+  defp short_id, do: 4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   defp set_id(%Entry.Passthrough{raw: raw} = e, id), do: %{e | raw: Map.put(raw, "id", id)}
   defp set_id(entry, id), do: Map.put(entry, :id, id)

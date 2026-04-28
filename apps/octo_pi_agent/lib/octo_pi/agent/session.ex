@@ -38,9 +38,11 @@ defmodule OctoPi.Agent.Session do
   alias OctoPi.Agent.Transport
   alias OctoPi.Agent.Turn
   alias OctoPi.Agent.Turn.Worker
+  alias OctoPi.Agent.TurnTaskSupervisor
   alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
+  alias OctoPi.AI.Model
 
   @type mode :: :sync | :async
 
@@ -50,8 +52,7 @@ defmodule OctoPi.Agent.Session do
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc false
-  def prompt(pid, msg_or_msgs),
-    do: GenServer.call(pid, {:prompt, List.wrap(normalize(msg_or_msgs))})
+  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(normalize(msg_or_msgs))})
 
   @doc false
   def continue(pid), do: GenServer.call(pid, :continue)
@@ -63,9 +64,8 @@ defmodule OctoPi.Agent.Session do
   def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, normalize(msg)})
 
   @doc false
-  def set_queue_mode(pid, queue, mode)
-      when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
-      do: GenServer.call(pid, {:set_queue_mode, queue, mode})
+  def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
+    do: GenServer.call(pid, {:set_queue_mode, queue, mode})
 
   @doc false
   def set_thinking_level(pid, level), do: GenServer.call(pid, {:set_thinking_level, level})
@@ -89,8 +89,7 @@ defmodule OctoPi.Agent.Session do
   def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts})
 
   @doc false
-  def compaction_response(pid, ref, result),
-    do: GenServer.call(pid, {:compaction_response, ref, result})
+  def compaction_response(pid, ref, result), do: GenServer.call(pid, {:compaction_response, ref, result})
 
   @doc false
   def state(pid), do: GenServer.call(pid, :state)
@@ -176,8 +175,7 @@ defmodule OctoPi.Agent.Session do
   def handle_call({:set_thinking_level, level}, _from, store),
     do: {:reply, :ok, put_in(store.session.thinking_level, level)}
 
-  def handle_call({:set_model, model}, _from, store),
-    do: {:reply, :ok, put_in(store.session.model, model)}
+  def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.session.model, model)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.session.tools
@@ -301,17 +299,15 @@ defmodule OctoPi.Agent.Session do
   # backstop). If the dying pid matches turn_pid, treat as a stream
   # failure.
   def handle_info({:DOWN, _mref, :process, pid, reason}, store) do
-    cond do
-      pid == store.session.turn_pid and reason != :normal ->
-        store =
-          store
-          |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
-          |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+    if pid == store.session.turn_pid and reason != :normal do
+      store =
+        store
+        |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
+        |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
 
-        {:noreply, end_run_aborted(store, reason)}
-
-      true ->
-        {:noreply, store}
+      {:noreply, end_run_aborted(store, reason)}
+    else
+      {:noreply, store}
     end
   end
 
@@ -386,7 +382,7 @@ defmodule OctoPi.Agent.Session do
 
     {:ok, pid} =
       Task.Supervisor.start_child(
-        OctoPi.Agent.TurnTaskSupervisor,
+        TurnTaskSupervisor,
         fn ->
           Worker.stream(parent, ref, %{
             context: ctx,
@@ -422,7 +418,7 @@ defmodule OctoPi.Agent.Session do
 
     {:ok, pid} =
       Task.Supervisor.start_child(
-        OctoPi.Agent.TurnTaskSupervisor,
+        TurnTaskSupervisor,
         fn -> Worker.tool_batch(parent, ref, opts, calls) end,
         restart: :temporary
       )
@@ -738,10 +734,9 @@ defmodule OctoPi.Agent.Session do
   # that matches a known context-overflow pattern, the message is from the
   # current model, and the message is not stale (i.e. it arrived after the
   # last compaction boundary, if any).
-  defp overflow_error?(
-         %Assistant{stop_reason: :error, error_message: msg, model: model_id, timestamp: ts},
-         %{session: session}
-       )
+  defp overflow_error?(%Assistant{stop_reason: :error, error_message: msg, model: model_id, timestamp: ts}, %{
+         session: session
+       })
        when is_binary(msg) do
     same_model = session.model != nil and session.model.id == model_id
     not_stale = is_nil(session.last_compaction_at_ms) or is_nil(ts) or ts > session.last_compaction_at_ms
@@ -817,7 +812,7 @@ defmodule OctoPi.Agent.Session do
   end
 
   @doc false
-  @spec aborted_assistant(OctoPi.AI.Model.t() | nil) :: Assistant.t()
+  @spec aborted_assistant(Model.t() | nil) :: Assistant.t()
   def aborted_assistant(model), do: synth_assistant(model, :aborted, "aborted by caller")
 
   defp synth_assistant(nil, stop_reason, error_message) do
@@ -832,7 +827,7 @@ defmodule OctoPi.Agent.Session do
     }
   end
 
-  defp synth_assistant(%OctoPi.AI.Model{} = model, stop_reason, error_message) do
+  defp synth_assistant(%Model{} = model, stop_reason, error_message) do
     %Assistant{
       api: model.api,
       provider: model.provider,

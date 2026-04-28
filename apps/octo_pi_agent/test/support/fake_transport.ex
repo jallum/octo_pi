@@ -69,6 +69,7 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
     {needs_gate, turn} =
       Agent.get_and_update(@agent_name, fn state ->
         script = Map.get(state, :script, [])
+
         {turn_or_empty, new_script} =
           case script do
             [] -> {:empty, []}

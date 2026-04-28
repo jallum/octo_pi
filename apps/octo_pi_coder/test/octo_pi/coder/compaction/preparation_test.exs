@@ -1,7 +1,9 @@
 defmodule OctoPi.Coder.Compaction.PreparationTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.Coder.Compaction.{FileOps, Preparation, Settings}
+  alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Preparation
+  alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Session.Entry
 
   # ---- entry builders ----------------------------------------------------
@@ -55,11 +57,12 @@ defmodule OctoPi.Coder.Compaction.PreparationTest do
     }
   end
 
-  defp rand_id, do: :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+  defp rand_id, do: 4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   defp text_of(messages) do
     Enum.map_join(messages, "\n", fn
-      %{"role" => "user", "content" => c} when is_binary(c) -> c
+      %{"role" => "user", "content" => c} when is_binary(c) ->
+        c
 
       %{"role" => "assistant", "content" => blocks} when is_list(blocks) ->
         Enum.map_join(blocks, " ", fn
@@ -67,7 +70,8 @@ defmodule OctoPi.Coder.Compaction.PreparationTest do
           _ -> ""
         end)
 
-      _ -> ""
+      _ ->
+        ""
     end)
   end
 
@@ -156,7 +160,7 @@ defmodule OctoPi.Coder.Compaction.PreparationTest do
       # With ample budget the cut snaps back to the prior boundary
       # (firstKeptEntryId of c1 = u2).
       assert prep.first_kept_entry_id == "u2"
-      assert text_of(prep.messages_to_summarize) |> String.contains?("First summary") == false
+      assert prep.messages_to_summarize |> text_of() |> String.contains?("First summary") == false
     end
 
     test "re-summarizes previously kept messages when recent window moves past them" do

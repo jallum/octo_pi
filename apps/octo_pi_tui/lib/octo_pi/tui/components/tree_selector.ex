@@ -37,7 +37,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   alias OctoPi.Coder.Components.TreeSelector, as: Tree
   alias OctoPi.Coder.Session.Entry
-  alias OctoPi.TUI.{Keybindings, Key}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.Keybindings
 
   @filter_cycle [:default, :no_tools, :user_only, :labeled_only, :all]
 

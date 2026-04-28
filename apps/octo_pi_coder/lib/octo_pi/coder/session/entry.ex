@@ -6,18 +6,16 @@ defmodule OctoPi.Coder.Session.Entry do
   still round-trip without code changes here.
   """
 
-  alias OctoPi.Coder.Session.Entry.{
-    BranchSummary,
-    Compaction,
-    Custom,
-    CustomMessage,
-    Label,
-    Message,
-    ModelChange,
-    Passthrough,
-    SessionInfo,
-    ThinkingLevelChange
-  }
+  alias OctoPi.Coder.Session.Entry.BranchSummary
+  alias OctoPi.Coder.Session.Entry.Compaction
+  alias OctoPi.Coder.Session.Entry.Custom
+  alias OctoPi.Coder.Session.Entry.CustomMessage
+  alias OctoPi.Coder.Session.Entry.Label
+  alias OctoPi.Coder.Session.Entry.Message
+  alias OctoPi.Coder.Session.Entry.ModelChange
+  alias OctoPi.Coder.Session.Entry.Passthrough
+  alias OctoPi.Coder.Session.Entry.SessionInfo
+  alias OctoPi.Coder.Session.Entry.ThinkingLevelChange
 
   @type t ::
           Message.t()

@@ -19,10 +19,20 @@ defmodule OctoPi.Coder.Session do
 
   use GenServer, restart: :temporary
 
+  alias OctoPi.AI.Message.User
   alias OctoPi.Coder.Compaction
-  alias OctoPi.Coder.Compaction.{BranchSummarization, BranchSummaryResult, Preparation, Result, Settings, Tokens, TreePreparation}
+  alias OctoPi.Coder.Compaction.BranchSummarization
+  alias OctoPi.Coder.Compaction.BranchSummaryResult
+  alias OctoPi.Coder.Compaction.Preparation
+  alias OctoPi.Coder.Compaction.Result
+  alias OctoPi.Coder.Compaction.Settings
+  alias OctoPi.Coder.Compaction.Tokens
+  alias OctoPi.Coder.Compaction.TreePreparation
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Extension.{Context, Dispatcher, Event}
+  alias OctoPi.Coder.Extension.Context
+  alias OctoPi.Coder.Extension.Dispatcher
+  alias OctoPi.Coder.Extension.Event
+  alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.MessageWriter
   alias OctoPi.Coder.SessionManager
@@ -59,8 +69,8 @@ defmodule OctoPi.Coder.Session do
           | {:session_manager, SessionManager.t()}
           | {:store_pid, pid()}
           | {:agent_pid, pid() | nil}
-          | {:model_provider, OctoPi.Coder.Session.model_provider()}
-          | {:settings_provider, OctoPi.Coder.Session.settings_provider()}
+          | {:model_provider, Session.model_provider()}
+          | {:settings_provider, Session.settings_provider()}
           | {:name, GenServer.name()}
 
   @doc """
@@ -105,8 +115,7 @@ defmodule OctoPi.Coder.Session do
   turn's prompt with post-compaction kept-window + synthetic summary.
   """
   @spec build_session_context(GenServer.server()) ::
-          %{messages: [term()], thinking_level: String.t(),
-            model: %{provider: String.t(), model_id: String.t()} | nil}
+          %{messages: [term()], thinking_level: String.t(), model: %{provider: String.t(), model_id: String.t()} | nil}
   def build_session_context(server), do: GenServer.call(server, :build_session_context)
 
   @doc """
@@ -124,8 +133,7 @@ defmodule OctoPi.Coder.Session do
   it on once a real failure mode shows up.
   """
   @spec add_entry(GenServer.server(), Entry.t(), keyword()) :: {:ok, String.t()}
-  def add_entry(server, entry, opts \\ []),
-    do: GenServer.call(server, {:add_entry, entry, opts})
+  def add_entry(server, entry, opts \\ []), do: GenServer.call(server, {:add_entry, entry, opts})
 
   @doc """
   Wire an agent pid into the session after init. Subscribes to agent
@@ -136,16 +144,14 @@ defmodule OctoPi.Coder.Session do
   coder session pid).
   """
   @spec set_agent_pid(GenServer.server(), pid()) :: :ok
-  def set_agent_pid(server, agent_pid),
-    do: GenServer.call(server, {:set_agent_pid, agent_pid})
+  def set_agent_pid(server, agent_pid), do: GenServer.call(server, {:set_agent_pid, agent_pid})
 
   @doc """
   Subscribe `subscriber` to agent events. Delegates to `OctoPi.Agent.subscribe/3`.
   The caller will receive `{:octo_pi_agent_event, event}` messages.
   """
   @spec subscribe(GenServer.server(), pid(), :async | :sync) :: :ok
-  def subscribe(server, subscriber, mode \\ :async),
-    do: GenServer.call(server, {:agent_subscribe, subscriber, mode})
+  def subscribe(server, subscriber, mode \\ :async), do: GenServer.call(server, {:agent_subscribe, subscriber, mode})
 
   @doc """
   Write the user message entry to the session file and dispatch the prompt
@@ -175,8 +181,7 @@ defmodule OctoPi.Coder.Session do
 
   @doc "Set the thinking level on the held agent."
   @spec set_thinking_level(GenServer.server(), atom()) :: :ok
-  def set_thinking_level(server, level),
-    do: GenServer.call(server, {:agent_set_thinking_level, level})
+  def set_thinking_level(server, level), do: GenServer.call(server, {:agent_set_thinking_level, level})
 
   @doc "Register an additional tool with the held agent."
   @spec add_tool(GenServer.server(), OctoPi.Agent.Tool.t()) :: :ok
@@ -191,11 +196,11 @@ defmodule OctoPi.Coder.Session do
   def drain_follow_up(server), do: GenServer.call(server, :agent_drain_follow_up)
 
   @doc "Append a user prompt to the session. Called by the UI before `Agent.prompt/2`."
-  @spec add_user_message(GenServer.server(), OctoPi.AI.Message.User.t()) :: {:ok, String.t()}
-  def add_user_message(server, %OctoPi.AI.Message.User{} = msg) do
+  @spec add_user_message(GenServer.server(), User.t()) :: {:ok, String.t()}
+  def add_user_message(server, %User{} = msg) do
     entry = %Entry.Message{
       id: nil,
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
       message: MessageWriter.from_user(msg)
     }
 
@@ -229,8 +234,7 @@ defmodule OctoPi.Coder.Session do
           | {:error, :nothing_to_compact | :no_model | term()}
 
   @spec compact(GenServer.server(), keyword()) :: compact_result()
-  def compact(server, opts \\ []),
-    do: GenServer.call(server, {:compact, opts}, :infinity)
+  def compact(server, opts \\ []), do: GenServer.call(server, {:compact, opts}, :infinity)
 
   @doc """
   Fork the current session into a new session file.
@@ -258,8 +262,7 @@ defmodule OctoPi.Coder.Session do
           | {:error, :enoent | :empty | :missing_header | :no_session_file}
 
   @spec fork(GenServer.server(), keyword()) :: fork_result()
-  def fork(server, opts),
-    do: GenServer.call(server, {:fork, opts}, :infinity)
+  def fork(server, opts), do: GenServer.call(server, {:fork, opts}, :infinity)
 
   @doc """
   Navigate the session tree to `target_id`.
@@ -299,8 +302,7 @@ defmodule OctoPi.Coder.Session do
           | {:error, :not_found | :no_model | term()}
 
   @spec navigate_tree(GenServer.server(), keyword()) :: navigate_tree_result()
-  def navigate_tree(server, opts),
-    do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
+  def navigate_tree(server, opts), do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
 
   @doc """
   Estimate context token usage for the current session, accounting for
@@ -383,11 +385,9 @@ defmodule OctoPi.Coder.Session do
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state, state}
 
-  def handle_call(:get_session_manager, _from, state),
-    do: {:reply, state.session_manager, state}
+  def handle_call(:get_session_manager, _from, state), do: {:reply, state.session_manager, state}
 
-  def handle_call(:get_extensions, _from, state),
-    do: {:reply, state.extensions, state}
+  def handle_call(:get_extensions, _from, state), do: {:reply, state.extensions, state}
 
   def handle_call(:build_session_context, _from, state),
     do: {:reply, SessionManager.build_session_context(state.session_manager), state}
@@ -411,14 +411,14 @@ defmodule OctoPi.Coder.Session do
   end
 
   def handle_call({:agent_prompt, save_text, send_text}, _from, state) do
-    user_msg = %OctoPi.AI.Message.User{
+    user_msg = %User{
       content: [%OctoPi.AI.Content.Text{text: save_text}],
       timestamp: :os.system_time(:millisecond)
     }
 
     entry = %Entry.Message{
       id: nil,
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
       message: MessageWriter.from_user(user_msg)
     }
 
@@ -469,8 +469,7 @@ defmodule OctoPi.Coder.Session do
 
   # -------------------------------------------------------------------------
 
-  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state)
-      when is_pid(agent_pid) do
+  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state) when is_pid(agent_pid) do
     # Route through the agent FSM: Agent emits CompactionRequested, our
     # handle_info handler runs the LLM, calls finish_compaction (which
     # writes the entry + compaction_response). Reply immediately so we
@@ -501,13 +500,13 @@ defmodule OctoPi.Coder.Session do
     case do_navigate_tree(state, opts) do
       {:ok, summary, old_leaf_id, new_sm} ->
         ctx =
-          %Context{cwd: new_sm.cwd}
-          |> Context.bind_session_manager(fn -> new_sm end)
+          Context.bind_session_manager(%Context{cwd: new_sm.cwd}, fn -> new_sm end)
 
-        tree_event = Event.new(:session_tree, %{
-          new_leaf_id: new_sm.leaf_id,
-          old_leaf_id: old_leaf_id
-        })
+        tree_event =
+          Event.new(:session_tree, %{
+            new_leaf_id: new_sm.leaf_id,
+            old_leaf_id: old_leaf_id
+          })
 
         Dispatcher.emit(state.extensions, tree_event, ctx)
         {:reply, {:ok, summary}, %{state | session_manager: new_sm}}
@@ -517,17 +516,13 @@ defmodule OctoPi.Coder.Session do
     end
   end
 
-  def handle_call(:get_context_usage, _from, state),
-    do: {:reply, do_get_context_usage(state), state}
+  def handle_call(:get_context_usage, _from, state), do: {:reply, do_get_context_usage(state), state}
 
-  def handle_call(:get_session_stats, _from, state),
-    do: {:reply, do_get_session_stats(state), state}
+  def handle_call(:get_session_stats, _from, state), do: {:reply, do_get_session_stats(state), state}
 
-  def handle_call(:get_compaction_settings, _from, state),
-    do: {:reply, state.settings_provider.(), state}
+  def handle_call(:get_compaction_settings, _from, state), do: {:reply, state.settings_provider.(), state}
 
-  def handle_call(:get_entries, _from, state),
-    do: {:reply, SessionManager.get_entries(state.session_manager), state}
+  def handle_call(:get_entries, _from, state), do: {:reply, SessionManager.get_entries(state.session_manager), state}
 
   defp do_compact(%State{} = state, opts) do
     path_entries = SessionManager.get_branch(state.session_manager)
@@ -544,8 +539,7 @@ defmodule OctoPi.Coder.Session do
 
   defp dispatch_compact(%State{} = state, prep, opts) do
     ctx =
-      %Context{cwd: state.session_manager.cwd}
-      |> Context.bind_session_manager(fn -> state.session_manager end)
+      Context.bind_session_manager(%Context{cwd: state.session_manager.cwd}, fn -> state.session_manager end)
 
     event =
       Event.new(:session_before_compact, %{
@@ -590,8 +584,7 @@ defmodule OctoPi.Coder.Session do
       {:error, :no_session_file}
     else
       ctx =
-        %Context{cwd: state.session_manager.cwd}
-        |> Context.bind_session_manager(fn -> state.session_manager end)
+        Context.bind_session_manager(%Context{cwd: state.session_manager.cwd}, fn -> state.session_manager end)
 
       leaf_id = SessionManager.get_leaf_entry_id(state.session_manager)
       event = Event.new(:session_before_fork, %{entry_id: leaf_id})
@@ -641,8 +634,7 @@ defmodule OctoPi.Coder.Session do
           }
 
           ctx =
-            %Context{cwd: state.session_manager.cwd}
-            |> Context.bind_session_manager(fn -> state.session_manager end)
+            Context.bind_session_manager(%Context{cwd: state.session_manager.cwd}, fn -> state.session_manager end)
 
           event = Event.new(:session_before_tree, %{preparation: prep})
 
@@ -665,10 +657,26 @@ defmodule OctoPi.Coder.Session do
               {:ok, ext_result, old_leaf_id, new_sm}
 
             :ok ->
-              run_default_navigate(state, target_entry, target_id, old_leaf_id, entries_to_summarize, user_wants_summary, opts)
+              run_default_navigate(
+                state,
+                target_entry,
+                target_id,
+                old_leaf_id,
+                entries_to_summarize,
+                user_wants_summary,
+                opts
+              )
 
             {:override, _ignored} ->
-              run_default_navigate(state, target_entry, target_id, old_leaf_id, entries_to_summarize, user_wants_summary, opts)
+              run_default_navigate(
+                state,
+                target_entry,
+                target_id,
+                old_leaf_id,
+                entries_to_summarize,
+                user_wants_summary,
+                opts
+              )
           end
       end
     end
@@ -718,10 +726,11 @@ defmodule OctoPi.Coder.Session do
       headers: Keyword.get(opts, :headers)
     ]
 
-    base = case Keyword.get(opts, :producer) do
-      nil -> base
-      producer -> [{:producer, producer} | base]
-    end
+    base =
+      case Keyword.get(opts, :producer) do
+        nil -> base
+        producer -> [{:producer, producer} | base]
+      end
 
     case user_wants_summary do
       :yes -> base
@@ -734,6 +743,7 @@ defmodule OctoPi.Coder.Session do
     sm = %{sm | leaf_id: new_leaf_id}
 
     from_id = old_leaf_id || "root"
+
     details = %{
       "readFiles" => summary_result.read_files,
       "modifiedFiles" => summary_result.modified_files
@@ -756,21 +766,17 @@ defmodule OctoPi.Coder.Session do
     %{sm | leaf_id: compute_new_leaf_id(target_entry, target_id)}
   end
 
-  defp compute_new_leaf_id(%Entry.Message{message: %{"role" => "user"}, parent_id: pid}, _target_id),
-    do: pid
+  defp compute_new_leaf_id(%Entry.Message{message: %{"role" => "user"}, parent_id: pid}, _target_id), do: pid
 
   defp compute_new_leaf_id(_entry, target_id), do: target_id
 
   # ---- agent event handling ----
 
   @impl true
-  def handle_info(
-        {:octo_pi_agent_event, %OctoPi.Agent.Event.MessageEnd{message: msg}},
-        state
-      ) do
+  def handle_info({:octo_pi_agent_event, %OctoPi.Agent.Event.MessageEnd{message: msg}}, state) do
     entry = %Entry.Message{
       id: nil,
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
       message: MessageWriter.from_assistant(msg)
     }
 
@@ -780,11 +786,7 @@ defmodule OctoPi.Coder.Session do
 
   def handle_info(
         {:octo_pi_agent_event,
-         %OctoPi.Agent.Event.ToolExecutionEnd{
-           tool_call_id: call_id,
-           tool_name: name,
-           result: result
-         }},
+         %OctoPi.Agent.Event.ToolExecutionEnd{tool_call_id: call_id, tool_name: name, result: result}},
         state
       ) do
     tool_result = %OctoPi.AI.Message.ToolResult{
@@ -798,7 +800,7 @@ defmodule OctoPi.Coder.Session do
 
     entry = %Entry.Message{
       id: nil,
-      timestamp: DateTime.utc_now() |> DateTime.to_iso8601(),
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
       message: MessageWriter.from_tool_result(tool_result)
     }
 
@@ -820,8 +822,7 @@ defmodule OctoPi.Coder.Session do
 
       %Preparation{} = prep ->
         ctx =
-          %Context{cwd: state.session_manager.cwd}
-          |> Context.bind_session_manager(fn -> state.session_manager end)
+          Context.bind_session_manager(%Context{cwd: state.session_manager.cwd}, fn -> state.session_manager end)
 
         before_event =
           Event.new(:session_before_compact, %{
@@ -897,8 +898,8 @@ defmodule OctoPi.Coder.Session do
     {input, output, cache_read, cache_write} =
       Enum.reduce(messages, {0, 0, 0, 0}, fn
         %{"role" => "assistant", "usage" => u}, {i, o, cr, cw} when is_map(u) ->
-          {i + map_int(u, "input"), o + map_int(u, "output"),
-           cr + map_int(u, "cacheRead"), cw + map_int(u, "cacheWrite")}
+          {i + map_int(u, "input"), o + map_int(u, "output"), cr + map_int(u, "cacheRead"),
+           cw + map_int(u, "cacheWrite")}
 
         _, acc ->
           acc
@@ -949,7 +950,12 @@ defmodule OctoPi.Coder.Session do
       %Entry.Message{message: %{"role" => "assistant"} = msg}, _acc ->
         u = msg["usage"] || %{}
         total = map_int(u, "totalTokens")
-        tokens = if total > 0, do: total, else: map_int(u, "input") + map_int(u, "output") + map_int(u, "cacheRead") + map_int(u, "cacheWrite")
+
+        tokens =
+          if total > 0,
+            do: total,
+            else: map_int(u, "input") + map_int(u, "output") + map_int(u, "cacheRead") + map_int(u, "cacheWrite")
+
         {:halt, tokens > 0}
 
       _, acc ->
@@ -967,13 +973,18 @@ defmodule OctoPi.Coder.Session do
   defp finish_compaction(session_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
     persist_compaction(session_pid, result, from_ext?, extensions)
 
-    OctoPi.Agent.compaction_response(agent_pid, ref, {:ok, %{
-      summary: result.summary,
-      first_kept_entry_id: result.first_kept_entry_id,
-      tokens_before: result.tokens_before,
-      details: result.details,
-      from_extension?: from_ext?
-    }})
+    OctoPi.Agent.compaction_response(
+      agent_pid,
+      ref,
+      {:ok,
+       %{
+         summary: result.summary,
+         first_kept_entry_id: result.first_kept_entry_id,
+         tokens_before: result.tokens_before,
+         details: result.details,
+         from_extension?: from_ext?
+       }}
+    )
   end
 
   defp persist_compaction(session_pid, %Result{} = result, from_ext?, extensions) do
@@ -983,14 +994,19 @@ defmodule OctoPi.Coder.Session do
       summary: result.summary,
       first_kept_entry_id: result.first_kept_entry_id,
       tokens_before: result.tokens_before,
-      from_hook: if(from_ext?, do: true, else: nil),
+      from_hook: if(from_ext?, do: true),
       details: result.details
     }
 
     {:ok, id} = add_entry(session_pid, entry)
     sm = get_session_manager(session_pid)
     stored = Map.fetch!(sm.by_id, id)
-    ctx = %Context{cwd: sm.cwd} |> Context.bind_session_manager(fn -> sm end)
-    Dispatcher.emit(extensions, Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}), ctx)
+    ctx = Context.bind_session_manager(%Context{cwd: sm.cwd}, fn -> sm end)
+
+    Dispatcher.emit(
+      extensions,
+      Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}),
+      ctx
+    )
   end
 end

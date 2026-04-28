@@ -4,6 +4,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SessionStore
 
   @fixture_root Path.expand(
                   "../../../../../tmp/pi-mono/packages/coding-agent/test/fixtures",
@@ -12,7 +13,8 @@ defmodule OctoPi.Coder.SessionManagerTest do
 
   describe "load/1 — error paths" do
     test "missing file returns :enoent" do
-      assert {:error, :enoent} = SessionManager.load(Path.join(System.tmp_dir!(), "nope-#{System.unique_integer()}.jsonl"))
+      assert {:error, :enoent} =
+               SessionManager.load(Path.join(System.tmp_dir!(), "nope-#{System.unique_integer()}.jsonl"))
     end
 
     test "empty file returns :empty" do
@@ -44,7 +46,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       assert sm.version == 3
       refute sm.migrated?
       assert sm.leaf_id == "m2"
-      assert Map.keys(sm.by_id) |> Enum.sort() == ["m1", "m2"]
+      assert sm.by_id |> Map.keys() |> Enum.sort() == ["m1", "m2"]
       assert match?(%Entry.Message{}, sm.by_id["m1"])
       assert sm.by_id["m2"].parent_id == "m1"
     end
@@ -164,12 +166,12 @@ defmodule OctoPi.Coder.SessionManagerTest do
     test "linear session — branch from leaf returns root→leaf" do
       sm = build_linear(["a", "b", "c", "d"])
       assert SessionManager.get_leaf_entry_id(sm) == "d"
-      assert SessionManager.get_branch(sm) |> Enum.map(& &1.id) == ~w(a b c d)
+      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == ~w(a b c d)
     end
 
     test "branch from intermediate id returns root→that id" do
       sm = build_linear(["a", "b", "c", "d"])
-      assert SessionManager.get_branch(sm, "b") |> Enum.map(& &1.id) == ~w(a b)
+      assert sm |> SessionManager.get_branch("b") |> Enum.map(& &1.id) == ~w(a b)
     end
 
     test "branch from unknown id returns []" do
@@ -187,7 +189,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       """)
 
       assert {:ok, sm} = SessionManager.load(tmp)
-      assert SessionManager.get_branch(sm) |> Enum.map(& &1.id) == ~w(m1 m2)
+      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == ~w(m1 m2)
     end
   end
 
@@ -210,7 +212,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       """)
 
       assert {:ok, sm} = SessionManager.load(tmp)
-      assert SessionManager.get_entries(sm) |> Enum.map(& &1.id) == ~w(m1 m2)
+      assert sm |> SessionManager.get_entries() |> Enum.map(& &1.id) == ~w(m1 m2)
     end
   end
 
@@ -376,7 +378,9 @@ defmodule OctoPi.Coder.SessionManagerTest do
       target_dir = Path.join(System.tmp_dir!(), "fork-dst-#{System.unique_integer([:positive])}")
       on_exit(fn -> File.rm_rf!(target_dir) end)
 
-      assert {:ok, forked} = SessionManager.fork(src, "/new-cwd", target_dir, id: "new-id", timestamp: "2026-01-01T00:00:00Z")
+      assert {:ok, forked} =
+               SessionManager.fork(src, "/new-cwd", target_dir, id: "new-id", timestamp: "2026-01-01T00:00:00Z")
+
       assert forked.session_id == "new-id"
       assert forked.cwd == "/new-cwd"
       assert forked.parent_session == src
@@ -388,7 +392,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       assert forked.leaf_id == "m2"
 
       # Original file untouched
-      [orig_header | _] = src |> OctoPi.Coder.SessionStore.read_entries() |> Enum.to_list()
+      [orig_header | _] = src |> SessionStore.read_entries() |> Enum.to_list()
       assert orig_header.id == "src-id"
       assert orig_header.cwd == "/orig"
       refute orig_header.parent_session
@@ -425,7 +429,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
       {sm, id2} = SessionManager.add_entry(sm, msg("b"))
       assert SessionManager.get_leaf_entry_id(sm) == id2
       assert sm.by_id[id2].parent_id == id1
-      assert SessionManager.get_branch(sm) |> Enum.map(& &1.id) == [id1, id2]
+      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == [id1, id2]
     end
 
     test "uses an explicit :id when provided" do
@@ -451,17 +455,17 @@ defmodule OctoPi.Coder.SessionManagerTest do
       File.mkdir_p!(tmp)
       on_exit(fn -> File.rm_rf!(tmp) end)
 
-      {:ok, store} = OctoPi.Coder.SessionStore.open(id: "rt", cwd: tmp, root: tmp)
-      path = OctoPi.Coder.SessionStore.path(store)
+      {:ok, store} = SessionStore.open(id: "rt", cwd: tmp, root: tmp)
+      path = SessionStore.path(store)
 
       sm = empty_sm()
       {sm, _id1} = SessionManager.add_entry(sm, msg("x"), store: store)
       {sm, _id2} = SessionManager.add_entry(sm, msg("y"), store: store)
 
-      :ok = OctoPi.Coder.SessionStore.close(store)
-      reread = path |> OctoPi.Coder.SessionStore.read_entries() |> Enum.to_list()
+      :ok = SessionStore.close(store)
+      reread = path |> SessionStore.read_entries() |> Enum.to_list()
 
-      [%OctoPi.Coder.Session.Header{}, m1, m2] = reread
+      [%Header{}, m1, m2] = reread
       [in_mem1, in_mem2] = sm.file_entries
       assert m1.id == in_mem1.id
       assert m2.id == in_mem2.id
@@ -553,8 +557,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
     assert is_binary(entry_id(first))
     assert entry_parent(first) == nil
 
-    rest
-    |> Enum.reduce(entry_id(first), fn e, prev_id ->
+    Enum.reduce(rest, entry_id(first), fn e, prev_id ->
       assert entry_parent(e) == prev_id
       assert is_binary(entry_id(e))
       entry_id(e)

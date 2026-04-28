@@ -61,11 +61,9 @@ defmodule OctoPi.Coder.Models do
     apply_anthropic_overrides(base, id)
   end
 
-  defp apply_anthropic_overrides(base, "claude-sonnet" <> _),
-    do: %{base | max_tokens: 64_000}
+  defp apply_anthropic_overrides(base, "claude-sonnet" <> _), do: %{base | max_tokens: 64_000}
 
-  defp apply_anthropic_overrides(base, "claude-opus" <> _),
-    do: %{base | max_tokens: 32_000, reasoning: true}
+  defp apply_anthropic_overrides(base, "claude-opus" <> _), do: %{base | max_tokens: 32_000, reasoning: true}
 
   defp apply_anthropic_overrides(base, _), do: base
 
@@ -126,11 +124,9 @@ defmodule OctoPi.Coder.Models do
     apply_google_overrides(base, id)
   end
 
-  defp apply_google_overrides(base, "gemini-2.5-pro" <> _),
-    do: %{base | reasoning: true, max_tokens: 65_536}
+  defp apply_google_overrides(base, "gemini-2.5-pro" <> _), do: %{base | reasoning: true, max_tokens: 65_536}
 
-  defp apply_google_overrides(base, "gemini-2.5-flash" <> _),
-    do: %{base | reasoning: true}
+  defp apply_google_overrides(base, "gemini-2.5-flash" <> _), do: %{base | reasoning: true}
 
   defp apply_google_overrides(base, _), do: base
 end

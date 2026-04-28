@@ -3,8 +3,11 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
   # Tests that exercise bad-syntax/crashing-init paths log warnings
   # by design; capture them so test output stays clean.
+  alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
+  alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.SessionStore
 
   @moduletag capture_log: true
 
@@ -420,7 +423,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
         root: Path.join(System.tmp_dir!(), "opi-loader-test-#{:erlang.unique_integer([:positive])}")
       ]
 
-      {:ok, store} = OctoPi.Coder.SessionStore.start_link(session_opts)
+      {:ok, store} = SessionStore.start_link(session_opts)
 
       sm = %OctoPi.Coder.SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
 
@@ -433,7 +436,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
       on_exit(fn ->
         if Process.alive?(session), do: GenServer.stop(session)
-        if Process.alive?(store), do: OctoPi.Coder.SessionStore.close(store)
+        if Process.alive?(store), do: SessionStore.close(store)
       end)
 
       {:ok, session: session}
@@ -461,8 +464,8 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
       assert {:ok, ext} =
                Loader.load_for_session(Path.join(dir, "compact_caller.ex"), session)
 
-      [handler] = OctoPi.Coder.Extension.get_handlers(ext, :turn_end)
-      handler.(%{type: :turn_end}, %OctoPi.Coder.Extension.Context{cwd: "/tmp"})
+      [handler] = Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %Context{cwd: "/tmp"})
 
       # Empty session → :nothing_to_compact, but the call reached Session.
       assert_received {:result, {:error, :nothing_to_compact}}
@@ -496,8 +499,8 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
       assert {:ok, ext} = Loader.load(Path.join(dir, "compact_caller_raw.ex"))
 
-      [handler] = OctoPi.Coder.Extension.get_handlers(ext, :turn_end)
-      handler.(%{type: :turn_end}, %OctoPi.Coder.Extension.Context{cwd: "/tmp"})
+      [handler] = Extension.get_handlers(ext, :turn_end)
+      handler.(%{type: :turn_end}, %Context{cwd: "/tmp"})
 
       assert_received {:caught, msg}
       assert msg =~ "compact not bound"

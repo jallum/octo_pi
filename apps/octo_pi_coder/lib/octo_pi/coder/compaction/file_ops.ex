@@ -38,35 +38,28 @@ defmodule OctoPi.Coder.Compaction.FileOps do
     do: Enum.reduce(blocks, ops, &classify/2)
 
   # Raw decoded-JSON assistant maps (as held by `Session.Entry.Message`).
-  def extract(%{"role" => "assistant", "content" => blocks}, %__MODULE__{} = ops)
-      when is_list(blocks),
-      do: Enum.reduce(blocks, ops, &classify/2)
+  def extract(%{"role" => "assistant", "content" => blocks}, %__MODULE__{} = ops) when is_list(blocks),
+    do: Enum.reduce(blocks, ops, &classify/2)
 
   def extract(_other, %__MODULE__{} = ops), do: ops
 
-  defp classify(%ToolCall{name: "read", arguments: %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | read: MapSet.put(ops.read, path)}
+  defp classify(%ToolCall{name: "read", arguments: %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | read: MapSet.put(ops.read, path)}
 
-  defp classify(%ToolCall{name: "write", arguments: %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | written: MapSet.put(ops.written, path)}
+  defp classify(%ToolCall{name: "write", arguments: %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | written: MapSet.put(ops.written, path)}
 
-  defp classify(%ToolCall{name: "edit", arguments: %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | edited: MapSet.put(ops.edited, path)}
+  defp classify(%ToolCall{name: "edit", arguments: %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | edited: MapSet.put(ops.edited, path)}
 
-  defp classify(%{"type" => "toolCall", "name" => "read", "arguments" => %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | read: MapSet.put(ops.read, path)}
+  defp classify(%{"type" => "toolCall", "name" => "read", "arguments" => %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | read: MapSet.put(ops.read, path)}
 
-  defp classify(%{"type" => "toolCall", "name" => "write", "arguments" => %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | written: MapSet.put(ops.written, path)}
+  defp classify(%{"type" => "toolCall", "name" => "write", "arguments" => %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | written: MapSet.put(ops.written, path)}
 
-  defp classify(%{"type" => "toolCall", "name" => "edit", "arguments" => %{"path" => path}}, ops)
-       when is_binary(path),
-       do: %{ops | edited: MapSet.put(ops.edited, path)}
+  defp classify(%{"type" => "toolCall", "name" => "edit", "arguments" => %{"path" => path}}, ops) when is_binary(path),
+    do: %{ops | edited: MapSet.put(ops.edited, path)}
 
   defp classify(_block, ops), do: ops
 
@@ -83,7 +76,7 @@ defmodule OctoPi.Coder.Compaction.FileOps do
 
     %{
       read_files: r |> MapSet.difference(modified) |> Enum.sort(),
-      modified_files: modified |> Enum.sort()
+      modified_files: Enum.sort(modified)
     }
   end
 
@@ -109,6 +102,5 @@ defmodule OctoPi.Coder.Compaction.FileOps do
 
   defp maybe_section(acc, _tag, []), do: acc
 
-  defp maybe_section(acc, tag, files),
-    do: ["<#{tag}>\n" <> Enum.join(files, "\n") <> "\n</#{tag}>" | acc]
+  defp maybe_section(acc, tag, files), do: ["<#{tag}>\n" <> Enum.join(files, "\n") <> "\n</#{tag}>" | acc]
 end

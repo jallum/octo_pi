@@ -62,9 +62,10 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   defp do_find_turn_start_index(_tuple, i, start_index) when i < start_index, do: -1
 
   defp do_find_turn_start_index(tuple, i, start_index) do
-    case turn_start?(elem(tuple, i)) do
-      true -> i
-      false -> do_find_turn_start_index(tuple, i - 1, start_index)
+    if turn_start?(elem(tuple, i)) do
+      i
+    else
+      do_find_turn_start_index(tuple, i - 1, start_index)
     end
   end
 
@@ -83,8 +84,7 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   """
   @spec find_cut_point([Entry.t()], non_neg_integer(), non_neg_integer(), non_neg_integer()) ::
           Result.t()
-  def find_cut_point(entries, start_index, end_index, keep_recent_tokens)
-      when is_list(entries) do
+  def find_cut_point(entries, start_index, end_index, keep_recent_tokens) when is_list(entries) do
     tuple = List.to_tuple(entries)
     cut_points = find_valid_cut_points(tuple, start_index, end_index)
     do_find_cut_point(tuple, cut_points, start_index, end_index, keep_recent_tokens)
@@ -103,8 +103,7 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   # Walk newest → oldest, accumulating token estimates from message
   # entries; once we cross the keep budget, snap forward to the
   # closest cut point at or after the current index.
-  defp walk_for_cut(_tuple, i, start_index, _acc, _keep, _cuts, default) when i < start_index,
-    do: default
+  defp walk_for_cut(_tuple, i, start_index, _acc, _keep, _cuts, default) when i < start_index, do: default
 
   defp walk_for_cut(tuple, i, start_index, acc, keep, cuts, default) do
     entry = elem(tuple, i)
@@ -131,8 +130,7 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   # Pull any non-message entries (model/thinking changes, custom,
   # session_info, label) that immediately precede the cut into the
   # kept window. Stop at a compaction boundary or any message entry.
-  defp absorb_leading_non_messages(_tuple, cut_index, start_index) when cut_index <= start_index,
-    do: cut_index
+  defp absorb_leading_non_messages(_tuple, cut_index, start_index) when cut_index <= start_index, do: cut_index
 
   defp absorb_leading_non_messages(tuple, cut_index, start_index) do
     case elem(tuple, cut_index - 1) do
@@ -165,16 +163,15 @@ defmodule OctoPi.Coder.Compaction.CutPoint do
   # ---- valid cut points --------------------------------------------------
 
   defp find_valid_cut_points(tuple, start_index, end_index) do
-    Enum.reduce(start_index..(end_index - 1)//1, [], fn i, acc ->
+    start_index..(end_index - 1)//1
+    |> Enum.reduce([], fn i, acc ->
       if cut_point?(elem(tuple, i)), do: [i | acc], else: acc
     end)
     |> Enum.reverse()
   end
 
   defp cut_point?(%Entry.Message{message: %{"role" => role}})
-       when role in ["user", "assistant", "bashExecution", "custom",
-                     "branchSummary", "compactionSummary"],
-       do: true
+       when role in ["user", "assistant", "bashExecution", "custom", "branchSummary", "compactionSummary"], do: true
 
   defp cut_point?(%Entry.BranchSummary{}), do: true
   defp cut_point?(%Entry.CustomMessage{}), do: true

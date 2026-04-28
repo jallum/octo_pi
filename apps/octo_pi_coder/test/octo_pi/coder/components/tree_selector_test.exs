@@ -310,9 +310,13 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
       # Add a label to the second root child
       roots_labeled =
         Enum.map(roots, fn root ->
-          %{root | children: Enum.map(root.children, fn child ->
-            if child.entry.id == "a1", do: %{child | label: "checkpoint"}, else: child
-          end)}
+          %{
+            root
+            | children:
+                Enum.map(root.children, fn child ->
+                  if child.entry.id == "a1", do: %{child | label: "checkpoint"}, else: child
+                end)
+          }
         end)
 
       flat = TreeSelector.flatten(roots_labeled)

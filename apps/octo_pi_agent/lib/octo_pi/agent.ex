@@ -90,8 +90,7 @@ defmodule OctoPi.Agent do
   """
   @spec compaction_response(session(), reference(), term()) ::
           :ok | {:error, :stale}
-  def compaction_response(pid, ref, result),
-    do: Session.compaction_response(pid, ref, result)
+  def compaction_response(pid, ref, result), do: Session.compaction_response(pid, ref, result)
 
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok

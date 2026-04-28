@@ -2,9 +2,13 @@ defmodule OctoPi.Coder.Session.MessagesTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.AI.Content.Text
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Usage
-  alias OctoPi.Coder.Session.{BranchSummaryMessage, CompactionSummaryMessage, Messages}
+  alias OctoPi.Coder.Session.BranchSummaryMessage
+  alias OctoPi.Coder.Session.CompactionSummaryMessage
+  alias OctoPi.Coder.Session.Messages
 
   @compaction_prefix "The conversation history before this point was compacted into the following summary:\n\n<summary>\n"
   @compaction_suffix "\n</summary>"
@@ -59,6 +63,7 @@ defmodule OctoPi.Coder.Session.MessagesTest do
     test "preserves message ordering across mixed roles" do
       u = %User{content: "u1", timestamp: 1}
       c = CompactionSummaryMessage.new("C", 0, 2)
+
       a = %Assistant{
         api: :anthropic_messages,
         provider: :anthropic,
@@ -68,6 +73,7 @@ defmodule OctoPi.Coder.Session.MessagesTest do
         content: [%Text{text: "a1"}],
         usage: %Usage{}
       }
+
       b = BranchSummaryMessage.new("B", "from", 4)
 
       result = Messages.to_llm([u, c, a, b])

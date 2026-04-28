@@ -23,7 +23,10 @@ defmodule OctoPi.Coder.Compaction.Preparation do
   an id (session needs migration).
   """
 
-  alias OctoPi.Coder.Compaction.{CutPoint, FileOps, Settings, Tokens}
+  alias OctoPi.Coder.Compaction.CutPoint
+  alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Settings
+  alias OctoPi.Coder.Compaction.Tokens
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
 
@@ -62,12 +65,10 @@ defmodule OctoPi.Coder.Compaction.Preparation do
   def prepare([], _settings), do: nil
 
   def prepare(path_entries, %Settings{} = settings) when is_list(path_entries) do
-    cond do
-      ends_with_compaction?(path_entries) ->
-        nil
-
-      true ->
-        do_prepare(path_entries, settings)
+    if ends_with_compaction?(path_entries) do
+      nil
+    else
+      do_prepare(path_entries, settings)
     end
   end
 

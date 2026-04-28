@@ -10,6 +10,7 @@ defmodule OctoPi.TUI.Components.SummarizePromptTest do
 
   defp navigate_to(state, option) do
     target_idx = Enum.find_index(SummarizePrompt.options(), &(&1 == option))
+
     Enum.reduce(1..target_idx//1, state, fn _, s ->
       {s1, _} = press(s, :down)
       s1
@@ -127,13 +128,13 @@ defmodule OctoPi.TUI.Components.SummarizePromptTest do
 
   describe "select 'Summarize'" do
     test "enter on 'Summarize' emits {:result, :yes}" do
-      s = SummarizePrompt.new() |> navigate_to("Summarize")
+      s = navigate_to(SummarizePrompt.new(), "Summarize")
       {_s1, events} = press(s, :enter)
       assert events == [{:result, :yes}]
     end
 
     test "maps to user_wants_summary: :yes" do
-      s = SummarizePrompt.new() |> navigate_to("Summarize")
+      s = navigate_to(SummarizePrompt.new(), "Summarize")
       {_s1, [{:result, result}]} = press(s, :enter)
       assert result == :yes
     end
@@ -143,7 +144,7 @@ defmodule OctoPi.TUI.Components.SummarizePromptTest do
 
   describe "select 'Summarize with custom prompt'" do
     test "enter emits :awaiting_custom_instructions" do
-      s = SummarizePrompt.new() |> navigate_to("Summarize with custom prompt")
+      s = navigate_to(SummarizePrompt.new(), "Summarize with custom prompt")
       {_s1, events} = press(s, :enter)
       assert events == [:awaiting_custom_instructions]
     end

@@ -80,12 +80,12 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessageTest do
     end
 
     test "applies background color" do
-      lines = Component.new(msg(), @theme) |> Component.render(80)
+      lines = msg() |> Component.new(@theme) |> Component.render(80)
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
 
     test "first line is blank separator" do
-      lines = Component.new(msg(), @theme) |> Component.render(80)
+      lines = msg() |> Component.new(@theme) |> Component.render(80)
       assert hd(lines) == ""
     end
   end
@@ -101,7 +101,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessageTest do
     end
 
     test "shows token count in header" do
-      lines = render_stripped(Component.new(msg(12_345), @theme) |> Component.toggle_expanded())
+      lines = 12_345 |> msg() |> Component.new(@theme) |> Component.toggle_expanded() |> render_stripped()
       assert Enum.any?(lines, &(&1 =~ "12,345"))
     end
 
@@ -117,7 +117,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessageTest do
     end
 
     test "applies background color" do
-      lines = expanded_comp() |> Component.render(80)
+      lines = Component.render(expanded_comp(), 80)
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
   end

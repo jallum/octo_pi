@@ -14,8 +14,11 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: Msg
-  alias OctoPi.TUI.Components.{Box, Markdown, Text}
-  alias OctoPi.TUI.{Keybindings, Theme}
+  alias OctoPi.TUI.Components.Box
+  alias OctoPi.TUI.Components.Markdown
+  alias OctoPi.TUI.Components.Text
+  alias OctoPi.TUI.Keybindings
+  alias OctoPi.TUI.Theme
 
   @expand_action "app.tools.expand"
 
@@ -76,7 +79,8 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
     bg_fn = fn text -> Theme.bg(theme, :custom_message_bg, text) end
 
     box =
-      Box.new(border: false, padding_x: 1, bg_fn: bg_fn)
+      [border: false, padding_x: 1, bg_fn: bg_fn]
+      |> Box.new()
       |> Box.add_child(%Text{content: label})
       |> Box.add_child(%Text{content: ""})
       |> Box.add_child(content_child)

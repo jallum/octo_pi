@@ -76,8 +76,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
       result = %{summary: "compacted", first_kept_entry_id: "e-1", tokens_before: 1234}
       :ok = Agent.compaction_response(session, ref, {:ok, result})
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:ok, ^result}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, ^result}}},
                      1_000
 
       assert :ok = Agent.wait_for_idle(session, 2_000)
@@ -137,8 +136,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
 
       :ok = Agent.compaction_response(session, ref, {:error, :no_model})
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:error, :no_model}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:error, :no_model}}},
                      1_000
 
       assert_receive {:octo_pi_agent_event, %Event.AgentEnd{reason: :error}}, 1_000
@@ -160,8 +158,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
 
       :ok = Agent.compaction_response(session, ref, {:cancel, "user vetoed"})
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:cancel, "user vetoed"}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:cancel, "user vetoed"}}},
                      1_000
 
       assert_receive {:octo_pi_agent_event, %Event.AgentEnd{reason: :error}}, 1_000
@@ -202,6 +199,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
 
   defp error_turn(error_message, opts \\ []) do
     ts = Keyword.get(opts, :timestamp, :os.system_time(:millisecond))
+
     msg = %Assistant{
       api: :fake_api,
       provider: :fake,
@@ -212,6 +210,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
       error_message: error_message,
       usage: %Usage{input: 0, output: 0}
     }
+
     [%AIEvent.Error{reason: :error, message: msg}]
   end
 
@@ -247,8 +246,7 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, ^result}}}, 1_000
 
       # ...then second overflow fires the guard: CompactionEnd error, then AgentEnd
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:error, :overflow_recovery_failed}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:error, :overflow_recovery_failed}}},
                      1_000
 
       assert_receive {:octo_pi_agent_event, %Event.AgentEnd{reason: :error}}, 1_000

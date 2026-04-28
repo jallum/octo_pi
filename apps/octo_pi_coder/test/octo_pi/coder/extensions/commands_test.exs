@@ -5,7 +5,11 @@ defmodule OctoPi.Coder.Extensions.CommandsTest do
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extensions.Commands
 
-  defp ext_with_commands(available_commands, compact_fn \\ fn _opts -> :ok end, navigate_tree_fn \\ fn _opts -> {:ok, :navigated} end) do
+  defp ext_with_commands(
+         available_commands,
+         compact_fn \\ fn _opts -> :ok end,
+         navigate_tree_fn \\ fn _opts -> {:ok, :navigated} end
+       ) do
     factory = fn api ->
       api =
         API.bind_core(api, %{

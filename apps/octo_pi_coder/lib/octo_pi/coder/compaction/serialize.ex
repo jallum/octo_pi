@@ -21,7 +21,9 @@ defmodule OctoPi.Coder.Compaction.Serialize do
   """
 
   alias OctoPi.AI.Content.Text
-  alias OctoPi.AI.Message.{Assistant, ToolResult, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.ToolResult
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
 
   @tool_result_max_chars 2_000
@@ -34,13 +36,13 @@ defmodule OctoPi.Coder.Compaction.Serialize do
   N is the count of dropped graphemes. Otherwise pass through.
   """
   @spec truncate_for_summary(String.t(), pos_integer()) :: String.t()
-  def truncate_for_summary(text, max_chars)
-      when is_binary(text) and is_integer(max_chars) and max_chars > 0 do
+  def truncate_for_summary(text, max_chars) when is_binary(text) and is_integer(max_chars) and max_chars > 0 do
     len = String.length(text)
 
-    case len > max_chars do
-      false -> text
-      true -> String.slice(text, 0, max_chars) <> "\n\n[... #{len - max_chars} more characters truncated]"
+    if len > max_chars do
+      String.slice(text, 0, max_chars) <> "\n\n[... #{len - max_chars} more characters truncated]"
+    else
+      text
     end
   end
 
@@ -121,7 +123,8 @@ defmodule OctoPi.Coder.Compaction.Serialize do
   defp tool_result_text(_), do: ""
 
   defp split_assistant_blocks(blocks) do
-    Enum.reduce(blocks, {[], [], []}, fn
+    blocks
+    |> Enum.reduce({[], [], []}, fn
       %Text{text: t}, {ts, ths, tcs} when is_binary(t) ->
         {[t | ts], ths, tcs}
 
@@ -141,9 +144,7 @@ defmodule OctoPi.Coder.Compaction.Serialize do
 
   defp render_tool_call(name, args) when is_map(args) do
     args_str =
-      args
-      |> Enum.map(fn {k, v} -> "#{k}=#{Jason.encode!(v)}" end)
-      |> Enum.join(", ")
+      Enum.map_join(args, ", ", fn {k, v} -> "#{k}=#{Jason.encode!(v)}" end)
 
     "#{name}(#{args_str})"
   end
@@ -155,6 +156,5 @@ defmodule OctoPi.Coder.Compaction.Serialize do
 
   defp maybe_tool_calls(parts, []), do: parts
 
-  defp maybe_tool_calls(parts, calls),
-    do: ["[Assistant tool calls]: " <> Enum.join(calls, "; ") | parts]
+  defp maybe_tool_calls(parts, calls), do: ["[Assistant tool calls]: " <> Enum.join(calls, "; ") | parts]
 end

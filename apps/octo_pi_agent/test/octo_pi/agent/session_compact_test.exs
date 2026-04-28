@@ -72,8 +72,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
 
       assert :ok = Agent.compaction_response(session, ref, {:cancel, "user said no"})
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:cancel, "user said no"}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:cancel, "user said no"}}},
                      1_000
 
       refute Agent.state(session).is_streaming?
@@ -202,8 +201,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
       :ok = Agent.compaction_response(session, ref, {:ok, %{summary: "post-stream"}})
 
-      assert_receive {:octo_pi_agent_event,
-                      %Event.CompactionEnd{result: {:ok, %{summary: "post-stream"}}}},
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, %{summary: "post-stream"}}}},
                      1_000
     end
   end

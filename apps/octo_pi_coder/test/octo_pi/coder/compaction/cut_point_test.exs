@@ -9,8 +9,7 @@ defmodule OctoPi.Coder.Compaction.CutPointTest do
 
   defp user(text, opts \\ []), do: message("user", text, opts)
 
-  defp assistant(text, opts \\ []),
-    do: message("assistant", [%{"type" => "text", "text" => text}], opts)
+  defp assistant(text, opts \\ []), do: message("assistant", [%{"type" => "text", "text" => text}], opts)
 
   defp tool_result(text, opts \\ []), do: message("toolResult", text, opts)
 
@@ -43,7 +42,7 @@ defmodule OctoPi.Coder.Compaction.CutPointTest do
     }
   end
 
-  defp rand_id, do: :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+  defp rand_id, do: 4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 
   # ---- find_turn_start_index --------------------------------------------
 

@@ -26,14 +26,16 @@ defmodule OctoPi.Coder.Session.Entry.Message do
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
-    [
-      {"type", "message"},
-      {"id", e.id},
-      {"parentId", e.parent_id},
-      {"timestamp", e.timestamp},
-      {"message", e.message}
-    ]
-    |> JSON.append_extras(e.extras)
+    JSON.append_extras(
+      [
+        {"type", "message"},
+        {"id", e.id},
+        {"parentId", e.parent_id},
+        {"timestamp", e.timestamp},
+        {"message", e.message}
+      ],
+      e.extras
+    )
   end
 
   @spec encode(t()) :: String.t()

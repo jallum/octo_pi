@@ -23,29 +23,29 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
   alias OctoPi.Coder
-  alias OctoPi.Coder.Session, as: CoderSession
-  alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
-  alias OctoPi.Coder.Session.Messages, as: SessionMessages
-  alias OctoPi.Coder.SessionManager
-  alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
   alias OctoPi.Coder.Extension.Event, as: ExtEvent
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.Coder.Session, as: CoderSession
+  alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
+  alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
+  alias OctoPi.TUI.AgentTelemetryLogger
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
+  alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.ModelSelector
-  alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.UserMessage
-  alias OctoPi.TUI.AgentTelemetryLogger
   alias OctoPi.TUI.EventLogger
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
@@ -459,7 +459,6 @@ defmodule OctoPi.TUI.Interactive do
     register_extension_tools(extensions, session)
     fire_session_start(extensions, cwd, self())
 
-
     {:ok, state, {:continue, :first_render}}
   end
 
@@ -717,8 +716,7 @@ defmodule OctoPi.TUI.Interactive do
 
         agent_opts =
           put_if_present(
-            [model: model, tools: tools, system_prompt: system_prompt,
-             messages_provider: messages_provider],
+            [model: model, tools: tools, system_prompt: system_prompt, messages_provider: messages_provider],
             :transport,
             opts[:transport]
           )
@@ -732,7 +730,8 @@ defmodule OctoPi.TUI.Interactive do
   defp new_session_id do
     <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
 
-    :io_lib.format("~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b", [a, b, c, d, e])
+    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b"
+    |> :io_lib.format([a, b, c, d, e])
     |> IO.iodata_to_binary()
   end
 
@@ -1077,7 +1076,7 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do
     theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())
-    coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.utc_now() |> DateTime.to_iso8601())
+    coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now()))
     csm = TUICSM.new(coder_msg, theme)
     %{state | transcript: [csm]}
   end

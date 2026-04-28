@@ -25,7 +25,9 @@ defmodule OctoPi.Coder.Session.Messages do
 
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.User
-  alias OctoPi.Coder.Session.{BranchSummaryMessage, CompactionSummaryMessage, MessageReader}
+  alias OctoPi.Coder.Session.BranchSummaryMessage
+  alias OctoPi.Coder.Session.CompactionSummaryMessage
+  alias OctoPi.Coder.Session.MessageReader
 
   # Verbatim from `messages.ts:13-27`.
   @compaction_prefix "The conversation history before this point was compacted into the following summary:\n\n<summary>\n"

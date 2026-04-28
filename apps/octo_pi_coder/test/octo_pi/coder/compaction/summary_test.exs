@@ -3,10 +3,12 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
 
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event
-  alias OctoPi.AI.Message.{Assistant, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Model
   alias OctoPi.AI.Usage
-  alias OctoPi.Coder.Compaction.{Prompts, Summary}
+  alias OctoPi.Coder.Compaction.Prompts
+  alias OctoPi.Coder.Compaction.Summary
 
   defp model(reasoning? \\ false) do
     %Model{

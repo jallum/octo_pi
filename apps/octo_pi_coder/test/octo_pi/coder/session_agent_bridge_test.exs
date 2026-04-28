@@ -113,8 +113,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       assert :ok = OctoPi.Agent.compact(agent, producer: producer)
       assert :ok = OctoPi.Agent.wait_for_idle(agent, 2_000)
 
-      assert_receive {:octo_pi_agent_event,
-                      %AgentEvent.CompactionEnd{result: {:ok, result}}},
+      assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:ok, result}}},
                      1_000
 
       assert result.summary == "THE-SUMMARY"
@@ -124,7 +123,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
 
       sm = Session.get_session_manager(coder)
       entry = sm.by_id |> Map.values() |> Enum.find(&match?(%Entry.Compaction{}, &1))
-      assert entry != nil
+      assert entry
       assert entry.summary == "THE-SUMMARY"
       assert entry.from_hook == nil
 
@@ -170,8 +169,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       :ok = OctoPi.Agent.compact(agent)
       :ok = OctoPi.Agent.wait_for_idle(agent, 2_000)
 
-      assert_receive {:octo_pi_agent_event,
-                      %AgentEvent.CompactionEnd{result: {:ok, result}}},
+      assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:ok, result}}},
                      1_000
 
       assert result.summary == "ext-override"
@@ -196,8 +194,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       OctoPi.Agent.subscribe(agent, self(), :async)
       :ok = OctoPi.Agent.compact(agent)
 
-      assert_receive {:octo_pi_agent_event,
-                      %AgentEvent.CompactionEnd{result: {:cancel, "not now"}}},
+      assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:cancel, "not now"}}},
                      2_000
 
       sm = Session.get_session_manager(coder)
@@ -210,8 +207,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       OctoPi.Agent.subscribe(agent, self(), :async)
       :ok = OctoPi.Agent.compact(agent)
 
-      assert_receive {:octo_pi_agent_event,
-                      %AgentEvent.CompactionEnd{result: {:error, :nothing_to_compact}}},
+      assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:error, :nothing_to_compact}}},
                      2_000
     end
 
@@ -222,8 +218,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       OctoPi.Agent.subscribe(agent, self(), :async)
       :ok = OctoPi.Agent.compact(agent)
 
-      assert_receive {:octo_pi_agent_event,
-                      %AgentEvent.CompactionEnd{result: {:error, :no_model}}},
+      assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:error, :no_model}}},
                      2_000
     end
   end

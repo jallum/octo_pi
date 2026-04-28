@@ -3,11 +3,16 @@ defmodule OctoPi.Coder.CompactionTest do
 
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event
-  alias OctoPi.AI.Message.{Assistant, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.Model
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction
-  alias OctoPi.Coder.Compaction.{FileOps, Preparation, Result, Settings}
+  alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Preparation
+  alias OctoPi.Coder.Compaction.Prompts
+  alias OctoPi.Coder.Compaction.Result
+  alias OctoPi.Coder.Compaction.Settings
 
   defp model(reasoning? \\ false) do
     %Model{
@@ -211,9 +216,11 @@ defmodule OctoPi.Coder.CompactionTest do
 
       fn m, ctx, opts ->
         [%User{content: [%Text{text: text}]}] = ctx.messages
-        kind = if String.ends_with?(text, OctoPi.Coder.Compaction.Prompts.turn_prefix()),
-          do: :turn_prefix,
-          else: :history
+
+        kind =
+          if String.ends_with?(text, Prompts.turn_prefix()),
+            do: :turn_prefix,
+            else: :history
 
         send(test, {:producer_call, kind, m, ctx, opts})
 
@@ -262,9 +269,7 @@ defmodule OctoPi.Coder.CompactionTest do
 
     test "turn-prefix call uses the 0.5 × reserve budget; history uses 0.8 ×" do
       assert {:ok, _} =
-               Compaction.compact(split_prep(), model(),
-                 producer: dual_producer()
-               )
+               Compaction.compact(split_prep(), model(), producer: dual_producer())
 
       assert_received {:producer_call, :history, _, _, %{max_tokens: 800}}
       assert_received {:producer_call, :turn_prefix, _, _, %{max_tokens: 500}}
@@ -305,7 +310,7 @@ defmodule OctoPi.Coder.CompactionTest do
       producer = fn _, ctx, _ ->
         [%User{content: [%Text{text: text}]}] = ctx.messages
 
-        if String.ends_with?(text, OctoPi.Coder.Compaction.Prompts.turn_prefix()),
+        if String.ends_with?(text, Prompts.turn_prefix()),
           do: error_event("turn-prefix boom"),
           else: done_with("HISTORY-BODY")
       end

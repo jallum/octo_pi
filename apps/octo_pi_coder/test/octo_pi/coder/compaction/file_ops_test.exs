@@ -2,7 +2,8 @@ defmodule OctoPi.Coder.Compaction.FileOpsTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.AI.Content.Text
-  alias OctoPi.AI.Message.{Assistant, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
   alias OctoPi.Coder.Compaction.FileOps
@@ -62,14 +63,14 @@ defmodule OctoPi.Coder.Compaction.FileOpsTest do
     end
 
     test "ignores non-assistant messages" do
-      ops = FileOps.new() |> Map.put(:read, MapSet.new(["sentinel"]))
+      ops = Map.put(FileOps.new(), :read, MapSet.new(["sentinel"]))
       assert FileOps.extract(%User{content: "hi", timestamp: 0}, ops) == ops
     end
 
     test "is reducible across multiple messages" do
       m1 = assistant([tc("read", %{"path" => "a"})])
       m2 = assistant([tc("write", %{"path" => "a"})])
-      ops = [m1, m2] |> Enum.reduce(FileOps.new(), &FileOps.extract/2)
+      ops = Enum.reduce([m1, m2], FileOps.new(), &FileOps.extract/2)
       assert ops.read == MapSet.new(["a"])
       assert ops.written == MapSet.new(["a"])
     end

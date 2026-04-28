@@ -117,16 +117,16 @@ defmodule OctoPi.Coder.Extension.ContextTest do
     end
 
     test "wires get_entries / get_branch / get_leaf_entry_id from a snapshot SessionManager", %{sm: sm} do
-      ctx = Context.new(%{cwd: "/tmp"}) |> Context.bind_session_manager(sm)
+      ctx = %{cwd: "/tmp"} |> Context.new() |> Context.bind_session_manager(sm)
 
       assert ctx.get_leaf_entry_id.() == "m2"
-      assert ctx.get_entries.() |> Enum.map(& &1.id) == ~w(m1 m2)
-      assert ctx.get_branch.() |> Enum.map(& &1.id) == ~w(m1 m2)
+      assert Enum.map(ctx.get_entries.(), & &1.id) == ~w(m1 m2)
+      assert Enum.map(ctx.get_branch.(), & &1.id) == ~w(m1 m2)
     end
 
     test "accepts a 0-arity getter so the context tracks live SessionManager state", %{sm: sm} do
       agent = start_supervised!({Agent, fn -> sm end})
-      ctx = Context.new(%{cwd: "/tmp"}) |> Context.bind_session_manager(fn -> Agent.get(agent, & &1) end)
+      ctx = %{cwd: "/tmp"} |> Context.new() |> Context.bind_session_manager(fn -> Agent.get(agent, & &1) end)
 
       assert ctx.get_leaf_entry_id.() == "m2"
 
@@ -140,8 +140,7 @@ defmodule OctoPi.Coder.Extension.ContextTest do
       Agent.update(agent, fn _ -> sm2 end)
 
       assert ctx.get_leaf_entry_id.() == sm2.leaf_id
-      assert ctx.get_entries.() |> Enum.count() == 3
+      assert Enum.count(ctx.get_entries.()) == 3
     end
-
   end
 end

@@ -222,7 +222,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   end
 
   defp call_init(module, id, actions) do
-    api = API.new(id) |> maybe_bind_core(actions)
+    api = id |> API.new() |> maybe_bind_core(actions)
 
     case module.init(api) do
       {:ok, %API{} = api} -> {:ok, api}

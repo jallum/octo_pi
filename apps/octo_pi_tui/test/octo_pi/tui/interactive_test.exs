@@ -8,6 +8,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
+  alias OctoPi.Coder.Session
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Footer
@@ -269,9 +270,9 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — Alt+Up dequeue overlay (opi-0g4.16)" do
-    alias OctoPi.Coder.Session, as: CoderSession
     alias OctoPi.Coder.SessionManager
     alias OctoPi.Coder.SessionStore
+    alias Session, as: CoderSession
 
     defp dequeue_state(items, selected) do
       %Interactive{dequeue_overlay: %{items: items, selected: selected}}
@@ -1182,9 +1183,9 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "add_tool via handle_ui_request registers the tool when a session is active" do
-      alias OctoPi.Coder.Session, as: CoderSession
       alias OctoPi.Coder.SessionManager
       alias OctoPi.Coder.SessionStore
+      alias Session, as: CoderSession
 
       id = "test-#{System.unique_integer([:positive])}"
       root = Path.join(System.tmp_dir!(), "opi-addtool-test-#{id}")

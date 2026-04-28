@@ -62,22 +62,20 @@ defmodule OctoPi.Agent.Turn.Worker do
   """
   @spec stream(pid(), reference(), stream_opts()) :: :ok
   def stream(parent, ref, %{context: ctx, model: model, transport: transport}) do
-    try do
-      stream = transport.stream(model, ctx, %OctoPi.AI.StreamOptions{})
+    stream = transport.stream(model, ctx, %OctoPi.AI.StreamOptions{})
 
-      assistant =
-        case Enum.reduce(stream, nil, &handle_ai_event(parent, ref, &1, &2)) do
-          %Assistant{stop_reason: r} = a when not is_nil(r) -> a
-          _partial_or_nil -> truncated_stream_assistant(model)
-        end
+    assistant =
+      case Enum.reduce(stream, nil, &handle_ai_event(parent, ref, &1, &2)) do
+        %Assistant{stop_reason: r} = a when not is_nil(r) -> a
+        _partial_or_nil -> truncated_stream_assistant(model)
+      end
 
-      send(parent, {:stream_done, ref, assistant})
+    send(parent, {:stream_done, ref, assistant})
+    :ok
+  rescue
+    e ->
+      send(parent, {:stream_failed, ref, Exception.message(e)})
       :ok
-    rescue
-      e ->
-        send(parent, {:stream_failed, ref, Exception.message(e)})
-        :ok
-    end
   end
 
   defp handle_ai_event(parent, ref, %AIEvent.Start{partial: p}, _acc) do
@@ -172,12 +170,15 @@ defmodule OctoPi.Agent.Turn.Worker do
         result
 
       %Tool{} = tool ->
-        send(parent, {:agent_event, ref,
-          %Event.ToolExecutionStart{
-            tool_call_id: call.id,
-            tool_name: call.name,
-            args: call.arguments
-          }})
+        send(
+          parent,
+          {:agent_event, ref,
+           %Event.ToolExecutionStart{
+             tool_call_id: call.id,
+             tool_name: call.name,
+             args: call.arguments
+           }}
+        )
 
         start_mono = System.monotonic_time()
 
@@ -207,11 +208,14 @@ defmodule OctoPi.Agent.Turn.Worker do
 
   defp run_tool_handler(parent, ref, opts, tool, call) do
     on_update = fn partial ->
-      send(parent, {:agent_event, ref,
-        %Event.ToolExecutionUpdate{
-          tool_call_id: call.id,
-          partial: partial
-        }})
+      send(
+        parent,
+        {:agent_event, ref,
+         %Event.ToolExecutionUpdate{
+           tool_call_id: call.id,
+           partial: partial
+         }}
+      )
     end
 
     params = prepare_params(tool, call.arguments)
@@ -263,12 +267,15 @@ defmodule OctoPi.Agent.Turn.Worker do
   end
 
   defp cast_tool_end(parent, ref, %ToolCall{} = call, result) do
-    send(parent, {:agent_event, ref,
-      %Event.ToolExecutionEnd{
-        tool_call_id: call.id,
-        tool_name: call.name,
-        result: result
-      }})
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.ToolExecutionEnd{
+         tool_call_id: call.id,
+         tool_name: call.name,
+         result: result
+       }}
+    )
   end
 
   defp prepare_params(%Tool{prepare_arguments: nil}, args), do: args

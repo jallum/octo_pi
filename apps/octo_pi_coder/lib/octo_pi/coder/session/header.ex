@@ -30,15 +30,17 @@ defmodule OctoPi.Coder.Session.Header do
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = h) do
-    [
-      {"type", "session"},
-      {"version", h.version},
-      {"id", h.id},
-      {"timestamp", h.timestamp},
-      {"cwd", h.cwd},
-      {"parentSession", h.parent_session}
-    ]
-    |> JSON.append_extras(h.extras)
+    JSON.append_extras(
+      [
+        {"type", "session"},
+        {"version", h.version},
+        {"id", h.id},
+        {"timestamp", h.timestamp},
+        {"cwd", h.cwd},
+        {"parentSession", h.parent_session}
+      ],
+      h.extras
+    )
   end
 
   @spec encode(t()) :: String.t()

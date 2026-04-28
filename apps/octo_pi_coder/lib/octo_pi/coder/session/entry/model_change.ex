@@ -22,15 +22,17 @@ defmodule OctoPi.Coder.Session.Entry.ModelChange do
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
-    [
-      {"type", "model_change"},
-      {"id", e.id},
-      {"parentId", e.parent_id},
-      {"timestamp", e.timestamp},
-      {"provider", e.provider},
-      {"modelId", e.model_id}
-    ]
-    |> JSON.append_extras(e.extras)
+    JSON.append_extras(
+      [
+        {"type", "model_change"},
+        {"id", e.id},
+        {"parentId", e.parent_id},
+        {"timestamp", e.timestamp},
+        {"provider", e.provider},
+        {"modelId", e.model_id}
+      ],
+      e.extras
+    )
   end
 
   @spec encode(t()) :: String.t()

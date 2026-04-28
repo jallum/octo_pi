@@ -23,15 +23,17 @@ defmodule OctoPi.Coder.Session.Entry.Label do
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
-    [
-      {"type", "label"},
-      {"id", e.id},
-      {"parentId", e.parent_id},
-      {"timestamp", e.timestamp},
-      {"targetId", e.target_id},
-      {"label", e.label}
-    ]
-    |> JSON.append_extras(e.extras)
+    JSON.append_extras(
+      [
+        {"type", "label"},
+        {"id", e.id},
+        {"parentId", e.parent_id},
+        {"timestamp", e.timestamp},
+        {"targetId", e.target_id},
+        {"label", e.label}
+      ],
+      e.extras
+    )
   end
 
   @spec encode(t()) :: String.t()

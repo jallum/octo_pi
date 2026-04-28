@@ -21,14 +21,16 @@ defmodule OctoPi.Coder.Session.Entry.ThinkingLevelChange do
 
   @spec pairs(t()) :: [{String.t(), term()}]
   def pairs(%__MODULE__{} = e) do
-    [
-      {"type", "thinking_level_change"},
-      {"id", e.id},
-      {"parentId", e.parent_id},
-      {"timestamp", e.timestamp},
-      {"thinkingLevel", e.thinking_level}
-    ]
-    |> JSON.append_extras(e.extras)
+    JSON.append_extras(
+      [
+        {"type", "thinking_level_change"},
+        {"id", e.id},
+        {"parentId", e.parent_id},
+        {"timestamp", e.timestamp},
+        {"thinkingLevel", e.thinking_level}
+      ],
+      e.extras
+    )
   end
 
   @spec encode(t()) :: String.t()

@@ -12,7 +12,9 @@ defmodule OctoPi.Coder.SessionManager.BuildContextTest do
     base = %Entry.Message{id: id, parent_id: parent, timestamp: "2025-01-01T00:00:00Z", message: nil}
 
     case role do
-      :user -> %{base | message: %{"role" => "user", "content" => text, "timestamp" => 1}}
+      :user ->
+        %{base | message: %{"role" => "user", "content" => text, "timestamp" => 1}}
+
       :assistant ->
         %{
           base
@@ -68,10 +70,14 @@ defmodule OctoPi.Coder.SessionManager.BuildContextTest do
 
   defp sm(entries) do
     by_id = Map.new(entries, fn e -> {e.id, e} end)
-    leaf_id = entries |> List.last() |> case do
-      nil -> nil
-      e -> e.id
-    end
+
+    leaf_id =
+      entries
+      |> List.last()
+      |> case do
+        nil -> nil
+        e -> e.id
+      end
 
     %SessionManager{
       cwd: "/c",

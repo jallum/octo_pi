@@ -139,10 +139,7 @@ defmodule OctoPi.Agent.Turn do
     finalize_turn(turn, assistant, reason)
   end
 
-  def handle_event(
-        %__MODULE__{state: :awaiting_response} = turn,
-        {:stream_failed, reason}
-      ) do
+  def handle_event(%__MODULE__{state: :awaiting_response} = turn, {:stream_failed, reason}) do
     finalize_synth(turn, :error, "stream failed: #{inspect(reason)}")
   end
 

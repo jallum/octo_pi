@@ -20,7 +20,10 @@ defmodule OctoPi.Coder.Compaction do
   """
 
   alias OctoPi.AI.Model
-  alias OctoPi.Coder.Compaction.{FileOps, Preparation, Result, Summary}
+  alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Preparation
+  alias OctoPi.Coder.Compaction.Result
+  alias OctoPi.Coder.Compaction.Summary
 
   @turn_separator "\n\n---\n\n**Turn Context (split turn):**\n\n"
 
@@ -43,11 +46,7 @@ defmodule OctoPi.Coder.Compaction do
   end
 
   # Single-pass: split_turn? is false OR there are no turn-prefix messages.
-  defp generate_body(
-         %Preparation{split_turn?: split?, turn_prefix_messages: tp} = prep,
-         model,
-         opts
-       )
+  defp generate_body(%Preparation{split_turn?: split?, turn_prefix_messages: tp} = prep, model, opts)
        when split? == false or tp == [] do
     Summary.generate(
       prep.messages_to_summarize,
@@ -82,8 +81,7 @@ defmodule OctoPi.Coder.Compaction do
 
   # Upstream short-circuits the history call when there's nothing to
   # summarize, returning the literal "No prior history." (compaction.ts:743-755).
-  defp history_summary(%Preparation{messages_to_summarize: []}, _model, _opts),
-    do: {:ok, "No prior history."}
+  defp history_summary(%Preparation{messages_to_summarize: []}, _model, _opts), do: {:ok, "No prior history."}
 
   defp history_summary(%Preparation{} = prep, %Model{} = model, opts) do
     Summary.generate(
@@ -95,26 +93,30 @@ defmodule OctoPi.Coder.Compaction do
   end
 
   defp history_opts(%Preparation{} = prep, opts) do
-    [
-      previous_summary: prep.previous_summary,
-      custom_instructions: Keyword.get(opts, :custom_instructions),
-      api_key: Keyword.get(opts, :api_key),
-      headers: Keyword.get(opts, :headers),
-      thinking_level: Keyword.get(opts, :thinking_level),
-      producer: Keyword.get(opts, :producer)
-    ]
-    |> Enum.reject(fn {_, v} -> is_nil(v) end)
+    Enum.reject(
+      [
+        previous_summary: prep.previous_summary,
+        custom_instructions: Keyword.get(opts, :custom_instructions),
+        api_key: Keyword.get(opts, :api_key),
+        headers: Keyword.get(opts, :headers),
+        thinking_level: Keyword.get(opts, :thinking_level),
+        producer: Keyword.get(opts, :producer)
+      ],
+      fn {_, v} -> is_nil(v) end
+    )
   end
 
   defp turn_prefix_opts(opts) do
-    [
-      variant: :turn_prefix,
-      api_key: Keyword.get(opts, :api_key),
-      headers: Keyword.get(opts, :headers),
-      thinking_level: Keyword.get(opts, :thinking_level),
-      producer: Keyword.get(opts, :producer)
-    ]
-    |> Enum.reject(fn {_, v} -> is_nil(v) end)
+    Enum.reject(
+      [
+        variant: :turn_prefix,
+        api_key: Keyword.get(opts, :api_key),
+        headers: Keyword.get(opts, :headers),
+        thinking_level: Keyword.get(opts, :thinking_level),
+        producer: Keyword.get(opts, :producer)
+      ],
+      fn {_, v} -> is_nil(v) end
+    )
   end
 
   defp build_result(%Preparation{} = prep, body) do

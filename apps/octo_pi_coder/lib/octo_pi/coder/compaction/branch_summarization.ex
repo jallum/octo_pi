@@ -48,13 +48,21 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
   (`tmp/pi-mono/.../compaction/branch-summarization.ts:185-355`).
   """
 
-  alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Content.Text
+  alias OctoPi.AI.Context, as: AIContext
   alias OctoPi.AI.Event
-  alias OctoPi.AI.Message.{Assistant, User}
+  alias OctoPi.AI.Message.Assistant
+  alias OctoPi.AI.Message.User
   alias OctoPi.AI.StreamOptions
-  alias OctoPi.Coder.Compaction.{BranchSummaryResult, FileOps, Prompts, Serialize, Tokens}
-  alias OctoPi.Coder.Session.{BranchSummaryMessage, CompactionSummaryMessage, Entry, Messages}
+  alias OctoPi.Coder.Compaction.BranchSummaryResult
+  alias OctoPi.Coder.Compaction.FileOps
+  alias OctoPi.Coder.Compaction.Prompts
+  alias OctoPi.Coder.Compaction.Serialize
+  alias OctoPi.Coder.Compaction.Tokens
+  alias OctoPi.Coder.Session.BranchSummaryMessage
+  alias OctoPi.Coder.Session.CompactionSummaryMessage
+  alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Messages
 
   @default_producer OctoPi.AI.Providers.Anthropic
 
@@ -167,14 +175,11 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
   defp build_instructions(nil, _replace), do: Prompts.branch_summary()
   defp build_instructions(custom, true), do: custom
 
-  defp build_instructions(custom, false),
-    do: Prompts.branch_summary() <> "\n\nAdditional focus: " <> custom
+  defp build_instructions(custom, false), do: Prompts.branch_summary() <> "\n\nAdditional focus: " <> custom
 
-  defp invoke(producer, model, ctx, opts) when is_atom(producer),
-    do: producer.stream(model, ctx, opts)
+  defp invoke(producer, model, ctx, opts) when is_atom(producer), do: producer.stream(model, ctx, opts)
 
-  defp invoke(fun, model, ctx, opts) when is_function(fun, 3),
-    do: fun.(model, ctx, opts)
+  defp invoke(fun, model, ctx, opts) when is_function(fun, 3), do: fun.(model, ctx, opts)
 
   defp consume(stream, file_ops) do
     result =

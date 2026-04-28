@@ -47,6 +47,7 @@ defmodule OctoPi.Coder.Extensions.TriggerCompact do
   defp should_fire?(previous, current, context_window, api)
        when is_integer(previous) and is_integer(current) and is_integer(context_window) do
     settings = api.get_compaction_settings.()
+
     not Tokens.should_compact?(previous, context_window, settings) and
       Tokens.should_compact?(current, context_window, settings)
   end
