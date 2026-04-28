@@ -5,10 +5,7 @@ defmodule OctoPi.Coder.Session.ReadEntriesTest do
   alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionStore
 
-  @fixture_root Path.expand(
-                  "../../../../../../tmp/pi-mono/packages/coding-agent/test/fixtures",
-                  __DIR__
-                )
+  @fixture_root Path.expand("../../../fixtures", __DIR__)
 
   describe "read_entries/1" do
     test "streams the before-compaction.jsonl fixture: header then entries" do

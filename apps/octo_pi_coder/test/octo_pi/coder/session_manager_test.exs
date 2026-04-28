@@ -6,10 +6,7 @@ defmodule OctoPi.Coder.SessionManagerTest do
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
 
-  @fixture_root Path.expand(
-                  "../../../../../tmp/pi-mono/packages/coding-agent/test/fixtures",
-                  __DIR__
-                )
+  @fixture_root Path.expand("../../fixtures", __DIR__)
 
   describe "load/1 — error paths" do
     test "missing file returns :enoent" do
