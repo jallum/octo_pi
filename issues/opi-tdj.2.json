@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-tdj",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Port AI-layer and extension telemetry handlers to Tracer",
   "type": "task",
-  "updated_at": "2026-04-28T13:53:49.712574Z"
+  "updated_at": "2026-04-28T14:13:08.276875Z"
 }
