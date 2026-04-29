@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Remove unreachable `:custom` clause from `handle_ui_request`",
   "type": "task",
-  "updated_at": "2026-04-29T12:41:44.697838Z"
+  "updated_at": "2026-04-29T12:44:15.368765Z"
 }
