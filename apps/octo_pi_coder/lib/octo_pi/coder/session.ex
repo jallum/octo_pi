@@ -11,10 +11,10 @@ defmodule OctoPi.Coder.Session do
   state to read and a single writer that keeps the in-memory DAG and
   the on-disk JSONL in lockstep.
 
-  The public surface is the idiomatic Elixir one — `compact/2`,
-  `add_entry/3`, `state/1`, etc. The bridge into the extension API
-  (a closure map per `Extension.API.bind_core/2`) is built inside
-  `Extension.Loader.load_for_session/2` and is not exposed here.
+  All public operations are surfaced through `OctoPi.Coder`. The bridge
+  into the extension API (a closure map per `Extension.API.bind_core/2`)
+  is built inside `Extension.Loader.load_for_session/2` and is not
+  exposed here.
   """
 
   use GenServer, restart: :temporary
@@ -25,7 +25,6 @@ defmodule OctoPi.Coder.Session do
   alias OctoPi.Coder.Compaction.BranchSummaryResult
   alias OctoPi.Coder.Compaction.Preparation
   alias OctoPi.Coder.Compaction.Result
-  alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Compaction.Tokens
   alias OctoPi.Coder.Compaction.TreePreparation
   alias OctoPi.Coder.Extension
@@ -97,249 +96,20 @@ defmodule OctoPi.Coder.Session do
       else: GenServer.start_link(__MODULE__, opts)
   end
 
-  @spec state(GenServer.server()) :: state()
-  def state(server), do: GenServer.call(server, :state)
-
-  @spec get_session_manager(GenServer.server()) :: SessionManager.t()
-  def get_session_manager(server), do: GenServer.call(server, :get_session_manager)
-
-  @spec get_extensions(GenServer.server()) :: [Extension.t()]
-  def get_extensions(server), do: GenServer.call(server, :get_extensions)
-
-  @doc """
-  Build the LLM-ready session context from the held `SessionManager`'s
-  current branch. Pure read-only delegate to
-  `SessionManager.build_session_context/2` (B6) — no extension dispatch,
-  no state mutation. Used by the agent run-process to assemble each
-  turn's prompt with post-compaction kept-window + synthetic summary.
-  """
-  @spec build_session_context(GenServer.server()) ::
-          %{messages: [term()], thinking_level: String.t(), model: %{provider: String.t(), model_id: String.t()} | nil}
-  def build_session_context(server), do: GenServer.call(server, :build_session_context)
-
-  @doc """
-  Append an entry to the session. Atomic across the in-memory
-  `SessionManager` and the on-disk `SessionStore` (delegates to
-  `SessionManager.add_entry/3` with `:store` set to the held pid).
-
-  Options forwarded to `SessionManager.add_entry/3`:
-
-    * `:id` — explicit id (skips generation).
-    * `:timestamp` — explicit ISO-8601 timestamp.
-
-  Returns `{:ok, entry_id}`. Errors from the underlying store surface
-  as a GenServer crash today; if a softer contract is needed, layer
-  it on once a real failure mode shows up.
-  """
-  @spec add_entry(GenServer.server(), Entry.t(), keyword()) :: {:ok, String.t()}
-  def add_entry(server, entry, opts \\ []), do: GenServer.call(server, {:add_entry, entry, opts})
-
-  @doc """
-  Wire an agent pid into the session after init. Subscribes to agent
-  events and stores the pid for compaction responses.
-
-  Used during resumption where `Coder.Session` must start before
-  `Agent.Session` (so its `messages_provider` can close over the
-  coder session pid).
-  """
-  @spec set_agent_pid(GenServer.server(), pid()) :: :ok
-  def set_agent_pid(server, agent_pid), do: GenServer.call(server, {:set_agent_pid, agent_pid})
-
-  @doc """
-  Subscribe `subscriber` to agent events. Delegates to `OctoPi.Agent.subscribe/3`.
-  The caller will receive `{:octo_pi_agent_event, event}` messages.
-  """
-  @spec subscribe(GenServer.server(), pid(), :async | :sync) :: :ok
-  def subscribe(server, subscriber, mode \\ :async), do: GenServer.call(server, {:agent_subscribe, subscriber, mode})
-
-  @doc """
-  Write the user message entry to the session file and dispatch the prompt
-  to the agent. `save_text` is persisted as-is; `send_text` is what the
-  agent receives (allows template expansion by the caller before this call).
-  When `send_text` is omitted it defaults to `save_text`.
-  """
-  @spec prompt(GenServer.server(), String.t()) :: :ok | {:error, term()}
-  @spec prompt(GenServer.server(), String.t(), String.t()) :: :ok | {:error, term()}
-  def prompt(server, save_text), do: prompt(server, save_text, save_text)
-
-  def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text})
-
-  @doc "Abort the current agent run."
-  @spec abort(GenServer.server()) :: :ok
-  def abort(server), do: GenServer.call(server, :agent_abort)
-
-  @doc "Queue a follow-up message with the held agent."
-  @spec follow_up(GenServer.server(), String.t()) :: :ok
-  def follow_up(server, text), do: GenServer.call(server, {:agent_follow_up, text})
-
-  @doc "Queue a steering message with the held agent."
-  @spec steer(GenServer.server(), String.t()) :: :ok
-  def steer(server, text), do: GenServer.call(server, {:agent_steer, text})
-
-  @doc "Set the model on the held agent."
-  @spec set_model(GenServer.server(), OctoPi.AI.Model.t()) :: :ok
-  def set_model(server, model), do: GenServer.call(server, {:agent_set_model, model})
-
-  @doc "Set the thinking level on the held agent."
-  @spec set_thinking_level(GenServer.server(), atom()) :: :ok
-  def set_thinking_level(server, level), do: GenServer.call(server, {:agent_set_thinking_level, level})
-
-  @doc "Register an additional tool with the held agent."
-  @spec add_tool(GenServer.server(), OctoPi.Agent.Tool.t()) :: :ok
-  def add_tool(server, tool), do: GenServer.call(server, {:agent_add_tool, tool})
-
-  @doc "Drain and return pending steering messages from the agent queue."
-  @spec drain_steering(GenServer.server()) :: [String.t()]
-  def drain_steering(server), do: GenServer.call(server, :agent_drain_steering)
-
-  @doc "Drain and return pending follow-up messages from the agent queue."
-  @spec drain_follow_up(GenServer.server()) :: [String.t()]
-  def drain_follow_up(server), do: GenServer.call(server, :agent_drain_follow_up)
-
-  @doc "Append a user prompt to the session. Called by the UI before `Agent.prompt/2`."
-  @spec add_user_message(GenServer.server(), User.t()) :: {:ok, String.t()}
-  def add_user_message(server, %User{} = msg) do
-    entry = %Entry.Message{
-      id: nil,
-      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
-      message: MessageWriter.from_user(msg)
-    }
-
-    add_entry(server, entry)
-  end
-
-  @doc """
-  Run the compaction orchestrator. Port of upstream `AgentSession.compact`
-  (`tmp/pi-mono/.../core/agent-session.ts:1605`).
-
-  Sequence:
-
-    1. Build a `%Compaction.Preparation{}` from the current branch and
-       the held compaction settings.
-    2. Emit `:session_before_compact` via `Dispatcher.halt_on_result/3`.
-       Honor:
-       - `{:cancel, reason}` → reply `{:cancel, reason}`; no LLM call.
-       - `{:override, %Result{}}` → reply `{:ok, result, from_extension?: true}`
-         (callers persist with `from_hook?: true` per E5b/.25).
-    3. Otherwise call `Compaction.compact/2` with the held model.
-
-  Persistence + `:session_compact` emit are scoped to E5b (.25); this
-  function only computes and returns the result. Callers persist.
-
-  Options passed through to the LLM path: `:custom_instructions`,
-  `:thinking_level`, `:api_key`, `:headers`, `:producer`.
-  """
   @type compact_result ::
           {:ok, %{result: Result.t(), from_extension?: boolean()}}
           | {:cancel, term()}
           | {:error, :nothing_to_compact | :no_model | term()}
 
-  @spec compact(GenServer.server(), keyword()) :: compact_result()
-  def compact(server, opts \\ []), do: GenServer.call(server, {:compact, opts}, :infinity)
-
-  @doc """
-  Fork the current session into a new session file.
-
-  Sequence:
-
-    1. Emit `:session_before_fork` via `Dispatcher.halt_on_result/3`.
-       - `{:cancel, reason}` → `{:cancel, reason}`; no file is written.
-       - `:ok` → call `SessionManager.fork/4`.
-
-  Options:
-    * `:target_cwd`  — working directory for the forked session (required)
-    * `:target_dir`  — directory where the new session file is written (required)
-    * `:id`          — explicit session id for the fork
-    * `:timestamp`   — explicit ISO-8601 timestamp for the fork
-
-  Returns:
-    * `{:ok, %SessionManager{}}` on success
-    * `{:cancel, reason}` when an extension vetoes the fork
-    * `{:error, reason}` when the underlying fork fails
-  """
   @type fork_result ::
           {:ok, SessionManager.t()}
           | {:cancel, term()}
           | {:error, :enoent | :empty | :missing_header | :no_session_file}
 
-  @spec fork(GenServer.server(), keyword()) :: fork_result()
-  def fork(server, opts), do: GenServer.call(server, {:fork, opts}, :infinity)
-
-  @doc """
-  Navigate the session tree to `target_id`.
-
-  Sequence:
-
-    1. No-op when `target_id == current_leaf_id` → `{:ok, nil}`.
-    2. Build `%TreePreparation{}` from the current and target positions.
-    3. Emit `:session_before_tree` via `Dispatcher.halt_on_result/3`.
-       - `{:cancel, reason}` → `{:cancel, reason}`; session unchanged.
-       - `{:override, %BranchSummaryResult{}}` → use extension summary
-         (only honored when `user_wants_summary != :no`).
-    4. If no override and `user_wants_summary != :no`, call
-       `BranchSummarization.generate/2`.
-    5. Update `session_manager.leaf_id` to the new position; when a
-       summary was produced, append a `BranchSummary` entry at the
-       navigation target first.
-
-  Options:
-    * `:target_id`          — (required) entry id to navigate to
-    * `:user_wants_summary` — `:no | :yes | {:yes, instructions}`
-      (default `:no`)
-    * `:model`              — `%OctoPi.AI.Model{}` (required when summarizing)
-    * `:api_key`, `:headers`— forwarded to the summarization producer
-    * `:producer`           — test injection for `BranchSummarization.generate/2`
-
-  Returns:
-    * `{:ok, %BranchSummaryResult{} | nil}` on success
-    * `{:cancel, reason}` when an extension vetoes
-    * `{:error, :not_found}` when `target_id` is not in the session
-    * `{:error, :no_model}` when summarization required but no model given
-    * `{:error, term()}` on LLM failure
-  """
   @type navigate_tree_result ::
           {:ok, BranchSummaryResult.t() | nil}
           | {:cancel, term()}
           | {:error, :not_found | :no_model | term()}
-
-  @spec navigate_tree(GenServer.server(), keyword()) :: navigate_tree_result()
-  def navigate_tree(server, opts), do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
-
-  @doc """
-  Estimate context token usage for the current session, accounting for
-  compaction boundaries. Mirrors upstream `AgentSession.getContextUsage`.
-
-  Returns `%{tokens: non_neg_integer() | nil, context_window: pos_integer(),
-  percent: float() | nil}`, or `nil` when no model with a valid context
-  window is available.
-
-  Returns `tokens: nil` when the latest compaction has no subsequent
-  valid (non-aborted/non-error) assistant response — context size is
-  unknown until the next LLM reply arrives.
-  """
-  @spec get_context_usage(GenServer.server()) :: map() | nil
-  def get_context_usage(server), do: GenServer.call(server, :get_context_usage)
-
-  @doc """
-  Session statistics: running token totals from assistant messages in the
-  current context window, plus context usage from `get_context_usage/1`.
-  Mirrors upstream `AgentSession.getSessionStats`.
-  """
-  @spec get_session_stats(GenServer.server()) :: map()
-  def get_session_stats(server), do: GenServer.call(server, :get_session_stats)
-
-  @doc """
-  Return the current compaction settings from the session's `SettingsManager`.
-  """
-  @spec get_compaction_settings(GenServer.server()) :: Settings.t()
-  def get_compaction_settings(server), do: GenServer.call(server, :get_compaction_settings)
-
-  @doc """
-  Return all entries from the session's `SessionManager` (the full DAG, not just
-  the current branch).
-  """
-  @spec get_entries(GenServer.server()) :: [Entry.t()]
-  def get_entries(server), do: GenServer.call(server, :get_entries)
 
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
@@ -351,12 +121,12 @@ defmodule OctoPi.Coder.Session do
   @spec __action_closures__(GenServer.server()) :: map()
   def __action_closures__(server) do
     %{
-      append_entry: fn entry -> add_entry(server, entry) end,
-      compact: fn opts -> compact(server, opts) end,
-      get_context_usage: fn -> get_context_usage(server) end,
-      get_compaction_settings: fn -> get_compaction_settings(server) end,
-      navigate_tree: fn opts -> navigate_tree(server, opts) end,
-      get_entries: fn -> get_entries(server) end
+      append_entry: fn entry -> GenServer.call(server, {:add_entry, entry, []}) end,
+      compact: fn opts -> GenServer.call(server, {:compact, opts}, :infinity) end,
+      get_context_usage: fn -> GenServer.call(server, :get_context_usage) end,
+      get_compaction_settings: fn -> GenServer.call(server, :get_compaction_settings) end,
+      navigate_tree: fn opts -> GenServer.call(server, {:navigate_tree, opts}, :infinity) end,
+      get_entries: fn -> GenServer.call(server, :get_entries) end
     }
   end
 
@@ -392,6 +162,18 @@ defmodule OctoPi.Coder.Session do
 
   def handle_call(:build_session_context, _from, state),
     do: {:reply, SessionManager.build_session_context(state.session_manager), state}
+
+  def handle_call({:add_user_message, %User{} = msg}, _from, state) do
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
+      message: MessageWriter.from_user(msg)
+    }
+
+    forward_opts = [store: state.store_pid]
+    {sm, id} = SessionManager.add_entry(state.session_manager, entry, forward_opts)
+    {:reply, {:ok, id}, %{state | session_manager: sm}}
+  end
 
   def handle_call({:add_entry, entry, opts}, _from, state) do
     forward_opts = Keyword.put(opts, :store, state.store_pid)
@@ -993,8 +775,8 @@ defmodule OctoPi.Coder.Session do
       details: result.details
     }
 
-    {:ok, id} = add_entry(session_pid, entry, [])
-    sm = get_session_manager(session_pid)
+    {:ok, id} = GenServer.call(session_pid, {:add_entry, entry, []})
+    sm = GenServer.call(session_pid, :get_session_manager)
     stored = Map.fetch!(sm.by_id, id)
     ctx = Context.bind_session_manager(%Context{cwd: sm.cwd}, fn -> sm end)
 

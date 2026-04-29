@@ -315,7 +315,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
       coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
       {:ok, agent} = OctoPi.Agent.start_session(model: model)
-      :ok = CoderSession.set_agent_pid(coder, agent)
+      :ok = OctoPi.Coder.set_agent_pid(coder, agent)
       {coder, agent}
     end
 
@@ -1201,7 +1201,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
       coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
       {:ok, agent} = OctoPi.Agent.start_session(model: tool_reg_model(), transport: FakeTransport)
-      :ok = CoderSession.set_agent_pid(coder, agent)
+      :ok = OctoPi.Coder.set_agent_pid(coder, agent)
 
       tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
       state = %Interactive{session: coder}

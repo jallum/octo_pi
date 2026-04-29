@@ -55,7 +55,7 @@ defmodule OctoPi.Coder do
 
   @doc "Read the session's current state."
   @spec state(session()) :: Session.state()
-  def state(server), do: Session.state(server)
+  def state(server), do: GenServer.call(server, :state)
 
   # ---- Agent interaction ----
 
@@ -64,7 +64,7 @@ defmodule OctoPi.Coder do
   `{:octo_pi_agent_event, event}` messages.
   """
   @spec subscribe(session(), pid(), :async | :sync) :: :ok
-  def subscribe(server, subscriber, mode \\ :async), do: Session.subscribe(server, subscriber, mode)
+  def subscribe(server, subscriber, mode \\ :async), do: GenServer.call(server, {:agent_subscribe, subscriber, mode})
 
   @doc """
   Write the user message entry to the session file and dispatch the prompt
@@ -74,46 +74,46 @@ defmodule OctoPi.Coder do
   """
   @spec prompt(session(), String.t()) :: :ok | {:error, term()}
   @spec prompt(session(), String.t(), String.t()) :: :ok | {:error, term()}
-  def prompt(server, save_text), do: Session.prompt(server, save_text)
-  def prompt(server, save_text, send_text), do: Session.prompt(server, save_text, send_text)
+  def prompt(server, save_text), do: prompt(server, save_text, save_text)
+  def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text})
 
   @doc "Abort the current agent run."
   @spec abort(session()) :: :ok
-  def abort(server), do: Session.abort(server)
+  def abort(server), do: GenServer.call(server, :agent_abort)
 
   @doc "Queue a follow-up message with the held agent."
   @spec follow_up(session(), String.t()) :: :ok
-  def follow_up(server, text), do: Session.follow_up(server, text)
+  def follow_up(server, text), do: GenServer.call(server, {:agent_follow_up, text})
 
   @doc "Queue a steering message with the held agent."
   @spec steer(session(), String.t()) :: :ok
-  def steer(server, text), do: Session.steer(server, text)
+  def steer(server, text), do: GenServer.call(server, {:agent_steer, text})
 
   @doc "Change the model for future runs."
   @spec set_model(session(), Model.t()) :: :ok
-  def set_model(server, model), do: Session.set_model(server, model)
+  def set_model(server, model), do: GenServer.call(server, {:agent_set_model, model})
 
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(session(), atom()) :: :ok
-  def set_thinking_level(server, level), do: Session.set_thinking_level(server, level)
+  def set_thinking_level(server, level), do: GenServer.call(server, {:agent_set_thinking_level, level})
 
   @doc "Register an additional tool with the held agent."
   @spec add_tool(session(), Tool.t()) :: :ok
-  def add_tool(server, tool), do: Session.add_tool(server, tool)
+  def add_tool(server, tool), do: GenServer.call(server, {:agent_add_tool, tool})
 
   @doc "Drain and return pending steering messages from the agent queue."
   @spec drain_steering(session()) :: [String.t()]
-  def drain_steering(server), do: Session.drain_steering(server)
+  def drain_steering(server), do: GenServer.call(server, :agent_drain_steering)
 
   @doc "Drain and return pending follow-up messages from the agent queue."
   @spec drain_follow_up(session()) :: [String.t()]
-  def drain_follow_up(server), do: Session.drain_follow_up(server)
+  def drain_follow_up(server), do: GenServer.call(server, :agent_drain_follow_up)
 
   # ---- Session management ----
 
   @doc "Wire an agent pid into the session after init."
   @spec set_agent_pid(session(), pid()) :: :ok
-  def set_agent_pid(server, agent_pid), do: Session.set_agent_pid(server, agent_pid)
+  def set_agent_pid(server, agent_pid), do: GenServer.call(server, {:set_agent_pid, agent_pid})
 
   @doc """
   Build the LLM-ready session context from the held `SessionManager`'s
@@ -121,55 +121,55 @@ defmodule OctoPi.Coder do
   """
   @spec build_session_context(session()) ::
           %{messages: [term()], thinking_level: String.t(), model: map() | nil}
-  def build_session_context(server), do: Session.build_session_context(server)
+  def build_session_context(server), do: GenServer.call(server, :build_session_context)
 
   @doc "Return the current `SessionManager`."
   @spec get_session_manager(session()) :: SessionManager.t()
-  def get_session_manager(server), do: Session.get_session_manager(server)
+  def get_session_manager(server), do: GenServer.call(server, :get_session_manager)
 
   @doc "Return the loaded extension list."
   @spec get_extensions(session()) :: [Extension.t()]
-  def get_extensions(server), do: Session.get_extensions(server)
+  def get_extensions(server), do: GenServer.call(server, :get_extensions)
 
   @doc "Append an entry to the session."
   @spec add_entry(session(), Entry.t(), keyword()) :: {:ok, String.t()}
-  def add_entry(server, entry, opts \\ []), do: Session.add_entry(server, entry, opts)
+  def add_entry(server, entry, opts \\ []), do: GenServer.call(server, {:add_entry, entry, opts})
 
   @doc "Append a user prompt to the session."
   @spec add_user_message(session(), User.t()) :: {:ok, String.t()}
-  def add_user_message(server, msg), do: Session.add_user_message(server, msg)
+  def add_user_message(server, %User{} = msg), do: GenServer.call(server, {:add_user_message, msg})
 
   # ---- Session operations ----
 
   @doc "Run the compaction orchestrator."
   @spec compact(session(), keyword()) :: compact_result()
-  def compact(server, opts \\ []), do: Session.compact(server, opts)
+  def compact(server, opts \\ []), do: GenServer.call(server, {:compact, opts}, :infinity)
 
   @doc "Fork the current session into a new session file."
   @spec fork(session(), keyword()) :: fork_result()
-  def fork(server, opts), do: Session.fork(server, opts)
+  def fork(server, opts), do: GenServer.call(server, {:fork, opts}, :infinity)
 
   @doc "Navigate the session tree to a target entry."
   @spec navigate_tree(session(), keyword()) :: navigate_tree_result()
-  def navigate_tree(server, opts), do: Session.navigate_tree(server, opts)
+  def navigate_tree(server, opts), do: GenServer.call(server, {:navigate_tree, opts}, :infinity)
 
   # ---- Queries ----
 
   @doc "Estimate context token usage for the current session."
   @spec get_context_usage(session()) :: map() | nil
-  def get_context_usage(server), do: Session.get_context_usage(server)
+  def get_context_usage(server), do: GenServer.call(server, :get_context_usage)
 
   @doc "Session statistics: running token totals and context usage."
   @spec get_session_stats(session()) :: map()
-  def get_session_stats(server), do: Session.get_session_stats(server)
+  def get_session_stats(server), do: GenServer.call(server, :get_session_stats)
 
   @doc "Return the current compaction settings."
   @spec get_compaction_settings(session()) :: Settings.t()
-  def get_compaction_settings(server), do: Session.get_compaction_settings(server)
+  def get_compaction_settings(server), do: GenServer.call(server, :get_compaction_settings)
 
   @doc "Return all entries from the session's `SessionManager`."
   @spec get_entries(session()) :: [Entry.t()]
-  def get_entries(server), do: Session.get_entries(server)
+  def get_entries(server), do: GenServer.call(server, :get_entries)
 
   # ---- Print mode ----
 

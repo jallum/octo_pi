@@ -309,7 +309,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:register_extension_tool, spec}) do
-    if state.session, do: CoderSession.add_tool(state.session, spec)
+    if state.session, do: Coder.add_tool(state.session, spec)
     {state, :ok}
   end
 
@@ -434,7 +434,7 @@ defmodule OctoPi.TUI.Interactive do
     footer_data = child_pid(sup, FooterData)
 
     :ok = Terminal.open(terminal)
-    CoderSession.subscribe(session, self(), :async)
+    Coder.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
 
@@ -696,7 +696,7 @@ defmodule OctoPi.TUI.Interactive do
       )
 
     {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
-    :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+    :ok = Coder.set_agent_pid(coder_pid, agent_pid)
     coder_pid
   end
 
@@ -720,7 +720,7 @@ defmodule OctoPi.TUI.Interactive do
           )
 
         messages_provider = fn _session ->
-          ctx = CoderSession.build_session_context(coder_pid)
+          ctx = Coder.build_session_context(coder_pid)
           SessionMessages.to_llm(ctx.messages)
         end
 
@@ -732,7 +732,7 @@ defmodule OctoPi.TUI.Interactive do
           )
 
         {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
-        :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+        :ok = Coder.set_agent_pid(coder_pid, agent_pid)
         coder_pid
     end
   end
@@ -813,7 +813,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp register_extension_tools(extensions, coder_session) do
     for ext <- extensions, tool <- Map.values(ext.tools) do
-      CoderSession.add_tool(coder_session, tool)
+      Coder.add_tool(coder_session, tool)
     end
 
     :ok
@@ -1123,7 +1123,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: CoderSession.abort(state.session)
+    if state.session, do: Coder.abort(state.session)
     state
   end
 
@@ -1133,7 +1133,7 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | input: %{state.input | value: "", cursor: 0}}
 
   defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: CoderSession.abort(state.session)
+    if state.session, do: Coder.abort(state.session)
     state
   end
 
@@ -1148,7 +1148,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.thinking.cycle", state, _key) do
     new_level = next_thinking_level(state.thinking_level)
-    if state.session, do: CoderSession.set_thinking_level(state.session, new_level)
+    if state.session, do: Coder.set_thinking_level(state.session, new_level)
     label = thinking_level_label(new_level)
 
     %{
@@ -1178,8 +1178,8 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
 
   defp dispatch_app_action("app.message.dequeue", state, _key) do
-    steering = CoderSession.drain_steering(state.session)
-    follow_up = CoderSession.drain_follow_up(state.session)
+    steering = Coder.drain_steering(state.session)
+    follow_up = Coder.drain_follow_up(state.session)
     items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
 
     if items == [],
@@ -1193,7 +1193,7 @@ defmodule OctoPi.TUI.Interactive do
     if text == "" do
       state
     else
-      if state.session, do: CoderSession.follow_up(state.session, text)
+      if state.session, do: Coder.follow_up(state.session, text)
       input = %{state.input | value: "", cursor: 0}
       %{state | input: input, notification: "Follow-up queued"}
     end
@@ -1205,7 +1205,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleForward", state, _key) do
     new_model = cycle_model(state.models, state.model, :next)
-    if state.session, do: CoderSession.set_model(state.session, new_model)
+    if state.session, do: Coder.set_model(state.session, new_model)
 
     %{
       state
@@ -1219,7 +1219,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleBackward", state, _key) do
     new_model = cycle_model(state.models, state.model, :prev)
-    if state.session, do: CoderSession.set_model(state.session, new_model)
+    if state.session, do: Coder.set_model(state.session, new_model)
 
     %{
       state
@@ -1356,7 +1356,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-    if state.session, do: CoderSession.prompt(state.session, value, send_text)
+    if state.session, do: Coder.prompt(state.session, value, send_text)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
@@ -1382,7 +1382,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_slash_command("compact", state) do
-    if state.session, do: Task.start(fn -> CoderSession.compact(state.session, []) end)
+    if state.session, do: Task.start(fn -> Coder.compact(state.session, []) end)
     state
   end
 
@@ -1672,8 +1672,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
     Enum.each(ov.items, fn
-      {:steering, msg} -> if state.session, do: CoderSession.steer(state.session, msg)
-      {:follow_up, msg} -> if state.session, do: CoderSession.follow_up(state.session, msg)
+      {:steering, msg} -> if state.session, do: Coder.steer(state.session, msg)
+      {:follow_up, msg} -> if state.session, do: Coder.follow_up(state.session, msg)
     end)
 
     unfocus(%{state | dequeue_overlay: nil})
@@ -1715,7 +1715,7 @@ defmodule OctoPi.TUI.Interactive do
         unfocus(%{state | model_selector: nil})
 
       {_new_ms, [{:select_model, model}]} ->
-        if state.session, do: CoderSession.set_model(state.session, model)
+        if state.session, do: Coder.set_model(state.session, model)
 
         unfocus(%{
           state

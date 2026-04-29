@@ -7,6 +7,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
   alias OctoPi.AI.Usage
+  alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Session
@@ -97,8 +98,8 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
 
   defp seed_entries(coder) do
     entry = %Entry.Message{id: nil, timestamp: nil, message: %{"role" => "user", "content" => "x"}}
-    {:ok, _} = Session.add_entry(coder, entry)
-    {:ok, _} = Session.add_entry(coder, entry)
+    {:ok, _} = Coder.add_entry(coder, entry)
+    {:ok, _} = Coder.add_entry(coder, entry)
   end
 
   defp ext_with(id, event_type, handler) do
@@ -124,7 +125,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       assert is_binary(result.first_kept_entry_id)
       assert result.from_extension? == false
 
-      sm = Session.get_session_manager(coder)
+      sm = Coder.get_session_manager(coder)
       entry = sm.by_id |> Map.values() |> Enum.find(&match?(%Entry.Compaction{}, &1))
       assert entry
       assert entry.summary == "THE-SUMMARY"
@@ -178,7 +179,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       assert result.summary == "ext-override"
       assert result.from_extension? == true
 
-      sm = Session.get_session_manager(coder)
+      sm = Coder.get_session_manager(coder)
       entry = sm.by_id |> Map.values() |> Enum.find(&match?(%Entry.Compaction{}, &1))
       assert entry.from_hook == true
     end
@@ -200,7 +201,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       assert_receive {:octo_pi_agent_event, %AgentEvent.CompactionEnd{result: {:cancel, "not now"}}},
                      2_000
 
-      sm = Session.get_session_manager(coder)
+      sm = Coder.get_session_manager(coder)
       refute Enum.any?(Map.values(sm.by_id), &match?(%Entry.Compaction{}, &1))
     end
 
