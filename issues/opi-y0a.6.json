@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T19:45:42.762456Z",
+  "description": "## What\n\nDelete `OctoPi.Agent.MessageLog`. Replace `loop.messages :: MessageLog.t()` with `loop.messages :: [AgentMessage]` (a plain list).\n\nConversions at callsites (~69):\n\n- `MessageLog.new(list)` → `list`\n- `MessageLog.push(log, msg)` → `[msg | rev]` style maintained internally, OR just `log ++ [msg]` if simplicity wins (transcripts are dozens of messages, not thousands)\n- `MessageLog.append_many(log, msgs)` → `log ++ msgs`\n- `MessageLog.to_list(log)` → identity (or `Enum.reverse` if we keep reverse-internal)\n- `MessageLog.count(log)` → `length(log)`\n- `MessageLog.pop(log)` → `tl(log)` or `List.delete_at(log, -1)` depending on direction\n- `MessageLog.find_last_value(log, fun)` → `Enum.find_value(Enum.reverse(log), fun)` or rewrite the call site\n\nPick a single representation (forward-list vs. reverse-list) and stick to it. Forward-list is simpler; benchmark only if a tight read path objects.\n\n## Why\n\n77-line wrapper around a list with a `count` cache. With Agent's transcript becoming a plain `[AgentMessage]` and synthetic types living in the union, the abstraction obscures more than it earns. Inlining shrinks the surface and removes a layer that has to evolve with every new message type.\n\n## Files\n\n- `apps/octo_pi_agent/lib/octo_pi/agent/message_log.ex` — deleted.\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop.ex` — call sites rewritten.\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop/state.ex` — type rewritten.\n- Wherever else MessageLog is referenced (small handful).\n\n## Independent of opi-y0a.1 through opi-y0a.5\n\nCan land first (cosmetic, low risk), last (after the architecture stabilizes), or anywhere in between. No semantic dependency on the other tickets.\n\n## Done when\n\n- `OctoPi.Agent.MessageLog` module is deleted.\n- `git grep MessageLog apps/octo_pi_agent` returns empty.\n- All existing tests pass.",
+  "id": "opi-y0a.6",
+  "labels": [],
+  "parent": "opi-y0a",
+  "priority": 3,
+  "status": "open",
+  "title": "Inline MessageLog into a plain list",
+  "type": "task",
+  "updated_at": "2026-04-29T19:45:42.762456Z"
+}
