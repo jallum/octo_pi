@@ -1,17 +1,15 @@
 {
-  "annotations": [],
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
-  "comments": [],
+  "closed_at": "2026-04-29T13:07:53Z",
   "created": "2026-04-26T15:06:12.767514Z",
   "description": "## Motivation\n\nToday's input pipeline routes raw bytes through the consumer just to bounce them back as parsed events:\n\n```\nstdin reader → Terminal → Registry{:stdin_chunk} → Interactive → StdinFSM (separate GenServer) → Registry{:stdin_event} → Interactive\n```\n\nTerminal owns the byte stream but doesn't own the parser; Interactive doesn't care about bytes but has to forward them. StdinFSM has no resources (no NIF/port/socket), no clients other than Interactive, and its only \"process-y\" feature is a 10 ms ESC-disambiguation timeout already expressed via GenServer's `{:reply, state, ms}` return.\n\n## Target shape\n\n```\nstdin reader → Terminal (owns FSM as pure funcs) → Registry{:stdin_event} → Interactive\n```\n\n- StdinFSM becomes a pure functional module: a struct + `process/2`, `flush/1`, `clear/1` returning `{state, events, next_timeout_ms | :infinity}`.\n- Terminal holds FSM state, feeds reader bytes through it, and uses its own GenServer timeout for the 10 ms flush deadline. Terminal already has another deadline (`probe_timeout_ms`), so it must multiplex via the gb_trees / sorted-deadline pattern (see auto-memory: \"Prefer GenServer timeout: over Process.send_after/3\").\n- Terminal broadcasts `{:stdin_event, seq}` (cooked) on the existing `Events` registry under topic `{:stdin_event, scope}`. The `{:stdin_chunk, _}` topic goes away.\n- Interactive drops the StdinFSM child, drops the `{:stdin_chunk, _}` handler, and subscribes to cooked events.\n\n## Non-goals\n\n- Not changing the Registry-based decoupling between Terminal and its consumer (separate discussion).\n- Not changing KeyParser; Interactive still parses `seq` into a key event.\n\n## Wins\n\n- One fewer process per Interactive session.\n- One fewer Registry hop per keystroke (chunk dispatch goes away).\n- Interactive's `handle_info` surface shrinks; Terminal's responsibility (\"turn TTY into events\") becomes coherent.",
   "id": "opi-445",
   "labels": [],
-  "parent": "",
   "priority": 2,
-  "status": "in_review",
+  "status": "closed",
   "title": "[EPIC] Fold StdinFSM into Terminal; emit cooked stdin events",
   "type": "epic",
-  "updated_at": "2026-04-26T15:49:12.870734Z"
+  "updated_at": "2026-04-29T13:07:53Z"
 }
