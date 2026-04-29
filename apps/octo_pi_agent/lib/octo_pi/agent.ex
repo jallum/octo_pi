@@ -28,7 +28,7 @@ defmodule OctoPi.Agent do
   @opaque t :: pid()
   @type subscribe_mode :: :sync | :async
 
-  @type loop_opt ::
+  @type loop_opts :: [
           {:model, Model.t()}
           | {:system_prompt, String.t() | nil}
           | {:tools, [OctoPi.Agent.Tool.t()]}
@@ -41,8 +41,7 @@ defmodule OctoPi.Agent do
           | {:auto_compact_reserve_tokens, pos_integer() | nil}
           | {:steering_queue_bound, pos_integer()}
           | {:follow_up_queue_bound, pos_integer()}
-
-  @type loop_opts :: [loop_opt()]
+        ]
 
   @doc """
   Start a loop GenServer.

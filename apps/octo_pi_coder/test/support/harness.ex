@@ -191,7 +191,7 @@ defmodule OctoPi.Coder.Test.Harness do
 
   @enforce_keys [:session, :collector]
   @type t :: %__MODULE__{
-          session: pid(),
+          session: OctoPi.Agent.t(),
           collector: pid(),
           extensions: [OctoPi.Coder.Extension.t()],
           unsubscribe: (-> :ok)

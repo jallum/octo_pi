@@ -24,7 +24,7 @@ defmodule OctoPi.Coder do
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.Tools
 
-  @opaque t :: GenServer.server()
+  @opaque t :: pid()
 
   @type print_opts :: [
           prompt: String.t(),
