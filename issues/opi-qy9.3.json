@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-qy9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Unify post-compact and post-navigate path-reset on Store.path/2",
   "type": "task",
-  "updated_at": "2026-04-29T17:55:45.633212Z"
+  "updated_at": "2026-04-29T18:01:17.673786Z"
 }
