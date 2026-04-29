@@ -437,12 +437,15 @@ defmodule OctoPi.TUI.Interactive do
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
 
+    %{enabled: auto_compact_enabled?} = Coder.get_compaction_settings(session)
+
     footer = %Footer{
       cwd: cwd,
       model_id: model.id,
       provider: model.provider,
       context_percent: 0.0,
       context_window: model.context_window,
+      auto_compact_enabled?: auto_compact_enabled?,
       git_branch: FooterData.get_git_branch(footer_data)
     }
 
@@ -1466,6 +1469,12 @@ defmodule OctoPi.TUI.Interactive do
         context_percent: context_percent
     }
   end
+
+  # After compaction, the LLM-visible context has been replaced. We
+  # don't know the new context size until the next assistant message
+  # reports usage, so reset percent to nil — the footer renders `?`
+  # for unknown.
+  defp update_footer(footer, %OctoPi.Coder.Event.CompactionEnd{result: {:ok, _}}), do: %{footer | context_percent: nil}
 
   defp update_footer(footer, _), do: footer
 
