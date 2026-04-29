@@ -29,18 +29,18 @@ defmodule OctoPi.Agent do
   @type subscribe_mode :: :sync | :async
 
   @type loop_opts :: [
-          {:model, Model.t()}
-          | {:system_prompt, String.t() | nil}
-          | {:tools, [OctoPi.Agent.Tool.t()]}
-          | {:thinking_level, OctoPi.AI.thinking_level() | :off}
-          | {:transport, module()}
-          | {:before_tool_call, (map() -> :allow | {:block, term()}) | nil}
-          | {:after_tool_call, (map() -> :unchanged | {:patch, map()}) | nil}
-          | {:messages_provider, (State.t() -> [OctoPi.AI.Message.t()]) | nil}
-          | {:messages, [OctoPi.AI.Message.t()]}
-          | {:auto_compact_reserve_tokens, pos_integer() | nil}
-          | {:steering_queue_bound, pos_integer()}
-          | {:follow_up_queue_bound, pos_integer()}
+          model: Model.t(),
+          system_prompt: String.t(),
+          tools: [OctoPi.Agent.Tool.t()],
+          thinking_level: OctoPi.AI.thinking_level() | :off,
+          transport: module(),
+          before_tool_call: (map() -> :allow | {:block, term()}),
+          after_tool_call: (map() -> :unchanged | {:patch, map()}),
+          messages_provider: (State.t() -> [OctoPi.AI.Message.t()]),
+          messages: [OctoPi.AI.Message.t()],
+          auto_compact_reserve_tokens: pos_integer(),
+          steering_queue_bound: pos_integer(),
+          follow_up_queue_bound: pos_integer()
         ]
 
   @doc """
