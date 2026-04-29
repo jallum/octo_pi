@@ -2,13 +2,14 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-29T13:08:01Z",
   "created": "2026-04-26T01:41:30Z",
   "description": "octo_pi is an Elixir/OTP port of pi-mono (TypeScript). The goal of this epic is to\nreplace the current flat MessageLog / Session architecture with one that mirrors\npi-mono's SessionManager + AgentSession design — typed, persistent, tree-shaped\nsession history; first-class compaction; and an extension hook system.\n\n## Why\n\nThe pi-mono architecture was designed carefully and has proven itself. Elixir/OTP\nis a better host for agents (fault tolerance, concurrency, hot reloading), but we\nwant to stay structurally close so learnings and tests can be ported directly.\n\n## Reference implementation\n\nAll pi-mono source lives at tmp/pi-mono/ relative to the repo root:\n  - tmp/pi-mono/packages/coding-agent/src/core/session-manager.ts  (SessionManager)\n  - tmp/pi-mono/packages/coding-agent/src/core/agent-session.ts     (AgentSession)\n  - tmp/pi-mono/packages/coding-agent/src/core/compaction/compaction.ts\n  - tmp/pi-mono/packages/coding-agent/src/core/extensions/types.ts\n\n## Current state (what changes)\n\n  - apps/octo_pi_agent/lib/octo_pi/agent/message_log.ex       — flat list, REPLACED\n  - apps/octo_pi_agent/lib/octo_pi/agent/session/state.ex     — holds :messages as MessageLog\n  - apps/octo_pi_agent/lib/octo_pi/agent/loop.ex              — passes MessageLog.to_list directly to transport\n  - apps/octo_pi_agent/lib/octo_pi/agent/event.ex             — missing CompactionStart/End\n  - apps/octo_pi_agent/lib/octo_pi/agent/session.ex           — no compaction, no extensions\n\n## Phases\n\nPhase 1 — Foundation: SessionEntry types, SessionManager, JSONL persistence\nPhase 2 — Wiring: migrate Session.State and Loop to use SessionManager\nPhase 3 — Compaction: events, Compaction module, auto/manual compaction\nPhase 4 — Extensions: behaviour, runner, compaction hooks, agent hooks, tool/command registration\nPhase 5 — Branching: fork and navigate_tree",
   "id": "opi-uuy",
   "labels": [],
   "priority": 2,
-  "status": "in_review",
+  "status": "closed",
   "title": "Align session architecture with pi-mono",
   "type": "task",
-  "updated_at": "2026-04-26T04:25:22.676228Z"
+  "updated_at": "2026-04-29T13:08:01Z"
 }
