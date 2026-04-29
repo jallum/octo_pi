@@ -239,6 +239,64 @@ defmodule OctoPi.Coder.SessionStoreTest do
     end
   end
 
+  describe "path/3 — single read primitive" do
+    setup %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "p3", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("u1"))
+
+      {:ok, comp} =
+        SessionStore.append_entry(pid, %Entry.Compaction{
+          id: nil,
+          timestamp: nil,
+          summary: "summary",
+          first_kept_entry_id: e1.id,
+          tokens_before: 100
+        })
+
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("u2"))
+      {:ok, e3} = SessionStore.append_entry(pid, message_entry("u3"))
+
+      {:ok, pid: pid, e1: e1, comp: comp, e2: e2, e3: e3}
+    end
+
+    test ":root walks all the way to root", %{pid: pid, e1: e1, comp: comp, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, :leaf, to: :root) == [e1, comp, e2, e3]
+    end
+
+    test ":latest_compaction stops at the most recent compaction (inclusive)",
+         %{pid: pid, comp: comp, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [comp, e2, e3]
+    end
+
+    test ":latest_compaction falls back to :root when no compaction exists", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "noc", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, a} = SessionStore.append_entry(pid, message_entry("a"))
+      {:ok, b} = SessionStore.append_entry(pid, message_entry("b"))
+
+      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [a, b]
+    end
+
+    test "to: <id> stops at that id (inclusive)", %{pid: pid, comp: comp, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, :leaf, to: comp.id) == [comp, e2, e3]
+    end
+
+    test "to: <id> falls back to :root when id not on path", %{pid: pid, e1: e1, comp: comp, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, :leaf, to: "no-such-id") == [e1, comp, e2, e3]
+    end
+
+    test "explicit leaf id walks from there", %{pid: pid, e1: e1, comp: comp, e2: e2} do
+      assert SessionStore.path(pid, e2.id, to: :root) == [e1, comp, e2]
+    end
+
+    test "nil leaf returns []", %{pid: pid} do
+      assert SessionStore.path(pid, nil, to: :root) == []
+    end
+  end
+
   describe "open/1 with :path (resume)" do
     test "loads an existing session and opens the file in append mode", %{tmp: tmp} do
       {:ok, p1} = SessionStore.open(id: "res", cwd: tmp, root: tmp)

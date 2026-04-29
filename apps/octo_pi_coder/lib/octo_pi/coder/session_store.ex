@@ -115,6 +115,22 @@ defmodule OctoPi.Coder.SessionStore do
   @spec get_branch(t(), String.t()) :: [Entry.t()]
   def get_branch(pid, from_id), do: GenServer.call(pid, {:get_branch, from_id})
 
+  @doc """
+  Single read primitive — walk from a leaf toward root with an optional
+  stop anchor. See `OctoPi.Coder.SessionManager.path/3` for full
+  semantics.
+
+  ## Arguments
+
+    * `leaf` — `:leaf` (current leaf), an entry id, or `nil` (returns `[]`).
+    * `opts[:to]` — `:root` (default), `:latest_compaction`, or a binary id.
+
+  Note: the file-path getter is the no-arg `path/1`; this read primitive
+  is `path/3` (no default args) to avoid shadowing it.
+  """
+  @spec path(t(), :leaf | String.t() | nil, keyword()) :: [Entry.t()]
+  def path(pid, leaf, opts), do: GenServer.call(pid, {:path, leaf, opts})
+
   @doc "Id of the current leaf entry, or `nil` for an empty session."
   @spec get_leaf_entry_id(t()) :: String.t() | nil
   def get_leaf_entry_id(pid), do: GenServer.call(pid, :get_leaf_entry_id)
@@ -279,6 +295,8 @@ defmodule OctoPi.Coder.SessionStore do
 
   def handle_call({:get_branch, from_id}, _from, state),
     do: {:reply, SessionManager.get_branch(state.sm, from_id), state}
+
+  def handle_call({:path, leaf, opts}, _from, state), do: {:reply, SessionManager.path(state.sm, leaf, opts), state}
 
   def handle_call(:get_leaf_entry_id, _from, state), do: {:reply, SessionManager.get_leaf_entry_id(state.sm), state}
 

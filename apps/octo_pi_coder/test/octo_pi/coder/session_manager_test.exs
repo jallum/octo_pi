@@ -190,6 +190,57 @@ defmodule OctoPi.Coder.SessionManagerTest do
     end
   end
 
+  describe "path/3 — anchor variants" do
+    defp build_with_compaction do
+      tmp = scratch("comp.jsonl")
+
+      File.write!(tmp, """
+      {"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}
+      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"u1"}}
+      {"type":"compaction","id":"c1","parentId":"m1","timestamp":"t","summary":"s","firstKeptEntryId":"m1","tokensBefore":100}
+      {"type":"message","id":"m2","parentId":"c1","timestamp":"t","message":{"role":"user","content":"u2"}}
+      {"type":"message","id":"m3","parentId":"m2","timestamp":"t","message":{"role":"user","content":"u3"}}
+      """)
+
+      {:ok, sm} = SessionManager.load(tmp)
+      sm
+    end
+
+    test ":root walks the entire branch" do
+      sm = build_with_compaction()
+      assert sm |> SessionManager.path(:leaf, to: :root) |> Enum.map(& &1.id) == ~w(m1 c1 m2 m3)
+    end
+
+    test ":latest_compaction stops at the most recent compaction (inclusive)" do
+      sm = build_with_compaction()
+
+      assert sm |> SessionManager.path(:leaf, to: :latest_compaction) |> Enum.map(& &1.id) ==
+               ~w(c1 m2 m3)
+    end
+
+    test ":latest_compaction falls back to root when no compaction exists" do
+      sm = build_linear(~w(a b c))
+
+      assert sm |> SessionManager.path(:leaf, to: :latest_compaction) |> Enum.map(& &1.id) ==
+               ~w(a b c)
+    end
+
+    test "to: <id> stops at that id (inclusive)" do
+      sm = build_with_compaction()
+      assert sm |> SessionManager.path(:leaf, to: "m2") |> Enum.map(& &1.id) == ~w(m2 m3)
+    end
+
+    test "explicit leaf id" do
+      sm = build_with_compaction()
+      assert sm |> SessionManager.path("m2", to: :root) |> Enum.map(& &1.id) == ~w(m1 c1 m2)
+    end
+
+    test "nil leaf returns []" do
+      sm = build_linear(~w(a b))
+      assert SessionManager.path(sm, nil, to: :root) == []
+    end
+  end
+
   describe "get_entries/1" do
     test "empty body session returns []" do
       tmp = scratch("nobody-entries.jsonl")

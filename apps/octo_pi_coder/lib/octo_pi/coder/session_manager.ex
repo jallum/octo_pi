@@ -171,34 +171,73 @@ defmodule OctoPi.Coder.SessionManager do
   def get_entry(%__MODULE__{by_id: by_id}, id) when is_binary(id), do: Map.get(by_id, id)
 
   @doc """
-  Walk from the current leaf to root and return the path in
-  root→leaf order. Returns `[]` when the session has no leaf.
-  Mirrors `getBranch()` with no argument (`session-manager.ts:1034`).
+  Walk from a leaf entry toward root and return the slice in root→leaf
+  order. Single read primitive used by branch reads, branch-switch, and
+  compaction.
+
+  ## Arguments
+
+    * `leaf` — `:leaf` resolves to the manager's current leaf id, or a
+      specific entry id to walk from.
+
+  ## Options
+
+    * `:to` — stop anchor (default `:root`):
+      * `:root` — walk all the way to a root entry (parent_id == nil
+        or pointing at a missing ancestor)
+      * `:latest_compaction` — stop at the most recent
+        `%Entry.Compaction{}` on the path (inclusive). Falls back to
+        `:root` when no compaction exists.
+      * a binary id — stop at the entry with that id (inclusive). Falls
+        back to `:root` when the id is not on the path.
+
+  Returns `[]` when no leaf exists or the leaf id is unknown. Orphaned
+  ancestors (parent_id pointing to a missing entry) terminate the walk
+  early so the returned path is always a contiguous chain.
   """
-  @spec get_branch(t()) :: [entry()]
-  def get_branch(%__MODULE__{leaf_id: nil}), do: []
-  def get_branch(%__MODULE__{leaf_id: id} = sm), do: get_branch(sm, id)
+  @spec path(t(), :leaf | String.t() | nil, keyword()) :: [entry()]
+  def path(sm, leaf \\ :leaf, opts \\ [])
+
+  def path(%__MODULE__{leaf_id: leaf_id} = sm, :leaf, opts), do: path(sm, leaf_id, opts)
+  def path(%__MODULE__{}, nil, _opts), do: []
+
+  def path(%__MODULE__{by_id: by_id}, leaf_id, opts) when is_binary(leaf_id) do
+    pred = stop_predicate(Keyword.get(opts, :to, :root))
+    walk_to_anchor(by_id, Map.get(by_id, leaf_id), pred, [])
+  end
+
+  defp stop_predicate(:root), do: fn _entry -> false end
+  defp stop_predicate(:latest_compaction), do: &match?(%Entry.Compaction{}, &1)
+  defp stop_predicate(id) when is_binary(id), do: fn entry -> entry_id(entry) == id end
+
+  defp walk_to_anchor(_by_id, nil, _pred, acc), do: acc
+
+  defp walk_to_anchor(by_id, entry, pred, acc) do
+    acc = [entry | acc]
+
+    if pred.(entry) do
+      acc
+    else
+      parent_id = entry_parent(entry)
+      parent = parent_id && Map.get(by_id, parent_id)
+      walk_to_anchor(by_id, parent, pred, acc)
+    end
+  end
 
   @doc """
-  Walk from the given entry id to root and return the path in
-  root→leaf order. Returns `[]` if the id is unknown. Orphaned
-  ancestors (parent_id pointing to a missing entry) terminate the
-  walk early so the returned path is always a contiguous chain
-  ending at the requested entry. Mirrors `getBranch(fromId)`
-  (`session-manager.ts:1034-1043`).
+  Walk from the current leaf to root and return the path in root→leaf
+  order. Returns `[]` when the session has no leaf. Equivalent to
+  `path(sm, :leaf, to: :root)`.
+  """
+  @spec get_branch(t()) :: [entry()]
+  def get_branch(%__MODULE__{} = sm), do: path(sm, :leaf, to: :root)
+
+  @doc """
+  Walk from the given entry id to root. Equivalent to
+  `path(sm, from_id, to: :root)`.
   """
   @spec get_branch(t(), String.t()) :: [entry()]
-  def get_branch(%__MODULE__{by_id: by_id}, from_id) when is_binary(from_id) do
-    walk_to_root(by_id, Map.get(by_id, from_id), [])
-  end
-
-  defp walk_to_root(_by_id, nil, acc), do: acc
-
-  defp walk_to_root(by_id, entry, acc) do
-    parent_id = entry_parent(entry)
-    parent = parent_id && Map.get(by_id, parent_id)
-    walk_to_root(by_id, parent, [entry | acc])
-  end
+  def get_branch(%__MODULE__{} = sm, from_id) when is_binary(from_id), do: path(sm, from_id, to: :root)
 
   defp entry_parent(%Entry.Passthrough{raw: r}), do: r["parentId"]
   defp entry_parent(entry), do: Map.get(entry, :parent_id)
@@ -314,7 +353,8 @@ defmodule OctoPi.Coder.SessionManager do
   defp do_build_context(_by_id, nil), do: %{messages: [], thinking_level: "off", model: nil}
 
   defp do_build_context(by_id, leaf) do
-    path = walk_to_root(by_id, leaf, [])
+    pred = stop_predicate(:root)
+    path = walk_to_anchor(by_id, leaf, pred, [])
     build_context_from_path(path)
   end
 
