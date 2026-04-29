@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "in_review",
   "title": "Interactive render-path cleanup: consolidate event dispatch and effect execution",
   "type": "epic",
-  "updated_at": "2026-04-28T11:42:28.518723Z"
+  "updated_at": "2026-04-29T12:48:39.703251Z"
 }
