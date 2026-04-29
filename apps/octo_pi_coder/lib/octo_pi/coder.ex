@@ -69,8 +69,9 @@ defmodule OctoPi.Coder do
   is omitted it defaults to `save_text`.
   """
   @spec prompt(session(), String.t()) :: :ok | {:error, term()}
-  @spec prompt(session(), String.t(), String.t()) :: :ok | {:error, term()}
   def prompt(server, save_text), do: prompt(server, save_text, save_text)
+
+  @spec prompt(session(), String.t(), String.t()) :: :ok | {:error, term()}
   def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text})
 
   @doc "Abort the current agent run."
@@ -115,8 +116,7 @@ defmodule OctoPi.Coder do
   Build the LLM-ready session context from the held `SessionManager`'s
   current branch.
   """
-  @spec build_session_context(session()) ::
-          %{messages: [term()], thinking_level: String.t(), model: map() | nil}
+  @spec build_session_context(session()) :: %{messages: [term()], thinking_level: String.t(), model: map() | nil}
   def build_session_context(server), do: GenServer.call(server, :build_session_context)
 
   @doc "Return the current `SessionManager`."
