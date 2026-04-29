@@ -31,7 +31,6 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
-  alias OctoPi.Agent.Message
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
@@ -45,62 +44,12 @@ defmodule OctoPi.Agent.Loop do
 
   @type mode :: :sync | :async
 
-  # ---------- public API ----------
-
+  # The only externally-visible function on this module is `start_link/1`,
+  # consumed by callers via `OctoPi.Agent.start_loop/1`. All other
+  # operations are GenServer messages — invoked through the front-facing
+  # `OctoPi.Agent` API, never against this module directly.
   @doc false
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
-
-  @doc false
-  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(Message.normalize(msg_or_msgs))})
-
-  @doc false
-  def continue(pid), do: GenServer.call(pid, :continue)
-
-  @doc false
-  def steer(pid, msg), do: GenServer.call(pid, {:steer, Message.normalize(msg)})
-
-  @doc false
-  def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, Message.normalize(msg)})
-
-  @doc false
-  def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
-    do: GenServer.call(pid, {:set_queue_mode, queue, mode})
-
-  @doc false
-  def set_thinking_level(pid, level), do: GenServer.call(pid, {:set_thinking_level, level})
-
-  @doc false
-  def set_model(pid, model), do: GenServer.call(pid, {:set_model, model})
-
-  @doc false
-  def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
-
-  @doc false
-  def push_message(pid, msg), do: GenServer.call(pid, {:push_message, msg})
-
-  @doc false
-  def set_messages(pid, msgs) when is_list(msgs), do: GenServer.call(pid, {:set_messages, msgs})
-
-  @doc false
-  def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
-
-  @doc false
-  def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
-
-  @doc false
-  def abort(pid), do: GenServer.call(pid, :abort)
-
-  @doc false
-  def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts})
-
-  @doc false
-  def compaction_response(pid, ref, result), do: GenServer.call(pid, {:compaction_response, ref, result})
-
-  @doc false
-  def state(pid), do: GenServer.call(pid, :state)
-
-  @doc false
-  def wait_for_idle(pid, timeout), do: GenServer.call(pid, :wait_for_idle, timeout)
 
   # ---------- GenServer callbacks ----------
 
