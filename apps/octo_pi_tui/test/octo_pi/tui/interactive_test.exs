@@ -9,7 +9,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CustomMessage
@@ -280,9 +280,9 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — Alt+Up dequeue overlay (opi-0g4.16)" do
+    alias Loop, as: CoderLoop
     alias OctoPi.Coder.SessionManager
     alias OctoPi.Coder.SessionStore
-    alias Session, as: CoderSession
 
     defp dequeue_state(items, selected) do
       %Interactive{dequeue_overlay: %{items: items, selected: selected}, focused_component: {:overlay, :dequeue}}
@@ -313,7 +313,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
 
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
+      coder = start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store]})
       {:ok, agent} = OctoPi.Agent.start_loop(model: model)
       :ok = OctoPi.Coder.set_agent_pid(coder, agent)
       {coder, agent}
@@ -1233,15 +1233,15 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "add_tool via handle_ui_request registers the tool when a session is active" do
+      alias Loop, as: CoderLoop
       alias OctoPi.Coder.SessionManager
       alias OctoPi.Coder.SessionStore
-      alias Session, as: CoderSession
 
       id = "test-#{System.unique_integer([:positive])}"
       root = Path.join(System.tmp_dir!(), "opi-addtool-test-#{id}")
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      coder = start_supervised!({CoderSession, [extensions: [], session_manager: sm, store_pid: store]})
+      coder = start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store]})
       {:ok, agent} = OctoPi.Agent.start_loop(model: tool_reg_model(), transport: FakeTransport)
       :ok = OctoPi.Coder.set_agent_pid(coder, agent)
 

@@ -29,7 +29,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.Event, as: ExtEvent
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
-  alias OctoPi.Coder.Session, as: CoderSession
+  alias OctoPi.Coder.Loop, as: CoderLoop
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
   alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
@@ -672,7 +672,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  # CoderSession.set_agent_pid → Subscribers.subscribe registry call appears
+  # CoderLoop.set_agent_pid → Subscribers.subscribe registry call appears
   # to Dialyzer as no_return when the Registry is not started. False positive.
   @dialyzer {:nowarn_function, new_session: 6}
   defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
@@ -681,7 +681,7 @@ defmodule OctoPi.TUI.Interactive do
     sm = %SessionManager{cwd: cwd, session_id: session_id}
 
     {:ok, coder_pid} =
-      CoderSession.start_link(
+      CoderLoop.start_link(
         extensions: extensions,
         session_manager: sm,
         store_pid: store_pid,
@@ -712,7 +712,7 @@ defmodule OctoPi.TUI.Interactive do
         {:ok, store_pid} = SessionStore.start_link(id: sm.session_id, path: path)
 
         {:ok, coder_pid} =
-          CoderSession.start_link(
+          CoderLoop.start_link(
             extensions: extensions,
             session_manager: sm,
             store_pid: store_pid,

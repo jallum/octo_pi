@@ -3,7 +3,7 @@ defmodule OctoPi.Coder.Extension.Loader do
 
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
 
   require Logger
 
@@ -49,7 +49,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   def load(path), do: do_load(path, _actions = nil)
 
   @doc """
-  Load an extension and pre-bind it to a live `OctoPi.Coder.Session`
+  Load an extension and pre-bind it to a live `OctoPi.Coder.Loop`
   process **before** `module.init/1` runs.
 
   This ordering matters: extension handlers register via `API.on(api,
@@ -65,7 +65,7 @@ defmodule OctoPi.Coder.Extension.Loader do
   @spec load_for_session(String.t(), GenServer.server()) ::
           {:ok, Extension.t()} | {:error, term()}
   def load_for_session(path, session) do
-    do_load(path, Session.__action_closures__(session))
+    do_load(path, Loop.__action_closures__(session))
   end
 
   defp do_load(path, actions) do

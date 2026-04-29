@@ -7,7 +7,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Loader
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
 
@@ -430,7 +430,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
       sm = %SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
 
       {:ok, session} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: sm,
           store_pid: store
@@ -469,7 +469,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
       [handler] = Extension.get_handlers(ext, :turn_end)
       handler.(%{type: :turn_end}, %Context{cwd: "/tmp"})
 
-      # Empty session → :nothing_to_compact, but the call reached Session.
+      # Empty session → :nothing_to_compact, but the call reached Loop.
       assert_received {:result, {:error, :nothing_to_compact}}
     end
 

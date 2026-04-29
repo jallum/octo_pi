@@ -1,6 +1,6 @@
-defmodule OctoPi.Coder.Session do
+defmodule OctoPi.Coder.Loop do
   @moduledoc """
-  Per-session orchestrator process. Holds the loaded extension list,
+  Per-loop orchestrator process. Holds the loaded extension list,
   the in-memory `SessionManager` tree, the `SessionStore` writer pid,
   and provider closures for the current model and compaction settings.
 
@@ -31,7 +31,7 @@ defmodule OctoPi.Coder.Session do
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
   alias OctoPi.Coder.Extension.Event
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.MessageWriter
   alias OctoPi.Coder.SessionManager
@@ -68,13 +68,13 @@ defmodule OctoPi.Coder.Session do
           session_manager: SessionManager.t(),
           store_pid: pid(),
           agent_pid: pid() | nil,
-          model_provider: Session.model_provider(),
+          model_provider: Loop.model_provider(),
           settings_manager: pid(),
           name: GenServer.name()
         ]
 
   @doc """
-  Start a session under `OctoPi.Coder.Session.Supervisor` (DynamicSupervisor).
+  Start a loop under `OctoPi.Coder.Loop.Supervisor` (DynamicSupervisor).
   Use this from production callers; tests typically prefer `start_link/1`
   directly with `start_supervised!` so the test owns the lifecycle.
   """
@@ -113,7 +113,7 @@ defmodule OctoPi.Coder.Session do
 
   @doc false
   # Internal: closure map for `Extension.API.bind_core/2`. Only the
-  # actions this Session actually implements are bound — unimplemented
+  # actions this Loop actually implements are bound — unimplemented
   # ones stay as the raise-on-call stubs from `API.new/1`, which is
   # exactly the right contract ("not bound — call bind_core first" or
   # not implemented at all is the same observable outcome at the API
@@ -263,9 +263,9 @@ defmodule OctoPi.Coder.Session do
   def handle_call({:compact, opts}, _from, state) do
     case do_compact(state, opts) do
       {:ok, %{result: result, from_extension?: from_ext?}} ->
-        session_pid = self()
+        loop_pid = self()
         extensions = state.extensions
-        spawn(fn -> persist_compaction(session_pid, result, from_ext?, extensions) end)
+        spawn(fn -> persist_compaction(loop_pid, result, from_ext?, extensions) end)
         {:reply, {:ok, %{result: result, from_extension?: from_ext?}}, state}
 
       other ->
@@ -631,14 +631,14 @@ defmodule OctoPi.Coder.Session do
     {:noreply, state}
   end
 
-  defp spawn_finish_compaction(session_pid, agent_pid, ref, result, override?, extensions) do
-    spawn(fn -> finish_compaction(session_pid, agent_pid, ref, result, override?, extensions) end)
+  defp spawn_finish_compaction(loop_pid, agent_pid, ref, result, override?, extensions) do
+    spawn(fn -> finish_compaction(loop_pid, agent_pid, ref, result, override?, extensions) end)
   end
 
-  defp spawn_compact_and_finish(session_pid, agent_pid, ref, prep, model, opts, extensions) do
+  defp spawn_compact_and_finish(loop_pid, agent_pid, ref, prep, model, opts, extensions) do
     spawn(fn ->
       case Compaction.compact(prep, model, opts) do
-        {:ok, %Result{} = result} -> finish_compaction(session_pid, agent_pid, ref, result, false, extensions)
+        {:ok, %Result{} = result} -> finish_compaction(loop_pid, agent_pid, ref, result, false, extensions)
         {:error, reason} -> OctoPi.Agent.compaction_response(agent_pid, ref, {:error, reason})
       end
     end)
@@ -745,8 +745,8 @@ defmodule OctoPi.Coder.Session do
     end
   end
 
-  defp finish_compaction(session_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
-    persist_compaction(session_pid, result, from_ext?, extensions)
+  defp finish_compaction(loop_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
+    persist_compaction(loop_pid, result, from_ext?, extensions)
 
     OctoPi.Agent.compaction_response(
       agent_pid,
@@ -762,7 +762,7 @@ defmodule OctoPi.Coder.Session do
     )
   end
 
-  defp persist_compaction(session_pid, %Result{} = result, from_ext?, extensions) do
+  defp persist_compaction(loop_pid, %Result{} = result, from_ext?, extensions) do
     entry = %Entry.Compaction{
       id: nil,
       timestamp: nil,
@@ -773,8 +773,8 @@ defmodule OctoPi.Coder.Session do
       details: result.details
     }
 
-    {:ok, id} = GenServer.call(session_pid, {:add_entry, entry, []})
-    sm = GenServer.call(session_pid, :get_session_manager)
+    {:ok, id} = GenServer.call(loop_pid, {:add_entry, entry, []})
+    sm = GenServer.call(loop_pid, :get_session_manager)
     stored = Map.fetch!(sm.by_id, id)
     ctx = Context.bind_session_manager(%Context{cwd: sm.cwd}, fn -> sm end)
 

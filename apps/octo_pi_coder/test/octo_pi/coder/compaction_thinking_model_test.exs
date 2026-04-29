@@ -22,7 +22,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   alias OctoPi.AI.Model
   alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Result
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
@@ -88,7 +88,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
     on_exit(fn -> if Process.alive?(store), do: SessionStore.close(store) end)
 
     {:ok, session} =
-      Session.start_link(
+      Loop.start_link(
         extensions: [],
         session_manager: %SessionManager{cwd: cwd, session_id: id},
         store_pid: store,

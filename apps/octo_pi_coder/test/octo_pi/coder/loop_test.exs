@@ -1,11 +1,11 @@
-defmodule OctoPi.Coder.SessionTest do
+defmodule OctoPi.Coder.LoopTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
@@ -40,7 +40,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
       sm = empty_sm()
 
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: sm, store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       state = :sys.get_state(pid)
@@ -55,21 +55,21 @@ defmodule OctoPi.Coder.SessionTest do
       sm = empty_sm()
 
       assert_raise KeyError, fn ->
-        Session.start_link(session_manager: sm, store_pid: store)
+        Loop.start_link(session_manager: sm, store_pid: store)
       end
 
       assert_raise KeyError, fn ->
-        Session.start_link(extensions: [], store_pid: store)
+        Loop.start_link(extensions: [], store_pid: store)
       end
 
       assert_raise KeyError, fn ->
-        Session.start_link(extensions: [], session_manager: sm)
+        Loop.start_link(extensions: [], session_manager: sm)
       end
     end
 
     test "default settings_manager returns Settings.default() for compaction", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert Coder.get_compaction_settings(pid) == Settings.default()
@@ -77,7 +77,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "default model_provider returns nil", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert :sys.get_state(pid).model_provider.() == nil
@@ -94,7 +94,7 @@ defmodule OctoPi.Coder.SessionTest do
         })
 
       {:ok, pid} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: store,
@@ -116,7 +116,7 @@ defmodule OctoPi.Coder.SessionTest do
       sm = empty_sm()
 
       {:ok, pid} =
-        Session.start_link(extensions: [ext], session_manager: sm, store_pid: store)
+        Loop.start_link(extensions: [ext], session_manager: sm, store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -138,7 +138,7 @@ defmodule OctoPi.Coder.SessionTest do
       sm = empty_sm()
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: sm, store_pid: store)
+        Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -225,7 +225,7 @@ defmodule OctoPi.Coder.SessionTest do
         })
 
       {:ok, pid} =
-        Session.start_link(
+        Loop.start_link(
           extensions: extensions,
           session_manager: empty_sm(),
           store_pid: store,
@@ -251,7 +251,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: store,
@@ -335,7 +335,7 @@ defmodule OctoPi.Coder.SessionTest do
         })
 
       {:ok, pid} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: store,
@@ -377,7 +377,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -429,7 +429,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -493,7 +493,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, sm} = SessionManager.load(path)
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: sm, store_pid: store)
+        Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {pid, path, store}
@@ -585,7 +585,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       dir = fork_dir(ctx)
@@ -598,7 +598,7 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -653,7 +653,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     defp session_with_two_branches(ctx) do
       store = open_store!(ctx)
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
@@ -672,7 +672,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "returns {:ok, nil} immediately when target_id == current leaf", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {:ok, id} = Coder.add_entry(pid, message_entry("a"))
       assert {:ok, nil} = Coder.navigate_tree(pid, target_id: id)
@@ -680,7 +680,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "returns {:error, :not_found} for an unknown target_id", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       assert {:error, :not_found} = Coder.navigate_tree(pid, target_id: "ghost")
     end
@@ -970,7 +970,7 @@ defmodule OctoPi.Coder.SessionTest do
       }
 
       {:ok, pid} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: store,
@@ -1066,7 +1066,7 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "returns nil when no model is set" do
       {:ok, pid2} =
-        Session.start_link(
+        Loop.start_link(
           extensions: [],
           session_manager: empty_sm(),
           store_pid: self(),

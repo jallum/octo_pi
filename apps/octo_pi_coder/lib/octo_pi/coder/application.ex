@@ -27,7 +27,7 @@ defmodule OctoPi.Coder.Application do
       {Registry, keys: :unique, name: OctoPi.Coder.FileMutex.Registry},
       {DynamicSupervisor, name: OctoPi.Coder.FileMutex.Supervisor, strategy: :one_for_one},
       {DynamicSupervisor, name: OctoPi.Coder.SessionStore.Supervisor, strategy: :one_for_one},
-      {DynamicSupervisor, name: OctoPi.Coder.Session.Supervisor, strategy: :one_for_one}
+      {DynamicSupervisor, name: OctoPi.Coder.Loop.Supervisor, strategy: :one_for_one}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: OctoPi.Coder.Supervisor)

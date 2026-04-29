@@ -1,4 +1,4 @@
-defmodule OctoPi.Coder.Session.ReadEntriesTest do
+defmodule OctoPi.Coder.Loop.ReadEntriesTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.Coder.Session.Entry

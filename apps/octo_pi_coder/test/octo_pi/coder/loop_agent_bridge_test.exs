@@ -1,4 +1,4 @@
-defmodule OctoPi.Coder.SessionAgentBridgeTest do
+defmodule OctoPi.Coder.LoopAgentBridgeTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.Agent.Event, as: AgentEvent
@@ -10,7 +10,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
   alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Extension
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
@@ -68,7 +68,7 @@ defmodule OctoPi.Coder.SessionAgentBridgeTest do
       settings_manager: sm
     ]
 
-    {:ok, coder} = Session.start_link(Keyword.merge(base, opts))
+    {:ok, coder} = Loop.start_link(Keyword.merge(base, opts))
 
     on_exit(fn ->
       if Process.alive?(coder), do: GenServer.stop(coder)

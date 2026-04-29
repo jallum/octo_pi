@@ -4,7 +4,7 @@ defmodule OctoPi.Coder.Extension.Context do
   alias OctoPi.Agent.Message
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Models
-  alias OctoPi.Coder.Session
+  alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
 
   @type t :: %__MODULE__{
@@ -15,9 +15,9 @@ defmodule OctoPi.Coder.Extension.Context do
           signal: reference() | nil,
           has_ui?: boolean(),
           ui: OctoPi.Coder.Extension.UIContext.t() | nil,
-          get_entries: (-> [Session.Entry.t()]),
+          get_entries: (-> [Entry.t()]),
           get_messages: (-> [Message.t()]),
-          get_branch: (-> [Session.Entry.t()]),
+          get_branch: (-> [Entry.t()]),
           get_leaf_entry_id: (-> String.t() | nil),
           find_model: (atom(), String.t() -> Model.t() | nil),
           get_model_auth: (Model.t() -> {:ok, map()} | {:error, String.t()}),
@@ -78,7 +78,7 @@ defmodule OctoPi.Coder.Extension.Context do
   end
 
   @doc """
-  Wire the `SessionManager` getters to a live `OctoPi.Coder.Session`
+  Wire the `SessionManager` getters to a live `OctoPi.Coder.Loop`
   pid. Convenience around `bind_session_manager/2` for the common
   case where the manager lives behind the session GenServer.
   """

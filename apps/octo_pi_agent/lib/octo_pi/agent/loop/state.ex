@@ -33,7 +33,7 @@ defmodule OctoPi.Agent.Loop.State do
       LLM messages list. `nil` falls back to
       `MessageLog.to_list(state.messages)`. The coder app passes a
       closure that delegates to
-      `OctoPi.Coder.Session.build_session_context/1` |>
+      `OctoPi.Coder.Loop.build_session_context/1` |>
       `OctoPi.Coder.Session.Messages.to_llm/1` so prompt assembly
       reflects post-compaction kept-window + synthetic summary.
   """
