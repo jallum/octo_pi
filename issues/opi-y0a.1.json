@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T19:43:53.917812Z",
+  "description": "## What\n\nRead-side cleanup. Agent.Loop accepts `convert_to_llm: ([AgentMessage] -> [Message])` — a stateless transform applied at LLM-call time. Required at `start_link` (no nil fallback).\n\n`build_turn_context/1` becomes:\n\n```elixir\ndefp build_turn_context(loop) do\n  %AIContext{\n    system_prompt: loop.system_prompt,\n    messages: loop.convert_to_llm.(MessageLog.to_list(loop.messages)),\n    tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)\n  }\nend\n```\n\nCoder.Loop.init installs `&OctoPi.Coder.Session.Messages.to_llm/1`. The closure-over-coder_pid pattern from opi-qy9 goes away — no more `Coder.build_session_context` round-trip per turn.\n\n## Why\n\n`messages_provider` exists because we override Agent's *read path*. After this ticket the read path is just `loop.messages` again; the only knob is \"how do you flatten this for the LLM.\" That's `convert_to_llm` — a function, not a provider.\n\n## Files\n\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop.ex` — `messages_provider` field renamed/typed; `build_turn_context/1` updated.\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop/state.ex` — field rename.\n- `apps/octo_pi_agent/lib/octo_pi/agent.ex` — drop `set_messages_provider/2`; `start_loop/1` accepts `convert_to_llm`.\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — install `to_llm/1` at start_link, not via post-init setter.\n\n## Out of scope\n\n- Any change to who writes to `loop.messages`. Agent still pushes assistant + tool_results from streamed turns; Coder still has no write API yet (lands in opi-y0a.2).\n- Compaction or navigation semantics.\n\n## Done when\n\n- `messages_provider` removed from Agent.Loop.State.\n- `convert_to_llm` is required at start_link; tests that don't supply one fail with `KeyError`.\n- All existing tests pass without messages_provider being referenced.",
+  "id": "opi-y0a.1",
+  "labels": [],
+  "parent": "opi-y0a",
+  "priority": 2,
+  "status": "open",
+  "title": "Replace messages_provider with stateless convert_to_llm",
+  "type": "task",
+  "updated_at": "2026-04-29T19:43:53.917812Z"
+}
