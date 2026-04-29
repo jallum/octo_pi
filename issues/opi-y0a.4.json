@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-y0a.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-y0a.5"
+  ],
   "comments": [],
   "created": "2026-04-29T19:45:06.065211Z",
   "description": "## What\n\nApply the opi-y0a.3 pattern to branch summary / `navigate_tree`. Mirrors upstream `AgentSession.navigateTree` (line 2675) — after the persistence work, `this.agent.state.messages = sessionContext.messages` (line 2836).\n\nSpecifically: after `do_navigate_tree` persists a `BranchSummary` entry (or just moves the leaf with no summary), Coder.Loop calls `Agent.set_messages(agent_pid, new_chain)` where `new_chain = SessionStore.path(:leaf, to: :latest_compaction)`.\n\nToday the post-navigate handler already updates `state.path` via `Store.path` (opi-qy9.3). This adds the symmetric `Agent.set_messages` call.\n\n## Why\n\nSame reason as opi-y0a.3: the host owns the working buffer. After navigation, the Agent's transcript must reflect the new chain or the next turn will run on stale messages.\n\n## Files\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — `:navigate_tree` handler: after the existing path reset, also call `Agent.set_messages`.\n\n## Out of scope\n\n- `do_navigate_tree`'s internal logic (extension hooks, summarization decision tree, etc.) — unchanged.\n\n## Done when\n\n- After `Coder.navigate_tree/2`, `Agent`'s `loop.messages` matches the new path.\n- Existing navigation tests still pass.\n- New test verifies post-navigate Agent transcript equals `[BranchSummaryMessage | tail]` when summarization happened, or equals the new-leaf-prefix chain when no summary.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Branch summary and navigate_tree mirror the compaction pattern",
   "type": "task",
-  "updated_at": "2026-04-29T19:46:05.304313Z"
+  "updated_at": "2026-04-29T19:46:10.786484Z"
 }

@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-y0a.4"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-29T19:45:24.416381Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Drop Coder.Loop's :path cache",
   "type": "task",
-  "updated_at": "2026-04-29T19:45:24.416381Z"
+  "updated_at": "2026-04-29T19:46:10.786484Z"
 }
