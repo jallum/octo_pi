@@ -134,8 +134,7 @@ defmodule OctoPi.Agent.Loop do
   def handle_call({:push_message, msg}, _from, store),
     do: {:reply, :ok, put_in(store.loop.messages, store.loop.messages ++ [msg])}
 
-  def handle_call({:set_messages, msgs}, _from, store),
-    do: {:reply, :ok, put_in(store.loop.messages, msgs)}
+  def handle_call({:set_messages, msgs}, _from, store), do: {:reply, :ok, put_in(store.loop.messages, msgs)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools
