@@ -826,15 +826,16 @@ defmodule OctoPi.TUI.Interactive do
     Dispatcher.emit(extensions, ExtEvent.new(:session_start, %{reason: :startup}), ctx)
   end
 
-  defp fire_extension_event([], _event_type, _state), do: :ok
+  defp fire_extension_event(extensions, event_type, state, payload \\ %{})
+  defp fire_extension_event([], _event_type, _state, _payload), do: :ok
 
-  defp fire_extension_event(extensions, event_type, state) do
+  defp fire_extension_event(extensions, event_type, state, payload) do
     interactive_pid = self()
     cwd = state.footer.cwd
 
     Task.start(fn ->
       ctx = Context.new(%{cwd: cwd, has_ui?: true, ui: build_ui_context(interactive_pid)})
-      Dispatcher.emit(extensions, ExtEvent.new(event_type), ctx)
+      Dispatcher.emit(extensions, ExtEvent.new(event_type, payload), ctx)
     end)
 
     :ok
@@ -1069,6 +1070,16 @@ defmodule OctoPi.TUI.Interactive do
         working_message: nil,
         footer: update_footer(state.footer, event)
     }
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.TurnStart{turn: turn}}) do
+    fire_extension_event(state.extensions, :turn_start, state, %{turn: turn})
+    state
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.TurnEnd{turn: turn}}) do
+    fire_extension_event(state.extensions, :turn_end, state, %{turn: turn})
+    state
   end
 
   def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do

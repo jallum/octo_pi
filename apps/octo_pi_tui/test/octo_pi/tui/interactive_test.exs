@@ -795,6 +795,48 @@ defmodule OctoPi.TUI.InteractiveTest do
       new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: []}})
       assert new_s.loader == nil
     end
+
+    test "TurnStart fires :turn_start to extensions with turn payload" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("lifecycle", fn api ->
+          API.on(api, :turn_start, fn event, _ctx ->
+            send(test_pid, {:turn_start_fired, event.turn})
+          end)
+        end)
+
+      s = %Interactive{extensions: [ext]}
+      Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 7}})
+      assert_receive {:turn_start_fired, 7}, 1_000
+    end
+
+    test "TurnEnd fires :turn_end to extensions with turn payload" do
+      test_pid = self()
+
+      {:ok, ext} =
+        ExtLoader.load_from_factory("lifecycle", fn api ->
+          API.on(api, :turn_end, fn event, _ctx ->
+            send(test_pid, {:turn_end_fired, event.turn})
+          end)
+        end)
+
+      s = %Interactive{extensions: [ext]}
+      Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnEnd{turn: 7}})
+      assert_receive {:turn_end_fired, 7}, 1_000
+    end
+
+    test "no extensions — TurnStart returns state unchanged" do
+      s = %Interactive{extensions: [], transcript: [{:user, "x"}]}
+      new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 0}})
+      assert new_s == s
+    end
+
+    test "no extensions — TurnEnd returns state unchanged" do
+      s = %Interactive{extensions: [], transcript: [{:user, "x"}]}
+      new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnEnd{turn: 0}})
+      assert new_s == s
+    end
   end
 
   describe "handle_event — loader lifecycle" do
