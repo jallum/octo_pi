@@ -23,6 +23,16 @@ defmodule OctoPi.Coder.Application do
       }
     })
 
+    OctoPi.Tracer.register(%{
+      id: :coder_loop,
+      description: "Coder loop init events (agent wiring, threshold plumbing)",
+      events: %{
+        info: [
+          [:octo_pi_coder, :loop, :init]
+        ]
+      }
+    })
+
     children = [
       {Registry, keys: :unique, name: OctoPi.Coder.FileMutex.Registry},
       {DynamicSupervisor, name: OctoPi.Coder.FileMutex.Supervisor, strategy: :one_for_one},

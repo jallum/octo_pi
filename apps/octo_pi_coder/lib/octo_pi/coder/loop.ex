@@ -161,6 +161,12 @@ defmodule OctoPi.Coder.Loop do
     %{reserve_tokens: reserve} = SettingsManager.get_compaction_settings(settings_manager)
     :ok = OctoPi.Agent.set_auto_compact_reserve_tokens(agent_pid, reserve)
 
+    :telemetry.execute(
+      [:octo_pi_coder, :loop, :init],
+      %{},
+      %{agent_pid: agent_pid, reserve_tokens: reserve}
+    )
+
     state = %State{
       extensions: extensions,
       store_pid: store_pid,
