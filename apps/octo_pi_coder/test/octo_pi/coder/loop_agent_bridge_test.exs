@@ -12,6 +12,7 @@ defmodule OctoPi.Coder.LoopAgentBridgeTest do
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.SettingsManager
@@ -55,7 +56,7 @@ defmodule OctoPi.Coder.LoopAgentBridgeTest do
       OctoPi.Agent.start_loop(
         model: @faux_model,
         transport: FauxTransport,
-        convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+        convert_to_llm: &SessionMessages.to_llm/1
       )
 
     {:ok, store} = SessionStore.start_link(id: id, cwd: System.tmp_dir!(), root: root)

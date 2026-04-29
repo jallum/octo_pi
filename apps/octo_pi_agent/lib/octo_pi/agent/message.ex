@@ -34,7 +34,4 @@ defmodule OctoPi.Agent.Message do
   def role(%User{}), do: :user
   def role(%Assistant{}), do: :assistant
   def role(%ToolResult{}), do: :tool_result
-
-  @spec convert_to_llm([t()]) :: [t()]
-  def convert_to_llm(messages), do: messages
 end

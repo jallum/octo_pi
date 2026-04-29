@@ -185,6 +185,7 @@ defmodule OctoPi.Coder.Test.Harness do
   alias OctoPi.Coder.Extension.Dispatcher
   alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.Test.EventCollector
   alias OctoPi.Coder.Test.FauxTransport
 
@@ -221,7 +222,7 @@ defmodule OctoPi.Coder.Test.Harness do
         model: @faux_model,
         transport: FauxTransport,
         tools: tools,
-        convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1,
+        convert_to_llm: &SessionMessages.to_llm/1,
         before_tool_call: build_before_tool_call(extensions, ctx),
         after_tool_call: build_after_tool_call(extensions, ctx)
       )

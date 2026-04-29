@@ -8,6 +8,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Loop
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
 
@@ -440,7 +441,7 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
             context_window: 128_000,
             max_tokens: 16_384
           },
-          convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+          convert_to_llm: &SessionMessages.to_llm/1
         )
 
       {:ok, session} =

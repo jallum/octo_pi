@@ -82,15 +82,4 @@ defmodule OctoPi.Agent.MessageTest do
       assert Message.role(tool_result()) == :tool_result
     end
   end
-
-  describe "convert_to_llm/1" do
-    test "returns all three message types unchanged" do
-      msgs = [%User{content: "hi", timestamp: 0}, assistant(), tool_result()]
-      assert Message.convert_to_llm(msgs) == msgs
-    end
-
-    test "is identity for an empty list" do
-      assert Message.convert_to_llm([]) == []
-    end
-  end
 end

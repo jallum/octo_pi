@@ -30,6 +30,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
@@ -696,7 +697,7 @@ defmodule OctoPi.TUI.Interactive do
           model: model,
           tools: tools,
           system_prompt: system_prompt,
-          convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+          convert_to_llm: &SessionMessages.to_llm/1
         ],
         :transport,
         opts[:transport]

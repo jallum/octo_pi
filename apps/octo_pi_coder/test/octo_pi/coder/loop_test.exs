@@ -7,6 +7,7 @@ defmodule OctoPi.Coder.LoopTest do
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.SettingsManager
@@ -34,7 +35,7 @@ defmodule OctoPi.Coder.LoopTest do
   }
 
   defp start_agent! do
-    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model, convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1)
+    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model, convert_to_llm: &SessionMessages.to_llm/1)
     on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
     pid
   end
@@ -462,7 +463,7 @@ defmodule OctoPi.Coder.LoopTest do
   describe "messages_provider closure for Agent.Loop (E5a)" do
     alias OctoPi.AI.Content.Text
     alias OctoPi.AI.Message.User
-    alias OctoPi.Coder.Session.Messages
+    alias SessionMessages, as: SessionMessages
 
     setup ctx do
       store = open_store!(ctx)
@@ -482,7 +483,7 @@ defmodule OctoPi.Coder.LoopTest do
         coder_session
         |> Coder.build_session_context()
         |> Map.fetch!(:messages)
-        |> Messages.to_llm()
+        |> SessionMessages.to_llm()
       end
     end
 

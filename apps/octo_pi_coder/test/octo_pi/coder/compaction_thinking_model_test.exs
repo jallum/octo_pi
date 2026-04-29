@@ -24,6 +24,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.SettingsManager
@@ -98,7 +99,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
           context_window: 128_000,
           max_tokens: 16_384
         },
-        convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+        convert_to_llm: &SessionMessages.to_llm/1
       )
 
     on_exit(fn -> if Process.alive?(agent), do: GenServer.stop(agent) end)
