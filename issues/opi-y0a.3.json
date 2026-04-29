@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-y0a.2"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-29T19:44:50.100712Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Coder owns compaction trigger and run; Agent kernel goes passive",
   "type": "task",
-  "updated_at": "2026-04-29T19:44:50.100712Z"
+  "updated_at": "2026-04-29T19:45:59.678998Z"
 }

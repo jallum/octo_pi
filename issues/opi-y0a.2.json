@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-y0a.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-y0a.3"
+  ],
   "comments": [],
   "created": "2026-04-29T19:44:15.975723Z",
   "description": "## What\n\nThe write side. Agent gains a host-write API; Coder takes ownership of *what's in Agent's buffer*.\n\nNew on Agent:\n\n- `Agent.push_message/2` — append a single `AgentMessage` to `loop.messages`.\n- `Agent.set_messages/2` — wholesale rewrite (used by ticket 3 for compaction, ticket 4 for navigation; introduced here so the API is complete).\n\nWiden Agent's message type:\n\n```elixir\n@type agent_message ::\n        AI.Message.t()\n        | OctoPi.Coder.Session.CompactionSummaryMessage.t()\n        | OctoPi.Coder.Session.BranchSummaryMessage.t()\n        # | other synthetic types as they land\n```\n\n`convert_to_llm` (from opi-y0a.1) is the boundary that flattens synthetic types — Agent stores them natively, the wire never sees them.\n\nCoder.Loop write points:\n\n- `init` — seed Agent: `Agent.set_messages(agent_pid, SessionStore.path(:leaf, to: :latest_compaction))`\n- `add_user_message` / `add_entry` for non-streamed types — after tree append, call `Agent.push_message`.\n\n**Ownership rule** (origin-based, not type-based):\n\n- Agent writes streamed assistant + tool_results from its own turns (already does this; unchanged).\n- Coder writes everything else (user prompts, synthetic types, future bash side-channel events).\n- Neither side double-writes the same message.\n\n## Why\n\nAfter this ticket, Agent's `loop.messages` is the canonical working buffer for the LLM, kept correct by the host. The bypass (`messages_provider`) is no longer load-bearing — `loop.messages` already represents the right chain.\n\n## Files\n\n- `apps/octo_pi_agent/lib/octo_pi/agent.ex` — public `push_message/2`, `set_messages/2`.\n- `apps/octo_pi_agent/lib/octo_pi/agent/loop.ex` — handle_call clauses; widen `loop.messages` element type.\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — `init` seeds Agent; `add_user_message` / `add_entry` mirror to Agent.\n\n## Out of scope\n\n- Compaction / navigation `set_messages` callsites (those land with the trigger inversion in opi-y0a.3 / opi-y0a.4).\n- Dropping `:path` (opi-y0a.5).\n- Inlining `MessageLog` (opi-y0a.6).\n\n## Done when\n\n- Agent has `push_message/2` and `set_messages/2`.\n- Agent's `loop.messages` accepts synthetic types without crashing in `convert_to_llm`.\n- Coder seeds Agent at init from `SessionStore.path(:to: :latest_compaction)`.\n- A new test verifies: after `Coder.add_user_message`, the Agent's `loop.messages` has the user message at the tail.\n- `messages_provider` can be removed from Coder.Loop.init's installation step (still defined on Agent for now if opi-y0a.1 hasn't deleted it; this ticket doesn't depend on that).",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Coder mirrors writes into Agent's transcript via push/set APIs",
   "type": "task",
-  "updated_at": "2026-04-29T19:45:54.370714Z"
+  "updated_at": "2026-04-29T19:45:59.678998Z"
 }
