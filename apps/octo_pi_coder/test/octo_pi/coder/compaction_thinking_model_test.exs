@@ -97,7 +97,8 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
           base_url: "https://example.com",
           context_window: 128_000,
           max_tokens: 16_384
-        }
+        },
+        convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
       )
 
     on_exit(fn -> if Process.alive?(agent), do: GenServer.stop(agent) end)

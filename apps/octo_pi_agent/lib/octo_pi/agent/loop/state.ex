@@ -28,14 +28,13 @@ defmodule OctoPi.Agent.Loop.State do
     * `:run_started_at_mono` — monotonic start time of the current run, nil when idle
     * `:before_tool_call` / `:after_tool_call` — optional hooks
     * `:transport` — `OctoPi.Agent.Transport` impl module
-    * `:messages_provider` — optional 1-arity closure
-      `(Loop.State -> [Message.t()])` used to build the per-turn
-      LLM messages list. `nil` falls back to
-      `MessageLog.to_list(state.messages)`. The coder app passes a
-      closure that delegates to
-      `OctoPi.Coder.Loop.build_session_context/1` |>
-      `OctoPi.Coder.Session.Messages.to_llm/1` so prompt assembly
-      reflects post-compaction kept-window + synthetic summary.
+    * `:convert_to_llm` — required 1-arity transform applied to the
+      transcript at LLM-call time, `([AgentMessage] -> [Message])`.
+      Stateless. The Coder app passes
+      `&OctoPi.Coder.Session.Messages.to_llm/1` to flatten synthetic
+      message types (CompactionSummaryMessage, BranchSummaryMessage)
+      into LLM-shaped user messages. Callers that don't have synthetic
+      types pass `&Function.identity/1`.
   """
 
   alias OctoPi.Agent.AbortRef
@@ -55,7 +54,7 @@ defmodule OctoPi.Agent.Loop.State do
   @type after_tool_call ::
           (map() -> {:patch, map()} | :unchanged)
 
-  @enforce_keys [:model, :transport]
+  @enforce_keys [:model, :transport, :convert_to_llm]
   @type t :: %__MODULE__{
           system_prompt: String.t() | nil,
           model: Model.t(),
@@ -76,7 +75,7 @@ defmodule OctoPi.Agent.Loop.State do
           before_tool_call: before_tool_call() | nil,
           after_tool_call: after_tool_call() | nil,
           transport: module(),
-          messages_provider: (t() -> [term()]) | nil,
+          convert_to_llm: ([term()] -> [term()]),
           compaction_auto?: false | :continue | :end_after | :overflow_retry,
           auto_compact_reserve_tokens: non_neg_integer() | nil,
           last_compaction_at_ms: integer() | nil,
@@ -97,7 +96,7 @@ defmodule OctoPi.Agent.Loop.State do
     :before_tool_call,
     :after_tool_call,
     :transport,
-    :messages_provider,
+    :convert_to_llm,
     :auto_compact_reserve_tokens,
     :last_compaction_at_ms,
     turn: %Turn{},

@@ -77,10 +77,6 @@ defmodule OctoPi.Agent.Loop do
   def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
 
   @doc false
-  def set_messages_provider(pid, provider) when is_function(provider, 1),
-    do: GenServer.call(pid, {:set_messages_provider, provider})
-
-  @doc false
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
   @doc false
@@ -114,7 +110,7 @@ defmodule OctoPi.Agent.Loop do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
-        messages_provider: Keyword.get(opts, :messages_provider),
+        convert_to_llm: Keyword.fetch!(opts, :convert_to_llm),
         messages: MessageLog.new(Keyword.get(opts, :messages, [])),
         auto_compact_reserve_tokens: Keyword.get(opts, :auto_compact_reserve_tokens),
         turn: Turn.new()
@@ -180,9 +176,6 @@ defmodule OctoPi.Agent.Loop do
     do: {:reply, :ok, put_in(store.loop.thinking_level, level)}
 
   def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
-
-  def handle_call({:set_messages_provider, provider}, _from, store),
-    do: {:reply, :ok, put_in(store.loop.messages_provider, provider)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools
@@ -579,23 +572,14 @@ defmodule OctoPi.Agent.Loop do
     end
   end
 
-  # Per-turn LLM context. When a `messages_provider` closure is set
-  # (the coder app wires one in to call
-  # `Coder.Session.build_session_context/1` |>
-  # `Coder.Session.Messages.to_llm/1` for post-compaction kept-window
-  # assembly), the closure produces the messages list. Otherwise
-  # falls back to `MessageLog.to_list/1` so the Agent app stays
-  # runnable standalone.
+  # Per-turn LLM context. `convert_to_llm` is a stateless transform
+  # `([AgentMessage] -> [Message])` applied to the transcript at
+  # call time. Coder installs `to_llm/1` to flatten synthetic
+  # message types; standalone Agent users pass `&Function.identity/1`.
   defp build_turn_context(loop) do
-    messages =
-      case loop.messages_provider do
-        nil -> MessageLog.to_list(loop.messages)
-        fun when is_function(fun, 1) -> fun.(loop)
-      end
-
     %AIContext{
       system_prompt: loop.system_prompt,
-      messages: messages,
+      messages: loop.convert_to_llm.(MessageLog.to_list(loop.messages)),
       tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)
     }
   end

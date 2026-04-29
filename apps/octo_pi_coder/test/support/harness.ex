@@ -222,6 +222,7 @@ defmodule OctoPi.Coder.Test.Harness do
         model: @faux_model,
         transport: FauxTransport,
         tools: tools,
+        convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1,
         before_tool_call: build_before_tool_call(extensions, ctx),
         after_tool_call: build_after_tool_call(extensions, ctx)
       )

@@ -40,7 +40,17 @@ defmodule OctoPi.Coder.Modes.Print do
         ResourceLoader.build_system_prompt(loader, cwd, tools)
       end)
 
-    session_opts = maybe_put([model: model, tools: tools, system_prompt: system_prompt], :transport, transport)
+    session_opts =
+      maybe_put(
+        [
+          model: model,
+          tools: tools,
+          system_prompt: system_prompt,
+          convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+        ],
+        :transport,
+        transport
+      )
 
     {:ok, session} = OctoPi.Agent.start_loop(session_opts)
     OctoPi.Agent.subscribe(session, self(), :async)

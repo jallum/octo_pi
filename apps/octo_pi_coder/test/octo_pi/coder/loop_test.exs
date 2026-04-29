@@ -34,7 +34,7 @@ defmodule OctoPi.Coder.LoopTest do
   }
 
   defp start_agent! do
-    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model)
+    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model, convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1)
     on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
     pid
   end

@@ -61,10 +61,11 @@ defmodule OctoPi.AgentTest do
                %Tool.Result{content: []}
     end
 
-    test "Loop.State enforces :model and :transport" do
+    test "Loop.State enforces :model, :transport, and :convert_to_llm" do
       state = %Loop.State{
         model: fake_model(),
-        transport: Transport.Direct
+        transport: Transport.Direct,
+        convert_to_llm: &Function.identity/1
       }
 
       assert state.tools == []
@@ -189,7 +190,7 @@ defmodule OctoPi.AgentTest do
 
   describe "Loop lifecycle" do
     setup do
-      {:ok, loop} = OctoPi.Agent.start_loop(model: fake_model())
+      {:ok, loop} = OctoPi.Agent.start_loop(model: fake_model(), convert_to_llm: &Function.identity/1)
       {:ok, loop: loop}
     end
 

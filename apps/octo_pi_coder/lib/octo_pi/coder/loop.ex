@@ -152,13 +152,6 @@ defmodule OctoPi.Coder.Loop do
 
     OctoPi.Agent.subscribe(agent_pid, self(), :async)
 
-    loop_pid = self()
-
-    OctoPi.Agent.set_messages_provider(agent_pid, fn _ ->
-      ctx = OctoPi.Coder.build_session_context(loop_pid)
-      OctoPi.Coder.Session.Messages.to_llm(ctx.messages)
-    end)
-
     state = %State{
       extensions: extensions,
       store_pid: store_pid,

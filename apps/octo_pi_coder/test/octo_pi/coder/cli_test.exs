@@ -118,7 +118,7 @@ defmodule OctoPi.Coder.CLITest do
 
     test "dispatches a valid request through Rpc" do
       {:ok, session} =
-        OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [])
+        OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [], convert_to_llm: &Function.identity/1)
 
       on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session, :normal, 500) end)
 
@@ -129,7 +129,7 @@ defmodule OctoPi.Coder.CLITest do
 
     test "returns a parse error for malformed JSON" do
       {:ok, session} =
-        OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [])
+        OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [], convert_to_llm: &Function.identity/1)
 
       on_exit(fn -> if Process.alive?(session), do: GenServer.stop(session, :normal, 500) end)
 
@@ -221,7 +221,7 @@ defmodule OctoPi.Coder.CLITest do
       output =
         ExUnit.CaptureIO.capture_io(fn ->
           {:ok, session} =
-            OctoPi.Agent.start_loop(model: model(), transport: FT, tools: [])
+            OctoPi.Agent.start_loop(model: model(), transport: FT, tools: [], convert_to_llm: &Function.identity/1)
 
           forwarder = spawn(fn -> CLI.forward_events() end)
           OctoPi.Agent.subscribe(session, forwarder, :async)

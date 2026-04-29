@@ -51,7 +51,7 @@ defmodule OctoPi.Agent.LoopAutoCompactTest do
   end
 
   defp start_loop(opts \\ []) do
-    opts = Keyword.merge([model: over_model(), transport: FakeTransport], opts)
+    opts = Keyword.merge([model: over_model(), transport: FakeTransport, convert_to_llm: &Function.identity/1], opts)
     {:ok, pid} = Agent.start_loop(opts)
     pid
   end

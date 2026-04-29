@@ -692,7 +692,12 @@ defmodule OctoPi.TUI.Interactive do
   defp start_session(store_pid, model, tools, system_prompt, extensions, opts) do
     agent_opts =
       put_if_present(
-        [model: model, tools: tools, system_prompt: system_prompt],
+        [
+          model: model,
+          tools: tools,
+          system_prompt: system_prompt,
+          convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1
+        ],
         :transport,
         opts[:transport]
       )
