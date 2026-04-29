@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T19:45:24.416381Z",
+  "description": "## What\n\nDelete `Coder.Loop.State.path`. After opi-y0a.2 / opi-y0a.3 / opi-y0a.4, the Agent's `loop.messages` is the canonical working chain; `:path` is duplicate state.\n\nReplacements at the call sites:\n\n- `build_session_context` (sole prod caller was `messages_provider` in init, now gone) — delete the public `Coder.build_session_context`. Internal SessionStore version stays.\n- Compaction prep input — already uses `state.path` today; switch to `SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)` on demand inside `do_compact`.\n- `do_get_context_usage` / `do_get_session_stats` — currently use `state.path` to compute `SessionManager.build_context_from_path(...)`; switch to `SessionStore.build_session_context(state.store_pid)`.\n- Any remaining `state.path` reads — same treatment.\n\nAlso drop:\n\n- `Coder.Loop.State.cwd` — already in SessionStore (`SessionStore.get_cwd/1`).\n- `:cwd` field if no remaining read sites depend on it being on the loop.\n\n## Why\n\n`:path` was the working linearization Coder.Loop owned. Now that Agent owns the working chain and SessionStore can produce a linearization on demand, keeping a third copy in Coder is just an invariant to maintain.\n\nThis *completes* the opi-qy9 trajectory:\n- opi-qy9: tree out of Loop, into Store; Loop carries `:path`.\n- opi-y0a.5: `:path` out of Loop too. Loop carries almost nothing.\n\n## Files\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — delete `:path` and `:cwd` from State; rewire the few read sites.\n- `apps/octo_pi_coder/lib/octo_pi/coder.ex` — delete `Coder.build_session_context/1`.\n\n## Out of scope\n\n- `SessionStore.path/3` and `SessionStore.build_session_context/1,2` — already exist, unchanged.\n\n## Done when\n\n- `Coder.Loop.State` has no `:path` or `:cwd` field.\n- `Coder.build_session_context/1` removed (or made internal-only if any remaining caller surfaces).\n- All existing tests pass.\n- A grep for `state.path` in `coder/loop.ex` returns nothing.",
+  "id": "opi-y0a.5",
+  "labels": [],
+  "parent": "opi-y0a",
+  "priority": 2,
+  "status": "open",
+  "title": "Drop Coder.Loop's :path cache",
+  "type": "task",
+  "updated_at": "2026-04-29T19:45:24.416381Z"
+}
