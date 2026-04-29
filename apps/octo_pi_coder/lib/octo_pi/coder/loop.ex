@@ -278,24 +278,39 @@ defmodule OctoPi.Coder.Loop do
     # CompactionRequested and the handle_info path below runs the
     # work.
     OctoPi.Agent.abort(state.agent_pid)
-
-    case do_compact(state, opts) do
-      {:ok, %{result: result, from_extension?: from_ext?}} = ok ->
-        new_state = finalize_compact(state, result, from_ext?)
-        {:reply, ok, new_state}
-
-      other ->
-        {:reply, other, state}
-    end
+    {result, new_state} = run_compact_with_telemetry(state, opts, :manual)
+    {:reply, result, new_state}
   end
 
   def handle_call({:fork, opts}, _from, state) do
-    {:reply, do_fork(state, opts), state}
+    started_mono = System.monotonic_time()
+    leaf_id = SessionStore.get_leaf_entry_id(state.store_pid)
+    result = do_fork(state, opts)
+
+    :telemetry.execute(
+      [:octo_pi_coder, :fork, :stop],
+      %{duration: System.monotonic_time() - started_mono},
+      %{old_leaf_id: leaf_id, target_dir: Keyword.get(opts, :target_dir), result: fork_result_kind(result)}
+    )
+
+    {:reply, result, state}
   end
 
   def handle_call({:navigate_tree, opts}, _from, state) do
-    case do_navigate_tree(state, opts) do
-      {:ok, summary, old_leaf_id, new_state} ->
+    started_mono = System.monotonic_time()
+    target_id = Keyword.get(opts, :target_id)
+    old_leaf_id = SessionStore.get_leaf_entry_id(state.store_pid)
+
+    :telemetry.execute(
+      [:octo_pi_coder, :navigate, :start],
+      %{system_time: System.system_time()},
+      %{target_id: target_id, old_leaf_id: old_leaf_id}
+    )
+
+    nav_result = do_navigate_tree(state, opts)
+
+    case nav_result do
+      {:ok, summary, ^old_leaf_id, new_state} ->
         # Rewrite Agent's transcript to the new chain. Mirrors
         # upstream `AgentSession.navigateTree` line 2836:
         # `this.agent.state.messages = sessionContext.messages`.
@@ -311,9 +326,27 @@ defmodule OctoPi.Coder.Loop do
           })
 
         Dispatcher.emit(state.extensions, tree_event, ctx)
+
+        :telemetry.execute(
+          [:octo_pi_coder, :navigate, :stop],
+          %{duration: System.monotonic_time() - started_mono},
+          %{
+            old_leaf_id: old_leaf_id,
+            new_leaf_id: SessionStore.get_leaf_entry_id(new_state.store_pid),
+            summarized?: not is_nil(summary),
+            result: :ok
+          }
+        )
+
         {:reply, {:ok, summary}, new_state}
 
       other ->
+        :telemetry.execute(
+          [:octo_pi_coder, :navigate, :stop],
+          %{duration: System.monotonic_time() - started_mono},
+          %{old_leaf_id: old_leaf_id, summarized?: false, result: navigate_result_kind(other)}
+        )
+
         {:reply, other, state}
     end
   end
@@ -333,30 +366,96 @@ defmodule OctoPi.Coder.Loop do
   # forwarding a user prompt when the current context exceeds the
   # configured threshold. Returns the (possibly updated) state.
   defp maybe_pre_prompt_compact(%State{} = state) do
-    if pre_prompt_should_compact?(state) do
-      case do_compact(state, auto?: true) do
-        {:ok, %{result: result, from_extension?: from_ext?}} ->
-          finalize_compact(state, result, from_ext?)
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+    usage = do_get_context_usage(state)
+    triggered? = pre_prompt_should_compact?(settings, usage)
 
-        _ ->
-          state
-      end
+    :telemetry.execute(
+      [:octo_pi_coder, :pre_prompt_check],
+      %{},
+      %{
+        triggered?: triggered?,
+        tokens: usage && usage.tokens,
+        context_window: usage && usage.context_window,
+        enabled?: settings.enabled
+      }
+    )
+
+    if triggered? do
+      {_result, new_state} = run_compact_with_telemetry(state, [auto?: true], :pre_prompt)
+      new_state
     else
       state
     end
   end
 
-  defp pre_prompt_should_compact?(%State{} = state) do
-    settings = SettingsManager.get_compaction_settings(state.settings_manager)
-
+  defp pre_prompt_should_compact?(settings, usage) do
     with true <- settings.enabled,
-         %{tokens: t, context_window: cw} when is_integer(t) and is_integer(cw) <-
-           do_get_context_usage(state) do
+         %{tokens: t, context_window: cw} when is_integer(t) and is_integer(cw) <- usage do
       Tokens.should_compact?(t, cw, settings)
     else
       _ -> false
     end
   end
+
+  # Wraps do_compact + finalize_compact with start/stop telemetry,
+  # tagged by `source` (:manual | :pre_prompt | :mid_run). Returns
+  # `{compact_result, state}`.
+  defp run_compact_with_telemetry(%State{} = state, opts, source) do
+    started_mono = System.monotonic_time()
+    tokens_before = compact_tokens_before(state)
+
+    :telemetry.execute(
+      [:octo_pi_coder, :compact, :start],
+      %{system_time: System.system_time()},
+      %{source: source, tokens_before: tokens_before}
+    )
+
+    {result, new_state} =
+      case do_compact(state, opts) do
+        {:ok, %{result: r, from_extension?: from_ext?}} = ok ->
+          {ok, finalize_compact(state, r, from_ext?)}
+
+        other ->
+          {other, state}
+      end
+
+    :telemetry.execute(
+      [:octo_pi_coder, :compact, :stop],
+      %{duration: System.monotonic_time() - started_mono},
+      %{
+        source: source,
+        result: compact_result_kind(result),
+        tokens_before: tokens_before,
+        tokens_after: compact_tokens_before(new_state),
+        from_extension?: from_extension?(result)
+      }
+    )
+
+    {result, new_state}
+  end
+
+  defp compact_tokens_before(state) do
+    case do_get_context_usage(state) do
+      %{tokens: t} when is_integer(t) -> t
+      _ -> nil
+    end
+  end
+
+  defp compact_result_kind({:ok, _}), do: :ok
+  defp compact_result_kind({:cancel, _}), do: :cancel
+  defp compact_result_kind({:error, reason}), do: {:error, reason}
+
+  defp from_extension?({:ok, %{from_extension?: v}}), do: v
+  defp from_extension?(_), do: false
+
+  defp fork_result_kind({:ok, _}), do: :ok
+  defp fork_result_kind({:cancel, _}), do: :cancel
+  defp fork_result_kind({:error, reason}), do: {:error, reason}
+
+  defp navigate_result_kind({:cancel, _}), do: :cancel
+  defp navigate_result_kind({:error, reason}), do: {:error, reason}
+  defp navigate_result_kind(_), do: :unknown
 
   defp do_compact(%State{} = state, opts) do
     settings = SettingsManager.get_compaction_settings(state.settings_manager)
@@ -640,16 +739,17 @@ defmodule OctoPi.Coder.Loop do
     # host to compact. Use the same do_compact pipeline as manual
     # compact, then thread the result back through Agent's FSM via
     # compaction_response/3.
-    case do_compact(state, opts) do
-      {:ok, %{result: result, from_extension?: from_ext?}} = ok ->
-        new_state = finalize_compact(state, result, from_ext?)
-        OctoPi.Agent.compaction_response(agent_pid, ref, agent_compaction_payload(ok, from_ext?))
-        {:noreply, new_state}
+    {result, new_state} = run_compact_with_telemetry(state, opts, :mid_run)
+
+    case result do
+      {:ok, %{from_extension?: from_ext?}} ->
+        OctoPi.Agent.compaction_response(agent_pid, ref, agent_compaction_payload(result, from_ext?))
 
       other ->
         OctoPi.Agent.compaction_response(agent_pid, ref, other)
-        {:noreply, state}
     end
+
+    {:noreply, new_state}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}

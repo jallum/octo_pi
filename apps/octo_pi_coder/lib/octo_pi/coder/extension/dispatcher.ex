@@ -350,24 +350,52 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
   end
 
   defp safe_call(ext, event_type, fun) do
-    fun.()
-  rescue
-    e ->
-      :telemetry.execute(
-        [:octo_pi_coder, :extension, :handler_error],
-        %{},
-        %{
-          extension_id: ext.id,
-          event_type: event_type,
-          error: Exception.message(e),
-          stacktrace: __STACKTRACE__
-        }
-      )
+    started_mono = System.monotonic_time()
 
-      Logger.warning("Extension #{ext.id} handler error on #{event_type}: #{Exception.message(e)}")
+    :telemetry.execute(
+      [:octo_pi_coder, :extension, :handler, :start],
+      %{system_time: System.system_time()},
+      %{extension_id: ext.id, event_type: event_type}
+    )
 
-      nil
+    {value, outcome} =
+      try do
+        v = fun.()
+        {v, handler_outcome(v)}
+      rescue
+        e ->
+          :telemetry.execute(
+            [:octo_pi_coder, :extension, :handler_error],
+            %{},
+            %{
+              extension_id: ext.id,
+              event_type: event_type,
+              error: Exception.message(e),
+              stacktrace: __STACKTRACE__
+            }
+          )
+
+          Logger.warning("Extension #{ext.id} handler error on #{event_type}: #{Exception.message(e)}")
+          {nil, :error}
+      end
+
+    :telemetry.execute(
+      [:octo_pi_coder, :extension, :handler, :stop],
+      %{duration: System.monotonic_time() - started_mono},
+      %{extension_id: ext.id, event_type: event_type, outcome: outcome}
+    )
+
+    value
   end
+
+  # Reified outcome tag for the handler.stop event metadata.
+  defp handler_outcome({:cancel, _}), do: :cancel
+  defp handler_outcome({:override, _}), do: :override
+  defp handler_outcome({:patch, _}), do: :patch
+  defp handler_outcome({:ok, _}), do: :ok
+  defp handler_outcome(:ok), do: :ok
+  defp handler_outcome(nil), do: :nil_result
+  defp handler_outcome(_), do: :other
 
   defp emit_cancel_telemetry(ext, event_type, reason) do
     :telemetry.execute(
