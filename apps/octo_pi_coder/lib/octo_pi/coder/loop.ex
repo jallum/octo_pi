@@ -754,7 +754,6 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-
   # -- helpers --
 
   defp append_to_store(state, entry, opts) do
@@ -767,8 +766,7 @@ defmodule OctoPi.Coder.Loop do
   # tool_result) and the Compaction chain-head (rewritten wholesale by
   # the compactor, not appended onto the tail).
   defp push_entry_to_agent(_agent_pid, %Entry.Message{message: %{"role" => role}})
-       when role in ["assistant", "toolResult"],
-       do: :ok
+       when role in ["assistant", "toolResult"], do: :ok
 
   defp push_entry_to_agent(_agent_pid, %Entry.Compaction{}), do: :ok
 

@@ -48,8 +48,7 @@ defmodule OctoPi.Agent do
 
   @doc "Append message(s) to the transcript and start a new run."
   @spec prompt(t(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
-  def prompt(pid, msg_or_msgs),
-    do: GenServer.call(pid, {:prompt, List.wrap(Message.normalize(msg_or_msgs))})
+  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(Message.normalize(msg_or_msgs))})
 
   @doc "Continue the current conversation with no new user input."
   @spec continue(t()) :: :ok | {:error, :already_streaming}
@@ -69,9 +68,8 @@ defmodule OctoPi.Agent do
   every queued item in one shot.
   """
   @spec set_queue_mode(t(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
-  def set_queue_mode(pid, queue, mode)
-      when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
-      do: GenServer.call(pid, {:set_queue_mode, queue, mode})
+  def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
+    do: GenServer.call(pid, {:set_queue_mode, queue, mode})
 
   @doc "Abort the current run. No-op if the loop is idle."
   @spec abort(t()) :: :ok
@@ -102,8 +100,7 @@ defmodule OctoPi.Agent do
   superseded or the agent was aborted).
   """
   @spec compaction_response(t(), reference(), term()) :: :ok | {:error, :stale}
-  def compaction_response(pid, ref, result),
-    do: GenServer.call(pid, {:compaction_response, ref, result})
+  def compaction_response(pid, ref, result), do: GenServer.call(pid, {:compaction_response, ref, result})
 
   @doc "Change the thinking level for future runs."
   @spec set_thinking_level(t(), atom()) :: :ok

@@ -457,7 +457,6 @@ defmodule OctoPi.Coder.LoopTest do
 
       assert length(rest) == 2
     end
-
   end
 
   describe "messages_provider closure for Agent.Loop (E5a)" do

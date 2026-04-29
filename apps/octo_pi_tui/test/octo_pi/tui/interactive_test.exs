@@ -10,6 +10,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Loop
+  alias OctoPi.Coder.Session.Messages
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CustomMessage
@@ -313,7 +314,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
 
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1)
+      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
 
       coder =
         start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
@@ -1243,7 +1244,9 @@ defmodule OctoPi.TUI.InteractiveTest do
       root = Path.join(System.tmp_dir!(), "opi-addtool-test-#{id}")
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: tool_reg_model(), transport: FakeTransport, convert_to_llm: &OctoPi.Coder.Session.Messages.to_llm/1)
+
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(model: tool_reg_model(), transport: FakeTransport, convert_to_llm: &Messages.to_llm/1)
 
       coder =
         start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
