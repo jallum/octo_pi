@@ -4,7 +4,6 @@ defmodule OctoPi.Coder.SessionManagerTest do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionManager
-  alias OctoPi.Coder.SessionStore
 
   @fixture_root Path.expand("../../fixtures", __DIR__)
 
@@ -410,68 +409,6 @@ defmodule OctoPi.Coder.SessionManagerTest do
       assert ancestor_id == "m1"
       # compaction entry must be included
       assert Enum.map(entries, & &1.id) == ["cmp", "m2"]
-    end
-  end
-
-  describe "fork/4" do
-    test "missing source returns :enoent" do
-      assert {:error, :enoent} =
-               SessionManager.fork(
-                 Path.join(System.tmp_dir!(), "nope-#{System.unique_integer()}.jsonl"),
-                 "/c2",
-                 System.tmp_dir!()
-               )
-    end
-
-    test "copies entries verbatim into a new file with rewritten header" do
-      src = scratch("fork-src.jsonl")
-
-      File.write!(src, """
-      {"type":"session","version":3,"id":"src-id","timestamp":"src-ts","cwd":"/orig"}
-      {"type":"message","id":"m1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"a"}}
-      {"type":"message","id":"m2","parentId":"m1","timestamp":"t2","message":{"role":"assistant","content":"b"}}
-      """)
-
-      target_dir = Path.join(System.tmp_dir!(), "fork-dst-#{System.unique_integer([:positive])}")
-      on_exit(fn -> File.rm_rf!(target_dir) end)
-
-      assert {:ok, forked} =
-               SessionManager.fork(src, "/new-cwd", target_dir, id: "new-id", timestamp: "2026-01-01T00:00:00Z")
-
-      assert forked.session_id == "new-id"
-      assert forked.cwd == "/new-cwd"
-      assert forked.parent_session == src
-      assert forked.version == 3
-
-      # Same body, same ids, same parent_id chain
-      assert forked.by_id["m1"].parent_id == nil
-      assert forked.by_id["m2"].parent_id == "m1"
-      assert forked.leaf_id == "m2"
-
-      # Original file untouched
-      [orig_header | _] = src |> SessionStore.read_entries() |> Enum.to_list()
-      assert orig_header.id == "src-id"
-      assert orig_header.cwd == "/orig"
-      refute orig_header.parent_session
-    end
-
-    test "forked file is independently loadable" do
-      src = scratch("fork-roundtrip.jsonl")
-
-      File.write!(src, """
-      {"type":"session","version":3,"id":"a","timestamp":"t","cwd":"/c"}
-      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"x"}}
-      """)
-
-      target_dir = Path.join(System.tmp_dir!(), "fork-rt-#{System.unique_integer([:positive])}")
-      on_exit(fn -> File.rm_rf!(target_dir) end)
-
-      assert {:ok, forked} = SessionManager.fork(src, "/c2", target_dir)
-      reloaded = SessionManager.load(forked.session_file)
-      assert {:ok, sm} = reloaded
-      assert sm.session_id == forked.session_id
-      assert sm.parent_session == src
-      assert Map.keys(sm.by_id) == ["m1"]
     end
   end
 

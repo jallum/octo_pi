@@ -514,12 +514,14 @@ defmodule OctoPi.Coder.LoopTest do
       Path.join(System.tmp_dir!(), "opi-fork-test-#{ctx.test}-#{System.unique_integer([:positive])}")
     end
 
-    test "returns {:ok, new_session_manager} for a valid session", ctx do
+    test "returns {:ok, new_store_pid} for a valid session", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
       {:ok, _} = Coder.add_entry(pid, message_entry("hello"))
 
       dir = fork_dir(ctx)
-      assert {:ok, %SessionManager{}} = Coder.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+      assert {:ok, new_store} = Coder.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+      assert is_pid(new_store)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
     end
 
     test "forked session has parent_session pointing at source file", ctx do
@@ -527,8 +529,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert new_sm.parent_session == source_path
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert SessionStore.get_session_manager(new_store).parent_session == source_path
     end
 
     test "forked session has the requested target_cwd", ctx do
@@ -536,8 +540,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
-      assert new_sm.cwd == "/fork/cwd"
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert SessionStore.get_cwd(new_store) == "/fork/cwd"
     end
 
     test "forked session carries all source entries", ctx do
@@ -546,8 +552,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("two"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert length(SessionManager.get_entries(new_sm)) == 2
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert length(SessionStore.get_entries(new_store)) == 2
     end
 
     test "forked session file is readable and loads correctly", ctx do
@@ -555,9 +563,11 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("content"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert {:ok, reloaded} = SessionManager.load(new_sm.session_file)
-      assert reloaded.session_id == new_sm.session_id
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert {:ok, reloaded} = SessionManager.load(SessionStore.path(new_store))
+      assert reloaded.session_id == SessionStore.get_session_id(new_store)
     end
 
     test "extension {:cancel, reason} aborts fork, no file written", ctx do

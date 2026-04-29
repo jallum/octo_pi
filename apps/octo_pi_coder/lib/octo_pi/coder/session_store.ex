@@ -189,6 +189,25 @@ defmodule OctoPi.Coder.SessionStore do
   @spec set_leaf(t(), String.t() | nil) :: :ok
   def set_leaf(pid, leaf_id), do: GenServer.call(pid, {:set_leaf, leaf_id})
 
+  @doc """
+  Fork this session into a new file under `target_dir`. The new file
+  gets a fresh session id and `parentSession = this_store.path`, with
+  all non-header entries copied verbatim from the in-memory tree (no
+  disk re-read of the source). Returns the supervised pid of the new
+  store, ready to use.
+
+  Mirrors upstream `SessionManager.forkFrom`
+  (`session-manager.ts:1316-1357`).
+
+  ## Options
+
+    * `:id` — explicit session id (defaults to a fresh random one)
+    * `:timestamp` — explicit ISO-8601 timestamp for the new header
+  """
+  @spec fork(t(), String.t(), Path.t(), keyword()) ::
+          {:ok, t()} | {:error, atom()}
+  def fork(pid, target_cwd, target_dir, opts \\ []), do: GenServer.call(pid, {:fork, target_cwd, target_dir, opts})
+
   @doc "Flush and shut down."
   @spec close(t()) :: :ok
   def close(pid), do: GenServer.call(pid, :close)
@@ -326,6 +345,10 @@ defmodule OctoPi.Coder.SessionStore do
   def handle_call({:set_leaf, leaf_id}, _from, state),
     do: {:reply, :ok, %{state | sm: SessionManager.set_leaf(state.sm, leaf_id)}}
 
+  def handle_call({:fork, target_cwd, target_dir, opts}, _from, state) do
+    {:reply, do_fork(state, target_cwd, target_dir, opts), state}
+  end
+
   def handle_call(:close, _from, state) do
     File.close(state.io)
     {:stop, :normal, :ok, state}
@@ -335,6 +358,40 @@ defmodule OctoPi.Coder.SessionStore do
 
   defp build_header(id, cwd, parent, timestamp) do
     %Header{id: id, version: 3, timestamp: timestamp, cwd: cwd, parent_session: parent}
+  end
+
+  defp do_fork(state, target_cwd, target_dir, opts) do
+    File.mkdir_p!(target_dir)
+
+    new_id = opts[:id] || generate_session_id()
+    timestamp = opts[:timestamp] || iso8601_now()
+    file_timestamp = timestamp |> String.replace(":", "-") |> String.replace(".", "-")
+    new_path = Path.join(target_dir, "#{file_timestamp}_#{new_id}.jsonl")
+
+    new_header = %Header{
+      id: new_id,
+      version: 3,
+      timestamp: timestamp,
+      cwd: target_cwd,
+      parent_session: state.path
+    }
+
+    body = Enum.reject(state.sm.file_entries, &match?(%Header{}, &1))
+    lines = [Header.encode(new_header) | Enum.map(body, &Entry.encode/1)]
+    File.write!(new_path, Enum.join(lines, "\n") <> "\n")
+
+    open(path: new_path)
+  end
+
+  # Random UUID-shaped id (not a true v7 — opaque session identifier
+  # matching pi-mono's contract that ids are opaque strings). 128
+  # random bits formatted as 8-4-4-4-12.
+  defp generate_session_id do
+    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
+
+    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b"
+    |> :io_lib.format([a, b, c, d, e])
+    |> IO.iodata_to_binary()
   end
 
   defp build_path(root, cwd, id) do

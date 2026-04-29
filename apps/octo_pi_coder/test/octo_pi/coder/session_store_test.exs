@@ -305,6 +305,59 @@ defmodule OctoPi.Coder.SessionStoreTest do
     end
   end
 
+  describe "fork/4" do
+    test "copies entries verbatim into a new supervised store with rewritten header",
+         %{tmp: tmp} do
+      {:ok, src} = SessionStore.open(id: "src-id", cwd: "/orig", root: tmp)
+      {:ok, m1} = SessionStore.append_entry(src, message_entry("a"))
+      {:ok, m2} = SessionStore.append_entry(src, message_entry("b"))
+      src_path = SessionStore.path(src)
+      target_dir = Path.join(tmp, "fork-dst")
+      on_exit(fn -> File.rm_rf!(target_dir) end)
+
+      assert {:ok, dst} =
+               SessionStore.fork(src, "/new-cwd", target_dir,
+                 id: "new-id",
+                 timestamp: "2026-01-01T00:00:00Z"
+               )
+
+      on_exit(fn -> if Process.alive?(dst), do: SessionStore.close(dst) end)
+
+      assert SessionStore.get_session_id(dst) == "new-id"
+      assert SessionStore.get_cwd(dst) == "/new-cwd"
+      assert SessionStore.get_session_manager(dst).parent_session == src_path
+
+      # Same ids, same parent chain.
+      assert dst |> SessionStore.get_branch() |> Enum.map(& &1.id) == [m1.id, m2.id]
+
+      # Original store and file untouched.
+      assert SessionStore.get_session_id(src) == "src-id"
+      [orig_header | _] = src_path |> SessionStore.read_entries() |> Enum.to_list()
+      assert orig_header.id == "src-id"
+      refute orig_header.parent_session
+
+      :ok = SessionStore.close(src)
+    end
+
+    test "appends to the source after fork stay isolated from the destination", %{tmp: tmp} do
+      {:ok, src} = SessionStore.open(id: "iso-src", cwd: "/c", root: tmp)
+      {:ok, _} = SessionStore.append_entry(src, message_entry("shared"))
+      target_dir = Path.join(tmp, "iso-dst")
+      on_exit(fn -> File.rm_rf!(target_dir) end)
+
+      {:ok, dst} = SessionStore.fork(src, "/c2", target_dir)
+      on_exit(fn -> if Process.alive?(dst), do: SessionStore.close(dst) end)
+
+      # Append to source after fork — should not affect the new store.
+      {:ok, _} = SessionStore.append_entry(src, message_entry("only-in-src"))
+
+      assert length(SessionStore.get_entries(src)) == 2
+      assert length(SessionStore.get_entries(dst)) == 1
+
+      :ok = SessionStore.close(src)
+    end
+  end
+
   describe "open/1 with :path (resume)" do
     test "loads an existing session and opens the file in append mode", %{tmp: tmp} do
       {:ok, p1} = SessionStore.open(id: "res", cwd: tmp, root: tmp)

@@ -53,8 +53,6 @@ defmodule OctoPi.Coder.Loop do
           extensions: [Extension.t()],
           store_pid: SessionStore.t(),
           path: [Entry.t()],
-          session_id: String.t(),
-          session_file: String.t() | nil,
           cwd: String.t(),
           agent_pid: OctoPi.Agent.t() | nil,
           model_provider: model_provider(),
@@ -64,13 +62,11 @@ defmodule OctoPi.Coder.Loop do
   defmodule State do
     @moduledoc false
 
-    @enforce_keys [:extensions, :store_pid, :path, :session_id, :cwd, :model_provider, :settings_manager]
+    @enforce_keys [:extensions, :store_pid, :path, :cwd, :model_provider, :settings_manager]
     defstruct [
       :extensions,
       :store_pid,
       :path,
-      :session_id,
-      :session_file,
       :cwd,
       :agent_pid,
       :model_provider,
@@ -115,9 +111,9 @@ defmodule OctoPi.Coder.Loop do
           | {:error, :nothing_to_compact | :no_model | term()}
 
   @type fork_result ::
-          {:ok, SessionManager.t()}
+          {:ok, SessionStore.t()}
           | {:cancel, term()}
-          | {:error, :enoent | :empty | :missing_header}
+          | {:error, atom()}
 
   @type navigate_tree_result ::
           {:ok, BranchSummaryResult.t() | nil}
@@ -157,8 +153,6 @@ defmodule OctoPi.Coder.Loop do
       extensions: extensions,
       store_pid: store_pid,
       path: SessionStore.path(store_pid, :leaf, to: :latest_compaction),
-      session_id: SessionStore.get_session_id(store_pid),
-      session_file: SessionStore.path(store_pid),
       cwd: SessionStore.get_cwd(store_pid),
       agent_pid: agent_pid,
       model_provider: Keyword.get(opts, :model_provider, fn -> nil end),
@@ -380,10 +374,12 @@ defmodule OctoPi.Coder.Loop do
         {:cancel, reason}
 
       :ok ->
-        target_cwd = Keyword.fetch!(opts, :target_cwd)
-        target_dir = Keyword.fetch!(opts, :target_dir)
-        fork_opts = Keyword.take(opts, [:id, :timestamp])
-        SessionManager.fork(state.session_file, target_cwd, target_dir, fork_opts)
+        SessionStore.fork(
+          state.store_pid,
+          Keyword.fetch!(opts, :target_cwd),
+          Keyword.fetch!(opts, :target_dir),
+          Keyword.take(opts, [:id, :timestamp])
+        )
     end
   end
 

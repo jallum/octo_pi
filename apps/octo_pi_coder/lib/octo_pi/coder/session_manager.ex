@@ -538,63 +538,6 @@ defmodule OctoPi.Coder.SessionManager do
 
   defp iso8601_now, do: DateTime.to_iso8601(DateTime.utc_now())
 
-  @doc """
-  Fork an existing session into a new file under `target_dir`. The
-  new file gets a fresh session id and `parentSession = source_path`,
-  with all non-header entries copied verbatim. Returns the loaded
-  `SessionManager` for the new file.
-
-  Mirrors `SessionManager.forkFrom`
-  (`session-manager.ts:1316-1357`).
-
-  Errors:
-    * `{:error, :enoent}` — source file does not exist
-    * `{:error, :empty}` — source has no parseable lines
-    * `{:error, :missing_header}` — source first entry is not a header
-  """
-  @spec fork(Path.t(), String.t(), Path.t(), keyword()) ::
-          {:ok, t()} | {:error, :enoent | :empty | :missing_header}
-  def fork(source_path, target_cwd, target_dir, opts \\ []) do
-    with true <- File.exists?(source_path) || {:error, :enoent},
-         entries when entries != [] <- source_path |> SessionStore.read_entries() |> Enum.to_list(),
-         [%Header{} | body] <- entries do
-      File.mkdir_p!(target_dir)
-
-      new_id = opts[:id] || create_session_id()
-      timestamp = opts[:timestamp] || iso8601_now()
-      file_timestamp = timestamp |> String.replace(":", "-") |> String.replace(".", "-")
-      new_path = Path.join(target_dir, "#{file_timestamp}_#{new_id}.jsonl")
-
-      header = %Header{
-        id: new_id,
-        version: @current_version,
-        timestamp: timestamp,
-        cwd: target_cwd,
-        parent_session: source_path
-      }
-
-      lines = [Header.encode(header) | Enum.map(body, &Entry.encode/1)]
-      File.write!(new_path, Enum.join(lines, "\n") <> "\n")
-
-      load(new_path)
-    else
-      {:error, _} = err -> err
-      [] -> {:error, :empty}
-      _ -> {:error, :missing_header}
-    end
-  end
-
-  # Random UUID-shaped id (not a true v7 — just an opaque session
-  # identifier, matching pi-mono's contract that ids are opaque
-  # strings). 128 random bits formatted as 8-4-4-4-12.
-  defp create_session_id do
-    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
-
-    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b"
-    |> :io_lib.format([a, b, c, d, e])
-    |> IO.iodata_to_binary()
-  end
-
   # ------- migration: v1 → v2 (assign id, parent_id, compaction id) -------
 
   defp ensure_ids(body, version) when version >= 2, do: body
