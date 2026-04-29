@@ -73,7 +73,8 @@ defmodule OctoPi.Coder do
   def prompt(server, save_text), do: prompt(server, save_text, save_text)
 
   @spec prompt(t(), String.t(), String.t()) :: :ok | {:error, term()}
-  def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text})
+  def prompt(server, save_text, send_text),
+    do: GenServer.call(server, {:agent_prompt, save_text, send_text}, :infinity)
 
   @doc "Abort the current agent run."
   @spec abort(t()) :: :ok
