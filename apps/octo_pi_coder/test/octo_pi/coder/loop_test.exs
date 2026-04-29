@@ -130,6 +130,28 @@ defmodule OctoPi.Coder.LoopTest do
       assert :sys.get_state(pid).model_provider.() == :my_model
       assert Coder.get_compaction_settings(pid) == expected
     end
+
+    test "plumbs SettingsManager's reserve_tokens into Agent at init", ctx do
+      store = open_store!(ctx)
+      agent = start_agent!()
+
+      {:ok, sm} =
+        SettingsManager.in_memory(%{
+          "compaction" => %{"reserveTokens" => 12_345}
+        })
+
+      {:ok, pid} =
+        Loop.start_link(
+          extensions: [],
+          store_pid: store,
+          agent_pid: agent,
+          settings_manager: sm
+        )
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert OctoPi.Agent.state(agent).auto_compact_reserve_tokens == 12_345
+    end
   end
 
   describe "getters" do
