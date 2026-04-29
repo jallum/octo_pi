@@ -1,6 +1,8 @@
 defmodule OctoPi.Coder.SessionStoreTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionStore
 
   setup do
@@ -138,6 +140,124 @@ defmodule OctoPi.Coder.SessionStoreTest do
       assert path =~ ~r|#{Regex.escape(tmp)}/sessions/--[^/]+--/[^/]*enc\.jsonl|
       assert path =~ "home"
       :ok = SessionStore.close(pid)
+    end
+  end
+
+  defp message_entry(text) do
+    %Entry.Message{
+      id: nil,
+      parent_id: nil,
+      timestamp: nil,
+      message: %{"role" => "user", "content" => text}
+    }
+  end
+
+  describe "append_entry/3 — typed-entry path" do
+    test "mints id, links parent to current leaf, returns materialized entry", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "ae", cwd: tmp, root: tmp)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("a"))
+      assert is_binary(e1.id)
+      assert e1.parent_id == nil
+      assert is_binary(e1.timestamp)
+
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("b"))
+      assert e2.parent_id == e1.id
+      assert SessionStore.get_leaf_entry_id(pid) == e2.id
+
+      :ok = SessionStore.close(pid)
+    end
+
+    test "honours :id and :timestamp opts", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "io", cwd: tmp, root: tmp)
+      {:ok, e} = SessionStore.append_entry(pid, message_entry("x"), id: "fixed", timestamp: "T")
+      assert e.id == "fixed"
+      assert e.timestamp == "T"
+      :ok = SessionStore.close(pid)
+    end
+
+    test "persists each entry to disk in v3 byte-stable shape", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "rt", cwd: tmp, root: tmp)
+      path = SessionStore.path(pid)
+
+      {:ok, _e1} = SessionStore.append_entry(pid, message_entry("x"))
+      {:ok, _e2} = SessionStore.append_entry(pid, message_entry("y"))
+
+      :ok = SessionStore.close(pid)
+      reread = path |> SessionStore.read_entries() |> Enum.to_list()
+
+      [%Header{}, m1, m2] = reread
+      assert m1.parent_id == nil
+      assert m2.parent_id == m1.id
+      assert m1.message["content"] == "x"
+      assert m2.message["content"] == "y"
+    end
+  end
+
+  describe "read API on the in-memory tree" do
+    setup %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "ra", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("a"))
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("b"))
+      {:ok, e3} = SessionStore.append_entry(pid, message_entry("c"))
+
+      {:ok, pid: pid, e1: e1, e2: e2, e3: e3}
+    end
+
+    test "get_entry/2 looks up by id", %{pid: pid, e2: e2} do
+      assert SessionStore.get_entry(pid, e2.id) == e2
+      assert SessionStore.get_entry(pid, "nope") == nil
+    end
+
+    test "get_entries/1 returns body in file order", %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.get_entries(pid) == [e1, e2, e3]
+    end
+
+    test "get_branch/1 walks current leaf to root", %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.get_branch(pid) == [e1, e2, e3]
+    end
+
+    test "get_branch/2 walks from given id to root", %{pid: pid, e1: e1, e2: e2} do
+      assert SessionStore.get_branch(pid, e2.id) == [e1, e2]
+    end
+
+    test "get_leaf_entry_id/1 returns current leaf", %{pid: pid, e3: e3} do
+      assert SessionStore.get_leaf_entry_id(pid) == e3.id
+    end
+
+    test "get_session_id / get_cwd surface header metadata", %{pid: pid, tmp: tmp} do
+      assert SessionStore.get_session_id(pid) == "ra"
+      assert SessionStore.get_cwd(pid) == tmp
+    end
+
+    test "build_session_context/1 returns a context map with messages", %{pid: pid} do
+      ctx = SessionStore.build_session_context(pid)
+      assert is_list(ctx.messages)
+      assert length(ctx.messages) == 3
+    end
+  end
+
+  describe "open/1 with :path (resume)" do
+    test "loads an existing session and opens the file in append mode", %{tmp: tmp} do
+      {:ok, p1} = SessionStore.open(id: "res", cwd: tmp, root: tmp)
+      {:ok, _e1} = SessionStore.append_entry(p1, message_entry("first"))
+      path = SessionStore.path(p1)
+      :ok = SessionStore.close(p1)
+
+      {:ok, p2} = SessionStore.open(path: path)
+      assert SessionStore.path(p2) == path
+      assert SessionStore.get_session_id(p2) == "res"
+      assert [first_entry] = SessionStore.get_entries(p2)
+      assert first_entry.message["content"] == "first"
+
+      {:ok, e2} = SessionStore.append_entry(p2, message_entry("second"))
+      assert e2.parent_id == first_entry.id
+      :ok = SessionStore.close(p2)
+
+      lines = path |> File.read!() |> String.split("\n", trim: true)
+      assert length(lines) == 3
     end
   end
 end

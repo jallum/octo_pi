@@ -44,7 +44,8 @@ defmodule OctoPi.Coder do
 
   @doc """
   Start a loop GenServer.
-  Required: `:extensions`, `:session_manager`, `:store_pid`.
+  Required: `:extensions`, `:store_pid`. The store is the source of
+  truth for the session tree; the loop loads its initial path from it.
   """
   @spec start_loop(Loop.start_opts()) :: {:ok, t()} | :ignore | {:error, term()}
   def start_loop(opts), do: Loop.start_link(opts)

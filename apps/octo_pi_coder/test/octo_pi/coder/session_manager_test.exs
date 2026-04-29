@@ -419,20 +419,20 @@ defmodule OctoPi.Coder.SessionManagerTest do
     test "advances leaf, indexes the entry, links parent_id to old leaf" do
       sm = empty_sm()
 
-      {sm, id1} = SessionManager.add_entry(sm, msg("a"))
-      assert SessionManager.get_leaf_entry_id(sm) == id1
-      assert sm.by_id[id1].parent_id == nil
+      {sm, entry1} = SessionManager.add_entry(sm, msg("a"))
+      assert SessionManager.get_leaf_entry_id(sm) == entry1.id
+      assert sm.by_id[entry1.id].parent_id == nil
 
-      {sm, id2} = SessionManager.add_entry(sm, msg("b"))
-      assert SessionManager.get_leaf_entry_id(sm) == id2
-      assert sm.by_id[id2].parent_id == id1
-      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == [id1, id2]
+      {sm, entry2} = SessionManager.add_entry(sm, msg("b"))
+      assert SessionManager.get_leaf_entry_id(sm) == entry2.id
+      assert sm.by_id[entry2.id].parent_id == entry1.id
+      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == [entry1.id, entry2.id]
     end
 
     test "uses an explicit :id when provided" do
       sm = empty_sm()
-      {sm, id} = SessionManager.add_entry(sm, msg("hi"), id: "fixed")
-      assert id == "fixed"
+      {sm, entry} = SessionManager.add_entry(sm, msg("hi"), id: "fixed")
+      assert entry.id == "fixed"
       assert sm.leaf_id == "fixed"
       assert sm.by_id["fixed"].id == "fixed"
     end
@@ -440,36 +440,11 @@ defmodule OctoPi.Coder.SessionManagerTest do
     test "fills timestamp when entry has none, preserves existing one" do
       sm = empty_sm()
 
-      {sm, _id} = SessionManager.add_entry(sm, msg("t1"))
+      {sm, _entry} = SessionManager.add_entry(sm, msg("t1"))
       assert is_binary(List.last(sm.file_entries).timestamp)
 
-      {sm, _id2} = SessionManager.add_entry(sm, %{msg("t2") | timestamp: "fixed-ts"})
+      {sm, _entry2} = SessionManager.add_entry(sm, %{msg("t2") | timestamp: "fixed-ts"})
       assert List.last(sm.file_entries).timestamp == "fixed-ts"
-    end
-
-    test "persists each entry to the attached SessionStore" do
-      tmp = Path.join(System.tmp_dir!(), "smt-store-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(tmp)
-      on_exit(fn -> File.rm_rf!(tmp) end)
-
-      {:ok, store} = SessionStore.open(id: "rt", cwd: tmp, root: tmp)
-      path = SessionStore.path(store)
-
-      sm = empty_sm()
-      {sm, _id1} = SessionManager.add_entry(sm, msg("x"), store: store)
-      {sm, _id2} = SessionManager.add_entry(sm, msg("y"), store: store)
-
-      :ok = SessionStore.close(store)
-      reread = path |> SessionStore.read_entries() |> Enum.to_list()
-
-      [%Header{}, m1, m2] = reread
-      [in_mem1, in_mem2] = sm.file_entries
-      assert m1.id == in_mem1.id
-      assert m2.id == in_mem2.id
-      assert m1.parent_id == nil
-      assert m2.parent_id == m1.id
-      assert m1.message["content"] == "x"
-      assert m2.message["content"] == "y"
     end
   end
 

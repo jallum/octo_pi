@@ -677,12 +677,10 @@ defmodule OctoPi.TUI.Interactive do
   defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
     session_id = new_session_id()
     {:ok, store_pid} = SessionStore.start_link(id: session_id, cwd: cwd)
-    sm = %SessionManager{cwd: cwd, session_id: session_id}
 
     {:ok, coder_pid} =
       Coder.start_loop(
         extensions: extensions,
-        session_manager: sm,
         store_pid: store_pid,
         model_provider: fn -> model end
       )
@@ -707,13 +705,11 @@ defmodule OctoPi.TUI.Interactive do
         new_session(cwd, model, tools, system_prompt, extensions, opts)
 
       path ->
-        {:ok, sm} = SessionManager.load(path)
-        {:ok, store_pid} = SessionStore.start_link(id: sm.session_id, path: path)
+        {:ok, store_pid} = SessionStore.start_link(path: path)
 
         {:ok, coder_pid} =
           Coder.start_loop(
             extensions: extensions,
-            session_manager: sm,
             store_pid: store_pid,
             model_provider: fn -> model end
           )

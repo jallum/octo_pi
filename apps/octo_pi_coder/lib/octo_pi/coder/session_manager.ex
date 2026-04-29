@@ -400,8 +400,11 @@ defmodule OctoPi.Coder.SessionManager do
   @doc """
   Append an entry to the session: assign id (collision-checked),
   link `parent_id` to the current leaf, fill timestamp if absent,
-  update the byId index + leaf pointer, and (when `:store` is
-  given) persist via `SessionStore.append/2`.
+  and update the byId index + leaf pointer.
+
+  Pure update on the in-memory struct — no IO. Persistence is the
+  caller's responsibility (typically `OctoPi.Coder.SessionStore`,
+  which wraps this and writes the materialized entry to its file).
 
   Mirrors the upstream `_appendEntry` flow
   (`session-manager.ts:821-826`) plus per-type appenders.
@@ -410,11 +413,11 @@ defmodule OctoPi.Coder.SessionManager do
 
     * `:id` — explicit id (skips generation).
     * `:timestamp` — explicit ISO-8601 timestamp (defaults to now).
-    * `:store` — pid of an `OctoPi.Coder.SessionStore` to persist into.
 
-  Returns `{updated_session_manager, entry_id}`.
+  Returns `{updated_session_manager, materialized_entry}` — the entry
+  with `id` / `parent_id` / `timestamp` filled in.
   """
-  @spec add_entry(t(), entry(), keyword()) :: {t(), String.t()}
+  @spec add_entry(t(), entry(), keyword()) :: {t(), entry()}
   def add_entry(%__MODULE__{} = sm, entry, opts \\ []) do
     id = opts[:id] || unique_short_id(MapSet.new(Map.keys(sm.by_id)))
     parent_id = sm.leaf_id
@@ -426,8 +429,6 @@ defmodule OctoPi.Coder.SessionManager do
       |> set_parent_id(parent_id)
       |> ensure_timestamp(timestamp)
 
-    if pid = opts[:store], do: SessionStore.append(pid, Entry.pairs(filled))
-
     sm = %{
       sm
       | by_id: Map.put(sm.by_id, id, filled),
@@ -435,8 +436,18 @@ defmodule OctoPi.Coder.SessionManager do
         file_entries: sm.file_entries ++ [filled]
     }
 
-    {sm, id}
+    {sm, filled}
   end
+
+  @doc """
+  Move the leaf pointer without appending an entry. Used by branch
+  navigation: after walking to a different node, the next append should
+  be a child of *that* node. Pure update; no IO.
+
+  Returns the updated session manager.
+  """
+  @spec set_leaf(t(), String.t() | nil) :: t()
+  def set_leaf(%__MODULE__{} = sm, leaf_id), do: %{sm | leaf_id: leaf_id}
 
   defp ensure_timestamp(%Entry.Passthrough{raw: raw} = e, ts) do
     case Map.get(raw, "timestamp") do
