@@ -1443,15 +1443,22 @@ defmodule OctoPi.TUI.Interactive do
   defp update_footer(footer, %{__struct__: MessageEnd, message: msg}) do
     usage = Map.get(msg, :usage, %{})
     cost_struct = Map.get(usage, :cost, %{})
-    new_input = footer.input_tokens + Map.get(usage, :input, 0)
+
+    # `context_percent` reflects the LLM's current context size from
+    # the latest assistant message (the same value `over_threshold?`
+    # uses to decide auto-compact), NOT the cumulative work done
+    # across the run. `input_tokens` etc. continue to accumulate for
+    # the running totals display.
+    context_tokens = current_context_tokens(usage)
 
     context_percent =
-      if footer.context_window > 0,
-        do: new_input / footer.context_window * 100.0
+      if footer.context_window > 0 and is_integer(context_tokens),
+        do: context_tokens / footer.context_window * 100.0,
+        else: footer.context_percent
 
     %{
       footer
-      | input_tokens: new_input,
+      | input_tokens: footer.input_tokens + Map.get(usage, :input, 0),
         output_tokens: footer.output_tokens + Map.get(usage, :output, 0),
         cache_read: footer.cache_read + Map.get(usage, :cache_read, 0),
         cache_write: footer.cache_write + Map.get(usage, :cache_write, 0),
@@ -1461,6 +1468,17 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp update_footer(footer, _), do: footer
+
+  # Mirrors `OctoPi.Agent.Loop.context_tokens_from_usage/1`: prefer
+  # provider-supplied `total_tokens` when positive; otherwise sum
+  # input + output + cache_read + cache_write so prompt-cache reads
+  # still count toward the trigger.
+  defp current_context_tokens(%{total_tokens: t}) when is_integer(t) and t > 0, do: t
+
+  defp current_context_tokens(%{input: i, output: o, cache_read: cr, cache_write: cw})
+       when is_integer(i) and is_integer(o) and is_integer(cr) and is_integer(cw), do: i + o + cr + cw
+
+  defp current_context_tokens(_), do: nil
 
   defp apply_partial(transcript, partial, theme) do
     content = extract_content_blocks(partial)
