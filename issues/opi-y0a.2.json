@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-y0a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Coder mirrors writes into Agent's transcript via push/set APIs",
   "type": "task",
-  "updated_at": "2026-04-29T20:06:11.062896Z"
+  "updated_at": "2026-04-29T20:10:47.779433Z"
 }
