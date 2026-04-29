@@ -109,10 +109,6 @@ defmodule OctoPi.Coder do
 
   # ---- Session management ----
 
-  @doc "Wire an agent into the loop after init."
-  @spec set_agent_pid(t(), OctoPi.Agent.t()) :: :ok
-  def set_agent_pid(server, agent_pid), do: GenServer.call(server, {:set_agent_pid, agent_pid})
-
   @doc """
   Build the LLM-ready session context from the held `SessionManager`'s
   current branch.

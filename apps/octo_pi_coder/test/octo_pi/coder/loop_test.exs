@@ -23,6 +23,32 @@ defmodule OctoPi.Coder.LoopTest do
     pid
   end
 
+  @faux_model %OctoPi.AI.Model{
+    id: "faux-1",
+    name: "Faux Model",
+    api: :faux,
+    provider: :faux,
+    base_url: "https://example.com",
+    context_window: 128_000,
+    max_tokens: 16_384
+  }
+
+  defp start_agent! do
+    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model)
+    on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
+    pid
+  end
+
+  defp try_stop(pid) do
+    GenServer.stop(pid)
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp loop_opts(extra \\ []) do
+    Keyword.put_new_lazy(extra, :agent_pid, &start_agent!/0)
+  end
+
   defp message_entry(text) do
     %Entry.Message{
       id: nil,
@@ -34,32 +60,38 @@ defmodule OctoPi.Coder.LoopTest do
   describe "start_link/1" do
     test "starts with required opts and exposes state via state/1", ctx do
       store = open_store!(ctx)
+      agent = start_agent!()
 
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       state = :sys.get_state(pid)
       assert state.extensions == []
       assert state.store_pid == store
       assert state.path == []
-      assert state.agent_pid == nil
+      assert state.agent_pid == agent
     end
 
-    test "raises if :extensions or :store_pid is missing", ctx do
+    test "raises if :extensions, :store_pid, or :agent_pid is missing", ctx do
       store = open_store!(ctx)
+      agent = start_agent!()
 
       assert_raise KeyError, fn ->
-        Loop.start_link(store_pid: store)
+        Loop.start_link(store_pid: store, agent_pid: agent)
       end
 
       assert_raise KeyError, fn ->
-        Loop.start_link(extensions: [])
+        Loop.start_link(extensions: [], agent_pid: agent)
+      end
+
+      assert_raise KeyError, fn ->
+        Loop.start_link(extensions: [], store_pid: store)
       end
     end
 
     test "default settings_manager returns Settings.default() for compaction", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert Coder.get_compaction_settings(pid) == Settings.default()
@@ -67,7 +99,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "default model_provider returns nil", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert :sys.get_state(pid).model_provider.() == nil
@@ -85,10 +117,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          store_pid: store,
-          model_provider: model_fn,
-          settings_manager: sm
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: model_fn,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -104,7 +138,7 @@ defmodule OctoPi.Coder.LoopTest do
       ext = %Extension{id: "e1", path: "/dev/null"}
 
       {:ok, pid} =
-        Loop.start_link(extensions: [ext], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [ext], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -125,7 +159,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -213,10 +247,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: extensions,
-          store_pid: store,
-          model_provider: fn -> test_model() end,
-          settings_manager: sm
+          loop_opts(
+            extensions: extensions,
+            store_pid: store,
+            model_provider: fn -> test_model() end,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -238,9 +274,11 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          store_pid: store,
-          model_provider: fn -> test_model() end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> test_model() end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -321,10 +359,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          store_pid: store,
-          model_provider: fn -> nil end,
-          settings_manager: sm
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> nil end,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -361,7 +401,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -441,7 +481,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -504,7 +544,7 @@ defmodule OctoPi.Coder.LoopTest do
       path = SessionStore.path(store)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {pid, path, store}
@@ -608,7 +648,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -663,7 +703,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     defp session_with_two_branches(ctx) do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
@@ -683,7 +723,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "returns {:ok, nil} immediately when target_id == current leaf", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {:ok, id} = Coder.add_entry(pid, message_entry("a"))
       assert {:ok, nil} = Coder.navigate_tree(pid, target_id: id)
@@ -691,7 +731,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "returns {:error, :not_found} for an unknown target_id", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       assert {:error, :not_found} = Coder.navigate_tree(pid, target_id: "ghost")
     end
@@ -982,9 +1022,11 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          store_pid: store,
-          model_provider: fn -> model end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> model end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -1079,9 +1121,11 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid2} =
         Loop.start_link(
-          extensions: [],
-          store_pid: store,
-          model_provider: fn -> nil end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> nil end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)

@@ -54,15 +54,16 @@ defmodule OctoPi.Coder.Loop do
           store_pid: SessionStore.t(),
           path: [Entry.t()],
           cwd: String.t(),
-          agent_pid: OctoPi.Agent.t() | nil,
+          agent_pid: OctoPi.Agent.t(),
           model_provider: model_provider(),
-          settings_manager: pid()
+          settings_manager: pid(),
+          pending_compact_from: GenServer.from() | nil
         }
 
   defmodule State do
     @moduledoc false
 
-    @enforce_keys [:extensions, :store_pid, :path, :cwd, :model_provider, :settings_manager]
+    @enforce_keys [:extensions, :store_pid, :path, :cwd, :agent_pid, :model_provider, :settings_manager]
     defstruct [
       :extensions,
       :store_pid,
@@ -70,14 +71,15 @@ defmodule OctoPi.Coder.Loop do
       :cwd,
       :agent_pid,
       :model_provider,
-      :settings_manager
+      :settings_manager,
+      pending_compact_from: nil
     ]
   end
 
   @type start_opts :: [
           extensions: [Extension.t()],
           store_pid: SessionStore.t(),
-          agent_pid: OctoPi.Agent.t() | nil,
+          agent_pid: OctoPi.Agent.t(),
           model_provider: Loop.model_provider(),
           settings_manager: pid(),
           name: GenServer.name()
@@ -97,6 +99,7 @@ defmodule OctoPi.Coder.Loop do
     # the caller rather than as a `{:EXIT, ...}` from a doomed GenServer.
     _ = Keyword.fetch!(opts, :extensions)
     _ = Keyword.fetch!(opts, :store_pid)
+    _ = Keyword.fetch!(opts, :agent_pid)
 
     {name, opts} = Keyword.pop(opts, :name)
 
@@ -145,9 +148,16 @@ defmodule OctoPi.Coder.Loop do
   def init(opts) do
     extensions = Keyword.fetch!(opts, :extensions)
     store_pid = Keyword.fetch!(opts, :store_pid)
-    agent_pid = Keyword.get(opts, :agent_pid)
+    agent_pid = Keyword.fetch!(opts, :agent_pid)
 
-    if agent_pid, do: OctoPi.Agent.subscribe(agent_pid, self(), :async)
+    OctoPi.Agent.subscribe(agent_pid, self(), :async)
+
+    loop_pid = self()
+
+    OctoPi.Agent.set_messages_provider(agent_pid, fn _ ->
+      ctx = OctoPi.Coder.build_session_context(loop_pid)
+      OctoPi.Coder.Session.Messages.to_llm(ctx.messages)
+    end)
 
     state = %State{
       extensions: extensions,
@@ -187,15 +197,10 @@ defmodule OctoPi.Coder.Loop do
     {:reply, {:ok, materialized.id}, state}
   end
 
-  def handle_call({:set_agent_pid, agent_pid}, _from, state) do
-    OctoPi.Agent.subscribe(agent_pid, self(), :async)
-    {:reply, :ok, %{state | agent_pid: agent_pid}}
-  end
-
   # ---- agent-delegation handles -------------------------------------------
 
   def handle_call({:agent_subscribe, subscriber, mode}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.subscribe(state.agent_pid, subscriber, mode)
+    OctoPi.Agent.subscribe(state.agent_pid, subscriber, mode)
     {:reply, :ok, state}
   end
 
@@ -212,73 +217,58 @@ defmodule OctoPi.Coder.Loop do
     }
 
     {state, _materialized} = append_to_store(state, entry, [])
-    result = if state.agent_pid, do: OctoPi.Agent.prompt(state.agent_pid, send_text), else: {:error, :no_agent}
-    {:reply, result, state}
+    {:reply, OctoPi.Agent.prompt(state.agent_pid, send_text), state}
   end
 
   def handle_call(:agent_abort, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.abort(state.agent_pid)
+    OctoPi.Agent.abort(state.agent_pid)
     {:reply, :ok, state}
   end
 
   def handle_call({:agent_follow_up, text}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.follow_up(state.agent_pid, text)
+    OctoPi.Agent.follow_up(state.agent_pid, text)
     {:reply, :ok, state}
   end
 
   def handle_call({:agent_steer, text}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.steer(state.agent_pid, text)
+    OctoPi.Agent.steer(state.agent_pid, text)
     {:reply, :ok, state}
   end
 
   def handle_call({:agent_set_model, model}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.set_model(state.agent_pid, model)
+    OctoPi.Agent.set_model(state.agent_pid, model)
     {:reply, :ok, state}
   end
 
   def handle_call({:agent_set_thinking_level, level}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.set_thinking_level(state.agent_pid, level)
+    OctoPi.Agent.set_thinking_level(state.agent_pid, level)
     {:reply, :ok, state}
   end
 
   def handle_call({:agent_add_tool, tool}, _from, state) do
-    if state.agent_pid, do: OctoPi.Agent.add_tool(state.agent_pid, tool)
+    OctoPi.Agent.add_tool(state.agent_pid, tool)
     {:reply, :ok, state}
   end
 
-  def handle_call(:agent_drain_steering, _from, state) do
-    result = if state.agent_pid, do: OctoPi.Agent.drain_steering(state.agent_pid), else: []
-    {:reply, result, state}
-  end
+  def handle_call(:agent_drain_steering, _from, state),
+    do: {:reply, OctoPi.Agent.drain_steering(state.agent_pid), state}
 
-  def handle_call(:agent_drain_follow_up, _from, state) do
-    result = if state.agent_pid, do: OctoPi.Agent.drain_follow_up(state.agent_pid), else: []
-    {:reply, result, state}
-  end
+  def handle_call(:agent_drain_follow_up, _from, state),
+    do: {:reply, OctoPi.Agent.drain_follow_up(state.agent_pid), state}
 
   # -------------------------------------------------------------------------
 
-  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state) when not is_nil(agent_pid) do
-    # Route through the agent FSM: Agent emits CompactionRequested, our
-    # handle_info handler runs the LLM, calls finish_compaction (which
-    # writes the entry + compaction_response). Reply immediately so we
-    # don't deadlock waiting for an event that flows back through us.
-    GenServer.reply(from, :ok)
-    OctoPi.Agent.compact(agent_pid)
-    {:noreply, state}
+  def handle_call({:compact, _opts}, _from, %State{pending_compact_from: pending} = state) when not is_nil(pending) do
+    {:reply, {:error, :busy}, state}
   end
 
-  def handle_call({:compact, opts}, _from, state) do
-    case do_compact(state, opts) do
-      {:ok, %{result: result, from_extension?: from_ext?}} ->
-        loop_pid = self()
-        extensions = state.extensions
-        spawn(fn -> persist_compaction(loop_pid, result, from_ext?, extensions) end)
-        {:reply, {:ok, %{result: result, from_extension?: from_ext?}}, state}
-
-      other ->
-        {:reply, other, state}
-    end
+  def handle_call({:compact, opts}, from, %State{agent_pid: agent_pid} = state) do
+    # Route through the agent FSM: Agent emits CompactionRequested, our
+    # handle_info handler runs the LLM, calls finish_compaction (which
+    # writes the entry + compaction_response). The reply to the original
+    # caller is deferred until the work resolves — see resolve_compact/2.
+    OctoPi.Agent.compact(agent_pid, opts)
+    {:noreply, %{state | pending_compact_from: from}}
   end
 
   def handle_call({:fork, opts}, _from, state) do
@@ -313,53 +303,14 @@ defmodule OctoPi.Coder.Loop do
 
   def handle_call(:get_entries, _from, state), do: {:reply, SessionStore.get_entries(state.store_pid), state}
 
-  defp do_compact(%State{} = state, opts) do
-    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+  # Pop pending_compact_from and reply with the compact_result. Also
+  # routes the equivalent payload back through Agent.compaction_response
+  # so the agent FSM can settle.
+  defp resolve_compact(%State{pending_compact_from: nil} = state, _result), do: state
 
-    case Preparation.prepare(state.path, settings) do
-      nil ->
-        {:error, :nothing_to_compact}
-
-      %Preparation{} = prep ->
-        dispatch_compact(state, prep, opts)
-    end
-  end
-
-  defp dispatch_compact(%State{} = state, prep, opts) do
-    ctx = build_ctx(state)
-
-    event =
-      Event.new(:session_before_compact, %{
-        preparation: prep,
-        custom_instructions: Keyword.get(opts, :custom_instructions)
-      })
-
-    case Dispatcher.halt_on_result(state.extensions, event, ctx) do
-      {:cancel, reason} ->
-        {:cancel, reason}
-
-      {:override, %Result{} = result} ->
-        {:ok, %{result: result, from_extension?: true}}
-
-      :ok ->
-        run_default_compact(state, prep, opts)
-    end
-  end
-
-  defp run_default_compact(%State{} = state, prep, opts) do
-    case state.model_provider.() do
-      nil ->
-        {:error, :no_model}
-
-      model ->
-        case Compaction.compact(prep, model, opts) do
-          {:ok, %Result{} = result} ->
-            {:ok, %{result: result, from_extension?: false}}
-
-          {:error, _} = err ->
-            err
-        end
-    end
+  defp resolve_compact(%State{pending_compact_from: from} = state, result) do
+    GenServer.reply(from, result)
+    %{state | pending_compact_from: nil}
   end
 
   # ---- fork ----------------------------------------------------------------
@@ -573,7 +524,7 @@ defmodule OctoPi.Coder.Loop do
     case Preparation.prepare(state.path, settings) do
       nil ->
         OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :nothing_to_compact})
-        {:noreply, state}
+        {:noreply, resolve_compact(state, {:error, :nothing_to_compact})}
 
       %Preparation{} = prep ->
         ctx = build_ctx(state)
@@ -587,7 +538,7 @@ defmodule OctoPi.Coder.Loop do
         case Dispatcher.halt_on_result(state.extensions, before_event, ctx) do
           {:cancel, reason} ->
             OctoPi.Agent.compaction_response(agent_pid, ref, {:cancel, reason})
-            {:noreply, state}
+            {:noreply, resolve_compact(state, {:cancel, reason})}
 
           {:override, %Result{} = result} ->
             spawn_finish_compaction(self(), agent_pid, ref, result, true, state.extensions)
@@ -599,18 +550,20 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
+  def handle_info({:compact_resolved, result}, state), do: {:noreply, resolve_compact(state, result)}
+
   def handle_info(_msg, state), do: {:noreply, state}
 
   defp dispatch_compaction(state, agent_pid, ref, prep, opts) do
     case state.model_provider.() do
       nil ->
         OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :no_model})
+        {:noreply, resolve_compact(state, {:error, :no_model})}
 
       model ->
         spawn_compact_and_finish(self(), agent_pid, ref, prep, model, opts, state.extensions)
+        {:noreply, state}
     end
-
-    {:noreply, state}
   end
 
   defp spawn_finish_compaction(loop_pid, agent_pid, ref, result, override?, extensions) do
@@ -620,8 +573,12 @@ defmodule OctoPi.Coder.Loop do
   defp spawn_compact_and_finish(loop_pid, agent_pid, ref, prep, model, opts, extensions) do
     spawn(fn ->
       case Compaction.compact(prep, model, opts) do
-        {:ok, %Result{} = result} -> finish_compaction(loop_pid, agent_pid, ref, result, false, extensions)
-        {:error, reason} -> OctoPi.Agent.compaction_response(agent_pid, ref, {:error, reason})
+        {:ok, %Result{} = result} ->
+          finish_compaction(loop_pid, agent_pid, ref, result, false, extensions)
+
+        {:error, reason} ->
+          OctoPi.Agent.compaction_response(agent_pid, ref, {:error, reason})
+          send(loop_pid, {:compact_resolved, {:error, reason}})
       end
     end)
   end
@@ -740,6 +697,8 @@ defmodule OctoPi.Coder.Loop do
          from_extension?: from_ext?
        }}
     )
+
+    send(loop_pid, {:compact_resolved, {:ok, %{result: result, from_extension?: from_ext?}}})
   end
 
   defp persist_compaction(loop_pid, %Result{} = result, from_ext?, extensions) do

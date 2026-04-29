@@ -30,7 +30,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Coder.Extension.Loader
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Session.CompactionSummaryMessage, as: CoderCSM
-  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.UIHost
@@ -671,37 +670,10 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  # Coder.set_agent_pid → Subscribers.subscribe registry call appears
-  # to Dialyzer as no_return when the Registry is not started. False positive.
-  @dialyzer {:nowarn_function, new_session: 6}
   defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
     session_id = new_session_id()
     {:ok, store_pid} = SessionStore.start_link(id: session_id, cwd: cwd)
-
-    {:ok, coder_pid} =
-      Coder.start_loop(
-        extensions: extensions,
-        store_pid: store_pid,
-        model_provider: fn -> model end
-      )
-
-    messages_provider = build_messages_provider(coder_pid)
-
-    agent_opts =
-      put_if_present(
-        [
-          model: model,
-          tools: tools,
-          system_prompt: system_prompt,
-          messages_provider: messages_provider
-        ],
-        :transport,
-        opts[:transport]
-      )
-
-    {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
-    :ok = Coder.set_agent_pid(coder_pid, agent_pid)
-    coder_pid
+    start_session(store_pid, model, tools, system_prompt, extensions, opts)
   end
 
   defp resume_or_new(cwd, model, tools, system_prompt, extensions, opts) do
@@ -713,42 +685,29 @@ defmodule OctoPi.TUI.Interactive do
 
       path ->
         {:ok, store_pid} = SessionStore.start_link(path: path)
-
-        {:ok, coder_pid} =
-          Coder.start_loop(
-            extensions: extensions,
-            store_pid: store_pid,
-            model_provider: fn -> model end
-          )
-
-        messages_provider = build_messages_provider(coder_pid)
-
-        agent_opts =
-          put_if_present(
-            [
-              model: model,
-              tools: tools,
-              system_prompt: system_prompt,
-              messages_provider: messages_provider
-            ],
-            :transport,
-            opts[:transport]
-          )
-
-        {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
-        :ok = Coder.set_agent_pid(coder_pid, agent_pid)
-        coder_pid
+        start_session(store_pid, model, tools, system_prompt, extensions, opts)
     end
   end
 
-  # Wire-edge transform for the agent loop: synthetic message types
-  # (CompactionSummaryMessage, BranchSummaryMessage) flatten into plain
-  # user messages here before reaching the provider.
-  defp build_messages_provider(coder_pid) do
-    fn _session ->
-      ctx = Coder.build_session_context(coder_pid)
-      SessionMessages.to_llm(ctx.messages)
-    end
+  defp start_session(store_pid, model, tools, system_prompt, extensions, opts) do
+    agent_opts =
+      put_if_present(
+        [model: model, tools: tools, system_prompt: system_prompt],
+        :transport,
+        opts[:transport]
+      )
+
+    {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
+
+    {:ok, coder_pid} =
+      Coder.start_loop(
+        extensions: extensions,
+        store_pid: store_pid,
+        agent_pid: agent_pid,
+        model_provider: fn -> model end
+      )
+
+    coder_pid
   end
 
   defp new_session_id do

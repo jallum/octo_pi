@@ -429,16 +429,31 @@ defmodule OctoPi.Coder.Extension.LoaderTest do
 
       sm = %SessionManager{cwd: "/tmp", session_id: "sm-loader-test"}
 
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(
+          model: %OctoPi.AI.Model{
+            id: "faux-1",
+            name: "Faux Model",
+            api: :faux,
+            provider: :faux,
+            base_url: "https://example.com",
+            context_window: 128_000,
+            max_tokens: 16_384
+          }
+        )
+
       {:ok, session} =
         Loop.start_link(
           extensions: [],
           session_manager: sm,
-          store_pid: store
+          store_pid: store,
+          agent_pid: agent
         )
 
       on_exit(fn ->
         if Process.alive?(session), do: GenServer.stop(session)
         if Process.alive?(store), do: SessionStore.close(store)
+        if Process.alive?(agent), do: GenServer.stop(agent)
       end)
 
       {:ok, session: session}

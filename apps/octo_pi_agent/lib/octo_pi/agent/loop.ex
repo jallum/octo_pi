@@ -77,6 +77,10 @@ defmodule OctoPi.Agent.Loop do
   def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
 
   @doc false
+  def set_messages_provider(pid, provider) when is_function(provider, 1),
+    do: GenServer.call(pid, {:set_messages_provider, provider})
+
+  @doc false
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
   @doc false
@@ -176,6 +180,9 @@ defmodule OctoPi.Agent.Loop do
     do: {:reply, :ok, put_in(store.loop.thinking_level, level)}
 
   def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
+
+  def handle_call({:set_messages_provider, provider}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.messages_provider, provider)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools

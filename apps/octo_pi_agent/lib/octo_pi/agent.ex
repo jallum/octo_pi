@@ -118,6 +118,14 @@ defmodule OctoPi.Agent do
   @spec add_tool(t(), map()) :: :ok
   def add_tool(pid, tool), do: Loop.add_tool(pid, tool)
 
+  @doc """
+  Install a per-turn messages-provider closure. Called by the Coder
+  loop during its own init once both the Agent and the Coder are
+  alive — breaks the boot-time circular dependency between them.
+  """
+  @spec set_messages_provider(t(), (State.t() -> [OctoPi.AI.Message.t()])) :: :ok
+  def set_messages_provider(pid, provider) when is_function(provider, 1), do: Loop.set_messages_provider(pid, provider)
+
   @doc "Drain all messages from the steering queue and return them."
   @spec drain_steering(t()) :: [Message.t()]
   def drain_steering(pid), do: Loop.drain_steering(pid)

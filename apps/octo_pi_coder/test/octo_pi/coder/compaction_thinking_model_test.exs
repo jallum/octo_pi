@@ -87,11 +87,27 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
     {:ok, store} = SessionStore.start_link(id: id, cwd: cwd, root: root)
     on_exit(fn -> if Process.alive?(store), do: SessionStore.close(store) end)
 
+    {:ok, agent} =
+      OctoPi.Agent.start_loop(
+        model: %Model{
+          id: "faux-1",
+          name: "Faux",
+          api: :faux,
+          provider: :faux,
+          base_url: "https://example.com",
+          context_window: 128_000,
+          max_tokens: 16_384
+        }
+      )
+
+    on_exit(fn -> if Process.alive?(agent), do: GenServer.stop(agent) end)
+
     {:ok, session} =
       Loop.start_link(
         extensions: [],
         session_manager: %SessionManager{cwd: cwd, session_id: id},
         store_pid: store,
+        agent_pid: agent,
         model_provider: fn -> model end,
         settings_manager: sm
       )
