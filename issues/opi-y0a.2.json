@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-y0a.1"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-29T19:44:15.975723Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Coder mirrors writes into Agent's transcript via push/set APIs",
   "type": "task",
-  "updated_at": "2026-04-29T19:44:15.975723Z"
+  "updated_at": "2026-04-29T19:45:54.370714Z"
 }
