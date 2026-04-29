@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Apply `flush_effects/1` in `handle_call` ui_request paths",
   "type": "task",
-  "updated_at": "2026-04-29T12:46:07.050539Z"
+  "updated_at": "2026-04-29T12:46:29.153552Z"
 }
