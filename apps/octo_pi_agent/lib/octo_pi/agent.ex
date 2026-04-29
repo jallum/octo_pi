@@ -117,6 +117,23 @@ defmodule OctoPi.Agent do
   @spec add_tool(t(), map()) :: :ok
   def add_tool(pid, tool), do: Loop.add_tool(pid, tool)
 
+  @doc """
+  Append a message to the working transcript. The host (Coder) calls
+  this for non-stream-originated messages — user prompts, synthetic
+  types, side-channel events. Stream-originated assistant messages
+  and tool results are pushed by the loop itself.
+  """
+  @spec push_message(t(), term()) :: :ok
+  def push_message(pid, msg), do: Loop.push_message(pid, msg)
+
+  @doc """
+  Replace the working transcript wholesale. The host calls this on
+  events that re-shape the LLM-visible chain end-to-end (compaction,
+  branch navigation).
+  """
+  @spec set_messages(t(), [term()]) :: :ok
+  def set_messages(pid, msgs), do: Loop.set_messages(pid, msgs)
+
   @doc "Drain all messages from the steering queue and return them."
   @spec drain_steering(t()) :: [Message.t()]
   def drain_steering(pid), do: Loop.drain_steering(pid)

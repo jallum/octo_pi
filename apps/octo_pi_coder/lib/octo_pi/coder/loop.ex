@@ -152,6 +152,12 @@ defmodule OctoPi.Coder.Loop do
 
     OctoPi.Agent.subscribe(agent_pid, self(), :async)
 
+    # Seed Agent's working transcript with the current chain
+    # (latest-compaction → leaf). On a fresh session this is empty;
+    # on resume it carries the LLM-visible history forward.
+    %{messages: seed} = SessionStore.build_session_context(store_pid)
+    :ok = OctoPi.Agent.set_messages(agent_pid, seed)
+
     state = %State{
       extensions: extensions,
       store_pid: store_pid,
@@ -182,11 +188,13 @@ defmodule OctoPi.Coder.Loop do
     }
 
     {state, materialized} = append_to_store(state, entry, [])
+    push_entry_to_agent(state.agent_pid, materialized)
     {:reply, {:ok, materialized.id}, state}
   end
 
   def handle_call({:add_entry, entry, opts}, _from, state) do
     {state, materialized} = append_to_store(state, entry, opts)
+    push_entry_to_agent(state.agent_pid, materialized)
     {:reply, {:ok, materialized.id}, state}
   end
 
@@ -724,6 +732,24 @@ defmodule OctoPi.Coder.Loop do
     {:ok, materialized} = SessionStore.append_entry(state.store_pid, entry, opts)
     state = %{state | path: state.path ++ [materialized]}
     {reset_path_after_compaction(state, materialized), materialized}
+  end
+
+  # Mirror Coder-originated entries into Agent's working transcript.
+  # Skips entries the Agent already pushed itself (streamed assistant /
+  # tool_result) and the Compaction chain-head (rewritten wholesale by
+  # the compactor, not appended onto the tail).
+  defp push_entry_to_agent(_agent_pid, %Entry.Message{message: %{"role" => role}})
+       when role in ["assistant", "toolResult"],
+       do: :ok
+
+  defp push_entry_to_agent(_agent_pid, %Entry.Compaction{}), do: :ok
+
+  defp push_entry_to_agent(agent_pid, entry) do
+    for msg <- SessionManager.entry_to_messages(entry) do
+      :ok = OctoPi.Agent.push_message(agent_pid, msg)
+    end
+
+    :ok
   end
 
   # Compaction is the inch-worm anchor: after appending one, the loop's

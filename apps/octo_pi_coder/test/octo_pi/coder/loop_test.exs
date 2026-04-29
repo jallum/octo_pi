@@ -195,6 +195,22 @@ defmodule OctoPi.Coder.LoopTest do
       assert {:ok, "fixed-id"} = Coder.add_entry(pid, message_entry("x"), id: "fixed-id")
       assert Coder.get_session_manager(pid).leaf_id == "fixed-id"
     end
+
+    test "mirrors user-origin entries into Agent's working transcript", ctx do
+      store = open_store!(ctx)
+      agent = start_agent!()
+
+      {:ok, pid} =
+        Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert {:ok, _} = Coder.add_entry(pid, message_entry("hello agent"))
+
+      agent_state = :sys.get_state(agent).loop
+      msgs = OctoPi.Agent.MessageLog.to_list(agent_state.messages)
+      assert [%{"role" => "user", "content" => "hello agent"}] = msgs
+    end
   end
 
   describe "compact/2" do
