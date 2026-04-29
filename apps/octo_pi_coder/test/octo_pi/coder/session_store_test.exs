@@ -240,34 +240,39 @@ defmodule OctoPi.Coder.SessionStoreTest do
   end
 
   describe "path/3 — single read primitive" do
+    # Topology: e1 → e2 → e3 → comp(firstKept=e2) → e4 → e5
+    # Kept window is [e2, e3]; e1 is pre-cut history; e4, e5 are tail.
     setup %{tmp: tmp} do
       {:ok, pid} = SessionStore.open(id: "p3", cwd: tmp, root: tmp)
       on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
 
       {:ok, e1} = SessionStore.append_entry(pid, message_entry("u1"))
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("u2"))
+      {:ok, e3} = SessionStore.append_entry(pid, message_entry("u3"))
 
       {:ok, comp} =
         SessionStore.append_entry(pid, %Entry.Compaction{
           id: nil,
           timestamp: nil,
           summary: "summary",
-          first_kept_entry_id: e1.id,
+          first_kept_entry_id: e2.id,
           tokens_before: 100
         })
 
-      {:ok, e2} = SessionStore.append_entry(pid, message_entry("u2"))
-      {:ok, e3} = SessionStore.append_entry(pid, message_entry("u3"))
+      {:ok, e4} = SessionStore.append_entry(pid, message_entry("u4"))
+      {:ok, e5} = SessionStore.append_entry(pid, message_entry("u5"))
 
-      {:ok, pid: pid, e1: e1, comp: comp, e2: e2, e3: e3}
+      {:ok, pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5}
     end
 
-    test ":root walks all the way to root", %{pid: pid, e1: e1, comp: comp, e2: e2, e3: e3} do
-      assert SessionStore.path(pid, :leaf, to: :root) == [e1, comp, e2, e3]
+    test ":root walks all the way to root",
+         %{pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: :root) == [e1, e2, e3, comp, e4, e5]
     end
 
-    test ":latest_compaction stops at the most recent compaction (inclusive)",
-         %{pid: pid, comp: comp, e2: e2, e3: e3} do
-      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [comp, e2, e3]
+    test ":latest_compaction stops at the latest compaction's first_kept_entry_id (inclusive)",
+         %{pid: pid, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [e2, e3, comp, e4, e5]
     end
 
     test ":latest_compaction falls back to :root when no compaction exists", %{tmp: tmp} do
@@ -280,16 +285,19 @@ defmodule OctoPi.Coder.SessionStoreTest do
       assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [a, b]
     end
 
-    test "to: <id> stops at that id (inclusive)", %{pid: pid, comp: comp, e2: e2, e3: e3} do
-      assert SessionStore.path(pid, :leaf, to: comp.id) == [comp, e2, e3]
+    test "to: <id> stops at that id (inclusive)",
+         %{pid: pid, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: comp.id) == [comp, e4, e5]
     end
 
-    test "to: <id> falls back to :root when id not on path", %{pid: pid, e1: e1, comp: comp, e2: e2, e3: e3} do
-      assert SessionStore.path(pid, :leaf, to: "no-such-id") == [e1, comp, e2, e3]
+    test "to: <id> falls back to :root when id not on path",
+         %{pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: "no-such-id") == [e1, e2, e3, comp, e4, e5]
     end
 
-    test "explicit leaf id walks from there", %{pid: pid, e1: e1, comp: comp, e2: e2} do
-      assert SessionStore.path(pid, e2.id, to: :root) == [e1, comp, e2]
+    test "explicit leaf id walks from there",
+         %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, e3.id, to: :root) == [e1, e2, e3]
     end
 
     test "nil leaf returns []", %{pid: pid} do

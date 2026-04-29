@@ -156,7 +156,7 @@ defmodule OctoPi.Coder.Loop do
     state = %State{
       extensions: extensions,
       store_pid: store_pid,
-      path: SessionStore.get_branch(store_pid),
+      path: SessionStore.path(store_pid, :leaf, to: :latest_compaction),
       session_id: SessionStore.get_session_id(store_pid),
       session_file: SessionStore.path(store_pid),
       cwd: SessionStore.get_cwd(store_pid),
@@ -774,10 +774,19 @@ defmodule OctoPi.Coder.Loop do
 
   defp append_to_store(state, entry, opts) do
     {:ok, materialized} = SessionStore.append_entry(state.store_pid, entry, opts)
-    {%{state | path: state.path ++ [materialized]}, materialized}
+    state = %{state | path: state.path ++ [materialized]}
+    {reset_path_after_compaction(state, materialized), materialized}
   end
 
-  defp refresh_path(state), do: %{state | path: SessionStore.get_branch(state.store_pid)}
+  # Compaction is the inch-worm anchor: after appending one, the loop's
+  # cached path should start at that compaction so the next compaction's
+  # input window is just `[compaction, kept tail]` and the LLM context
+  # built from `:path` is `[summary, kept tail]`. Same shape navigate-
+  # tree converges to via `refresh_path/1`.
+  defp reset_path_after_compaction(state, %Entry.Compaction{}), do: refresh_path(state)
+  defp reset_path_after_compaction(state, _entry), do: state
+
+  defp refresh_path(state), do: %{state | path: SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)}
 
   defp build_ctx(state) do
     Context.bind_session_manager(

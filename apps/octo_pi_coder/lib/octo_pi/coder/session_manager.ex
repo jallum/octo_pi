@@ -185,11 +185,17 @@ defmodule OctoPi.Coder.SessionManager do
     * `:to` — stop anchor (default `:root`):
       * `:root` — walk all the way to a root entry (parent_id == nil
         or pointing at a missing ancestor)
-      * `:latest_compaction` — stop at the most recent
-        `%Entry.Compaction{}` on the path (inclusive). Falls back to
-        `:root` when no compaction exists.
-      * a binary id — stop at the entry with that id (inclusive). Falls
-        back to `:root` when the id is not on the path.
+      * `:latest_compaction` — stop at the **latest compaction's
+        `first_kept_entry_id`** (inclusive). This includes the kept
+        window (`first_kept_entry_id..compaction`) plus everything
+        after the compaction — matching upstream's
+        `prepareCompaction` boundary (`compaction.ts:622-637`) and
+        keeping `build_session_context`'s "summary + kept window +
+        tail" emission well-defined. Falls back to the compaction
+        itself if its `first_kept_entry_id` is not on the path; falls
+        back to `:root` when no compaction exists.
+      * a binary id — stop at the entry with that id (inclusive).
+        Falls back to `:root` when the id is not on the path.
 
   Returns `[]` when no leaf exists or the leaf id is unknown. Orphaned
   ancestors (parent_id pointing to a missing entry) terminate the walk
@@ -202,13 +208,41 @@ defmodule OctoPi.Coder.SessionManager do
   def path(%__MODULE__{}, nil, _opts), do: []
 
   def path(%__MODULE__{by_id: by_id}, leaf_id, opts) when is_binary(leaf_id) do
-    pred = stop_predicate(Keyword.get(opts, :to, :root))
-    walk_to_anchor(by_id, Map.get(by_id, leaf_id), pred, [])
+    full = walk_to_anchor(by_id, Map.get(by_id, leaf_id), &never_stop/1, [])
+    apply_to_anchor(full, Keyword.get(opts, :to, :root))
   end
 
-  defp stop_predicate(:root), do: fn _entry -> false end
-  defp stop_predicate(:latest_compaction), do: &match?(%Entry.Compaction{}, &1)
-  defp stop_predicate(id) when is_binary(id), do: fn entry -> entry_id(entry) == id end
+  defp never_stop(_entry), do: false
+
+  defp apply_to_anchor(full, :root), do: full
+
+  defp apply_to_anchor(full, :latest_compaction) do
+    case latest_compaction_anchor_id(full) do
+      nil -> full
+      anchor_id -> drop_before_id(full, anchor_id)
+    end
+  end
+
+  defp apply_to_anchor(full, id) when is_binary(id) do
+    case drop_before_id(full, id) do
+      [] -> full
+      sliced -> sliced
+    end
+  end
+
+  defp latest_compaction_anchor_id(full) do
+    full
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %Entry.Compaction{first_kept_entry_id: fk} when is_binary(fk) -> fk
+      %Entry.Compaction{} = c -> entry_id(c)
+      _ -> nil
+    end)
+  end
+
+  defp drop_before_id(entries, id) do
+    Enum.drop_while(entries, fn e -> entry_id(e) != id end)
+  end
 
   defp walk_to_anchor(_by_id, nil, _pred, acc), do: acc
 
@@ -353,8 +387,7 @@ defmodule OctoPi.Coder.SessionManager do
   defp do_build_context(_by_id, nil), do: %{messages: [], thinking_level: "off", model: nil}
 
   defp do_build_context(by_id, leaf) do
-    pred = stop_predicate(:root)
-    path = walk_to_anchor(by_id, leaf, pred, [])
+    path = walk_to_anchor(by_id, leaf, &never_stop/1, [])
     build_context_from_path(path)
   end
 
