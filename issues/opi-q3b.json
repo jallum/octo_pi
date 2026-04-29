@@ -2,6 +2,13 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "comments": [
+    {
+      "author": "",
+      "text": "Closing as obsolete. Token telemetry is now consumed by multiple downstream systems:\n\n- Compaction: `apps/octo_pi_coder/lib/octo_pi/coder/compaction/tokens.ex` (`estimate_context_tokens/1` uses `Usage.total_tokens`); driven via `extensions/trigger_compact.ex`.\n- TUI footer dashboard: `apps/octo_pi_tui/lib/octo_pi/tui/components/footer.ex` renders input/output/cache tokens and cost.\n- Cost tracking: `apps/octo_pi_ai/lib/octo_pi/ai/usage/cost.ex`.\n- Session persistence: usage serialized via `message_reader.ex` / `message_writer.ex`.\n\nTracer still attaches a logging handler (`apps/octo_pi_tracer/lib/octo_pi/tracer.ex`), but it now coexists with real consumers rather than being the only sink. Original premise no longer holds.",
+      "timestamp": "2026-04-29T13:06:39.978294Z"
+    }
+  ],
   "created": "2026-04-27T23:53:10Z",
   "description": "Both Anthropic and OpenAI telemetry handlers delegate to TelemetryLogger, which only logs events as [telemetry] name key: value to Logger.info when enabled. The token counts (input_tokens, output_tokens, total_tokens) are emitted but never consumed for any downstream purpose — no cost tracking, no compaction decisions, no dashboards.\\n\\nFix: Either build a proper telemetry consumer (e.g. a cost aggregator or stats collector) or remove the dead telemetry emission code. At minimum, ensure the token data flows somewhere useful.",
   "id": "opi-q3b",
@@ -10,5 +17,5 @@
   "status": "open",
   "title": "Act on AI telemetry token counts instead of just logging them",
   "type": "task",
-  "updated_at": "2026-04-27T23:53:10Z"
+  "updated_at": "2026-04-29T13:06:39.978294Z"
 }
