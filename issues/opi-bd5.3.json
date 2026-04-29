@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\nSome terminals (macOS Terminal.app default config, certain SSH setups, Linux consoles without TIOCLINUX support) do not distinguish `Enter` from `shift+Enter` — both arrive as `\\r`. Without a fallback, users on those terminals cannot insert a literal newline and are forced to submit prematurely.\n\nUpstream's editor has a workaround: when the user submits with Enter and the **character before the cursor is `\\`**, delete the backslash and insert a newline instead of submitting.\n\nOcto_pi's editor does not implement this fallback.\n\n## Upstream code reference\n\n`tmp/pi-mono/packages/tui/src/components/editor.ts:725-731, 739-745`:\n\n```ts\n// In the tui.input.submit branch:\nconst currentLine = this.state.lines[this.state.cursorLine] || \"\";\nif (this.state.cursorCol > 0 && currentLine[this.state.cursorCol - 1] === \"\\\\\") {\n  this.handleBackspace();\n  this.addNewLine();\n  return;\n}\nthis.submitValue();\n```\n\nThe same logic is also reachable via the `tui.input.newLine` branch (lines 716-732) using a helper `shouldSubmitOnBackslashEnter`. Two paths converge on identical behavior.\n\n## Files to modify\n\n- The Elixir editor handler that processes `\"tui.input.submit\"`. Locate via grep `\"tui.input.submit\"` in `apps/octo_pi_tui/lib/`. Likely lives next to the `tui.input.newLine` handler.\n\n## Acceptance\n\n- Typing `foo\\<Enter>` produces a multi-line buffer `foo\\n` (the `\\` is consumed) and does **not** submit.\n- Typing `foo<Enter>` (without trailing backslash) still submits normally.\n- Typing `foo \\ <Enter>` (backslash with trailing space) **submits** (because the char immediately before cursor is space, not `\\`).\n- Test covers all three cases.\n\n## Blast radius\n\nEditor-internal. No registry change. Tiny.",
+  "id": "opi-bd5.3",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Backslash-Enter newline fallback for terminals without shift+enter",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

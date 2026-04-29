@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\n`app.model.select` (`ctrl+l`) is dispatched in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` at lines 1232-1234, but no model selector component exists, so the action is a no-op. Verified in tmux: pressing `ctrl+l` produces no visible UI.\n\n## Upstream component\n\n`tmp/pi-mono/packages/coding-agent/src/modes/interactive/components/model-selector.ts`. Activated via `showModelSelector(initialSearchInput?)` (`interactive-mode.ts:3924-`). Mounted via `showSelector` modal pattern (`interactive-mode.ts:3682-3693`).\n\n## Bindings consumed\n\nStandard `tui.select.*` only — no model-selector-specific bindings beyond the search input. The search input itself uses standard `tui.editor.*` cursor/deletion/yank actions (per the `Input` component reuse pattern).\n\n## Behavior\n\n1. Selector lists all configured models with a search input at top.\n2. Filter by typing.\n3. `enter` selects → calls `session.setModel(modelId)`, shows status `\"Switched to {modelName}\"`.\n4. `escape` / `ctrl+c` (with empty search) cancels without changing model.\n5. After selection, also invalidates footer + updates editor border color (border tracks current thinking level).\n\n## Files likely created/modified\n\n- New: `apps/octo_pi_tui/lib/octo_pi/tui/components/model_selector.ex`.\n- Update: `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` to call `show_model_selector/0` instead of the current no-op.\n\n## Acceptance\n\n- `ctrl+l` opens the selector with search input focused.\n- Typing filters the model list.\n- Enter sets the active model and closes the selector with a status message.\n- Escape cancels.\n- Footer updates to reflect new model.\n\n## Notes\n\nSmaller than the tree/session/scoped-models selectors because there are no selector-specific app actions — just standard `tui.select.*` flow. This mostly exercises the modal pattern correctly. If the modal infrastructure isn't yet in place in octo_pi, that surfaces as a prerequisite (likely shared with the other selector tickets).",
+  "id": "opi-bd5.8",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Model selector activation (ctrl+l)",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

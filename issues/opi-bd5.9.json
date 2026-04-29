@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\n`app.editor.external` (`ctrl+g`) is dispatched but octo_pi has no `open_external_editor/0` implementation. tmux validation showed the key is consumed (state changes) but no editor launches.\n\n## Upstream behavior (`interactive-mode.ts:3385-`)\n\n```ts\nprivate openExternalEditor(): void {\n  const editorCmd = process.env.VISUAL || process.env.EDITOR;\n  if (!editorCmd) {\n    this.showWarning(\"No editor configured. Set $VISUAL or $EDITOR environment variable.\");\n    return;\n  }\n  const currentText = this.editor.getExpandedText?.() ?? this.editor.getText();\n  const tmpFile = path.join(os.tmpdir(), `pi-editor-${Date.now()}.pi.md`);\n  // write file, suspend TUI, spawn editor synchronously, on exit read file back, set editor text, delete tmp\n}\n```\n\n## Required steps\n\n1. Read `$VISUAL`, fall back to `$EDITOR`. If neither set, show warning and return.\n2. Write current editor contents to a temp file with extension `.pi.md` in `System.tmp_dir!()`. Use a unique name (timestamp or UUID).\n3. **Suspend the TUI** so the spawned editor has the terminal. Spawn editor synchronously, wait for exit.\n4. On editor exit, read file contents back, replace editor text. Delete temp file.\n5. Restore TUI (re-enter raw mode, force render).\n\n## Files likely created/modified\n\n- New module `OctoPi.TUI.ExternalEditor` (or function in `interactive.ex`).\n- Update: `interactive.ex` `app.editor.external` handler to call it.\n\n## Acceptance\n\n- `ctrl+g` with `$EDITOR=vim` (or similar) opens vim with current editor contents.\n- Saving and exiting vim returns to `mix pi` with editor populated by the saved file.\n- TUI state restored cleanly (no stray escape sequences, raw mode re-entered).\n- `ctrl+g` with neither `$VISUAL` nor `$EDITOR` set shows warning, no spawn.\n- Test in tmux to verify terminal handoff works correctly.\n\n## Notes\n\nReuses TUI suspend/restore semantics from `app.suspend`. The trickiest part on BEAM is spawning a foreground process that gets the TTY — likely needs `:os.cmd` (which doesn't give the TTY back), or a Port with `:nouse_stdio` plus terminal handoff via `OctoPi.TUI.Terminal.RawMode`. Verify by reading the implementation rather than assuming.\n\nIf the suspend round-trip ticket lands first, reuse its primitives. Otherwise this ticket may need to invent them.",
+  "id": "opi-bd5.9",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "External editor (ctrl+g) — $VISUAL/$EDITOR integration",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

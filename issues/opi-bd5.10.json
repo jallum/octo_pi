@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\n`app.clipboard.pasteImage` (`ctrl+v`) is dispatched but octo_pi has no clipboard read. Upstream behavior: read OS clipboard for image data, write to a temp PNG, **insert the path string at cursor** (does not embed bytes).\n\n## Upstream behavior (`interactive-mode.ts:2374-2399`)\n\n```ts\nthis.defaultEditor.onPasteImage = () => {\n  this.handleClipboardImagePaste();\n};\n\nprivate async handleClipboardImagePaste(): Promise<void> {\n  try {\n    const image = await readClipboardImage();\n    if (!image) return;\n    const ext = extensionForImageMimeType(image.mimeType) ?? \"png\";\n    const fileName = `pi-clipboard-${crypto.randomUUID()}.${ext}`;\n    const filePath = path.join(os.tmpdir(), fileName);\n    fs.writeFileSync(filePath, Buffer.from(image.bytes));\n    this.editor.insertTextAtCursor?.(filePath);\n    this.ui.requestRender();\n  } catch {\n    // Silently ignore clipboard errors\n  }\n}\n```\n\n`readClipboardImage()` is OS-specific:\n- **macOS**: `pbpaste` with `-Prefer png` flag, or AppleScript `osascript -e 'the clipboard as «class PNGf»'`.\n- **Linux**: `xclip -selection clipboard -t image/png -o` (X11) or `wl-paste --type image/png` (Wayland).\n- **Windows**: native API.\n\n## Files likely created/modified\n\n- New: `OctoPi.TUI.Clipboard` module — likely a port to a CLI tool (`pbpaste` etc.) initially; NIF later if needed.\n- Update: `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` `app.clipboard.pasteImage` handler.\n\n## Acceptance\n\n- With an image on clipboard, `ctrl+v` writes a temp PNG to `System.tmp_dir!()` and inserts its absolute path into the editor at cursor.\n- With no image (clipboard has text or is empty), `ctrl+v` is a **silent no-op** (no warning per upstream — matches `try/catch{}` swallowing).\n- macOS path verified.\n\n## Default key on Windows\n\nUpstream uses `alt+v` on Windows (`coding-agent/src/core/keybindings.ts:107`):\n```ts\n\"app.clipboard.pasteImage\": {\n  defaultKeys: process.platform === \"win32\" ? \"alt+v\" : \"ctrl+v\",\n  ...\n}\n```\nMirror this in our defaults if octo_pi ever supports Windows. For now `ctrl+v` is fine.\n\n## Notes\n\nLarger surface than it looks because of platform shims. Suggest macOS-only first iteration; document as platform-gated. The path-as-text insertion (rather than image embedding) is intentional — the agent reads the file when it sees the path in the prompt.",
+  "id": "opi-bd5.10",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Clipboard image paste (ctrl+v)",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

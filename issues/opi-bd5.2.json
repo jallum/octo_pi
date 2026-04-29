@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\n`tui.editor.jumpForward` (`ctrl+]`) and `tui.editor.jumpBackward` (`ctrl+alt+]`) are **not in our `OctoPi.TUI.Keybindings` defaults** and not implemented in the editor. The keys parse correctly per telemetry trace (`parsed=%OctoPi.TUI.Key{key: 93, modifiers: [:ctrl]}` and `[:ctrl, :alt]`), so the gap is purely registry + handler.\n\n## Behavior (stateful — unlike every other binding)\n\nFrom upstream `tmp/pi-mono/packages/tui/src/components/editor.ts:538-556, 796-803, 1943-1971`:\n\n1. Pressing `ctrl+]` sets `jumpMode = \"forward\"`. Pressing `ctrl+alt+]` sets `jumpMode = \"backward\"`.\n2. The **next keystroke** is consumed: if it's a printable character, the editor jumps the cursor to the next/previous occurrence of that char in the document. If it's a control character or the same hotkey again, jump mode cancels.\n3. `jumpToChar` searches forward/backward starting from `cursor+1` / `cursor-1`, walking lines until a match is found or the document ends. No match → cursor unchanged.\n\nUpstream `jumpToChar` (`editor.ts:1943-1971`):\n\n```ts\nprivate jumpToChar(char: string, direction: \"forward\" | \"backward\"): void {\n  this.lastAction = null;\n  const isForward = direction === \"forward\";\n  const lines = this.state.lines;\n  const end = isForward ? lines.length : -1;\n  const step = isForward ? 1 : -1;\n  for (let lineIdx = this.state.cursorLine; lineIdx !== end; lineIdx += step) {\n    const line = lines[lineIdx] || \"\";\n    const isCurrentLine = lineIdx === this.state.cursorLine;\n    const searchFrom = isCurrentLine\n      ? (isForward ? this.state.cursorCol + 1 : this.state.cursorCol - 1)\n      : undefined;\n    const idx = isForward ? line.indexOf(char, searchFrom) : line.lastIndexOf(char, searchFrom);\n    if (idx !== -1) {\n      this.state.cursorLine = lineIdx;\n      this.setCursorCol(idx);\n      return;\n    }\n  }\n}\n```\n\n## Files to modify\n\n- `apps/octo_pi_tui/lib/octo_pi/tui/keybindings.ex` — add defaults:\n  ```elixir\n  \"tui.editor.jumpForward\" => %{keys: [\"ctrl+]\"], description: \"Jump forward to character\"},\n  \"tui.editor.jumpBackward\" => %{keys: [\"ctrl+alt+]\"], description: \"Jump backward to character\"},\n  ```\n- The Elixir editor module currently handling `tui.editor.cursorUp` etc. — locate via grep `\"tui.editor.cursorUp\"` in `apps/octo_pi_tui/lib/`. Add a `:jump_mode` field to its state (`:forward | :backward | nil`), and a \"consume next printable char\" path that intercepts before the normal handler.\n\n## Acceptance\n\n- Defaults entries added.\n- Pressing `ctrl+]` then a printable char moves cursor to the next occurrence on or after `cursor+1`; if no match, cursor stays.\n- Pressing `ctrl+]` twice cancels jump mode (no jump happens, second press is a no-op).\n- Pressing `ctrl+]` then a control character cancels jump mode and that control char's normal handler runs.\n- Backward variant (`ctrl+alt+]`) symmetric.\n- Tests cover the three branches (match / no match / cancel-by-rehotkey / cancel-by-control-char).\n\n## Notes\n\nThis is the only stateful binding in the system. All other bindings are one-shot. The implementation needs editor state, not just a key handler. When porting, the upstream pattern of `jumpMode = null` early-cancel before falling through to the rest of `handleInput` is the cleanest approach.",
+  "id": "opi-bd5.2",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Editor character jump mode (ctrl+] / ctrl+alt+])",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

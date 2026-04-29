@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\nDuring the prior tmux validation, `ctrl+z` did suspend the BEAM process (`[1] + suspended  mix pi --log-telemetry=...`). What's not yet verified: SIGCONT-driven restoration of the TUI after `fg`.\n\n## Upstream behavior (`interactive-mode.ts:3232-3267`)\n\n```ts\nprivate handleCtrlZ(): void {\n  if (process.platform === \"win32\") {\n    this.showStatus(\"Suspend to background is not supported on Windows\");\n    return;\n  }\n  // Keep event loop alive while suspended\n  const suspendKeepAlive = setInterval(() => {}, 2 ** 30);\n  // Ignore SIGINT during suspend so ctrl+c doesn't kill backgrounded process\n  const ignoreSigint = () => {};\n  process.on(\"SIGINT\", ignoreSigint);\n  // Restore TUI on resume\n  process.once(\"SIGCONT\", () => {\n    clearInterval(suspendKeepAlive);\n    process.removeListener(\"SIGINT\", ignoreSigint);\n    this.ui.start();\n    this.ui.requestRender(true);\n  });\n  try {\n    this.ui.stop();\n    process.kill(0, \"SIGTSTP\"); // pid=0 = entire process group\n  } catch (error) {\n    clearInterval(suspendKeepAlive);\n    process.removeListener(\"SIGINT\", ignoreSigint);\n    throw error;\n  }\n}\n```\n\nKey points:\n1. `setInterval` keepalive is **Node-specific** — keeps event loop alive while suspended. On BEAM this is likely unnecessary, but verify.\n2. SIGINT ignored during suspend so terminal `ctrl+c` doesn't kill the backgrounded process.\n3. `SIGCONT` listener re-enters raw mode (`ui.start()`) and forces full render.\n4. `process.kill(0, \"SIGTSTP\")` sends to entire process group (not just self) — this is what makes the shell take over.\n5. Win32: empty default key (`core/keybindings.ts:69`); manual binding shows status.\n\n## What to verify in tmux\n\n1. `ctrl+z` from `mix pi` suspends to shell. ✅ (verified in prior session)\n2. `fg` brings it back and the TUI redraws correctly:\n   - No leftover escape sequences.\n   - Raw mode restored (typing is captured by editor, not shell).\n   - Cursor in the right place (not in weird position from pre-suspend).\n3. `ctrl+c` *while suspended* (typed at the shell prompt that took over) does **not** kill the backgrounded mix pi process.\n4. Repeat suspend/resume multiple times — no degradation.\n\n## If broken\n\n- Trap SIGCONT in BEAM signal handling (likely via `OctoPi.TUI.Terminal.RawMode` or a NIF — check `apps/octo_pi_tui_terminal/lib/octo_pi/tui/terminal/raw_mode.ex`).\n- On resume, re-enter raw mode and force a full render.\n- Investigate whether BEAM needs the keepalive equivalent (likely not — BEAM has its own scheduler).\n\n## Files likely involved\n\n- `apps/octo_pi_tui_terminal/lib/octo_pi/tui/terminal/raw_mode.ex`\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` — `app.suspend` handler\n\n## Acceptance\n\n- ctrl+z + fg loop is clean: at least 5 round-trips with no terminal corruption.\n- `ctrl+c` during suspend does not kill the process.\n- Test transcript saved as a comment on this ticket.\n- Any fixes needed are made here or filed as follow-up tickets.\n\n## Notes\n\nProbably the smallest of the side-effect tickets — could be 30 minutes of validation if everything works as expected, more if BEAM signal handling needs work.",
+  "id": "opi-bd5.11",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Suspend round-trip verification (ctrl+z + fg)",
+  "type": "task",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

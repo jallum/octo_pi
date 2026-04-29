@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\nUpstream supports `~/.pi/agent/keybindings.json` for user customization, plus a `/reload` slash command that re-reads the file without restart. Octo_pi's `OctoPi.TUI.Keybindings` accepts user bindings programmatically (`set_user_bindings/2`) but there is no file loader and no slash command.\n\n## Upstream references\n\n- **File loader entry point**: `tmp/pi-mono/packages/coding-agent/src/core/keybindings.ts:330-367` (`KeybindingsManager.create`, `loadFromFile`).\n- **Migration map** (legacy ids → namespaced ids): `core/keybindings.ts:204-264` (`KEYBINDING_NAME_MIGRATIONS`). Includes ~50 mappings such as `cursorUp` → `tui.editor.cursorUp`, `interrupt` → `app.interrupt`, etc. Run on every load; emit a single status message if any migrations fired.\n- **`/reload` slash command dispatch**: `interactive-mode.ts:2499` (string literal `/reload` in `onSubmit`) → calls `this.keybindings.reload()` at `interactive-mode.ts:4687`.\n- **`reload()` impl**: `core/keybindings.ts:354-357` — re-reads the configured path and calls `setUserBindings`.\n- **Path resolution**: `getAgentDir()` returns `~/.pi/agent` by default — see `coding-agent/src/config.ts`. For octo_pi we should pick a parallel path; suggest `~/.octo_pi/agent/keybindings.json` (confirm with project conventions before committing).\n\n## File format\n\n```json\n{\n  \"tui.editor.cursorUp\": [\"up\", \"ctrl+p\"],\n  \"tui.editor.cursorDown\": [\"down\", \"ctrl+n\"],\n  \"tui.editor.deleteWordBackward\": [\"ctrl+w\", \"alt+backspace\"]\n}\n```\n\nEach value can be a single string or array of strings. Unknown ids ignored. Invalid JSON → fall back to defaults silently (per upstream `loadRawConfig:330-338` which catches and returns undefined).\n\n## Required behaviors\n\n1. **On startup**: attempt to load the JSON file. Absent → defaults. Unparseable → defaults, no error.\n2. **Migration**: legacy ids auto-migrate via the upstream map. Emit one status message: `\"Migrated N legacy keybinding ids\"`.\n3. **`/reload` command**: rereads file, calls `set_user_bindings/2` on the manager, shows status message. If conflicts (use `OctoPi.TUI.Keybindings.detect_conflicts/3` which already exists), include conflict count in status.\n4. **Conflict surfacing**: existing conflict detection should populate a status message after every reload (not just startup).\n\n## Files likely modified\n\n- New: `OctoPi.TUI.Keybindings.FileLoader` (or similar) — JSON read + migration.\n- Boot wiring: `apps/octo_pi_coder/lib/octo_pi/coder/cli.ex` (look for where `OctoPi.TUI.Keybindings.new/0` is called; replace with file-aware constructor).\n- Slash command registration: see existing `/clear`, `/help` dispatch — search for `\"/clear\"` in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`.\n\n## Acceptance\n\n- Creating `~/.octo_pi/agent/keybindings.json` with a binding override and starting `mix pi` honors the override.\n- Conflict on a user binding (same key bound to two actions) shows in status.\n- `/reload` after editing the file applies changes without restart.\n- Legacy id (e.g. `\"cursorUp\"`) auto-migrates to `\"tui.editor.cursorUp\"` and is logged.\n\n## Notes\n\nNot strictly required for any other ticket in this epic — defaults work without user bindings. But this is the minimum to support user-customized bindings for the actions added in the selector tickets. Schedule independently.",
+  "id": "opi-bd5.4",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "/reload slash command + user keybindings.json loader",
+  "type": "feature",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

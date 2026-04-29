@@ -1,0 +1,19 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-bd5.12"
+  ],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\n`OctoPi.TUI.Terminal.KeyParser` only handles `\\x1b[H` / `\\x1b[F` and SS3 forms (`\\x1bOH` / `\\x1bOF`) for Home/End. macOS Terminal.app and most modern terminals send the **VT-style sequences** `\\x1b[1~` (Home) and `\\x1b[4~` (End), which our parser returns as `unknown`.\n\n**Verified live in tmux** — telemetry trace from `mix pi --log-telemetry=/tmp/pi_trace.log` after pressing Home and End:\n```\nseq=[1~ parsed=unknown\nseq=[4~ parsed=unknown\n```\n`ctrl+a` / `ctrl+e` work correctly, masking the issue until you actually press the dedicated Home/End keys.\n\n## Files to modify\n\n- `apps/octo_pi_tui_terminal/lib/octo_pi/tui/terminal/key_parser.ex` — existing similar entries: `legacy_csi(\"H\")` / `legacy_csi(\"F\")` at lines 110-111, modifier forms (`7$`, `8$`, `7^`, `8^`) at lines 150-157.\n  - Add `legacy_csi(\"1~\")` returning `%Key{key: :home}`.\n  - Add `legacy_csi(\"4~\")` returning `%Key{key: :end}`.\n  - Optionally add the alternate VT forms `\\x1b[7~` (home) and `\\x1b[8~` (end) — upstream accepts these too. See `tmp/pi-mono/packages/tui/src/keys.ts:373-374`:\n    ```\n    home: [\"\\x1b[H\", \"\\x1bOH\", \"\\x1b[1~\", \"\\x1b[7~\"],\n    end:  [\"\\x1b[F\", \"\\x1bOF\", \"\\x1b[4~\", \"\\x1b[8~\"],\n    ```\n- Mirror modifier forms (`tmp/pi-mono/packages/tui/src/keys.ts:404, 418` for shift/ctrl) if the existing octo_pi parser doesn't already handle them under different sequences. Confirm the gap with a grep before adding.\n\n## Acceptance\n\n- Pressing Home/End in `mix pi` moves the cursor to line start/end (verifiable in tmux with a sentinel-character probe: send Home, type `|`, see `|hello world` instead of `h|ello world`).\n- Telemetry trace shows `parsed=%OctoPi.TUI.Key{key: :home}` (or `:end`) for the `[1~` / `[4~` sequences instead of `parsed=unknown`.\n- Tests cover all four primary sequence forms per key (`[H`/`OH`/`[1~`/`[7~` for Home, `[F`/`OF`/`[4~`/`[8~` for End) — see upstream behavior at `keys.ts:996-1016`.\n\n## Blast radius\n\nParser-only. No callers change. Smallest of the foundation tickets.\n\n## Notes for the next agent\n\nDon't trust documentation over implementation. Read `apps/octo_pi_tui_terminal/lib/octo_pi/tui/terminal/key_parser.ex` directly to understand the existing dispatch shape before adding clauses. Memory rule: when something doesn't work as expected, read the implementation first.",
+  "id": "opi-bd5.1",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Fix Home/End VT-style key parser sequences",
+  "type": "bug",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}

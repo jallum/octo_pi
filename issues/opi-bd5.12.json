@@ -1,0 +1,29 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-bd5.1",
+    "opi-bd5.2",
+    "opi-bd5.3",
+    "opi-bd5.4",
+    "opi-bd5.5",
+    "opi-bd5.6",
+    "opi-bd5.7",
+    "opi-bd5.8",
+    "opi-bd5.9",
+    "opi-bd5.10",
+    "opi-bd5.11"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T11:58:29.058460Z",
+  "description": "## Problem\n\nDuring earlier tmux validation, several shortcut handlers exist in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` but produced no observable effect when triggered. Some are explainable by single-model environments or absent thinking content; others may be genuine wiring bugs. This ticket runs a systematic audit **after** the foundation/wiring tickets land and files follow-up tickets for any remaining bugs.\n\n## Shortcuts to verify (from prior tmux audit)\n\n| Shortcut | Action | Status during prior audit | Verification approach |\n|---|---|---|---|\n| `Home` / `End` | cursorLineStart / End | parsed `unknown` — fixed by parser ticket | Sentinel-character probe in tmux |\n| `ctrl+l` | `app.model.select` | Dispatched (`interactive.ex:1232-1234`); no UI opened | After model-selector ticket lands; verify selector appears |\n| `ctrl+p` / `shift+ctrl+p` | model.cycle{Forward,Backward} | Dispatched; no visible effect with single-model env | Configure ≥2 models, verify status message + footer change |\n| `ctrl+t` | thinking.toggle | Dispatched; no visible effect when no thinking content present | Generate thinking output first, then toggle |\n| `ctrl+o` | tools.expand | Dispatched; needs tool output present | Run a tool, then toggle |\n| `shift+tab` | thinking.cycle | Dispatched; needs thinking-capable model | Configure thinking-capable model |\n| `alt+enter` | message.followUp | Dispatched; needs streaming | Start a long generation, queue follow-up |\n| `alt+up` | message.dequeue | Dispatched; needs queue with content | Queue messages first |\n| `ctrl+g` | editor.external | Dispatched; did not launch `$EDITOR` in tmux test | After external-editor ticket lands |\n| `ctrl+v` | clipboard.pasteImage | Dispatched; needs clipboard image | After clipboard ticket lands |\n| `ctrl+-` | editor.undo | Typed `X`, sent `ctrl+-`, `X` remained — possibly broken | Type then undo, verify text removed |\n\n## Method\n\n1. Use tmux + `mix pi --log-telemetry=/tmp/pi_trace.log`. Send keys via `tmux send-keys -t <session>` using key names: `C-l`, `C-p`, `BTab`, `M-Enter`, `M-Up`, `C-_` (for ctrl+-), etc.\n2. For each shortcut, set up the *minimum* state needed to observe its effect (e.g., for `ctrl+t` ensure a thinking-capable model is configured; for `ctrl+v` put an image on clipboard with `pbcopy < image.png` or AppleScript; for `alt+enter` start a streaming response first).\n3. Capture pane state before/after with `tmux capture-pane -t <session> -p`. State diff confirms the action fired.\n4. Cross-reference each action's handler in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` against upstream behavior (line refs in table below).\n\n## Upstream behavior to compare against\n\n- `app.model.select` `ctrl+l`: opens `ModelSelectorComponent` (`tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts:3924-`)\n- `app.model.cycleForward/Backward`: calls `session.cycleModel(direction)`, shows status via `showStatus` (`:3330-3347`)\n- `app.thinking.cycle` `shift+tab`: calls `session.cycleThinkingLevel()`; shows `\"Current model does not support thinking\"` if returns undefined (`:3319-3328`)\n- `app.thinking.toggle` `ctrl+t`: clears chatContainer, rebuilds from messages (`:3367-3383`)\n- `app.tools.expand` `ctrl+o`: walks chat children calling `setExpanded` on `isExpandable` (`:3349-3365`)\n- `app.message.followUp` `alt+enter`: when streaming → queues via `session.prompt(text, {streamingBehavior: \"followUp\"})`; not streaming → acts like submit (`:3269-3298`)\n- `app.message.dequeue` `alt+up`: calls `restoreQueuedMessagesToEditor()`; shows status with count (`:3300-3307`)\n- `app.editor.external` `ctrl+g`: reads `$VISUAL` then `$EDITOR`, writes to `os.tmpdir()/pi-editor-{ts}.pi.md`, spawns, reads back (`:3385-`)\n- `tui.editor.undo` `ctrl+-`: pops `UndoStack` snapshot. Each state-changing action pre-pushes via `pushUndoSnapshot()` (`tui/src/components/editor.ts` — see snapshot calls at L378, L610, L631, L947, L960, L1034, L1089, L1145, and `undo()` impl).\n\n## Deliverables\n\n- Audit transcript saved as a comment on this ticket: shortcut → status (pass/fail/inconclusive) + tmux evidence.\n- One follow-up ticket per confirmed bug (filed as peers under the parent epic).\n- Memory notes added to `~/.claude/projects/-Users-j5n-Workspace-octo-pi/memory/` if any non-obvious wiring rules surface during the audit.\n\n## Why it blocks on the rest\n\nThis ticket is the **closure validation** for the epic. The model-selector ticket gates the `ctrl+l` test. The parser ticket gates Home/End. The jump-mode ticket gates `ctrl+]`. The backslash-enter ticket gates that fallback. Other tickets land their handlers; this one validates the system end-to-end.\n\n## Notes\n\n**Do not run this audit before the foundation tickets land.** Premature audit will reproduce known parser/handler gaps and waste cycles.\n\nMemory rules to honor: synchronize via telemetry, not Process.sleep; always validate terminal behavior in tmux; read implementation, not docs.",
+  "id": "opi-bd5.12",
+  "labels": [],
+  "parent": "opi-bd5",
+  "priority": 2,
+  "status": "open",
+  "title": "Audit pass: verify ambiguously-wired shortcuts end-to-end",
+  "type": "task",
+  "updated_at": "2026-04-29T11:58:29.058460Z"
+}
