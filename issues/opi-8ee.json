@@ -16,8 +16,8 @@
   "labels": [],
   "parent": "",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire extensions into Interactive — load, dispatch, lifecycle events",
   "type": "epic",
-  "updated_at": "2026-04-29T13:24:45.934221Z"
+  "updated_at": "2026-04-29T13:24:49.996006Z"
 }
