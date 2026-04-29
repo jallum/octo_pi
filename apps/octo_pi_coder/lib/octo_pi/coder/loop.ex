@@ -27,6 +27,7 @@ defmodule OctoPi.Coder.Loop do
 
   use GenServer, restart: :temporary
 
+  alias OctoPi.Agent.Subscribers
   alias OctoPi.AI.Message.User
   alias OctoPi.Coder.Compaction
   alias OctoPi.Coder.Compaction.BranchSummarization
@@ -398,9 +399,9 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-  # Wraps do_compact + finalize_compact with start/stop telemetry,
-  # tagged by `source` (:manual | :pre_prompt | :mid_run). Returns
-  # `{compact_result, state}`.
+  # Wraps do_compact + finalize_compact with start/stop telemetry +
+  # subscriber events, tagged by `source` (:manual | :pre_prompt |
+  # :mid_run). Returns `{compact_result, state}`.
   defp run_compact_with_telemetry(%State{} = state, opts, source) do
     started_mono = System.monotonic_time()
     tokens_before = compact_tokens_before(state)
@@ -409,6 +410,11 @@ defmodule OctoPi.Coder.Loop do
       [:octo_pi_coder, :compact, :start],
       %{system_time: System.system_time()},
       %{source: source, tokens_before: tokens_before}
+    )
+
+    Subscribers.dispatch(
+      state.agent_pid,
+      %OctoPi.Coder.Event.CompactionStart{reason: source}
     )
 
     {result, new_state} =
@@ -430,6 +436,11 @@ defmodule OctoPi.Coder.Loop do
         tokens_after: compact_tokens_before(new_state),
         from_extension?: from_extension?(result)
       }
+    )
+
+    Subscribers.dispatch(
+      state.agent_pid,
+      %OctoPi.Coder.Event.CompactionEnd{result: result, reason: source}
     )
 
     {result, new_state}
