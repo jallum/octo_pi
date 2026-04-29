@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-qy9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Apply to_llm/1 consistently at all wire edges",
   "type": "task",
-  "updated_at": "2026-04-29T18:01:24.106963Z"
+  "updated_at": "2026-04-29T18:03:26.672615Z"
 }
