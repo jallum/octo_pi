@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-qy9.1",
+    "opi-qy9.2"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T17:19:57.495400Z",
+  "description": "## What\n\nAfter a `Compaction` entry is successfully appended (auto, manual, or extension-driven), `Coder.Loop` calls:\n\n```elixir\nnew_path = SessionStore.path(store, :leaf, to: :latest_compaction)\n```\n\nand replaces `state.path`. This is the SAME call branch-switch (`navigate_tree`) makes after moving the leaf. Removes the asymmetry where compaction appends but Loop's path keeps growing, while navigate refreshes Loop's path explicitly.\n\nMatches the upstream invariant: after compaction, the LLM sees `[summary] + [tail since cut]` — modeled here as Loop's `:path` literally being `[compaction_entry, ...kept tail]`.\n\n## Why\n\nUnifies two code paths that today do different things to `:path`. After this ticket, both compaction and navigate use the same one-liner to refresh Loop's view, and the compactor's invariant — \"my input is everything since the latest anchor\" — falls out naturally because `:path` already starts at the latest anchor.\n\n## Files\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — `do_compact/2`, `persist_compaction/4`, `finish_compaction/6`, `handle_info CompactionRequested`, `do_navigate_tree/2` — all converge on the same `Store.path(server, :leaf, to: :latest_compaction)` rewrite\n\n## Out of scope\n\n- The branch-switch case (it already refreshes path; just confirm it uses the same call shape).\n- Visual / UI re-render concerns; this is state-only.\n\n## Done when\n\n- After auto-compaction (overflow + threshold), Loop's `:path` starts with the new `Compaction` entry.\n- After manual compaction, same.\n- Existing compaction tests still pass; new test verifies `state.path` shape pre/post compact.\n- Tests confirm the next prompt's turn context (`messages_provider` output) is `[CompactionSummaryMessage | kept_tail]`.",
+  "id": "opi-qy9.3",
+  "labels": [],
+  "parent": "opi-qy9",
+  "priority": 2,
+  "status": "open",
+  "title": "Unify post-compact and post-navigate path-reset on Store.path/2",
+  "type": "task",
+  "updated_at": "2026-04-29T17:19:57.495400Z"
+}

@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T17:19:57.495400Z",
+  "description": "## Goal\n\nRebalance Elixir-process ownership so the tree-of-record (full session DAG, by_id index, id minting, eventual deferred-flush) lives in `OctoPi.Coder.SessionStore`, and `OctoPi.Coder.Loop` carries only the linearized current path (root-or-latest-compaction → leaf). Compactor and branch-switch share one store read primitive instead of bespoke walks against an in-process struct.\n\n## Why\n\nToday `Coder.Loop`'s `State` carries the entire `SessionManager` struct — `by_id` map, every entry on every branch ever explored, leaf pointer, label index — plus the orchestration responsibilities (extension dispatch, agent FSM bridging, compaction kickoff). The store is a write-only file handle. This conflates two concerns: *what is the conversation right now* (Loop's job) and *what is the historical tree* (Store's job).\n\nRebalanced, the runtime becomes much simpler: Loop appends to its `:path` list, hands `:path` directly to the compactor, and only re-fetches from the store when *switching* paths (resume, fork, navigate, post-compaction reset).\n\nA side benefit: deferred-flush (upstream's \"buffer until first assistant\" rule) becomes trivial once writer + buffer state colocate. Tracked separately as a follow-on idea.\n\n## Scope (in)\n\n- Move `SessionManager` struct + tree ops into `SessionStore` GenServer.\n- Loop drops `:session_manager`, gains `:path` + thin metadata.\n- One canonical store read primitive: `path/2` with `:to` (`:root` | `:latest_compaction` | id).\n- Unify post-compaction and post-navigate-tree path-reset on the same primitive.\n- Apply `to_llm/1` consistently at all wire edges.\n\n## Scope (out)\n\n- Deferred-flush (separate idea ticket).\n- Any change to JSONL format, entry types, compaction algorithm, extension event surface, or upstream parity. **This is purely an Elixir-process-topology refactor.**\n- Renaming `SessionStore` / `SessionManager` (mostly — internal modules may consolidate but the public-facing names stay).\n\n## Constraint\n\nThis is a port. The on-disk JSONL format and entry semantics are byte-identical to upstream pi-mono before and after this epic. Verify by replaying upstream-generated session files and confirming round-trip byte-stability.\n\n## Done when\n\n- `Coder.Loop.State` no longer references `SessionManager.t()`.\n- `SessionStore` is the only process holding `by_id` / `file_entries` / `leaf_id`.\n- `Store.path/2` is the single read primitive used by Loop, compactor, and navigate-tree.\n- Compactor consumes `state.path` directly (no tree walk per call).\n- All existing tests green; upstream JSONL round-trip parity preserved.",
+  "id": "opi-qy9",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Rebalance session ownership: store owns tree, loop owns path",
+  "type": "epic",
+  "updated_at": "2026-04-29T17:19:57.495400Z"
+}

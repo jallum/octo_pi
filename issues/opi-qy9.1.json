@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-qy9.2",
+    "opi-qy9.3"
+  ],
+  "comments": [],
+  "created": "2026-04-29T17:19:57.495400Z",
+  "description": "## What\n\n`OctoPi.Coder.SessionStore` GenServer takes ownership of the `SessionManager` struct (by_id, file_entries, leaf_id, label index, id minting). Exposes a synchronous API:\n\n- `append_entry/2` — mints id, links parent, persists, returns `{:ok, %Entry{...}}`\n- `get_entry/2`\n- `get_branch/1,2`\n- `find_common_ancestor/3`\n- `collect_entries_for_branch_summary/3`\n- `build_session_context/2`\n\n`OctoPi.Coder.Loop.State` drops `:session_manager`. Gains:\n\n- `:path` — `[Entry.t()]` in root→leaf order, the current linearized path\n- `:session_id`, `:session_file`, `:cwd` — metadata previously held inside SessionManager\n\nLoop maintains `:path` as a local cache: prepends/appends on `Store.append_entry/2` mutation, refetches from store on branch-switch / post-compact reset (the latter handled in opi-1.3).\n\n## Why\n\nToday `Coder.Loop` carries the full tree (by_id + every branch); the store carries only a file handle. After this ticket the store is the source of truth for the tree, and Loop's state describes only \"what is the conversation right now.\"\n\n## Files\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/session_store.ex` — gains state\n- `apps/octo_pi_coder/lib/octo_pi/coder/session_manager.ex` — survives as a pure-functions module the store delegates to (or is folded in; pick what reads better)\n- `apps/octo_pi_coder/lib/octo_pi/coder/loop.ex` — `State` slimmed; all `SessionManager.*` calls re-routed through `SessionStore` API\n- `apps/octo_pi_coder/lib/octo_pi/coder/compaction/preparation.ex` — input source unchanged (still `path_entries` list); upstream caller in Loop now passes `state.path` instead of `SessionManager.get_branch(sm)`\n\n## Out of scope\n\n- `path/2` primitive with `:to` opts — opi-1.2.\n- Compaction's path-reset unification — opi-1.3.\n- `to_llm/1` consistency — opi-1.4.\n\n## Done when\n\n- `Coder.Loop.State` has no `:session_manager` field.\n- `SessionStore` holds the `by_id`, `file_entries`, `leaf_id` it currently doesn't.\n- All existing tests pass without modifying their assertions about JSONL byte-output.\n- Round-trip a non-trivial pi-mono-generated session file: load → append a synthetic entry → bytes match what upstream would produce.",
+  "id": "opi-qy9.1",
+  "labels": [],
+  "parent": "opi-qy9",
+  "priority": 2,
+  "status": "open",
+  "title": "Move tree-of-record into SessionStore; Coder.Loop carries :path",
+  "type": "task",
+  "updated_at": "2026-04-29T17:19:57.495400Z"
+}

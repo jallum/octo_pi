@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T17:19:57.495400Z",
+  "description": "## What\n\nThe synthetic-message → LLM-user-message conversion (`OctoPi.Coder.Session.Messages.to_llm/1`) is a **wire-edge** transform: every place that hands messages to a provider must call it. Today it runs at:\n\n- TUI's resume path — wires `messages_provider` that calls `to_llm/1` (`tui/interactive.ex:721-724`)\n- `compaction/branch_summarization.ex:143` — calls `to_llm/1` before serializing for the summary LLM call\n\nIt does NOT run at:\n\n- TUI's `new_session` path (`messages_provider` not wired — confirm and fix)\n- `compaction/summary.ex` (the main compaction-summary LLM call) — input comes pre-built from `entry_to_messages/1` and is passed straight to `Summary.generate/4` without flattening synthetic types\n\n## Why\n\nThis is asymmetric, not architecturally broken — synthetic types like `CompactionSummaryMessage` and `BranchSummaryMessage` happen to render fine for the summarization model today because `Serialize.conversation/1` and `Tokens.estimate_tokens/1` accept them. But the contract should be: synthetic types never reach a provider. The fix is consistency at every wire edge, not collapsing to one boundary (there are legitimately two: turn context and internal summarization prompts).\n\n## Files\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/compaction/summary.ex` — apply `to_llm/1` to input messages before serializing the prompt\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` — wire `messages_provider` in `new_session/6` (currently only the resume path wires it)\n- Optional: `apps/octo_pi_coder/lib/octo_pi/coder/session/messages.ex` — small docstring update if the contract becomes clearer\n\n## Out of scope\n\n- Adding new synthetic-message types (`bashExecution`, `custom`) — those land in their own port tickets.\n- Refactoring `to_llm/1`'s internal structure.\n\n## Independent of opi-1.1, opi-1.2, opi-1.3\n\nCan land first, last, or in parallel — touches different code paths.\n\n## Done when\n\n- `compaction/summary.ex` calls `Messages.to_llm/1` on input before generating the prompt.\n- `TUI.Interactive.new_session/6` wires `messages_provider` on the agent loop.\n- A test confirms a `CompactionSummaryMessage` in `state.path` is converted to a wrapped user message at every wire edge (turn context + internal summarization).\n- No synthetic-role struct ever reaches a provider in any code path.",
+  "id": "opi-qy9.4",
+  "labels": [],
+  "parent": "opi-qy9",
+  "priority": 2,
+  "status": "open",
+  "title": "Apply to_llm/1 consistently at all wire edges",
+  "type": "task",
+  "updated_at": "2026-04-29T17:19:57.495400Z"
+}
