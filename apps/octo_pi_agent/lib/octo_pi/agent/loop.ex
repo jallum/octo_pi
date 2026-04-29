@@ -32,7 +32,6 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
@@ -117,7 +116,7 @@ defmodule OctoPi.Agent.Loop do
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
         convert_to_llm: Keyword.fetch!(opts, :convert_to_llm),
-        messages: MessageLog.new(Keyword.get(opts, :messages, [])),
+        messages: Keyword.get(opts, :messages, []),
         auto_compact_reserve_tokens: Keyword.get(opts, :auto_compact_reserve_tokens),
         turn: Turn.new()
       }
@@ -145,7 +144,7 @@ defmodule OctoPi.Agent.Loop do
     if store.loop.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      loop = %{store.loop | messages: MessageLog.append_many(store.loop.messages, msgs)}
+      loop = %{store.loop | messages: store.loop.messages ++ msgs}
       {:reply, :ok, %{store | loop: loop}, {:continue, :start_run}}
     end
   end
@@ -184,10 +183,10 @@ defmodule OctoPi.Agent.Loop do
   def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
 
   def handle_call({:push_message, msg}, _from, store),
-    do: {:reply, :ok, put_in(store.loop.messages, MessageLog.push(store.loop.messages, msg))}
+    do: {:reply, :ok, put_in(store.loop.messages, store.loop.messages ++ [msg])}
 
   def handle_call({:set_messages, msgs}, _from, store),
-    do: {:reply, :ok, put_in(store.loop.messages, MessageLog.new(msgs))}
+    do: {:reply, :ok, put_in(store.loop.messages, msgs)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools
@@ -486,10 +485,7 @@ defmodule OctoPi.Agent.Loop do
   defp finish_turn(store, %Assistant{} = assistant, tool_results, reason) do
     emit_turn_stop(store, reason)
 
-    messages =
-      store.loop.messages
-      |> MessageLog.push(assistant)
-      |> MessageLog.append_many(tool_results)
+    messages = store.loop.messages ++ [assistant | tool_results]
 
     store =
       store
@@ -529,7 +525,7 @@ defmodule OctoPi.Agent.Loop do
               # the LLM context on retry.
               |> put_in(
                 [Access.key(:loop), Access.key(:messages)],
-                MessageLog.pop(store.loop.messages)
+                Enum.drop(store.loop.messages, -1)
               )
 
             advance(store, {:compact_requested, [auto?: true]})
@@ -558,7 +554,7 @@ defmodule OctoPi.Agent.Loop do
       |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
       |> put_in(
         [Access.key(:loop), Access.key(:messages)],
-        MessageLog.append_many(store.loop.messages, steers)
+        store.loop.messages ++ steers
       )
 
     {:continue, store}
@@ -577,7 +573,7 @@ defmodule OctoPi.Agent.Loop do
           |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], q)
           |> put_in(
             [Access.key(:loop), Access.key(:messages)],
-            MessageLog.append_many(store.loop.messages, msgs)
+            store.loop.messages ++ msgs
           )
 
         {:continue, store}
@@ -591,7 +587,7 @@ defmodule OctoPi.Agent.Loop do
   defp build_turn_context(loop) do
     %AIContext{
       system_prompt: loop.system_prompt,
-      messages: loop.convert_to_llm.(MessageLog.to_list(loop.messages)),
+      messages: loop.convert_to_llm.(loop.messages),
       tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)
     }
   end
@@ -599,10 +595,10 @@ defmodule OctoPi.Agent.Loop do
   defp end_run(store, reason) do
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: reason,
-      messages: MessageLog.to_list(store.loop.messages)
+      messages: store.loop.messages
     })
 
-    emit_loop_stop(store.loop, reason, store.turn_id, MessageLog.count(store.loop.messages))
+    emit_loop_stop(store.loop, reason, store.turn_id, length(store.loop.messages))
     flip_idle(store)
   end
 
@@ -613,14 +609,14 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp end_run_aborted(store, _reason) do
-    messages = MessageLog.push(store.loop.messages, aborted_assistant(store.loop.model))
+    messages = store.loop.messages ++ [aborted_assistant(store.loop.model)]
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: :aborted,
-      messages: MessageLog.to_list(messages)
+      messages: messages
     })
 
-    emit_loop_stop(store.loop, :aborted, store.turn_id, MessageLog.count(messages))
+    emit_loop_stop(store.loop, :aborted, store.turn_id, length(messages))
 
     store = put_in(store.loop.messages, messages)
     store = put_in(store.loop.error_message, "aborted by caller")
@@ -691,7 +687,7 @@ defmodule OctoPi.Agent.Loop do
     |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
     |> put_in(
       [Access.key(:loop), Access.key(:messages)],
-      MessageLog.append_many(store.loop.messages, steers ++ followups)
+      store.loop.messages ++ steers ++ followups
     )
   end
 
@@ -744,7 +740,9 @@ defmodule OctoPi.Agent.Loop do
   # positive token total that is NOT stale (i.e. its timestamp is after the
   # last compaction).  Returns nil when nothing qualifies.
   defp find_last_successful_context_tokens(messages, last_compaction_at_ms) do
-    MessageLog.find_last_value(messages, fn
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value(fn
       %Assistant{stop_reason: stop, usage: usage, timestamp: ts}
       when stop not in [:error, :aborted] ->
         tokens = context_tokens_from_usage(usage)

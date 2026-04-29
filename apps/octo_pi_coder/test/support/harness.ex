@@ -178,7 +178,6 @@ defmodule OctoPi.Coder.Test.Harness do
   OTP Registry entry is owned by that process.
   """
 
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
@@ -258,9 +257,7 @@ defmodule OctoPi.Coder.Test.Harness do
   def get_assistant_texts(%__MODULE__{session: session}) do
     state = OctoPi.Agent.state(session)
 
-    state.messages
-    |> MessageLog.to_list()
-    |> Enum.flat_map(&extract_text_blocks/1)
+    Enum.flat_map(state.messages, &extract_text_blocks/1)
   end
 
   defp load_factories(factories) do

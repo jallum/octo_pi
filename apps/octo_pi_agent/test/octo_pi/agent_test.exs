@@ -5,7 +5,6 @@ defmodule OctoPi.AgentTest do
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.TestSupport.EchoTool
   alias OctoPi.Agent.Tool
@@ -69,7 +68,7 @@ defmodule OctoPi.AgentTest do
       }
 
       assert state.tools == []
-      assert MessageLog.to_list(state.messages) == []
+      assert state.messages == []
       refute state.is_streaming?
       assert state.pending_tool_calls == MapSet.new()
       assert %PendingMessageQueue{count: 0, mode: :one_at_a_time} = state.steering_queue
@@ -198,7 +197,7 @@ defmodule OctoPi.AgentTest do
       state = OctoPi.Agent.state(loop)
       assert state.model.id == "claude-haiku-4-5"
       refute state.is_streaming?
-      assert MessageLog.to_list(state.messages) == []
+      assert state.messages == []
     end
 
     test "subscribe/3 returns an unsubscribe fn", %{loop: loop} do

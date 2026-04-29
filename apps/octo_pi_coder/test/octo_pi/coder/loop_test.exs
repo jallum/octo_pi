@@ -207,7 +207,7 @@ defmodule OctoPi.Coder.LoopTest do
       assert {:ok, _} = Coder.add_entry(pid, message_entry("hello agent"))
 
       agent_state = :sys.get_state(agent).loop
-      msgs = OctoPi.Agent.MessageLog.to_list(agent_state.messages)
+      msgs = agent_state.messages
       assert [%{"role" => "user", "content" => "hello agent"}] = msgs
     end
   end
