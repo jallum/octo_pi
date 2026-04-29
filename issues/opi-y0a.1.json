@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-y0a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Replace messages_provider with stateless convert_to_llm",
   "type": "task",
-  "updated_at": "2026-04-29T19:47:52.531524Z"
+  "updated_at": "2026-04-29T19:53:56.219178Z"
 }
