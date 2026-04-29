@@ -692,16 +692,29 @@ defmodule OctoPi.Agent.Session do
     )
   end
 
-  # F4: returns true when this assistant's input tokens plus the configured
+  # F4: returns true when this assistant's context tokens plus the configured
   # reserve exceed the model context window.  Used on the :continue path.
   defp over_threshold?(%Assistant{usage: usage}, %{session: session}) do
     reserve = session.auto_compact_reserve_tokens
     ctx = session.model && session.model.context_window
-    input = usage.input
+    tokens = context_tokens_from_usage(usage)
 
-    is_integer(reserve) and is_integer(ctx) and is_integer(input) and
-      input + reserve > ctx
+    is_integer(reserve) and is_integer(ctx) and is_integer(tokens) and
+      tokens + reserve > ctx
   end
+
+  # Mirrors upstream `calculateContextTokens`: prefer provider-supplied
+  # `total_tokens` when positive; otherwise sum input + output + cache_read +
+  # cache_write so prompt-cache reads (common with Anthropic caching) still
+  # count toward the trigger.
+  defp context_tokens_from_usage(%{total_tokens: t}) when is_integer(t) and t > 0, do: t
+
+  defp context_tokens_from_usage(%{input: i, output: o, cache_read: cr, cache_write: cw})
+       when is_integer(i) and is_integer(o) and is_integer(cr) and is_integer(cw) do
+    i + o + cr + cw
+  end
+
+  defp context_tokens_from_usage(_), do: nil
 
   # F5: returns true when the current assistant is an error (with no useful
   # usage) but a prior successful assistant in the transcript is over the
@@ -713,9 +726,9 @@ defmodule OctoPi.Agent.Session do
 
     with r when is_integer(r) <- reserve,
          c when is_integer(c) <- ctx,
-         input when is_integer(input) <-
-           find_last_successful_input(session.messages, session.last_compaction_at_ms) do
-      input + r > c
+         tokens when is_integer(tokens) <-
+           find_last_successful_context_tokens(session.messages, session.last_compaction_at_ms) do
+      tokens + r > c
     else
       _ -> false
     end
@@ -723,16 +736,19 @@ defmodule OctoPi.Agent.Session do
 
   defp over_threshold_on_error?(_assistant, _store), do: false
 
-  # Walk newest-to-oldest through the message log and return the input token
-  # count of the first successful (non-error, non-aborted) assistant with
-  # non-zero input tokens that is NOT stale (i.e. its timestamp is after the
+  # Walk newest-to-oldest through the message log and return the context-token
+  # count of the first successful (non-error, non-aborted) assistant with a
+  # positive token total that is NOT stale (i.e. its timestamp is after the
   # last compaction).  Returns nil when nothing qualifies.
-  defp find_last_successful_input(messages, last_compaction_at_ms) do
+  defp find_last_successful_context_tokens(messages, last_compaction_at_ms) do
     MessageLog.find_last_value(messages, fn
-      %Assistant{stop_reason: stop, usage: %{input: input}, timestamp: ts}
-      when stop not in [:error, :aborted] and is_integer(input) and input > 0 ->
-        if is_nil(last_compaction_at_ms) or is_nil(ts) or ts > last_compaction_at_ms do
-          input
+      %Assistant{stop_reason: stop, usage: usage, timestamp: ts}
+      when stop not in [:error, :aborted] ->
+        tokens = context_tokens_from_usage(usage)
+
+        if is_integer(tokens) and tokens > 0 and
+             (is_nil(last_compaction_at_ms) or is_nil(ts) or ts > last_compaction_at_ms) do
+          tokens
         end
 
       _ ->

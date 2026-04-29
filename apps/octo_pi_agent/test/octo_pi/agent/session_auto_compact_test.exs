@@ -104,6 +104,40 @@ defmodule OctoPi.Agent.SessionAutoCompactTest do
       refute_receive {:octo_pi_agent_event, %Event.CompactionRequested{}}, 200
     end
 
+    test "cache_read pushes total over threshold even when input is small" do
+      # input 10 + cache_read 80 = 90; 90 + reserve 60 = 150 > ctx 100 → trigger.
+      # The bug: prior code looked only at input (10) and let this slip through.
+      cached_first = %Assistant{
+        api: :fake_api,
+        provider: :fake,
+        model: "fake-model",
+        timestamp: 0,
+        content: [%Text{text: "done"}],
+        stop_reason: :stop,
+        usage: %Usage{input: 10, output: 5, cache_read: 80}
+      }
+
+      second = final_msg(0)
+      FakeTransport.set_script([turn_events(cached_first), turn_events(second)])
+
+      session = start_session(auto_compact_reserve_tokens: 60)
+      Agent.subscribe(session, self(), :async)
+
+      :ok = Agent.follow_up(session, "after-compact-follow-up")
+      :ok = Agent.prompt(session, "initial")
+
+      assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref, opts: opts}},
+                     1_000
+
+      assert opts == [auto?: true]
+
+      result = %{summary: "compacted", first_kept_entry_id: "e-1", tokens_before: 1234}
+      :ok = Agent.compaction_response(session, ref, {:ok, result})
+
+      assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, ^result}}}, 1_000
+      assert :ok = Agent.wait_for_idle(session, 2_000)
+    end
+
     test "no auto_compact_reserve_tokens: never triggers regardless of usage" do
       # reserve is nil — over_threshold? should return false
       first = final_msg(999_999)
