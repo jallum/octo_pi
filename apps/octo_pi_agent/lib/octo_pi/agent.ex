@@ -115,6 +115,15 @@ defmodule OctoPi.Agent do
   def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
 
   @doc """
+  Update the mid-run auto-compaction threshold reserve. Set to `nil`
+  to disable mid-run threshold detection. Coder calls this from its
+  init to flow the SettingsManager's `reserve_tokens` into Agent.
+  """
+  @spec set_auto_compact_reserve_tokens(t(), non_neg_integer() | nil) :: :ok
+  def set_auto_compact_reserve_tokens(pid, reserve) when is_nil(reserve) or (is_integer(reserve) and reserve >= 0),
+    do: GenServer.call(pid, {:set_auto_compact_reserve_tokens, reserve})
+
+  @doc """
   Append a message to the working transcript. The host (Coder) calls
   this for non-stream-originated messages — user prompts, synthetic
   types, side-channel events. Stream-originated assistant messages

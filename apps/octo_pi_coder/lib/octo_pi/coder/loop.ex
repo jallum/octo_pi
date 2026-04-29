@@ -152,12 +152,21 @@ defmodule OctoPi.Coder.Loop do
     %{messages: seed} = SessionStore.build_session_context(store_pid)
     :ok = OctoPi.Agent.set_messages(agent_pid, seed)
 
+    settings_manager = resolve_settings_manager(opts)
+
+    # Flow the configured reserve into Agent so mid-run auto-compact
+    # has a threshold to check against. Without this, Agent's
+    # `over_threshold?` returns false and mid-run compaction never
+    # fires.
+    %{reserve_tokens: reserve} = SettingsManager.get_compaction_settings(settings_manager)
+    :ok = OctoPi.Agent.set_auto_compact_reserve_tokens(agent_pid, reserve)
+
     state = %State{
       extensions: extensions,
       store_pid: store_pid,
       agent_pid: agent_pid,
       model_provider: Keyword.get(opts, :model_provider, fn -> nil end),
-      settings_manager: resolve_settings_manager(opts)
+      settings_manager: settings_manager
     }
 
     {:ok, state}

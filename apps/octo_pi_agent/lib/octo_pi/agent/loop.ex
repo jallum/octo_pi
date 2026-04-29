@@ -136,6 +136,9 @@ defmodule OctoPi.Agent.Loop do
 
   def handle_call({:set_messages, msgs}, _from, store), do: {:reply, :ok, put_in(store.loop.messages, msgs)}
 
+  def handle_call({:set_auto_compact_reserve_tokens, reserve}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.auto_compact_reserve_tokens, reserve)}
+
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools
     new_tools = if Enum.any?(tools, &(&1.name == tool.name)), do: tools, else: tools ++ [tool]

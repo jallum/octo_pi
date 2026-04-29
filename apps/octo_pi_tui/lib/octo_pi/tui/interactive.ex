@@ -441,6 +441,7 @@ defmodule OctoPi.TUI.Interactive do
       cwd: cwd,
       model_id: model.id,
       provider: model.provider,
+      context_percent: 0.0,
       context_window: model.context_window,
       git_branch: FooterData.get_git_branch(footer_data)
     }
