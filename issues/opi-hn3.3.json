@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Extract `flush_effects/1` from `advance/1`",
   "type": "task",
-  "updated_at": "2026-04-29T12:44:52.551806Z"
+  "updated_at": "2026-04-29T12:45:15.433127Z"
 }
