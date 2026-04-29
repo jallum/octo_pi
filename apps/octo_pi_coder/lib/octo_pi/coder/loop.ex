@@ -287,6 +287,12 @@ defmodule OctoPi.Coder.Loop do
   def handle_call({:navigate_tree, opts}, _from, state) do
     case do_navigate_tree(state, opts) do
       {:ok, summary, old_leaf_id, new_state} ->
+        # Rewrite Agent's transcript to the new chain. Mirrors
+        # upstream `AgentSession.navigateTree` line 2836:
+        # `this.agent.state.messages = sessionContext.messages`.
+        %{messages: msgs} = SessionStore.build_session_context(new_state.store_pid)
+        :ok = OctoPi.Agent.set_messages(new_state.agent_pid, msgs)
+
         ctx = build_ctx(new_state)
 
         tree_event =
