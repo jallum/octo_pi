@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Clear `notification` on resize — move into `handle_event(%Resize{})`",
   "type": "bug",
-  "updated_at": "2026-04-29T12:44:16.989102Z"
+  "updated_at": "2026-04-29T12:44:50.867879Z"
 }
