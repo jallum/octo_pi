@@ -2,13 +2,14 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-29T12:40:59Z",
   "created": "2026-04-28T11:13:52Z",
   "description": "## Goal\n\nPort all upstream pi-mono documentation (from ) into the octo_pi project, adapting each doc to reflect our Elixir system while preserving the upstream reference for parity checking.\n\n## Why\n\nThe upstream docs are the source of truth for pi-mono behavior. We need adapted versions that:\n1. Reference our Elixir modules and functions instead of TypeScript APIs\n2. Preserve upstream source file links for parity auditing\n3. Document where our implementation diverges from upstream\n4. Live in  alongside our existing port-map docs\n\n## Scope\n\n24 upstream docs across these categories:\n\n**Core system (12 docs)** — compaction, session format, settings, providers, models, custom providers, extensions, RPC, SDK, packages, skills, prompt templates\n\n**TUI/UI (3 docs)** — TUI components, themes, keybindings\n\n**Setup/Config (6 docs)** — terminal setup, tmux, termux, Windows, shell aliases, development\n\n**Reference (3 docs)** — tree navigation, JSON event stream, TUI components (duplicate category)\n\n## Process\n\nEach sub-ticket:\n1. Read the upstream doc from \n2. Create an adapted version in  (or )\n3. Update all code references to our Elixir equivalents\n4. Preserve upstream source links with  notation\n5. Note any divergence from upstream behavior\n6. Keep the doc readable as a standalone reference\n\n## Acceptance\n\nAll 24 docs ported, reviewed for accuracy, and linked from the project README or a docs index page.",
   "id": "opi-r6c",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Docs Migration: Port upstream pi-mono documentation to octo_pi",
   "type": "epic",
-  "updated_at": "2026-04-28T11:13:52Z"
+  "updated_at": "2026-04-29T12:40:59Z"
 }
