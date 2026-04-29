@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Route `:force_render`, `{:extension_result}`, `{:custom_done}` through `handle_event`",
   "type": "task",
-  "updated_at": "2026-04-29T12:45:17.011403Z"
+  "updated_at": "2026-04-29T12:46:05.307350Z"
 }
