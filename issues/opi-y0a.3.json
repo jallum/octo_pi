@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-y0a",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Coder owns compaction trigger and run; Agent kernel goes passive",
   "type": "task",
-  "updated_at": "2026-04-29T19:46:05.304313Z"
+  "updated_at": "2026-04-29T20:10:55.030458Z"
 }
