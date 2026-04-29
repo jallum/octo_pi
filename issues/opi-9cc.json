@@ -14,8 +14,8 @@
   "id": "opi-9cc",
   "labels": [],
   "priority": 1,
-  "status": "open",
+  "status": "closed",
   "title": "Add request correlation ID to AI telemetry events",
   "type": "task",
-  "updated_at": "2026-04-29T13:09:14.452407Z"
+  "updated_at": "2026-04-29T13:09:18.346545Z"
 }
