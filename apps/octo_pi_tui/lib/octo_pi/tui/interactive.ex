@@ -65,7 +65,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Paste
-  alias OctoPi.TUI.Renderer
+  alias OctoPi.TUI.RenderLoop
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Terminal.Image
@@ -83,7 +83,7 @@ defmodule OctoPi.TUI.Interactive do
   @type t :: %__MODULE__{
           session: pid() | nil,
           sup: pid() | nil,
-          renderer: pid() | nil,
+          render_loop: pid() | nil,
           terminal: pid() | nil,
           raw_mode_fn: (atom() -> :ok) | nil,
           skip_raw_mode: boolean(),
@@ -125,14 +125,13 @@ defmodule OctoPi.TUI.Interactive do
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
-          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
-          force_next_render: boolean()
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct session: nil,
             sup: nil,
-            renderer: nil,
+            render_loop: nil,
             terminal: nil,
             raw_mode_fn: nil,
             skip_raw_mode: false,
@@ -174,8 +173,7 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
-            focused_component: :input,
-            force_next_render: false
+            focused_component: :input
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -311,7 +309,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:register_extension_tool, spec}) do
-    if state.session, do: CoderSession.add_tool(state.session, spec)
+    if state.session, do: Coder.add_tool(state.session, spec)
     {state, :ok}
   end
 
@@ -351,31 +349,39 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  @type run_opts :: [
+          model: Model.t(),
+          cwd: String.t(),
+          tools: [OctoPi.Agent.Tool.t()],
+          transport: module(),
+          system_prompt: String.t() | nil,
+          continue: boolean(),
+          models: [Model.t()],
+          extensions: [Extension.t()],
+          resource_loader: OctoPi.Coder.ResourceLoader.t(),
+          keybindings_path: Path.t() | nil,
+          expand_prompt_fn: (String.t() -> String.t()) | nil,
+          dimensions: {pos_integer(), pos_integer()},
+          write_fn: (iodata() -> term()),
+          raw_mode_fn: (:enter | :exit -> term()),
+          skip_raw_mode: boolean(),
+          skip_sigwinch: boolean(),
+          auto_start_reader: boolean(),
+          tty_fn: (-> term()),
+          open_editor_fn: (String.t() -> term()),
+          send_sigtstp_fn: (-> term()),
+          debug_render: boolean(),
+          terminal_name: GenServer.name() | nil,
+          name: GenServer.name()
+        ]
+
   @doc """
   Entry point for the CLI. Starts the Interactive GenServer, then
   blocks until it exits.
 
-  Options:
-
-    * `:model`    — `%OctoPi.AI.Model{}` (required for real runs)
-    * `:tools`    — list of `%OctoPi.Agent.Tool{}` (default `[]`)
-    * `:transport`, `:system_prompt` — forwarded to
-      `OctoPi.Agent.start_session/1`
-    * `:dimensions` — `{w, h}` override for tests
-    * `:write_fn`  — 1-arg fn that receives rendered bytes;
-      default `&IO.write/1`. Tests use this to capture output.
-    * `:skip_raw_mode`, `:skip_sigwinch`, `:auto_start_reader`,
-      `:raw_mode_fn` — Terminal test overrides, passed through.
-    * `:terminal_name` — name under which to register the
-      Terminal GenServer. Pass `nil` to leave it unregistered
-      (useful when multiple Interactive runs share a VM, e.g.
-      tests).
-    * `:name` — name under which to register *this* Interactive
-      GenServer. Tests use it to address Interactive directly
-      (e.g. `send(name, {:hid_event, %Key{...}})`). Default
-      unregistered.
+  Required: `:model`. All others are optional.
   """
-  @spec run(keyword()) :: :ok
+  @spec run(run_opts()) :: :ok
   def run(opts) do
     {:ok, pid} = GenServer.start_link(__MODULE__, opts, gen_opts(opts))
     ref = Process.monitor(pid)
@@ -415,18 +421,20 @@ defmodule OctoPi.TUI.Interactive do
 
     children = [
       %{id: Terminal, start: {Terminal, :start_link, [terminal_opts]}},
-      %{id: Renderer, start: {Renderer, :start_link, [build_renderer_opts(opts, w, h)]}},
       %{id: FooterData, start: {FooterData, :start_link, [[cwd: cwd]]}}
     ]
 
     {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all, max_restarts: 0)
 
     terminal = child_pid(sup, Terminal)
-    renderer = child_pid(sup, Renderer)
+
+    {:ok, render_loop} =
+      RenderLoop.start_link(width: w, height: h, terminal: terminal, csi_2026?: true)
+
     footer_data = child_pid(sup, FooterData)
 
     :ok = Terminal.open(terminal)
-    CoderSession.subscribe(session, self(), :async)
+    Coder.subscribe(session, self(), :async)
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
 
@@ -444,7 +452,7 @@ defmodule OctoPi.TUI.Interactive do
     state = %__MODULE__{
       session: session,
       sup: sup,
-      renderer: renderer,
+      render_loop: render_loop,
       terminal: terminal,
       raw_mode_fn: raw_mode_fn,
       skip_raw_mode: skip_raw_mode,
@@ -477,16 +485,15 @@ defmodule OctoPi.TUI.Interactive do
 
   @impl GenServer
   def handle_continue(:first_render, state) do
-    state = render_frame(state)
+    state = send_render(state)
     {:noreply, state, loader_timeout(state)}
   end
 
   @impl GenServer
   def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
-    Renderer.resize(state.renderer, w, h)
+    send(state.render_loop, {:resize, w, h})
 
     state
-    |> Map.put(:force_next_render, true)
     |> handle_event(event)
     |> advance()
   end
@@ -548,22 +555,24 @@ defmodule OctoPi.TUI.Interactive do
     theme = build_custom_theme(state)
     done = fn result -> send(interactive_pid, {:custom_done, from, result}) end
     component = factory.(tui, theme, done)
-    new_state = render_frame(%{state | custom_widget: {from, component}})
+    new_state = send_render(%{state | custom_widget: {from, component}})
     {:noreply, new_state, loader_timeout(new_state)}
   end
 
   def handle_call({:ui_request, msg}, from, state) do
     {new_state, reply} = handle_ui_request(state, msg)
 
-    case reply do
-      :pending ->
-        new_state = put_dialog_from(new_state, from)
-        new_state = render_frame(new_state)
-        {:noreply, new_state, loader_timeout(new_state)}
+    new_state =
+      case reply do
+        :pending -> put_dialog_from(new_state, from)
+        _ -> new_state
+      end
 
-      val ->
-        new_state = render_frame(new_state)
-        {:reply, val, new_state, loader_timeout(new_state)}
+    new_state = send_render(new_state)
+
+    case reply do
+      :pending -> {:noreply, new_state, loader_timeout(new_state)}
+      val -> {:reply, val, new_state, loader_timeout(new_state)}
     end
   end
 
@@ -577,13 +586,7 @@ defmodule OctoPi.TUI.Interactive do
   def terminate(_reason, state) do
     # Move cursor past the last rendered line so the shell prompt appears
     # on a fresh line below the content (mirrors upstream pi-mono stop()).
-    with pid when is_pid(pid) <- state.renderer,
-         true <- Process.alive?(pid),
-         bytes when bytes != "" <- Renderer.exit_bytes(pid),
-         term when is_pid(term) <- state.terminal,
-         true <- Process.alive?(term) do
-      Terminal.write(term, bytes)
-    end
+    if pid = state.render_loop, do: send(pid, :stop)
 
     # Synchronously shut the supervisor down so Terminal.terminate/2
     # (and through it Reader.terminate/2) runs before we return —
@@ -635,9 +638,9 @@ defmodule OctoPi.TUI.Interactive do
   defp advance(%{exit: true} = state), do: {:stop, :normal, state}
 
   defp advance(state) do
-    state = maybe_suspend(state)
+    state = handle_suspend(state)
     state = maybe_launch_editor(state)
-    state = render_frame(state)
+    state = send_render(state)
     {:noreply, state, loader_timeout(state)}
   end
 
@@ -693,7 +696,7 @@ defmodule OctoPi.TUI.Interactive do
       )
 
     {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
-    :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+    :ok = Coder.set_agent_pid(coder_pid, agent_pid)
     coder_pid
   end
 
@@ -717,7 +720,7 @@ defmodule OctoPi.TUI.Interactive do
           )
 
         messages_provider = fn _session ->
-          ctx = CoderSession.build_session_context(coder_pid)
+          ctx = Coder.build_session_context(coder_pid)
           SessionMessages.to_llm(ctx.messages)
         end
 
@@ -729,7 +732,7 @@ defmodule OctoPi.TUI.Interactive do
           )
 
         {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
-        :ok = CoderSession.set_agent_pid(coder_pid, agent_pid)
+        :ok = Coder.set_agent_pid(coder_pid, agent_pid)
         coder_pid
     end
   end
@@ -810,7 +813,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp register_extension_tools(extensions, coder_session) do
     for ext <- extensions, tool <- Map.values(ext.tools) do
-      CoderSession.add_tool(coder_session, tool)
+      Coder.add_tool(coder_session, tool)
     end
 
     :ok
@@ -837,15 +840,6 @@ defmodule OctoPi.TUI.Interactive do
     :ok
   end
 
-  defp build_renderer_opts(opts, w, h) do
-    base = [width: w, height: h, csi_2026?: true]
-
-    case Keyword.fetch(opts, :min_interval_ms) do
-      {:ok, ms} -> Keyword.put(base, :min_interval_ms, ms)
-      :error -> base
-    end
-  end
-
   defp build_terminal_opts(opts, write_fn) do
     opts
     |> Keyword.take([
@@ -870,14 +864,14 @@ defmodule OctoPi.TUI.Interactive do
 
   # Suspend cycles the Terminal: close (deactivates → cooked mode for
   # the parent shell) → SIGTSTP → open (re-activates after fg).
-  defp maybe_suspend(%{suspend_pending: true} = state) do
+  defp handle_suspend(%{suspend_pending: true} = state) do
     Terminal.close(state.terminal)
     state.send_sigtstp_fn.()
     Terminal.open(state.terminal)
     %{state | suspend_pending: false}
   end
 
-  defp maybe_suspend(state), do: state
+  defp handle_suspend(state), do: state
 
   @doc false
   def default_send_sigtstp do
@@ -906,60 +900,47 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp render_frame(state) do
+  defp send_render(state) do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
-    lines = render(state, input_lines)
-    lines = maybe_composite_model_selector(state, lines)
-    lines = maybe_composite_dequeue_overlay(state, lines)
-    lines = maybe_composite_focused_dialog(state, lines)
+    {lines, layout} = build_screen(state, input_lines)
+    lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
       nil -> :ok
       fd -> log_overwide(fd, lines, state.width)
     end
 
-    post_input_h = post_input_height(state)
-    cursor_seq = cursor_position(state, input_lines, lines, post_input_h)
-    {:ok, bytes} = Renderer.render(state.renderer, lines, cursor_seq, force: state.force_next_render)
-
-    if bytes != "", do: Terminal.write(state.terminal, bytes)
-    %{state | force_next_render: false}
+    cursor_seq = cursor_position(state, input_lines, lines, layout)
+    send(state.render_loop, {:render, lines, cursor_seq})
+    state
   end
 
-  defp maybe_composite_model_selector(%{model_selector: nil}, lines), do: lines
-
-  defp maybe_composite_model_selector(%{model_selector: ms, width: w, height: h}, lines) do
+  defp composite_active_overlay(%{model_selector: ms, width: w, height: h}, lines) when not is_nil(ms) do
     ov_w = min(60, w)
     ov_lines = ModelSelector.render(ms, ov_w)
     ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [ov], w, h)
   end
 
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: nil}, lines), do: lines
-
-  defp maybe_composite_dequeue_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) do
+  defp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do
     ov_w = min(70, w)
     ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
     overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [overlay], w, h)
   end
 
-  defp maybe_composite_focused_dialog(%{focused_component: {:dialog, key}} = state, lines) do
-    ov_w = min(70, state.width)
+  defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
+    ov_w = min(70, w)
 
     case render_dialog_overlay(state, key, ov_w) do
-      nil ->
-        lines
-
-      ov_lines ->
-        ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
-        Overlay.composite(lines, [ov], state.width, state.height)
+      nil -> lines
+      ov_lines -> Overlay.composite(lines, [%Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}], w, h)
     end
   end
 
-  defp maybe_composite_focused_dialog(_state, lines), do: lines
+  defp composite_active_overlay(_state, lines), do: lines
 
   defp render_dialog_overlay(%{login_dialog: d}, :login, w) when not is_nil(d), do: LoginDialog.render(d, w)
 
@@ -1007,29 +988,15 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp post_input_height(%__MODULE__{input: input, width: width, notification: notification}) do
-    length(Components.Input.render_dropdown(input, width)) +
-      length(render_notification(notification, width))
-  end
+  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _layout) when not is_nil(cw), do: "\e[?25l"
 
-  defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _post_input_h) when not is_nil(cw),
-    do: "\e[?25l"
-
-  defp cursor_position(
-         %__MODULE__{
-           input: input,
-           width: width,
-           height: height,
-           footer: footer,
-           ui_overrides: ui_overrides,
-           footer_data: footer_data_pid
-         },
-         input_lines,
-         lines,
-         post_input_h
-       ) do
+  defp cursor_position(%__MODULE__{input: input, width: width, height: height}, input_lines, lines, %{
+         footer_height: footer_height,
+         dropdown_height: dropdown_height,
+         notification_height: notification_height
+       }) do
     {crow, ccol} = Components.Input.cursor_rc(input, width)
-    footer_height = length(footer_lines(Map.get(ui_overrides, :footer), footer, footer_data_pid, width))
+    post_input_h = dropdown_height + notification_height
     input_end = length(lines) - footer_height - post_input_h
     input_start = input_end - length(input_lines)
     viewport_top = max(0, length(lines) - height)
@@ -1124,8 +1091,7 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, %Resize{width: w, height: h}),
     do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
 
-  def handle_event(%{loader: %Components.Loader{} = loader} = state, :loader_tick),
-    do: %{state | loader: Components.Loader.advance_frame(loader)}
+  def handle_event(%{loader: %Components.Loader{}} = state, :loader_tick), do: state
 
   def handle_event(state, {:bash_done, id, output, exit_code}) do
     transcript =
@@ -1157,7 +1123,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: CoderSession.abort(state.session)
+    if state.session, do: Coder.abort(state.session)
     state
   end
 
@@ -1167,7 +1133,7 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | input: %{state.input | value: "", cursor: 0}}
 
   defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: CoderSession.abort(state.session)
+    if state.session, do: Coder.abort(state.session)
     state
   end
 
@@ -1182,7 +1148,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.thinking.cycle", state, _key) do
     new_level = next_thinking_level(state.thinking_level)
-    if state.session, do: CoderSession.set_thinking_level(state.session, new_level)
+    if state.session, do: Coder.set_thinking_level(state.session, new_level)
     label = thinking_level_label(new_level)
 
     %{
@@ -1212,8 +1178,8 @@ defmodule OctoPi.TUI.Interactive do
   defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
 
   defp dispatch_app_action("app.message.dequeue", state, _key) do
-    steering = CoderSession.drain_steering(state.session)
-    follow_up = CoderSession.drain_follow_up(state.session)
+    steering = Coder.drain_steering(state.session)
+    follow_up = Coder.drain_follow_up(state.session)
     items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
 
     if items == [],
@@ -1227,7 +1193,7 @@ defmodule OctoPi.TUI.Interactive do
     if text == "" do
       state
     else
-      if state.session, do: CoderSession.follow_up(state.session, text)
+      if state.session, do: Coder.follow_up(state.session, text)
       input = %{state.input | value: "", cursor: 0}
       %{state | input: input, notification: "Follow-up queued"}
     end
@@ -1239,7 +1205,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleForward", state, _key) do
     new_model = cycle_model(state.models, state.model, :next)
-    if state.session, do: CoderSession.set_model(state.session, new_model)
+    if state.session, do: Coder.set_model(state.session, new_model)
 
     %{
       state
@@ -1253,7 +1219,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.model.cycleBackward", state, _key) do
     new_model = cycle_model(state.models, state.model, :prev)
-    if state.session, do: CoderSession.set_model(state.session, new_model)
+    if state.session, do: Coder.set_model(state.session, new_model)
 
     %{
       state
@@ -1280,10 +1246,7 @@ defmodule OctoPi.TUI.Interactive do
             :error -> %{width: 100, height: 100}
           end
 
-        cell_dims =
-          if is_pid(state.renderer),
-            do: Renderer.get_cell_dims(state.renderer),
-            else: %{width_px: 9, height_px: 18}
+        cell_dims = %{width_px: 9, height_px: 18}
 
         case Image.render_image(base64_data, image_dims, cell_dims: cell_dims, mime_type: mime_type) do
           {:ok, encoded, _rows} -> %{state | input: Components.Input.paste(state.input, encoded)}
@@ -1393,7 +1356,7 @@ defmodule OctoPi.TUI.Interactive do
 
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-    if state.session, do: CoderSession.prompt(state.session, value, send_text)
+    if state.session, do: Coder.prompt(state.session, value, send_text)
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
@@ -1419,7 +1382,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_slash_command("compact", state) do
-    if state.session, do: Task.start(fn -> CoderSession.compact(state.session, []) end)
+    if state.session, do: Task.start(fn -> Coder.compact(state.session, []) end)
     state
   end
 
@@ -1622,23 +1585,25 @@ defmodule OctoPi.TUI.Interactive do
   # --- rendering helpers (pure) ---
 
   @doc """
-  Render the current state into a flat list of lines ready for the
+  Build the current state into a flat list of lines ready for the
   Renderer. Components are concatenated in layout order — the
   Renderer handles terminal mechanics (scrolling, cursor, clearing).
   """
-  @spec render(t()) :: [binary()]
-  def render(%{input: input, width: width} = state) do
-    render(state, Components.Input.render(input, width))
+  @spec build_screen(t()) :: [binary()]
+  def build_screen(%{input: input, width: width} = state) do
+    {lines, _layout} = build_screen(state, Components.Input.render(input, width))
+    lines
   end
 
-  @spec render(t(), [binary()]) :: [binary()]
-  def render(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
+  @spec build_screen(t(), [binary()]) :: {[binary()], map()}
+  def build_screen(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
-    if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    lines = if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
+    {lines, %{footer_height: 0, dropdown_height: 0, notification_height: 0}}
   end
 
-  def render(
+  def build_screen(
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
         input_lines
       ) do
@@ -1648,14 +1613,20 @@ defmodule OctoPi.TUI.Interactive do
     loader_lines = render_loader(loader, width, state.theme)
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
-    footer_lines = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
+    footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
     all =
       banner_lines ++
         resource_lines ++
-        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines
+        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
 
-    [""] ++ all
+    layout = %{
+      footer_height: length(footer_lines_val),
+      dropdown_height: length(dropdown_lines),
+      notification_height: length(notification_lines)
+    }
+
+    {[""] ++ all, layout}
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}
@@ -1701,8 +1672,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
     Enum.each(ov.items, fn
-      {:steering, msg} -> if state.session, do: CoderSession.steer(state.session, msg)
-      {:follow_up, msg} -> if state.session, do: CoderSession.follow_up(state.session, msg)
+      {:steering, msg} -> if state.session, do: Coder.steer(state.session, msg)
+      {:follow_up, msg} -> if state.session, do: Coder.follow_up(state.session, msg)
     end)
 
     unfocus(%{state | dequeue_overlay: nil})
@@ -1744,7 +1715,7 @@ defmodule OctoPi.TUI.Interactive do
         unfocus(%{state | model_selector: nil})
 
       {_new_ms, [{:select_model, model}]} ->
-        if state.session, do: CoderSession.set_model(state.session, model)
+        if state.session, do: Coder.set_model(state.session, model)
 
         unfocus(%{
           state

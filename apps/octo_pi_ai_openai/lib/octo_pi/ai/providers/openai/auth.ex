@@ -3,14 +3,14 @@ defmodule OctoPi.AI.Providers.OpenAI.Auth do
   Resolves an API key for OpenAI-completions-dialect providers
   (OpenAI, OpenRouter, xAI, Groq, DeepSeek, etc.).
 
-  Priority: explicit `StreamOptions.api_key` → provider-specific
+  Priority: explicit `CallOptions.api_key` → provider-specific
   env var. Returns `nil` when neither is set, which is the correct
   outcome for keyless backends like a local Ollama server.
 
   Mirrors pi-mono's `env-api-keys.ts` `getEnvApiKey/1`.
   """
 
-  alias OctoPi.AI.{Model, StreamOptions}
+  alias OctoPi.AI.{CallOptions, Model}
 
   @env_by_provider %{
     openai: "OPENAI_API_KEY",
@@ -27,8 +27,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Auth do
     vercel_ai_gateway: "AI_GATEWAY_API_KEY"
   }
 
-  @spec resolve(Model.t(), StreamOptions.t()) :: binary() | nil
-  def resolve(_model, %StreamOptions{api_key: key}) when is_binary(key) and key != "", do: key
+  @spec resolve(Model.t(), CallOptions.t()) :: binary() | nil
+  def resolve(_model, %CallOptions{api_key: key}) when is_binary(key) and key != "", do: key
   def resolve(%Model{provider: provider}, _opts), do: provider |> env_var() |> read_env()
 
   defp env_var(provider), do: Map.get(@env_by_provider, provider)

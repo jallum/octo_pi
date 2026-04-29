@@ -11,13 +11,13 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
   Ported from `openai-completions.ts` L460-933.
   """
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.OpenAI.Compat
   alias OctoPi.AI.SanitizeUnicode
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.TransformMessages
@@ -29,8 +29,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
           body: map()
         }
 
-  @spec build(Model.t(), Context.t(), StreamOptions.t(), Compat.t()) :: built()
-  def build(%Model{} = model, %Context{} = context, %StreamOptions{} = opts, %Compat{} = compat) do
+  @spec build(Model.t(), Context.t(), CallOptions.t(), Compat.t()) :: built()
+  def build(%Model{} = model, %Context{} = context, %CallOptions{} = opts, %Compat{} = compat) do
     %{
       url: url(model),
       method: :post,
@@ -53,7 +53,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     |> extra_headers(opts)
   end
 
-  defp auth_header(hdrs, %StreamOptions{api_key: key}) when is_binary(key) and key != "",
+  defp auth_header(hdrs, %CallOptions{api_key: key}) when is_binary(key) and key != "",
     do: hdrs ++ [{"authorization", "Bearer " <> key}]
 
   defp auth_header(hdrs, _opts), do: hdrs
@@ -86,7 +86,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     has_image or has_vision_input?(rest)
   end
 
-  defp session_affinity_headers(hdrs, %StreamOptions{} = opts, %Compat{send_session_affinity_headers: true}) do
+  defp session_affinity_headers(hdrs, %CallOptions{} = opts, %Compat{send_session_affinity_headers: true}) do
     session_id = get_in(opts.metadata || %{}, ["session_id"])
 
     if session_id do
@@ -103,9 +103,9 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   defp session_affinity_headers(hdrs, _opts, _compat), do: hdrs
 
-  defp extra_headers(hdrs, %StreamOptions{headers: nil}), do: hdrs
+  defp extra_headers(hdrs, %CallOptions{headers: nil}), do: hdrs
 
-  defp extra_headers(hdrs, %StreamOptions{headers: extra}),
+  defp extra_headers(hdrs, %CallOptions{headers: extra}),
     do: hdrs ++ Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
 
   # --- Body ---
@@ -126,12 +126,12 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     |> apply_cache_control(model, compat, cache_retention)
   end
 
-  defp put_max_tokens(body, %StreamOptions{max_tokens: nil}, _compat), do: body
+  defp put_max_tokens(body, %CallOptions{max_tokens: nil}, _compat), do: body
 
-  defp put_max_tokens(body, %StreamOptions{max_tokens: max}, %Compat{max_tokens_field: :max_tokens}),
+  defp put_max_tokens(body, %CallOptions{max_tokens: max}, %Compat{max_tokens_field: :max_tokens}),
     do: Map.put(body, "max_tokens", max)
 
-  defp put_max_tokens(body, %StreamOptions{max_tokens: max}, _compat), do: Map.put(body, "max_completion_tokens", max)
+  defp put_max_tokens(body, %CallOptions{max_tokens: max}, _compat), do: Map.put(body, "max_completion_tokens", max)
 
   defp put_stream_options(body, %Compat{supports_usage_in_streaming: true}),
     do: Map.put(body, "stream_options", %{"include_usage" => true})
@@ -142,8 +142,8 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   defp put_store(body, _compat), do: body
 
-  defp put_temperature(body, %StreamOptions{temperature: nil}), do: body
-  defp put_temperature(body, %StreamOptions{temperature: t}), do: Map.put(body, "temperature", t)
+  defp put_temperature(body, %CallOptions{temperature: nil}), do: body
+  defp put_temperature(body, %CallOptions{temperature: t}), do: Map.put(body, "temperature", t)
 
   defp put_tools(body, %Context{tools: []}, _compat), do: body
 
@@ -168,7 +168,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
     end
   end
 
-  defp put_reasoning(body, _model, %StreamOptions{reasoning: nil}, _compat), do: body
+  defp put_reasoning(body, _model, %CallOptions{reasoning: nil}, _compat), do: body
 
   defp put_reasoning(body, _model, opts, %Compat{supports_reasoning_effort: true} = compat) do
     effort = map_reasoning_effort(opts.reasoning, compat.reasoning_effort_map)
@@ -209,7 +209,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
 
   # --- Caching ---
 
-  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
+  defp resolve_cache_retention(%CallOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
     do: r
 
   defp resolve_cache_retention(_opts), do: "short"

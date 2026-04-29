@@ -35,7 +35,6 @@ defmodule Mix.Tasks.Ai.Demo do
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
 
@@ -90,11 +89,9 @@ defmodule Mix.Tasks.Ai.Demo do
   end
 
   defp stream_turns(model, context, turn) do
-    stream_opts = %StreamOptions{max_tokens: 512, temperature: 0.2}
-
     final =
       model
-      |> OctoPi.AI.stream(context, stream_opts)
+      |> OctoPi.AI.stream(context, max_tokens: 512, temperature: 0.2)
       |> Enum.reduce(nil, &handle_event/2)
 
     IO.write("\n")
@@ -244,7 +241,7 @@ defmodule Mix.Tasks.Ai.Demo do
       mix ai.demo "your prompt" [--model <id>] [--tool]
 
     Credentials (checked in order):
-      StreamOptions.api_key    (not exposed on this CLI)
+      :api_key opt             (not exposed on this CLI)
       ANTHROPIC_OAUTH_TOKEN    env var
       ANTHROPIC_API_KEY        env var
       Claude Code keychain     (macOS only, if logged in)

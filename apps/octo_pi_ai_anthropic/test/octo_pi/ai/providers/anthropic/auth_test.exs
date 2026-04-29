@@ -1,10 +1,10 @@
 defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Providers.Anthropic.Auth
   alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
   alias OctoPi.AI.Providers.Anthropic.Auth.NoopKeychain
-  alias OctoPi.AI.StreamOptions
 
   # Remote-capture telemetry handler (avoids local-function perf warning).
   def __telemetry_forward__(name, meas, meta, %{pid: pid, ref: ref}) do
@@ -42,18 +42,18 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
       System.put_env("ANTHROPIC_API_KEY", "ak-env")
 
       assert %Credentials{type: :api_key, token: "ak-explicit"} =
-               Auth.resolve(%StreamOptions{api_key: "ak-explicit"})
+               Auth.resolve(%CallOptions{api_key: "ak-explicit"})
     end
 
     test "opts.api_key holding an OAuth token is classified as :oauth" do
       assert %Credentials{type: :oauth, token: "sk-ant-oat-xyz"} =
-               Auth.resolve(%StreamOptions{api_key: "sk-ant-oat-xyz"})
+               Auth.resolve(%CallOptions{api_key: "sk-ant-oat-xyz"})
     end
 
     test "empty opts.api_key falls through to env" do
       System.put_env("ANTHROPIC_API_KEY", "env-key")
 
-      assert %Credentials{token: "env-key"} = Auth.resolve(%StreamOptions{api_key: ""})
+      assert %Credentials{token: "env-key"} = Auth.resolve(%CallOptions{api_key: ""})
     end
   end
 
@@ -136,7 +136,7 @@ defmodule OctoPi.AI.Providers.Anthropic.AuthTest do
     end
 
     test "emits :resolved with source :opts on explicit api_key", %{ref: ref} do
-      Auth.resolve(%StreamOptions{api_key: "ak-x"})
+      Auth.resolve(%CallOptions{api_key: "ak-x"})
       assert_receive {^ref, [:octo_pi_ai_anthropic, :auth, :resolved], %{}, meta}
       assert meta == %{type: :api_key, source: :opts}
     end

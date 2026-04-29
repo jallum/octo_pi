@@ -1,13 +1,13 @@
 defmodule OctoPi.AITest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
   alias OctoPi.AI.Provider
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
@@ -30,7 +30,7 @@ defmodule OctoPi.AITest do
       assert %ToolCall{id: "1", name: "t"}
       assert %Usage{}
       assert %Usage.Cost{}
-      assert %StreamOptions{}
+      assert %CallOptions{}
       assert %Content.Text{}
       assert %Content.Thinking{}
       assert %Content.Image{data: "x", mime_type: "image/png"}
@@ -83,10 +83,9 @@ defmodule OctoPi.AITest do
       assert %Event.Error{reason: :error, message: assistant}
     end
 
-    test "provider behaviour defines stream/3 and stream_simple/3" do
+    test "provider behaviour defines stream_to/4" do
       callbacks = Provider.behaviour_info(:callbacks)
-      assert {:stream, 3} in callbacks
-      assert {:stream_simple, 3} in callbacks
+      assert {:stream_to, 4} in callbacks
     end
   end
 end

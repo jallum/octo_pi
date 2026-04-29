@@ -23,21 +23,37 @@ defmodule OctoPi.Agent do
   alias OctoPi.Agent.Session
   alias OctoPi.Agent.Session.State
   alias OctoPi.Agent.Subscribers
+  alias OctoPi.AI.Model
 
   @type session :: pid()
   @type subscribe_mode :: :sync | :async
 
+  @type session_opt ::
+          {:model, Model.t()}
+          | {:system_prompt, String.t() | nil}
+          | {:tools, [OctoPi.Agent.Tool.t()]}
+          | {:thinking_level, OctoPi.AI.thinking_level() | :off}
+          | {:transport, module()}
+          | {:before_tool_call, (map() -> :allow | {:block, term()}) | nil}
+          | {:after_tool_call, (map() -> :unchanged | {:patch, map()}) | nil}
+          | {:messages_provider, (State.t() -> [OctoPi.AI.Message.t()]) | nil}
+          | {:messages, [OctoPi.AI.Message.t()]}
+          | {:auto_compact_reserve_tokens, pos_integer() | nil}
+          | {:steering_queue_bound, pos_integer()}
+          | {:follow_up_queue_bound, pos_integer()}
+
+  @type session_opts :: [session_opt()]
+
   @doc """
-  Start a session GenServer. Required opts: `:model`. Optional:
-  `:system_prompt`, `:tools`, `:thinking_level`, `:transport`,
-  `:before_tool_call`, `:after_tool_call`, `:messages`.
+  Start a session GenServer.
+
+  Required: `:model`. All others are optional.
   """
-  @spec start_session(keyword()) :: {:ok, session()}
+  @spec start_session(session_opts()) :: {:ok, session()}
   def start_session(opts) when is_list(opts), do: Session.start_link(opts)
 
   @doc "Append message(s) to the transcript and start a new run."
-  @spec prompt(session(), String.t() | Message.t() | [Message.t() | String.t()]) ::
-          :ok | {:error, :already_streaming}
+  @spec prompt(session(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
   def prompt(pid, msg_or_msgs), do: Session.prompt(pid, msg_or_msgs)
 
   @doc "Continue the current conversation with no new user input."
@@ -88,8 +104,7 @@ defmodule OctoPi.Agent do
   match Agent's currently active compaction (e.g. the request was
   superseded or the agent was aborted).
   """
-  @spec compaction_response(session(), reference(), term()) ::
-          :ok | {:error, :stale}
+  @spec compaction_response(session(), reference(), term()) :: :ok | {:error, :stale}
   def compaction_response(pid, ref, result), do: Session.compaction_response(pid, ref, result)
 
   @doc "Change the thinking level for future runs."
@@ -97,7 +112,7 @@ defmodule OctoPi.Agent do
   def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
 
   @doc "Change the model for future runs."
-  @spec set_model(session(), OctoPi.AI.Model.t()) :: :ok
+  @spec set_model(session(), Model.t()) :: :ok
   def set_model(pid, model), do: Session.set_model(pid, model)
 
   @doc "Add a tool to the session's active tool list. No-op if a tool with the same name already exists."
@@ -121,14 +136,11 @@ defmodule OctoPi.Agent do
   def subscribe(session_pid), do: subscribe(session_pid, self(), :async)
 
   @spec subscribe(session(), subscribe_mode()) :: (-> :ok)
-  def subscribe(session_pid, mode) when mode in [:sync, :async] do
-    subscribe(session_pid, self(), mode)
-  end
+  def subscribe(session_pid, mode) when mode in [:sync, :async], do: subscribe(session_pid, self(), mode)
 
   @spec subscribe(session(), pid(), subscribe_mode()) :: (-> :ok)
-  def subscribe(session_pid, listener_pid, mode) when is_pid(listener_pid) do
-    Subscribers.subscribe(session_pid, listener_pid, mode)
-  end
+  def subscribe(session_pid, listener_pid, mode) when is_pid(listener_pid),
+    do: Subscribers.subscribe(session_pid, listener_pid, mode)
 
   @doc "Read the session's current state."
   @spec state(session()) :: State.t()

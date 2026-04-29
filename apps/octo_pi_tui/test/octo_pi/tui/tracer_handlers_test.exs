@@ -17,21 +17,6 @@ defmodule OctoPi.TUI.TracerHandlersTest do
     })
 
     OctoPi.Tracer.register(%{
-      id: :tui_agent,
-      description: "Agent session, turn, and tool lifecycle events (TUI view)",
-      events: [
-        [:octo_pi_agent, :session, :start],
-        [:octo_pi_agent, :session, :stop],
-        [:octo_pi_agent, :turn, :start],
-        [:octo_pi_agent, :turn, :stop],
-        [:octo_pi_agent, :tool, :start],
-        [:octo_pi_agent, :tool, :end],
-        [:octo_pi_agent, :tool, :error]
-      ],
-      level: :info
-    })
-
-    OctoPi.Tracer.register(%{
       id: :tui_raw,
       description: "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
       events: [
@@ -51,11 +36,6 @@ defmodule OctoPi.TUI.TracerHandlersTest do
     test "Events.Tracer registers :tui_events with OctoPi.Tracer" do
       ids = Enum.map(OctoPi.Tracer.registered(), & &1.id)
       assert :tui_events in ids
-    end
-
-    test "Agent.Tracer registers :tui_agent with OctoPi.Tracer" do
-      ids = Enum.map(OctoPi.Tracer.registered(), & &1.id)
-      assert :tui_agent in ids
     end
 
     test "Tracer registers :tui_raw with OctoPi.Tracer" do

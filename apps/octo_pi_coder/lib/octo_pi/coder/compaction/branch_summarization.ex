@@ -53,7 +53,6 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.Coder.Compaction.BranchSummaryResult
   alias OctoPi.Coder.Compaction.FileOps
   alias OctoPi.Coder.Compaction.Prompts
@@ -64,7 +63,7 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.Messages
 
-  @default_producer OctoPi.AI.Providers.Anthropic
+  @default_producer OctoPi.AI
 
   # ---- preparation result struct -------------------------------------------
 
@@ -100,7 +99,7 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
           reserve_tokens: pos_integer(),
           custom_instructions: String.t() | nil,
           replace_instructions: boolean(),
-          producer: module() | (term(), term(), term() -> Enumerable.t())
+          producer: module() | (term(), term(), keyword() -> Enumerable.t())
         ]
 
   @doc """
@@ -158,14 +157,14 @@ defmodule OctoPi.Coder.Compaction.BranchSummarization do
         tools: []
       }
 
-      stream_opts = %StreamOptions{
+      call_opts = [
         max_tokens: 2048,
         api_key: api_key,
         headers: headers
-      }
+      ]
 
       producer
-      |> invoke(model, ai_ctx, stream_opts)
+      |> invoke(model, ai_ctx, call_opts)
       |> consume(prep.file_ops)
     end
   end

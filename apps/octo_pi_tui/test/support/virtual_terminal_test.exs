@@ -103,8 +103,8 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "full redraw renders correctly" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
-      {:ok, bytes} = Renderer.render(r, ["hello", "world"])
+      r = Renderer.new(width: 40, height: 5)
+      {bytes, _r} = Renderer.render(r, ["hello", "world"], "")
 
       vt = 40 |> VT.new(5) |> VT.write(bytes)
       viewport = VT.get_viewport(vt)
@@ -116,12 +116,12 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "differential render updates only changed lines" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
+      r = Renderer.new(width: 40, height: 5)
 
-      {:ok, bytes1} = Renderer.render(r, ["aaa", "bbb", "ccc"])
+      {bytes1, r} = Renderer.render(r, ["aaa", "bbb", "ccc"], "")
       vt = 40 |> VT.new(5) |> VT.write(bytes1)
 
-      {:ok, bytes2} = Renderer.render(r, ["aaa", "XXX", "ccc"])
+      {bytes2, _r} = Renderer.render(r, ["aaa", "XXX", "ccc"], "")
       vt = VT.write(vt, bytes2)
 
       viewport = VT.get_viewport(vt)
@@ -133,12 +133,12 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "shrink clears stale rows" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 10, min_interval_ms: 0)
+      r = Renderer.new(width: 40, height: 10)
 
-      {:ok, bytes1} = Renderer.render(r, ["a", "b", "c", "d", "e"])
+      {bytes1, r} = Renderer.render(r, ["a", "b", "c", "d", "e"], "")
       vt = 40 |> VT.new(10) |> VT.write(bytes1)
 
-      {:ok, bytes2} = Renderer.render(r, ["a", "b"])
+      {bytes2, _r} = Renderer.render(r, ["a", "b"], "")
       vt = VT.write(vt, bytes2)
 
       viewport = VT.get_viewport(vt)
@@ -152,13 +152,13 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "resize then render clears and redraws" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
+      r = Renderer.new(width: 40, height: 5)
 
-      {:ok, bytes1} = Renderer.render(r, ["old1", "old2", "old3"])
+      {bytes1, r} = Renderer.render(r, ["old1", "old2", "old3"], "")
       vt = 40 |> VT.new(5) |> VT.write(bytes1)
 
-      :ok = Renderer.resize(r, 60, 8)
-      {:ok, bytes2} = Renderer.render(r, ["new1", "new2"])
+      r = Renderer.resize(r, 60, 8)
+      {bytes2, _r} = Renderer.render(r, ["new1", "new2"], "")
       vt = vt |> VT.resize(60, 8) |> VT.write(bytes2)
 
       viewport = VT.get_viewport(vt)
@@ -170,15 +170,15 @@ defmodule OctoPi.TUI.VirtualTerminalTest do
     test "spinner animation: only middle line changes" do
       alias OctoPi.TUI.Renderer
 
-      {:ok, r} = Renderer.start_link(width: 40, height: 5, min_interval_ms: 0)
+      r = Renderer.new(width: 40, height: 5)
 
-      {:ok, bytes1} = Renderer.render(r, ["Header", "⠋ Working...", "Footer"])
+      {bytes1, r} = Renderer.render(r, ["Header", "⠋ Working...", "Footer"], "")
       vt = 40 |> VT.new(5) |> VT.write(bytes1)
 
-      {:ok, bytes2} = Renderer.render(r, ["Header", "⠙ Working...", "Footer"])
+      {bytes2, r} = Renderer.render(r, ["Header", "⠙ Working...", "Footer"], "")
       vt = VT.write(vt, bytes2)
 
-      {:ok, bytes3} = Renderer.render(r, ["Header", "⠹ Working...", "Footer"])
+      {bytes3, _r} = Renderer.render(r, ["Header", "⠹ Working...", "Footer"], "")
       vt = VT.write(vt, bytes3)
 
       viewport = VT.get_viewport(vt)

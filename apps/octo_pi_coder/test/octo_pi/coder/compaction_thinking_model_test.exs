@@ -20,6 +20,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.AI.Model
+  alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Session
   alias OctoPi.Coder.Session.Entry
@@ -104,14 +105,14 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
     ts = DateTime.to_iso8601(DateTime.utc_now())
 
     {:ok, _u_id} =
-      Session.add_entry(session, %Entry.Message{
+      Coder.add_entry(session, %Entry.Message{
         id: nil,
         timestamp: ts,
         message: %{"role" => "user", "content" => "Write down the first 10 prime numbers."}
       })
 
     {:ok, a_id} =
-      Session.add_entry(session, %Entry.Message{
+      Coder.add_entry(session, %Entry.Message{
         id: nil,
         timestamp: ts,
         message: %{
@@ -130,7 +131,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
     first_kept = r.first_kept_entry_id || fallback_first_id
 
     {:ok, _} =
-      Session.add_entry(session, %Entry.Compaction{
+      Coder.add_entry(session, %Entry.Compaction{
         id: nil,
         timestamp: ts,
         summary: r.summary,
@@ -149,7 +150,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
       session = open_session(ctx, thinking_model())
       _a_id = add_conversation(session)
 
-      assert {:ok, %{result: %Result{} = r}} = Session.compact(session, thinking_level: :high)
+      assert {:ok, %{result: %Result{} = r}} = Coder.compact(session, thinking_level: :high)
       assert is_binary(r.summary) and r.summary != ""
       assert r.tokens_before > 0
     end
@@ -158,10 +159,10 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
       session = open_session(ctx, thinking_model())
       a_id = add_conversation(session)
 
-      {:ok, %{result: %Result{} = r}} = Session.compact(session, thinking_level: :high)
+      {:ok, %{result: %Result{} = r}} = Coder.compact(session, thinking_level: :high)
       persist_compaction(session, r, a_id)
 
-      ctx_map = Session.build_session_context(session)
+      ctx_map = Coder.build_session_context(session)
       [first | _] = ctx_map.messages
       assert Map.get(first, :role) == "compactionSummary"
     end
@@ -170,7 +171,7 @@ defmodule OctoPi.Coder.CompactionThinkingModelTest do
       session = open_session(ctx, non_thinking_model())
       _a_id = add_conversation(session)
 
-      assert {:ok, %{result: %Result{} = r}} = Session.compact(session, thinking_level: :off)
+      assert {:ok, %{result: %Result{} = r}} = Coder.compact(session, thinking_level: :off)
       assert is_binary(r.summary) and r.summary != ""
       assert r.tokens_before > 0
     end

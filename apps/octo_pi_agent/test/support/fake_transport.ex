@@ -1,7 +1,7 @@
 defmodule OctoPi.Agent.TestSupport.FakeTransport do
   @moduledoc """
   Test transport. Yields canned `OctoPi.AI.Event` streams, one
-  scripted turn per `stream/3` call.
+  scripted turn per `stream_to/4` call.
 
   The script lives in an `Agent` process started on demand under the
   supervision tree of the test run. Tests are `async: false` so a
@@ -33,7 +33,7 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
   end
 
   @doc """
-  Block the next `stream/3` call until `release_gate/0` is called.
+  Block the next `stream_to/4` call until `release_gate/0` is called.
   The stream Task registers its own pid atomically when it picks up the
   pending gate.  Call `set_gate/0` before prompting, assert the busy
   error, then call `release_gate/0` to unblock the Task.
@@ -61,7 +61,7 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
   end
 
   @impl true
-  def stream(_model, _context, _opts) do
+  def stream_to(_model, _context, _opts, caller) do
     ensure_agent()
     worker = self()
 
@@ -95,10 +95,17 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
       end
     end
 
-    case turn do
-      :empty -> raise "FakeTransport: script exhausted"
-      turn -> turn
-    end
+    turn =
+      case turn do
+        :empty -> raise "FakeTransport: script exhausted"
+        t -> t
+      end
+
+    {:ok,
+     spawn(fn ->
+       Enum.each(turn, &send(caller, {self(), :event, &1}))
+       send(caller, {self(), :done})
+     end)}
   end
 
   defp ensure_agent do

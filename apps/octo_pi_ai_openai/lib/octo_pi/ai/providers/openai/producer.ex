@@ -14,16 +14,15 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   Ported from `openai-completions.ts` L110-196.
   """
 
-  alias OctoPi.AI.{PartialJson, SSE, StreamOptions}
+  alias OctoPi.AI.{CallOptions, PartialJson, SSE, Telemetry}
   alias OctoPi.AI.Providers.OpenAI.{Auth, Compat, Decoder, Request}
   alias OctoPi.AI.SSE.Event, as: SseEvent
 
   @type start_arg :: %{
           required(:model) => OctoPi.AI.Model.t(),
           required(:context) => OctoPi.AI.Context.t(),
-          required(:opts) => OctoPi.AI.StreamOptions.t(),
+          required(:opts) => OctoPi.AI.CallOptions.t(),
           required(:caller) => pid(),
-          required(:ref) => reference(),
           optional(:req_overrides) => keyword()
         }
 
@@ -40,21 +39,15 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   def run(%{} = args) do
     caller_mon = Process.monitor(args.caller)
     start_mono = System.monotonic_time()
-
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :start],
-      %{system_time: System.system_time()},
-      %{model: args.model.id}
-    )
+    Telemetry.request_start(args.model)
 
     compat = Compat.resolve(args.model)
     {start_event, decoder_state} = Decoder.new(args.model)
 
-    send(args.caller, {args.ref, :event, start_event})
+    send(args.caller, {self(), :event, start_event})
 
     state = %{
       caller: args.caller,
-      ref: args.ref,
       caller_mon: caller_mon,
       model: args.model,
       sse: SSE.new(),
@@ -104,7 +97,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
           state
       end
 
-    send(state.caller, {state.ref, :done})
+    send(state.caller, {self(), :done})
     :ok
   end
 
@@ -140,29 +133,29 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp process_chunk(chunk, state) do
     {sse_events, sse} = SSE.decode(state.sse, chunk)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
   defp flush_sse(state) do
     {sse_events, sse} = SSE.finalize(state.sse)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
-  defp apply_sse_events(sse_events, decoder, caller, ref) do
+  defp apply_sse_events(sse_events, decoder, caller) do
     Enum.reduce(sse_events, decoder, fn sse_ev, dstate ->
-      handle_sse_event(sse_ev, dstate, caller, ref)
+      handle_sse_event(sse_ev, dstate, caller)
     end)
   end
 
-  defp handle_sse_event(%SseEvent{data: "[DONE]"}, dstate, _caller, _ref), do: dstate
+  defp handle_sse_event(%SseEvent{data: "[DONE]"}, dstate, _caller), do: dstate
 
-  defp handle_sse_event(%SseEvent{data: data}, dstate, caller, ref) do
+  defp handle_sse_event(%SseEvent{data: data}, dstate, caller) do
     case PartialJson.parse_with_repair(data) do
       {:ok, event} when is_map(event) ->
         {events, dstate} = Decoder.handle(dstate, event)
-        Enum.each(events, &send(caller, {ref, :event, &1}))
+        Enum.each(events, &send(caller, {self(), :event, &1}))
         dstate
 
       _ ->
@@ -172,11 +165,11 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   # --- auth ---
 
-  defp ensure_api_key(%StreamOptions{api_key: key} = opts, _model)
+  defp ensure_api_key(%CallOptions{api_key: key} = opts, _model)
        when is_binary(key) and key != "",
        do: opts
 
-  defp ensure_api_key(%StreamOptions{} = opts, model),
+  defp ensure_api_key(%CallOptions{} = opts, model),
     do: %{opts | api_key: Auth.resolve(model, opts)}
 
   # --- callbacks ---
@@ -202,7 +195,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp emit_done_or_error(state) do
     final = Decoder.finalize(state.decoder)
-    send(state.caller, {state.ref, :event, final})
+    send(state.caller, {self(), :event, final})
     state
   end
 
@@ -212,7 +205,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp emit_error(state, message, reason) do
     {error_ev, decoder} = Decoder.error(state.decoder, message, reason)
-    send(state.caller, {state.ref, :event, error_ev})
+    send(state.caller, {self(), :event, error_ev})
     %{state | decoder: decoder}
   end
 
@@ -221,26 +214,19 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   defp emit_request_stop(state, start_mono, extras) do
     usage = state.decoder.message.usage
 
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :stop],
+    Telemetry.request_stop(
+      state.model,
       %{
         duration: System.monotonic_time() - start_mono,
         input_tokens: usage.input,
         output_tokens: usage.output,
         total_tokens: usage.total_tokens
       },
-      Map.merge(
-        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
-        Map.new(extras)
-      )
+      Map.merge(%{stop_reason: state.decoder.message.stop_reason}, Map.new(extras))
     )
   end
 
   defp emit_request_exception(state, start_mono, kind, reason) do
-    :telemetry.execute(
-      [:octo_pi_ai_openai, :request, :exception],
-      %{duration: System.monotonic_time() - start_mono},
-      %{model: state.model.id, kind: kind, reason: reason}
-    )
+    Telemetry.request_exception(state.model, start_mono, kind, reason)
   end
 end

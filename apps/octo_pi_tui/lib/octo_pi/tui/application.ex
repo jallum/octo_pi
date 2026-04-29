@@ -17,28 +17,10 @@ defmodule OctoPi.TUI.Application do
     })
 
     OctoPi.Tracer.register(%{
-      id: :tui_agent,
-      description: "Agent session, turn, and tool lifecycle events (TUI view)",
-      events: [
-        [:octo_pi_agent, :session, :start],
-        [:octo_pi_agent, :session, :stop],
-        [:octo_pi_agent, :turn, :start],
-        [:octo_pi_agent, :turn, :stop],
-        [:octo_pi_agent, :tool, :start],
-        [:octo_pi_agent, :tool, :stop],
-        [:octo_pi_agent, :tool, :error]
-      ],
-      level: :info
-    })
-
-    OctoPi.Tracer.register(%{
       id: :tui_raw,
-      description: "TTY pipeline trace: reader, stdin, key, terminal, raw_mode (high-frequency — expect volume)",
+      description: "TTY pipeline trace: reader, terminal writes, raw_mode (high-frequency — expect volume)",
       events: [
         [:octo_pi_tui, :reader, :read],
-        [:octo_pi_tui, :stdin, :chunk],
-        [:octo_pi_tui, :stdin, :sequence],
-        [:octo_pi_tui, :key, :event],
         [:octo_pi_tui, :terminal, :reader_exit],
         [:octo_pi_tui, :terminal, :reader_down],
         [:octo_pi_tui, :terminal, :tty_write],
@@ -56,10 +38,9 @@ defmodule OctoPi.TUI.Application do
 
     OctoPi.Tracer.register(%{
       id: :tui_render,
-      description: "TUI renderer frame timing and throttle skips",
+      description: "TUI renderer frame timing",
       events: [
-        [:octo_pi_tui, :renderer, :render],
-        [:octo_pi_tui, :render_throttle, :skip]
+        [:octo_pi_tui, :renderer, :render]
       ],
       level: :debug
     })

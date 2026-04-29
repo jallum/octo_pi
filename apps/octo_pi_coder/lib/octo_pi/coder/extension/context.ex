@@ -84,6 +84,6 @@ defmodule OctoPi.Coder.Extension.Context do
   """
   @spec bind_session(t(), GenServer.server()) :: t()
   def bind_session(%__MODULE__{} = ctx, session) do
-    bind_session_manager(ctx, fn -> Session.get_session_manager(session) end)
+    bind_session_manager(ctx, fn -> GenServer.call(session, :get_session_manager) end)
   end
 end

@@ -1,7 +1,7 @@
 defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{Context, Event, Message, Model, StreamOptions, ToolCall}
+  alias OctoPi.AI.{CallOptions, Context, Event, Message, Model, ToolCall}
   alias OctoPi.AI.Providers.OpenAI.Producer
   alias OctoPi.AI.TestSupport.FakeOpenAIPlug, as: Fake
 
@@ -27,32 +27,30 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
 
   defp start_producer(chunks, status \\ 200) do
     caller = self()
-    ref = make_ref()
 
     {:ok, pid} =
       Producer.start(%{
         model: model(),
         context: user_context(),
-        opts: %StreamOptions{},
+        opts: %CallOptions{},
         caller: caller,
-        ref: ref,
         req_overrides: [plug: Fake.serve(chunks, status)]
       })
 
-    {pid, ref}
+    pid
   end
 
-  defp collect_events(ref, timeout \\ 2_000) do
+  defp collect_events(pid, timeout \\ 2_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
-    do_collect(ref, [], deadline)
+    do_collect(pid, [], deadline)
   end
 
-  defp do_collect(ref, acc, deadline) do
+  defp do_collect(pid, acc, deadline) do
     remaining = max(deadline - System.monotonic_time(:millisecond), 0)
 
     receive do
-      {^ref, :event, event} -> do_collect(ref, [event | acc], deadline)
-      {^ref, :done} -> Enum.reverse(acc)
+      {^pid, :event, event} -> do_collect(pid, [event | acc], deadline)
+      {^pid, :done} -> Enum.reverse(acc)
     after
       remaining ->
         flunk("timed out after #{remaining}ms; collected: #{inspect(Enum.reverse(acc))}")
@@ -83,8 +81,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert [
                %Event.Start{},
@@ -134,8 +132,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert %Event.Done{reason: :tool_use, message: msg} = List.last(events)
       assert [%ToolCall{id: "call_abc", name: "read", arguments: %{"path" => "foo.txt"}}] = msg.content
@@ -154,8 +152,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert %Event.Done{reason: :stop} = List.last(events)
     end
@@ -164,8 +162,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
   describe "error handling" do
     test "non-2xx HTTP status surfaces as Error event" do
       body = ~s({"error":{"message":"overloaded"}})
-      {_pid, ref} = start_producer([body], 529)
-      events = collect_events(ref)
+      pid = start_producer([body], 529)
+      events = collect_events(pid)
 
       assert [%Event.Start{}, %Event.Error{reason: :error, message: msg}] = events
       assert msg.error_message =~ "HTTP 529"
@@ -180,8 +178,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       assert %Event.Done{reason: :stop} = List.last(events)
     end
@@ -201,10 +199,10 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {pid, ref} = start_producer(chunks)
+      pid = start_producer(chunks)
       ref_mon = Process.monitor(pid)
 
-      _events = collect_events(ref)
+      _events = collect_events(pid)
 
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, reason}, 500
       assert reason in [:normal, :noproc]
@@ -218,9 +216,9 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       handler = "openai-producer-telemetry-#{inspect(ref)}"
 
       events = [
-        [:octo_pi_ai_openai, :request, :start],
-        [:octo_pi_ai_openai, :request, :stop],
-        [:octo_pi_ai_openai, :request, :exception]
+        [:octo_pi_ai, :request, :start],
+        [:octo_pi_ai, :request, :stop],
+        [:octo_pi_ai, :request, :exception]
       ]
 
       :telemetry.attach_many(
@@ -248,26 +246,28 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      _events = collect_events(ref)
+      pid = start_producer(chunks)
+      _events = collect_events(pid)
 
-      assert_receive {^tref, [:octo_pi_ai_openai, :request, :start], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :start], meas, meta}
       assert is_integer(meas.system_time)
+      assert meta.api == :openai_completions
       assert meta.model == "gpt-4o"
 
-      assert_receive {^tref, [:octo_pi_ai_openai, :request, :stop], meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], meas, meta}
       assert is_integer(meas.duration) and meas.duration > 0
       assert meas.input_tokens == 5
       assert meas.output_tokens == 2
+      assert meta.api == :openai_completions
       assert meta.stop_reason == :stop
       assert meta.http_status == 200
     end
 
     test "emits stop with http_status on non-2xx response", %{telemetry_ref: tref} do
-      {_pid, ref} = start_producer(["{\"error\":\"boom\"}"], 500)
-      _events = collect_events(ref)
+      pid = start_producer(["{\"error\":\"boom\"}"], 500)
+      _events = collect_events(pid)
 
-      assert_receive {^tref, [:octo_pi_ai_openai, :request, :stop], _meas, meta}
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, meta}
       assert meta.http_status == 500
     end
 
@@ -287,15 +287,13 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
 
       caller = spawn(fn -> Process.sleep(:infinity) end)
       caller_mon = Process.monitor(caller)
-      ref = make_ref()
 
       {:ok, _pid} =
         Producer.start(%{
           model: model(),
           context: user_context(),
-          opts: %StreamOptions{},
+          opts: %CallOptions{},
           caller: caller,
-          ref: ref,
           req_overrides: [plug: Fake.serve(chunks)]
         })
 
@@ -303,7 +301,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       Process.exit(caller, :kill)
       assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
 
-      assert_receive {^tref, [:octo_pi_ai_openai, :request, :stop], _meas,
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas,
                       %{stop_reason: :aborted}},
                      2_000
     end
@@ -335,8 +333,8 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
         Fake.done()
       ]
 
-      {_pid, ref} = start_producer(chunks)
-      events = collect_events(ref)
+      pid = start_producer(chunks)
+      events = collect_events(pid)
 
       text =
         events
@@ -365,7 +363,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
     test "on_payload can modify the request body" do
       test_pid = self()
 
-      opts = %StreamOptions{
+      opts = %CallOptions{
         on_payload: fn body, model ->
           send(test_pid, {:payload, body, model})
           Map.put(body, "custom_field", true)
@@ -373,19 +371,17 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       }
 
       caller = self()
-      ref = make_ref()
 
-      {:ok, _pid} =
+      {:ok, pid} =
         Producer.start(%{
           model: model(),
           context: user_context(),
           opts: opts,
           caller: caller,
-          ref: ref,
           req_overrides: [plug: Fake.serve(simple_chunks())]
         })
 
-      _events = collect_events(ref)
+      _events = collect_events(pid)
 
       assert_receive {:payload, body, m}
       assert body["model"] == "gpt-4o"
@@ -395,7 +391,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
     test "on_response receives status and headers" do
       test_pid = self()
 
-      opts = %StreamOptions{
+      opts = %CallOptions{
         on_response: fn info, model ->
           send(test_pid, {:response, info, model})
           :ok
@@ -403,19 +399,17 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       }
 
       caller = self()
-      ref = make_ref()
 
-      {:ok, _pid} =
+      {:ok, pid} =
         Producer.start(%{
           model: model(),
           context: user_context(),
           opts: opts,
           caller: caller,
-          ref: ref,
           req_overrides: [plug: Fake.serve(simple_chunks())]
         })
 
-      _events = collect_events(ref)
+      _events = collect_events(pid)
 
       assert_receive {:response, info, m}
       assert info.status == 200

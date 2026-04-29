@@ -21,7 +21,7 @@ defmodule OctoPi.Coder.Test.FauxTransport do
   @moduledoc """
   Test transport for `octo_pi_coder` extension tests. Converts
   `FauxResponse` structs into scripted AI event sequences, one per
-  `stream/3` call.
+  `stream_to/5` call.
 
   Usage is identical to `OctoPi.Agent.TestSupport.FakeTransport`:
   call `set_script/1` before starting a run, call `clear/0` in
@@ -55,14 +55,21 @@ defmodule OctoPi.Coder.Test.FauxTransport do
   end
 
   @impl true
-  def stream(_model, _context, _opts) do
-    case Agent.get_and_update(@agent_name, fn
-           [] -> {:empty, []}
-           [head | rest] -> {head, rest}
-         end) do
-      :empty -> raise "FauxTransport: script exhausted"
-      events -> events
-    end
+  def stream_to(_model, _context, _opts, caller) do
+    events =
+      case Agent.get_and_update(@agent_name, fn
+             [] -> {:empty, []}
+             [head | rest] -> {head, rest}
+           end) do
+        :empty -> raise "FauxTransport: script exhausted"
+        evs -> evs
+      end
+
+    {:ok,
+     spawn(fn ->
+       Enum.each(events, &send(caller, {self(), :event, &1}))
+       send(caller, {self(), :done})
+     end)}
   end
 
   # ── event builders ───────────────────────────────────────────────

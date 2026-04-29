@@ -7,8 +7,12 @@ defmodule OctoPi.AI.Application do
   def start(_type, _args) do
     OctoPi.Tracer.register(%{
       id: :ai_core,
-      description: "AI core stream lifecycle events (open and close)",
-      events: [[:octo_pi_ai, :stream, :open], [:octo_pi_ai, :stream, :close]],
+      description: "AI provider request lifecycle events (all providers)",
+      events: [
+        [:octo_pi_ai, :request, :start],
+        [:octo_pi_ai, :request, :stop],
+        [:octo_pi_ai, :request, :exception]
+      ],
       level: :info
     })
 

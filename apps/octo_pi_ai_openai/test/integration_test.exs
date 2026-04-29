@@ -7,8 +7,8 @@ defmodule OctoPi.AI.Providers.OpenAI.IntegrationTest do
   """
   use ExUnit.Case
 
-  alias OctoPi.AI.{Content, Context, Event, Message, Model, StreamOptions, Tool, ToolCall}
-  alias OctoPi.AI.Providers.OpenAI
+  alias OctoPi.AI
+  alias OctoPi.AI.{Content, Context, Event, Message, Model, Tool, ToolCall}
 
   @moduletag :integration
 
@@ -25,16 +25,16 @@ defmodule OctoPi.AI.Providers.OpenAI.IntegrationTest do
   end
 
   defp opts do
-    %StreamOptions{
+    [
       api_key: System.get_env("OPENAI_API_KEY"),
       max_tokens: 256,
       temperature: 0.0
-    }
+    ]
   end
 
   defp stream_to_list(model, context, opts) do
     model
-    |> OpenAI.stream(context, opts)
+    |> AI.stream(context, opts)
     |> Enum.to_list()
   end
 
@@ -136,7 +136,7 @@ defmodule OctoPi.AI.Providers.OpenAI.IntegrationTest do
 
       events =
         model()
-        |> OpenAI.stream(ctx, opts())
+        |> AI.stream(ctx, opts())
         |> Enum.take(3)
 
       assert length(events) == 3

@@ -17,14 +17,14 @@ defmodule OctoPi.TUI.TuiRenderTest do
   defp setup_render(opts) do
     width = Keyword.get(opts, :width, 40)
     height = Keyword.get(opts, :height, 10)
-    {:ok, r} = Renderer.start_link(width: width, height: height, min_interval_ms: 0)
+    r = Renderer.new(width: width, height: height)
     vt = VT.new(width, height)
     {r, vt}
   end
 
   defp render_frame(r, vt, lines) do
-    {:ok, bytes} = Renderer.render(r, lines)
-    VT.write(vt, bytes)
+    {bytes, r} = Renderer.render(r, lines)
+    {r, VT.write(vt, bytes)}
   end
 
   defp visible(vt), do: VT.get_viewport(vt)
@@ -34,16 +34,16 @@ defmodule OctoPi.TUI.TuiRenderTest do
   describe "resize handling" do
     test "height change triggers full redraw, content preserved" do
       {r, vt} = setup_render(width: 40, height: 10)
-      vt = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
+      {r, vt} = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
 
       assert Enum.at(visible(vt), 0) == "Line 0"
       assert Enum.at(visible(vt), 1) == "Line 1"
       assert Enum.at(visible(vt), 2) == "Line 2"
 
       # Resize to taller terminal
-      :ok = Renderer.resize(r, 40, 15)
+      r = Renderer.resize(r, 40, 15)
       vt = VT.resize(vt, 40, 15)
-      vt = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
+      {_r, vt} = render_frame(r, vt, ["Line 0", "Line 1", "Line 2"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "Line 0"
@@ -54,11 +54,11 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "width change triggers full redraw" do
       {r, vt} = setup_render(width: 40, height: 10)
-      vt = render_frame(r, vt, ["short"])
+      {r, vt} = render_frame(r, vt, ["short"])
 
-      :ok = Renderer.resize(r, 60, 10)
+      r = Renderer.resize(r, 60, 10)
       vt = VT.resize(vt, 60, 10)
-      vt = render_frame(r, vt, ["wider content now"])
+      {_r, vt} = render_frame(r, vt, ["wider content now"])
 
       assert Enum.at(visible(vt), 0) == "wider content now"
     end
@@ -70,11 +70,11 @@ defmodule OctoPi.TUI.TuiRenderTest do
     test "clears stale rows when content shrinks from 6 to 2" do
       {r, vt} = setup_render(height: 10)
       lines = Enum.map(0..5, &"Line #{&1}")
-      vt = render_frame(r, vt, lines)
+      {r, vt} = render_frame(r, vt, lines)
 
       assert Enum.at(visible(vt), 5) == "Line 5"
 
-      vt = render_frame(r, vt, ["Line 0", "Line 1"])
+      {_r, vt} = render_frame(r, vt, ["Line 0", "Line 1"])
       rows = visible(vt)
 
       assert Enum.at(rows, 0) == "Line 0"
@@ -87,8 +87,8 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "handles shrink to single line" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["a", "b", "c", "d"])
-      vt = render_frame(r, vt, ["Only line"])
+      {r, vt} = render_frame(r, vt, ["a", "b", "c", "d"])
+      {_r, vt} = render_frame(r, vt, ["Only line"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "Only line"
@@ -99,8 +99,8 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "handles shrink to empty" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["a", "b", "c"])
-      vt = render_frame(r, vt, [])
+      {r, vt} = render_frame(r, vt, ["a", "b", "c"])
+      {_r, vt} = render_frame(r, vt, [])
 
       rows = visible(vt)
       assert Enum.all?(rows, &(&1 == ""))
@@ -112,13 +112,13 @@ defmodule OctoPi.TUI.TuiRenderTest do
   describe "differential rendering" do
     test "cursor tracking after shrink with unchanged remaining lines" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["a", "b", "c", "d", "e"])
+      {r, vt} = render_frame(r, vt, ["a", "b", "c", "d", "e"])
 
       # Shrink to 3 lines (same content)
-      vt = render_frame(r, vt, ["a", "b", "c"])
+      {r, vt} = render_frame(r, vt, ["a", "b", "c"])
 
       # Change middle line — should render correctly despite shrink
-      vt = render_frame(r, vt, ["a", "X", "c"])
+      {_r, vt} = render_frame(r, vt, ["a", "X", "c"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "a"
@@ -128,9 +128,9 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "only middle line changes — spinner animation" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["Header", "⠋ Working...", "Footer"])
-      vt = render_frame(r, vt, ["Header", "⠙ Working...", "Footer"])
-      vt = render_frame(r, vt, ["Header", "⠹ Working...", "Footer"])
+      {r, vt} = render_frame(r, vt, ["Header", "⠋ Working...", "Footer"])
+      {r, vt} = render_frame(r, vt, ["Header", "⠙ Working...", "Footer"])
+      {_r, vt} = render_frame(r, vt, ["Header", "⠹ Working...", "Footer"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "Header"
@@ -140,8 +140,8 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "first line changes but rest stays same" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
-      vt = render_frame(r, vt, ["XXX", "bbb", "ccc", "ddd"])
+      {r, vt} = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
+      {_r, vt} = render_frame(r, vt, ["XXX", "bbb", "ccc", "ddd"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "XXX"
@@ -152,8 +152,8 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "last line changes but rest stays same" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
-      vt = render_frame(r, vt, ["aaa", "bbb", "ccc", "XXX"])
+      {r, vt} = render_frame(r, vt, ["aaa", "bbb", "ccc", "ddd"])
+      {_r, vt} = render_frame(r, vt, ["aaa", "bbb", "ccc", "XXX"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "aaa"
@@ -164,8 +164,8 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "non-adjacent line changes preserve unchanged lines between" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["a", "b", "c", "d", "e"])
-      vt = render_frame(r, vt, ["a", "X", "c", "Y", "e"])
+      {r, vt} = render_frame(r, vt, ["a", "b", "c", "d", "e"])
+      {_r, vt} = render_frame(r, vt, ["a", "X", "c", "Y", "e"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "a"
@@ -177,9 +177,9 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
     test "transition: content → empty → content" do
       {r, vt} = setup_render(height: 10)
-      vt = render_frame(r, vt, ["hello", "world"])
-      vt = render_frame(r, vt, [])
-      vt = render_frame(r, vt, ["back", "again"])
+      {r, vt} = render_frame(r, vt, ["hello", "world"])
+      {r, vt} = render_frame(r, vt, [])
+      {_r, vt} = render_frame(r, vt, ["back", "again"])
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "back"
@@ -193,15 +193,15 @@ defmodule OctoPi.TUI.TuiRenderTest do
       # Initial: 6 chat lines + 3 editor lines = 9 total
       chat = Enum.map(0..5, &"Chat #{&1}")
       editor = ["───", "input text", "───"]
-      vt = render_frame(r, vt, chat ++ editor)
+      {r, vt} = render_frame(r, vt, chat ++ editor)
 
       # Inflate: 15 chat lines + 3 editor = 18 (exceeds terminal height)
       big_chat = Enum.map(0..14, &"Chat #{&1}")
-      vt = render_frame(r, vt, big_chat ++ editor)
+      {r, vt} = render_frame(r, vt, big_chat ++ editor)
 
       # Shrink back: 7 chat lines + 3 editor = 10
       small_chat = Enum.map(5..11, &"Chat #{&1}")
-      vt = render_frame(r, vt, small_chat ++ editor)
+      {_r, vt} = render_frame(r, vt, small_chat ++ editor)
 
       rows = visible(vt)
       # Chat 5..11 + editor should be visible, stale rows cleared
@@ -218,13 +218,13 @@ defmodule OctoPi.TUI.TuiRenderTest do
       {r, vt} = setup_render(height: 10)
 
       # Start with 5 lines
-      vt = render_frame(r, vt, Enum.map(0..4, &"Line #{&1}"))
+      {r, vt} = render_frame(r, vt, Enum.map(0..4, &"Line #{&1}"))
 
       # Shrink to 3
-      vt = render_frame(r, vt, Enum.map(0..2, &"Line #{&1}"))
+      {r, vt} = render_frame(r, vt, Enum.map(0..2, &"Line #{&1}"))
 
       # Append one more (4 total now)
-      vt = render_frame(r, vt, Enum.map(0..3, &"Line #{&1}"))
+      {_r, vt} = render_frame(r, vt, Enum.map(0..3, &"Line #{&1}"))
 
       rows = visible(vt)
       assert Enum.at(rows, 0) == "Line 0"
@@ -237,7 +237,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
   # --- Interactive render integration ---
 
-  describe "Interactive.render end-to-end" do
+  describe "Interactive.build_screen end-to-end" do
     test "input with borders always visible after long transcript" do
       alias OctoPi.TUI.Components.Footer
       alias OctoPi.TUI.Components.Input
@@ -254,7 +254,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
         height: 24
       }
 
-      lines = Interactive.render(state)
+      lines = Interactive.build_screen(state)
 
       # The last lines should be footer, preceded by input with borders
       # Input renders: [border, content, border] = 3 lines
@@ -285,23 +285,26 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
       # Start with 5 lines (padded to 10 by fit_to_height)
       lines0 = pad_to_height(["Header", "Line 1", "───", "", "───"], 10)
-      vt = render_frame(r, vt, lines0)
+      {r, vt} = render_frame(r, vt, lines0)
       rows = visible(vt)
       assert Enum.at(rows, 5) == "Header"
       assert Enum.at(rows, 9) == "───"
 
       # Grow to 8 lines — padding shrinks
       lines1 =
-        pad_to_height(["Header", "Line 1", "Line 2", "Line 3", "Line 4", "───", "", "───"], 10)
+        pad_to_height(
+          ["Header", "Line 1", "Line 2", "Line 3", "Line 4", "───", "", "───"],
+          10
+        )
 
-      vt = render_frame(r, vt, lines1)
+      {r, vt} = render_frame(r, vt, lines1)
       rows = visible(vt)
       assert Enum.at(rows, 2) == "Header"
       assert Enum.at(rows, 9) == "───"
 
       # Grow past height — viewport scrolls, top lines off-screen
       lines2 = Enum.map(1..8, &"Line #{&1}") ++ ["───", "", "───"]
-      vt = render_frame(r, vt, lines2)
+      {r, vt} = render_frame(r, vt, lines2)
       rows = visible(vt)
       # 11 lines, viewport shows last 10 → Line 1 scrolled off
       assert Enum.at(rows, 0) == "Line 2"
@@ -309,7 +312,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
       # Continue growing — more lines scroll off top
       lines3 = Enum.map(1..12, &"Line #{&1}") ++ ["───", "", "───"]
-      vt = render_frame(r, vt, lines3)
+      {_r, vt} = render_frame(r, vt, lines3)
       rows = visible(vt)
       # 15 lines, viewport shows last 10 → Lines 1-5 scrolled off
       assert Enum.at(rows, 0) == "Line 6"
@@ -325,7 +328,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
 
       # Frame 1: some transcript + input + footer
       frame1 = pad_to_height(["Hello world", "───", "", "───", "footer1", "footer2"], 12)
-      vt = render_frame(r, vt, frame1)
+      {r, vt} = render_frame(r, vt, frame1)
 
       # Frame 2: assistant response starts streaming (7 lines → 5 padding)
       frame2 =
@@ -342,7 +345,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
           12
         )
 
-      vt = render_frame(r, vt, frame2)
+      {r, vt} = render_frame(r, vt, frame2)
       rows = visible(vt)
       assert Enum.at(rows, 5) == "> what's new?"
       assert Enum.at(rows, 6) == "Let me check..."
@@ -366,7 +369,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
           12
         )
 
-      vt = render_frame(r, vt, frame3)
+      {r, vt} = render_frame(r, vt, frame3)
       rows = visible(vt)
       # 11 content lines + 1 padding row → tool box starts at row 4
       assert Enum.at(rows, 4) =~ "bash"
@@ -391,7 +394,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
         "footer2"
       ]
 
-      vt = render_frame(r, vt, frame4)
+      {_r, vt} = render_frame(r, vt, frame4)
       rows = visible(vt)
       # 14 lines, viewport shows last 12 → first 2 scrolled off
       # Row 0 = "" (tool separator), Row 1 = tool box top
@@ -407,12 +410,12 @@ defmodule OctoPi.TUI.TuiRenderTest do
       # Simulate word-by-word streaming — short words so they fit width
       words = ~w(Hi how are you ok bye go up at)
 
-      {vt, _} =
-        Enum.reduce(words, {vt, ""}, fn word, {vt_acc, text_acc} ->
+      {_r, vt, _} =
+        Enum.reduce(words, {r, vt, ""}, fn word, {r_acc, vt_acc, text_acc} ->
           new_text = if text_acc == "", do: word, else: text_acc <> " " <> word
           lines = pad_to_height([new_text, "───", "", "───"], 8)
-          vt_acc = render_frame(r, vt_acc, lines)
-          {vt_acc, new_text}
+          {r_acc, vt_acc} = render_frame(r_acc, vt_acc, lines)
+          {r_acc, vt_acc, new_text}
         end)
 
       rows = visible(vt)
@@ -432,16 +435,16 @@ defmodule OctoPi.TUI.TuiRenderTest do
   describe "redraw counter" do
     test "full_redraws increments on first render, stays flat on shrink and growth" do
       {r, _vt} = setup_render(height: 10)
-      assert Renderer.full_redraws(r) == 0
+      assert r.full_redraws == 0
 
-      {:ok, _} = Renderer.render(r, ["a", "b", "c", "d"])
-      assert Renderer.full_redraws(r) == 1
+      {_, r} = Renderer.render(r, ["a", "b", "c", "d"])
+      assert r.full_redraws == 1
 
-      {:ok, _} = Renderer.render(r, ["a", "b"])
-      assert Renderer.full_redraws(r) == 1, "shrink uses diff path, not full redraw"
+      {_, r} = Renderer.render(r, ["a", "b"])
+      assert r.full_redraws == 1, "shrink uses diff path, not full redraw"
 
-      {:ok, _} = Renderer.render(r, ["a", "b", "c"])
-      assert Renderer.full_redraws(r) == 1, "growth must stay on the diff path"
+      {_, r} = Renderer.render(r, ["a", "b", "c"])
+      assert r.full_redraws == 1, "growth must stay on the diff path"
     end
   end
 
@@ -453,24 +456,26 @@ defmodule OctoPi.TUI.TuiRenderTest do
       try do
         {r, vt} = setup_render(width: 40, height: 10)
         lines = Enum.map(0..19, &"Line #{&1}")
-        {:ok, bytes0} = Renderer.render(r, lines)
+        {bytes0, r} = Renderer.render(r, lines)
         vt = VT.write(vt, bytes0)
-        initial = Renderer.full_redraws(r)
+        initial = r.full_redraws
 
-        for h <- [15, 8, 14, 11] do
-          :ok = Renderer.resize(r, 40, h)
-          {:ok, bytes} = Renderer.render(r, lines)
+        r =
+          Enum.reduce([15, 8, 14, 11], r, fn h, r ->
+            r = Renderer.resize(r, 40, h)
+            {bytes, r} = Renderer.render(r, lines)
 
-          refute bytes =~ "\e[2J",
-                 "Termux height change must not emit clear-screen (h=#{h})"
+            refute bytes =~ "\e[2J",
+                   "Termux height change must not emit clear-screen (h=#{h})"
 
-          refute bytes =~ "\e[3J",
-                 "Termux height change must not clear scrollback (h=#{h})"
+            refute bytes =~ "\e[3J",
+                   "Termux height change must not clear scrollback (h=#{h})"
 
-          _ = VT.write(vt, bytes)
-        end
+            _ = VT.write(vt, bytes)
+            r
+          end)
 
-        assert Renderer.full_redraws(r) == initial,
+        assert r.full_redraws == initial,
                "Termux height changes must not bump full_redraws"
       after
         case prev do
@@ -484,7 +489,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
   describe "style isolation across lines" do
     test "rendered italic line does not leak italic into the next line" do
       {r, vt} = setup_render(width: 20, height: 6)
-      {:ok, bytes} = Renderer.render(r, ["\e[3mItalic\e[23m", "Plain"])
+      {bytes, _r} = Renderer.render(r, ["\e[3mItalic\e[23m", "Plain"])
       vt = VT.write(vt, bytes)
       refute VT.cell_italic?(vt, 1, 0), "italic leaked to plain line"
     end
@@ -494,11 +499,11 @@ defmodule OctoPi.TUI.TuiRenderTest do
     test "deleting lines clears stale rows and preserves remaining content" do
       {r, vt} = setup_render(width: 20, height: 12)
       twelve = Enum.map(0..11, &"Line #{&1}")
-      {:ok, bytes0} = Renderer.render(r, twelve)
+      {bytes0, r} = Renderer.render(r, twelve)
       vt = VT.write(vt, bytes0)
 
       seven = Enum.map(0..6, &"Line #{&1}")
-      {:ok, bytes1} = Renderer.render(r, seven)
+      {bytes1, _r} = Renderer.render(r, seven)
       vt = VT.write(vt, bytes1)
 
       rows = visible(vt)
@@ -508,17 +513,17 @@ defmodule OctoPi.TUI.TuiRenderTest do
     test "appending after a shrink stays on the diff path (no extra full redraw)" do
       {r, vt} = setup_render(width: 20, height: 10)
       eight = Enum.map(0..7, &"Line #{&1}")
-      {:ok, b0} = Renderer.render(r, eight)
+      {b0, r} = Renderer.render(r, eight)
       vt = VT.write(vt, b0)
 
-      {:ok, b1} = Renderer.render(r, ["Line 0", "Line 1"])
+      {b1, r} = Renderer.render(r, ["Line 0", "Line 1"])
       vt = VT.write(vt, b1)
-      after_shrink = Renderer.full_redraws(r)
+      after_shrink = r.full_redraws
 
-      {:ok, b2} = Renderer.render(r, ["Line 0", "Line 1", "Line 2"])
+      {b2, r} = Renderer.render(r, ["Line 0", "Line 1", "Line 2"])
       vt = VT.write(vt, b2)
 
-      assert Renderer.full_redraws(r) == after_shrink,
+      assert r.full_redraws == after_shrink,
              "append after shrink should stay on the diff path"
 
       rows = visible(vt)
@@ -546,7 +551,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
       }
 
       composed = Overlay.composite(base, [overlay], 80, 24)
-      vt = render_frame(r, vt, composed)
+      {_r, vt} = render_frame(r, vt, composed)
 
       assert Enum.any?(visible(vt), &String.contains?(&1, "OVERLAY")),
              "expected overlay text in viewport: #{inspect(visible(vt))}"

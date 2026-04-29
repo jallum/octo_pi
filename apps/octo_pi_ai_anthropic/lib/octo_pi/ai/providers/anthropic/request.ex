@@ -19,6 +19,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   See `docs/port-map/anthropic.md` §1.
   """
 
+  alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Message
@@ -27,7 +28,6 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   alias OctoPi.AI.Providers.Anthropic.Auth.Credentials
   alias OctoPi.AI.Providers.Anthropic.ToolNames
   alias OctoPi.AI.SanitizeUnicode
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
 
@@ -49,9 +49,9 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   (callers like the Decoder need to know whether OAuth is in play to
   reverse-normalize tool names on the response).
   """
-  @spec build(Model.t(), Context.t(), StreamOptions.t() | nil, Credentials.t() | nil) :: built()
+  @spec build(Model.t(), Context.t(), CallOptions.t() | nil, Credentials.t() | nil) :: built()
   def build(%Model{} = model, %Context{} = context, opts \\ nil, auth \\ nil) do
-    opts = opts || %StreamOptions{}
+    opts = opts || %CallOptions{}
     auth = auth || Auth.resolve(opts)
 
     %{
@@ -68,7 +68,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
   @spec url(Model.t()) :: binary()
   defp url(%Model{base_url: base}), do: String.trim_trailing(base, "/") <> "/messages"
 
-  @spec headers(Credentials.t(), StreamOptions.t()) :: [{binary(), binary()}]
+  @spec headers(Credentials.t(), CallOptions.t()) :: [{binary(), binary()}]
   defp headers(%Credentials{type: :api_key, token: token}, opts) do
     [
       {"x-api-key", token},
@@ -90,14 +90,14 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
     ] ++ extra_headers(opts)
   end
 
-  @spec extra_headers(StreamOptions.t()) :: [{binary(), binary()}]
-  defp extra_headers(%StreamOptions{headers: nil}), do: []
+  @spec extra_headers(CallOptions.t()) :: [{binary(), binary()}]
+  defp extra_headers(%CallOptions{headers: nil}), do: []
 
-  defp extra_headers(%StreamOptions{headers: extra}), do: Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
+  defp extra_headers(%CallOptions{headers: extra}), do: Enum.map(extra, fn {k, v} -> {to_string(k), to_string(v)} end)
 
   # --- Body ---
 
-  @spec body(Model.t(), Context.t(), StreamOptions.t(), Credentials.t()) :: map()
+  @spec body(Model.t(), Context.t(), CallOptions.t(), Credentials.t()) :: map()
   defp body(model, context, opts, auth) do
     max_tokens = opts.max_tokens || div(model.max_tokens, 3)
     oauth? = auth.type == :oauth
@@ -122,7 +122,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Request do
 
   # --- Caching ---
 
-  defp resolve_cache_retention(%StreamOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
+  defp resolve_cache_retention(%CallOptions{metadata: %{"cache_retention" => r}}) when r in ["none", "short", "long"],
     do: r
 
   defp resolve_cache_retention(_opts), do: "short"

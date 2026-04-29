@@ -41,13 +41,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   alias OctoPi.AI.Providers.Anthropic.Request
   alias OctoPi.AI.SSE
   alias OctoPi.AI.SSE.Event, as: SseEvent
+  alias OctoPi.AI.Telemetry
 
   @type start_arg :: %{
           required(:model) => OctoPi.AI.Model.t(),
           required(:context) => OctoPi.AI.Context.t(),
-          required(:opts) => OctoPi.AI.StreamOptions.t(),
+          required(:opts) => OctoPi.AI.CallOptions.t(),
           required(:caller) => pid(),
-          required(:ref) => reference(),
           optional(:req_overrides) => keyword()
         }
 
@@ -69,21 +69,15 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
     caller_mon = Process.monitor(args.caller)
     auth = Auth.resolve(args.opts)
     start_mono = System.monotonic_time()
-
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :start],
-      %{system_time: System.system_time()},
-      %{model: args.model.id, auth_type: auth.type}
-    )
+    Telemetry.request_start(args.model, %{auth_type: auth.type})
 
     {start_event, decoder_state} =
       Decoder.new(args.model, oauth?: auth.type == :oauth, tools: args.context.tools)
 
-    send(args.caller, {args.ref, :event, start_event})
+    send(args.caller, {self(), :event, start_event})
 
     state = %{
       caller: args.caller,
-      ref: args.ref,
       caller_mon: caller_mon,
       model: args.model,
       sse: SSE.new(),
@@ -129,7 +123,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
           state
       end
 
-    send(state.caller, {state.ref, :done})
+    send(state.caller, {self(), :done})
     :ok
   end
 
@@ -165,7 +159,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   defp process_chunk(chunk, state) do
     {sse_events, sse} = SSE.decode(state.sse, chunk)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
@@ -174,27 +168,27 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   # behaviour; see SSE.finalize/1).
   defp flush_sse(state) do
     {sse_events, sse} = SSE.finalize(state.sse)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller, state.ref)
+    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
     %{state | sse: sse, decoder: decoder}
   end
 
-  defp apply_sse_events(sse_events, decoder, caller, ref) do
+  defp apply_sse_events(sse_events, decoder, caller) do
     Enum.reduce(sse_events, decoder, fn sse_ev, dstate ->
-      handle_sse_event(sse_ev, dstate, caller, ref)
+      handle_sse_event(sse_ev, dstate, caller)
     end)
   end
 
-  defp handle_sse_event(%SseEvent{event: "ping"}, dstate, _caller, _ref), do: dstate
+  defp handle_sse_event(%SseEvent{event: "ping"}, dstate, _caller), do: dstate
 
-  defp handle_sse_event(%SseEvent{event: "error", data: data}, _dstate, _caller, _ref) do
+  defp handle_sse_event(%SseEvent{event: "error", data: data}, _dstate, _caller) do
     raise "Anthropic SSE error: #{data}"
   end
 
-  defp handle_sse_event(%SseEvent{data: data}, dstate, caller, ref) do
+  defp handle_sse_event(%SseEvent{data: data}, dstate, caller) do
     case PartialJson.parse_with_repair(data) do
       {:ok, event} when is_map(event) ->
         {events, dstate} = Decoder.handle(dstate, event)
-        Enum.each(events, &send(caller, {ref, :event, &1}))
+        Enum.each(events, &send(caller, {self(), :event, &1}))
         dstate
 
       _ ->
@@ -207,7 +201,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   defp emit_done_or_error(state) do
     final = Decoder.finalize(state.decoder)
-    send(state.caller, {state.ref, :event, final})
+    send(state.caller, {self(), :event, final})
     state
   end
 
@@ -217,7 +211,7 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
 
   defp emit_error(state, message, reason) do
     {error_ev, decoder} = Decoder.error(state.decoder, message, reason)
-    send(state.caller, {state.ref, :event, error_ev})
+    send(state.caller, {self(), :event, error_ev})
     %{state | decoder: decoder}
   end
 
@@ -226,26 +220,19 @@ defmodule OctoPi.AI.Providers.Anthropic.Producer do
   defp emit_request_stop(state, start_mono, extras) do
     usage = state.decoder.message.usage
 
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :stop],
+    Telemetry.request_stop(
+      state.model,
       %{
         duration: System.monotonic_time() - start_mono,
         input_tokens: usage.input,
         output_tokens: usage.output,
         total_tokens: usage.total_tokens
       },
-      Map.merge(
-        %{model: state.model.id, stop_reason: state.decoder.message.stop_reason},
-        Map.new(extras)
-      )
+      Map.merge(%{stop_reason: state.decoder.message.stop_reason}, Map.new(extras))
     )
   end
 
   defp emit_request_exception(state, start_mono, kind, reason) do
-    :telemetry.execute(
-      [:octo_pi_ai_anthropic, :request, :exception],
-      %{duration: System.monotonic_time() - start_mono},
-      %{model: state.model.id, kind: kind, reason: reason}
-    )
+    Telemetry.request_exception(state.model, start_mono, kind, reason)
   end
 end

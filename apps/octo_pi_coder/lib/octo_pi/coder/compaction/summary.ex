@@ -35,7 +35,6 @@ defmodule OctoPi.Coder.Compaction.Summary do
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
   alias OctoPi.AI.Model
-  alias OctoPi.AI.StreamOptions
   alias OctoPi.Coder.Compaction.Prompts
   alias OctoPi.Coder.Compaction.Serialize
 
@@ -46,12 +45,12 @@ defmodule OctoPi.Coder.Compaction.Summary do
           previous_summary: String.t() | nil,
           api_key: String.t() | nil,
           headers: map() | nil,
-          producer: module() | (Model.t(), AIContext.t(), StreamOptions.t() -> Enumerable.t()),
+          producer: module() | (Model.t(), AIContext.t(), keyword() -> Enumerable.t()),
           variant: variant(),
-          thinking_level: StreamOptions.thinking_level() | :off | nil
+          thinking_level: OctoPi.AI.thinking_level() | :off | nil
         ]
 
-  @default_producer OctoPi.AI.Providers.Anthropic
+  @default_producer OctoPi.AI
 
   @spec generate([struct()], Model.t(), pos_integer(), opts()) ::
           {:ok, String.t()} | {:error, String.t()}
@@ -81,17 +80,17 @@ defmodule OctoPi.Coder.Compaction.Summary do
       tools: []
     }
 
-    stream_opts = %StreamOptions{
+    call_opts = [
       max_tokens: max_tokens,
       api_key: Keyword.get(opts, :api_key),
       headers: Keyword.get(opts, :headers),
       reasoning: resolve_reasoning(model, Keyword.get(opts, :thinking_level))
-    }
+    ]
 
     producer = Keyword.get(opts, :producer, @default_producer)
 
     producer
-    |> invoke(model, ai_ctx, stream_opts)
+    |> invoke(model, ai_ctx, call_opts)
     |> consume()
   end
 

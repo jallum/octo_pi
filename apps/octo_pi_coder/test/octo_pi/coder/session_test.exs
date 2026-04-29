@@ -1,6 +1,7 @@
 defmodule OctoPi.Coder.SessionTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.Coder
   alias OctoPi.Coder.Compaction.Settings
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
@@ -42,7 +43,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: sm, store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      state = Session.state(pid)
+      state = :sys.get_state(pid)
       assert state.extensions == []
       assert state.session_manager == sm
       assert state.store_pid == store
@@ -71,7 +72,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Session.get_compaction_settings(pid) == Settings.default()
+      assert Coder.get_compaction_settings(pid) == Settings.default()
     end
 
     test "default model_provider returns nil", ctx do
@@ -79,7 +80,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Session.state(pid).model_provider.() == nil
+      assert :sys.get_state(pid).model_provider.() == nil
     end
 
     test "honors caller-supplied model_provider and settings_manager", ctx do
@@ -103,8 +104,8 @@ defmodule OctoPi.Coder.SessionTest do
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Session.state(pid).model_provider.() == :my_model
-      assert Session.get_compaction_settings(pid) == expected
+      assert :sys.get_state(pid).model_provider.() == :my_model
+      assert Coder.get_compaction_settings(pid) == expected
     end
   end
 
@@ -123,11 +124,11 @@ defmodule OctoPi.Coder.SessionTest do
     end
 
     test "get_session_manager/1 returns the seeded SessionManager", %{pid: pid, sm: sm} do
-      assert Session.get_session_manager(pid) == sm
+      assert Coder.get_session_manager(pid) == sm
     end
 
     test "get_extensions/1 returns the seeded extension list", %{pid: pid, ext: ext} do
-      assert Session.get_extensions(pid) == [ext]
+      assert Coder.get_extensions(pid) == [ext]
     end
   end
 
@@ -145,9 +146,9 @@ defmodule OctoPi.Coder.SessionTest do
     end
 
     test "appends to in-process SessionManager AND persists to store", %{pid: pid, store: store} do
-      assert {:ok, entry_id} = Session.add_entry(pid, message_entry("hello"))
+      assert {:ok, entry_id} = Coder.add_entry(pid, message_entry("hello"))
 
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
       assert sm.leaf_id == entry_id
       assert Map.has_key?(sm.by_id, entry_id)
 
@@ -159,19 +160,19 @@ defmodule OctoPi.Coder.SessionTest do
     end
 
     test "two appends produce a parent_id chain in the SessionManager", %{pid: pid} do
-      assert {:ok, id1} = Session.add_entry(pid, message_entry("a"))
-      assert {:ok, id2} = Session.add_entry(pid, message_entry("b"))
+      assert {:ok, id1} = Coder.add_entry(pid, message_entry("a"))
+      assert {:ok, id2} = Coder.add_entry(pid, message_entry("b"))
       refute id1 == id2
 
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
       assert sm.leaf_id == id2
       e2 = Map.fetch!(sm.by_id, id2)
       assert e2.parent_id == id1
     end
 
     test "honors caller-supplied :id option", %{pid: pid} do
-      assert {:ok, "fixed-id"} = Session.add_entry(pid, message_entry("x"), id: "fixed-id")
-      assert Session.get_session_manager(pid).leaf_id == "fixed-id"
+      assert {:ok, "fixed-id"} = Coder.add_entry(pid, message_entry("x"), id: "fixed-id")
+      assert Coder.get_session_manager(pid).leaf_id == "fixed-id"
     end
   end
 
@@ -235,8 +236,8 @@ defmodule OctoPi.Coder.SessionTest do
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       # Two messages so prep has something to summarize.
-      {:ok, _} = Session.add_entry(pid, message_entry("first"))
-      {:ok, _} = Session.add_entry(pid, message_entry("second"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("first"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("second"))
 
       pid
     end
@@ -258,7 +259,7 @@ defmodule OctoPi.Coder.SessionTest do
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      assert {:error, :nothing_to_compact} = Session.compact(pid)
+      assert {:error, :nothing_to_compact} = Coder.compact(pid)
     end
 
     test "extension {:cancel, reason} surfaces verbatim, no LLM call", ctx do
@@ -277,7 +278,7 @@ defmodule OctoPi.Coder.SessionTest do
         done_event("")
       end
 
-      assert {:cancel, "user said no"} = Session.compact(pid, producer: producer)
+      assert {:cancel, "user said no"} = Coder.compact(pid, producer: producer)
       assert_received :cancel_handler_ran
       refute_received :producer_called
     end
@@ -304,7 +305,7 @@ defmodule OctoPi.Coder.SessionTest do
       end
 
       assert {:ok, %{result: ^override_result, from_extension?: true}} =
-               Session.compact(pid, producer: producer)
+               Coder.compact(pid, producer: producer)
 
       refute_received :producer_called
     end
@@ -320,7 +321,7 @@ defmodule OctoPi.Coder.SessionTest do
       pid = populated_session(ctx)
 
       assert {:ok, %{result: %Result{summary: "LLM-SUMMARY"}, from_extension?: false}} =
-               Session.compact(pid, producer: producer)
+               Coder.compact(pid, producer: producer)
 
       assert_received :producer_called
     end
@@ -343,10 +344,10 @@ defmodule OctoPi.Coder.SessionTest do
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      {:ok, _} = Session.add_entry(pid, message_entry("a"))
-      {:ok, _} = Session.add_entry(pid, message_entry("b"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("a"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("b"))
 
-      assert {:error, :no_model} = Session.compact(pid)
+      assert {:error, :no_model} = Coder.compact(pid)
     end
 
     test "passes preparation in :session_before_compact event payload", ctx do
@@ -360,7 +361,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       pid = populated_session(ctx, [ext])
       producer = fn _, _, _ -> done_event("ok") end
-      Session.compact(pid, producer: producer, custom_instructions: "tag this")
+      Coder.compact(pid, producer: producer, custom_instructions: "tag this")
 
       assert_received {:event_seen, event}
       assert event.type == :session_before_compact
@@ -384,20 +385,20 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "empty session returns empty context", %{pid: pid} do
       assert %{messages: [], thinking_level: "off", model: nil} =
-               Session.build_session_context(pid)
+               Coder.build_session_context(pid)
     end
 
     test "delegates to SessionManager and reflects appended messages", %{pid: pid} do
-      {:ok, _} = Session.add_entry(pid, message_entry("hello"))
-      {:ok, _} = Session.add_entry(pid, message_entry("world"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("hello"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("world"))
 
-      ctx = Session.build_session_context(pid)
+      ctx = Coder.build_session_context(pid)
       assert length(ctx.messages) == 2
     end
 
     test "compaction boundary: synthetic summary at head, kept window after", %{pid: pid} do
-      {:ok, _id1} = Session.add_entry(pid, message_entry("first"))
-      {:ok, id2} = Session.add_entry(pid, message_entry("second"))
+      {:ok, _id1} = Coder.add_entry(pid, message_entry("first"))
+      {:ok, id2} = Coder.add_entry(pid, message_entry("second"))
 
       compaction = %Entry.Compaction{
         id: nil,
@@ -407,10 +408,10 @@ defmodule OctoPi.Coder.SessionTest do
         tokens_before: 1234
       }
 
-      {:ok, _} = Session.add_entry(pid, compaction)
-      {:ok, _} = Session.add_entry(pid, message_entry("after"))
+      {:ok, _} = Coder.add_entry(pid, compaction)
+      {:ok, _} = Coder.add_entry(pid, message_entry("after"))
 
-      ctx = Session.build_session_context(pid)
+      ctx = Coder.build_session_context(pid)
 
       assert [%CompactionSummaryMessage{summary: "the summary", tokens_before: 1234} | rest] =
                ctx.messages
@@ -440,22 +441,22 @@ defmodule OctoPi.Coder.SessionTest do
     defp build_provider(coder_session) do
       fn _agent_state ->
         coder_session
-        |> Session.build_session_context()
+        |> Coder.build_session_context()
         |> Map.fetch!(:messages)
         |> Messages.to_llm()
       end
     end
 
     test "no compaction: passes through messages as-is", %{pid: pid} do
-      {:ok, _} = Session.add_entry(pid, message_entry("hi"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("hi"))
       provider = build_provider(pid)
 
       assert [_msg] = provider.(:dummy_state)
     end
 
     test "after compaction: synthetic summary becomes wrapped User at head", %{pid: pid} do
-      {:ok, _id1} = Session.add_entry(pid, message_entry("first"))
-      {:ok, id2} = Session.add_entry(pid, message_entry("kept"))
+      {:ok, _id1} = Coder.add_entry(pid, message_entry("first"))
+      {:ok, id2} = Coder.add_entry(pid, message_entry("kept"))
 
       compaction = %Entry.Compaction{
         id: nil,
@@ -465,8 +466,8 @@ defmodule OctoPi.Coder.SessionTest do
         tokens_before: 1000
       }
 
-      {:ok, _} = Session.add_entry(pid, compaction)
-      {:ok, _} = Session.add_entry(pid, message_entry("after"))
+      {:ok, _} = Coder.add_entry(pid, compaction)
+      {:ok, _} = Coder.add_entry(pid, message_entry("after"))
 
       provider = build_provider(pid)
 
@@ -504,66 +505,66 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "returns {:ok, new_session_manager} for a valid session", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("hello"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("hello"))
 
       dir = fork_dir(ctx)
-      assert {:ok, %SessionManager{}} = Session.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+      assert {:ok, %SessionManager{}} = Coder.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
     end
 
     test "forked session has parent_session pointing at source file", ctx do
       {pid, source_path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
       assert new_sm.parent_session == source_path
     end
 
     test "forked session has the requested target_cwd", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Session.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
+      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
       assert new_sm.cwd == "/fork/cwd"
     end
 
     test "forked session carries all source entries", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("one"))
-      {:ok, _} = Session.add_entry(pid, message_entry("two"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("one"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("two"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
       assert length(SessionManager.get_entries(new_sm)) == 2
     end
 
     test "forked session file is readable and loads correctly", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("content"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("content"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
       assert {:ok, reloaded} = SessionManager.load(new_sm.session_file)
       assert reloaded.session_id == new_sm.session_id
     end
 
     test "extension {:cancel, reason} aborts fork, no file written", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, _} = Session.add_entry(pid, message_entry("a"))
+      {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       ext = ext_with("c", :session_before_fork, fn _e, _c -> {:cancel, "not allowed"} end)
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
       dir = fork_dir(ctx)
-      assert {:cancel, "not allowed"} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      assert {:cancel, "not allowed"} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
       refute File.dir?(dir)
     end
 
     test "event payload includes leaf entry_id", ctx do
       test_pid = self()
       {pid, _path, _store} = loaded_session!(ctx)
-      {:ok, leaf_id} = Session.add_entry(pid, message_entry("leaf"))
+      {:ok, leaf_id} = Coder.add_entry(pid, message_entry("leaf"))
 
       ext =
         ext_with("e", :session_before_fork, fn event, _c ->
@@ -573,7 +574,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
       dir = fork_dir(ctx)
-      Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
 
       assert_received {:fork_event, event}
       assert event.type == :session_before_fork
@@ -588,7 +589,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       dir = fork_dir(ctx)
-      assert {:error, :no_session_file} = Session.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      assert {:error, :no_session_file} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
     end
   end
 
@@ -610,7 +611,7 @@ defmodule OctoPi.Coder.SessionTest do
       assert bound.get_entries.() == []
       assert bound.get_leaf_entry_id.() == nil
 
-      assert {:ok, id} = Session.add_entry(pid, message_entry("x"))
+      assert {:ok, id} = Coder.add_entry(pid, message_entry("x"))
       assert bound.get_leaf_entry_id.() == id
     end
   end
@@ -655,14 +656,14 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      {:ok, id1} = Session.add_entry(pid, message_entry("root message"))
-      {:ok, id2} = Session.add_entry(pid, message_entry("branch A"))
+      {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
+      {:ok, id2} = Coder.add_entry(pid, message_entry("branch A"))
       # Navigate back to id1 to create a fork point for id3
       :sys.replace_state(pid, fn state ->
         %{state | session_manager: %{state.session_manager | leaf_id: id1}}
       end)
 
-      {:ok, id3} = Session.add_entry(pid, message_entry("branch B"))
+      {:ok, id3} = Coder.add_entry(pid, message_entry("branch B"))
 
       {pid, id1, id2, id3}
     end
@@ -673,15 +674,15 @@ defmodule OctoPi.Coder.SessionTest do
       store = open_store!(ctx)
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      {:ok, id} = Session.add_entry(pid, message_entry("a"))
-      assert {:ok, nil} = Session.navigate_tree(pid, target_id: id)
+      {:ok, id} = Coder.add_entry(pid, message_entry("a"))
+      assert {:ok, nil} = Coder.navigate_tree(pid, target_id: id)
     end
 
     test "returns {:error, :not_found} for an unknown target_id", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      assert {:error, :not_found} = Session.navigate_tree(pid, target_id: "ghost")
+      assert {:error, :not_found} = Coder.navigate_tree(pid, target_id: "ghost")
     end
 
     # ---- cancel path ----
@@ -691,9 +692,9 @@ defmodule OctoPi.Coder.SessionTest do
       ext = ext_with("c", :session_before_tree, fn _e, _c -> {:cancel, "denied"} end)
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
-      assert {:cancel, "denied"} = Session.navigate_tree(pid, target_id: id2)
+      assert {:cancel, "denied"} = Coder.navigate_tree(pid, target_id: id2)
       # leaf unchanged (should still be id3 — the last one added)
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
       refute sm.leaf_id == id2
     end
 
@@ -714,7 +715,7 @@ defmodule OctoPi.Coder.SessionTest do
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
       assert {:ok, ^ext_result} =
-               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :yes, model: nav_model())
+               Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :yes, model: nav_model())
 
       assert_received :ext_ran
     end
@@ -734,7 +735,7 @@ defmodule OctoPi.Coder.SessionTest do
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
       assert {:ok, nil} =
-               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
+               Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
 
       refute_received :llm_called
     end
@@ -751,10 +752,10 @@ defmodule OctoPi.Coder.SessionTest do
       end
 
       assert {:ok, nil} =
-               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
+               Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :no, producer: producer)
 
       refute_received :llm_called
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
       # id2 is a user message → new leaf is id2's parent (id1)
       assert sm.leaf_id == id1
     end
@@ -766,7 +767,7 @@ defmodule OctoPi.Coder.SessionTest do
       producer = summary_producer("summarized")
 
       assert {:ok, %BranchSummaryResult{summary: summary}} =
-               Session.navigate_tree(pid,
+               Coder.navigate_tree(pid,
                  target_id: id2,
                  user_wants_summary: :yes,
                  model: nav_model(),
@@ -785,7 +786,7 @@ defmodule OctoPi.Coder.SessionTest do
         [_] = summary_producer("ok").(model, ai_ctx, opts)
       end
 
-      Session.navigate_tree(pid,
+      Coder.navigate_tree(pid,
         target_id: id2,
         user_wants_summary: {:yes, "focus on files"},
         model: nav_model(),
@@ -802,7 +803,7 @@ defmodule OctoPi.Coder.SessionTest do
       {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
 
       assert {:error, :no_model} =
-               Session.navigate_tree(pid, target_id: id2, user_wants_summary: :yes)
+               Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :yes)
     end
 
     # ---- event payload ----
@@ -818,7 +819,7 @@ defmodule OctoPi.Coder.SessionTest do
         end)
 
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
-      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+      Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
 
       assert_received {:tree_event, event}
       assert event.type == :session_before_tree
@@ -838,7 +839,7 @@ defmodule OctoPi.Coder.SessionTest do
         end)
 
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
-      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+      Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
 
       assert_received {:session_tree, event}
       assert event.type == :session_tree
@@ -860,7 +861,7 @@ defmodule OctoPi.Coder.SessionTest do
         end)
 
       :sys.replace_state(pid, fn state -> %{state | extensions: [cancel_ext, tree_ext]} end)
-      assert {:cancel, "no"} = Session.navigate_tree(pid, target_id: id2)
+      assert {:cancel, "no"} = Coder.navigate_tree(pid, target_id: id2)
       refute_received :session_tree_emitted
     end
 
@@ -872,14 +873,14 @@ defmodule OctoPi.Coder.SessionTest do
       producer = summary_producer("summary text")
 
       {:ok, _result} =
-        Session.navigate_tree(pid,
+        Coder.navigate_tree(pid,
           target_id: id2,
           user_wants_summary: :yes,
           model: nav_model(),
           producer: producer
         )
 
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
       # Find the BranchSummary entry
       branch_summary =
         sm
@@ -896,14 +897,14 @@ defmodule OctoPi.Coder.SessionTest do
       producer = summary_producer("summary")
 
       {:ok, _result} =
-        Session.navigate_tree(pid,
+        Coder.navigate_tree(pid,
           target_id: id2,
           user_wants_summary: :yes,
           model: nav_model(),
           producer: producer
         )
 
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
 
       branch_summary =
         sm
@@ -916,11 +917,11 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "no-summary navigation does not append any new entries", ctx do
       {pid, _id1, id2, _id3} = session_with_two_branches(ctx)
-      count_before = pid |> Session.get_session_manager() |> SessionManager.get_entries() |> length()
+      count_before = pid |> Coder.get_session_manager() |> SessionManager.get_entries() |> length()
 
-      Session.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
+      Coder.navigate_tree(pid, target_id: id2, user_wants_summary: :no)
 
-      count_after = pid |> Session.get_session_manager() |> SessionManager.get_entries() |> length()
+      count_after = pid |> Coder.get_session_manager() |> SessionManager.get_entries() |> length()
       assert count_after == count_before
     end
 
@@ -933,13 +934,13 @@ defmodule OctoPi.Coder.SessionTest do
       :sys.replace_state(pid, fn state -> %{state | extensions: [ext]} end)
 
       {:ok, _} =
-        Session.navigate_tree(pid,
+        Coder.navigate_tree(pid,
           target_id: id2,
           user_wants_summary: :yes,
           model: nav_model()
         )
 
-      sm = Session.get_session_manager(pid)
+      sm = Coder.get_session_manager(pid)
 
       branch_summary =
         sm
@@ -1018,11 +1019,11 @@ defmodule OctoPi.Coder.SessionTest do
     end
 
     test "exposes current context usage alongside token totals", %{pid: pid, model: model} do
-      Session.add_entry(pid, user_msg("hello"))
-      Session.add_entry(pid, assistant_msg("hi", 200))
+      Coder.add_entry(pid, user_msg("hello"))
+      Coder.add_entry(pid, assistant_msg("hi", 200))
 
-      stats = Session.get_session_stats(pid)
-      cu = Session.get_context_usage(pid)
+      stats = Coder.get_session_stats(pid)
+      cu = Coder.get_context_usage(pid)
 
       assert cu.tokens == stats.context_usage.tokens
       assert cu.tokens == 200
@@ -1032,14 +1033,14 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "reports nil context tokens immediately after compaction (no post-compaction assistant)",
          %{pid: pid} do
-      Session.add_entry(pid, user_msg("first"))
-      Session.add_entry(pid, assistant_msg("response1", 180_000))
-      {:ok, kept_id} = Session.add_entry(pid, user_msg("second"))
-      Session.add_entry(pid, assistant_msg("response2", 195_000))
-      Session.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
-      Session.add_entry(pid, user_msg("third"))
+      Coder.add_entry(pid, user_msg("first"))
+      Coder.add_entry(pid, assistant_msg("response1", 180_000))
+      {:ok, kept_id} = Coder.add_entry(pid, user_msg("second"))
+      Coder.add_entry(pid, assistant_msg("response2", 195_000))
+      Coder.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
+      Coder.add_entry(pid, user_msg("third"))
 
-      stats = Session.get_session_stats(pid)
+      stats = Coder.get_session_stats(pid)
       assert stats.tokens.input == 195_000
       assert stats.context_usage
       assert stats.context_usage.tokens == nil
@@ -1048,15 +1049,15 @@ defmodule OctoPi.Coder.SessionTest do
 
     test "uses post-compaction usage for current context, not stale pre-compaction usage",
          %{pid: pid} do
-      Session.add_entry(pid, user_msg("first"))
-      Session.add_entry(pid, assistant_msg("response1", 180_000))
-      {:ok, kept_id} = Session.add_entry(pid, user_msg("second"))
-      Session.add_entry(pid, assistant_msg("response2", 195_000))
-      Session.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
-      Session.add_entry(pid, user_msg("third"))
-      Session.add_entry(pid, assistant_msg("response3", 25_000))
+      Coder.add_entry(pid, user_msg("first"))
+      Coder.add_entry(pid, assistant_msg("response1", 180_000))
+      {:ok, kept_id} = Coder.add_entry(pid, user_msg("second"))
+      Coder.add_entry(pid, assistant_msg("response2", 195_000))
+      Coder.add_entry(pid, compaction_entry("summary", kept_id, 195_000))
+      Coder.add_entry(pid, user_msg("third"))
+      Coder.add_entry(pid, assistant_msg("response3", 25_000))
 
-      stats = Session.get_session_stats(pid)
+      stats = Coder.get_session_stats(pid)
       assert stats.tokens.input == 220_000
       assert stats.context_usage
       assert stats.context_usage.tokens == 25_000
@@ -1074,7 +1075,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)
 
-      assert Session.get_context_usage(pid2) == nil
+      assert Coder.get_context_usage(pid2) == nil
     end
   end
 end

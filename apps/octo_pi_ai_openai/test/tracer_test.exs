@@ -4,15 +4,15 @@ defmodule OctoPi.AI.Providers.OpenAI.TracerTest do
   import ExUnit.CaptureLog
 
   @events [
-    [:octo_pi_ai_openai, :request, :start],
-    [:octo_pi_ai_openai, :request, :stop],
-    [:octo_pi_ai_openai, :request, :exception]
+    [:octo_pi_ai, :request, :start],
+    [:octo_pi_ai, :request, :stop],
+    [:octo_pi_ai, :request, :exception]
   ]
 
   setup do
-    OctoPi.Tracer.register(%{id: :openai, description: "", events: @events, level: :info})
+    OctoPi.Tracer.register(%{id: :ai_core, description: "", events: @events, level: :info})
     OctoPi.Tracer.attach_all()
-    on_exit(fn -> OctoPi.Tracer.detach(:openai) end)
+    on_exit(fn -> OctoPi.Tracer.detach(:ai_core) end)
     :ok
   end
 
@@ -21,39 +21,41 @@ defmodule OctoPi.AI.Providers.OpenAI.TracerTest do
       log =
         capture_log(fn ->
           :telemetry.execute(
-            [:octo_pi_ai_openai, :request, :start],
+            [:octo_pi_ai, :request, :start],
             %{system_time: 0},
-            %{model: "gpt-4o"}
+            %{api: :openai_completions, model: "gpt-4o"}
           )
         end)
 
-      assert log =~ "octo_pi_ai_openai.request.start"
+      assert log =~ "octo_pi_ai.request.start"
+      assert log =~ "openai_completions"
+      assert log =~ "gpt-4o"
     end
 
     test "forwards :request, :stop events to the logger" do
       log =
         capture_log(fn ->
           :telemetry.execute(
-            [:octo_pi_ai_openai, :request, :stop],
+            [:octo_pi_ai, :request, :stop],
             %{duration: 100, input_tokens: 10, output_tokens: 20, total_tokens: 30},
-            %{model: "gpt-4o", stop_reason: :end_turn}
+            %{api: :openai_completions, model: "gpt-4o", stop_reason: :stop}
           )
         end)
 
-      assert log =~ "octo_pi_ai_openai.request.stop"
+      assert log =~ "octo_pi_ai.request.stop"
     end
 
     test "forwards :request, :exception events to the logger" do
       log =
         capture_log(fn ->
           :telemetry.execute(
-            [:octo_pi_ai_openai, :request, :exception],
+            [:octo_pi_ai, :request, :exception],
             %{duration: 50},
-            %{model: "gpt-4o", kind: :error, reason: :timeout}
+            %{api: :openai_completions, model: "gpt-4o", kind: :error, reason: :timeout}
           )
         end)
 
-      assert log =~ "octo_pi_ai_openai.request.exception"
+      assert log =~ "octo_pi_ai.request.exception"
     end
   end
 end
