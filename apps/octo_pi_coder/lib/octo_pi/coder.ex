@@ -53,10 +53,6 @@ defmodule OctoPi.Coder do
   @spec start_session_supervised(Session.start_opts()) :: DynamicSupervisor.on_start_child()
   def start_session_supervised(opts), do: Session.start_supervised(opts)
 
-  @doc "Read the session's current state."
-  @spec state(session()) :: Session.state()
-  def state(server), do: GenServer.call(server, :state)
-
   # ---- Agent interaction ----
 
   @doc """

@@ -154,8 +154,6 @@ defmodule OctoPi.Coder.Session do
   end
 
   @impl true
-  def handle_call(:state, _from, state), do: {:reply, state, state}
-
   def handle_call(:get_session_manager, _from, state), do: {:reply, state.session_manager, state}
 
   def handle_call(:get_extensions, _from, state), do: {:reply, state.extensions, state}

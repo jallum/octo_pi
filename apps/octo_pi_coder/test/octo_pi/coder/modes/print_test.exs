@@ -52,12 +52,12 @@ defmodule OctoPi.Coder.Modes.PrintTest do
       output =
         ExUnit.CaptureIO.capture_io(fn ->
           assert {:ok, _} =
-                   Print.run(%{
+                   Print.run(
                      prompt: "hi",
                      model: model(),
                      transport: FakeTransport,
                      tools: []
-                   })
+                   )
         end)
 
       assert output =~ "hello world"
@@ -75,12 +75,12 @@ defmodule OctoPi.Coder.Modes.PrintTest do
 
       ExUnit.CaptureIO.capture_io(fn ->
         assert {:error, :error} =
-                 Print.run(%{
+                 Print.run(
                    prompt: "fail",
                    model: model(),
                    transport: FakeTransport,
                    tools: []
-                 })
+                 )
       end)
     end
   end

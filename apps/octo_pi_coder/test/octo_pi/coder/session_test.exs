@@ -43,7 +43,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: sm, store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      state = Coder.state(pid)
+      state = :sys.get_state(pid)
       assert state.extensions == []
       assert state.session_manager == sm
       assert state.store_pid == store
@@ -80,7 +80,7 @@ defmodule OctoPi.Coder.SessionTest do
       {:ok, pid} = Session.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Coder.state(pid).model_provider.() == nil
+      assert :sys.get_state(pid).model_provider.() == nil
     end
 
     test "honors caller-supplied model_provider and settings_manager", ctx do
@@ -104,7 +104,7 @@ defmodule OctoPi.Coder.SessionTest do
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      assert Coder.state(pid).model_provider.() == :my_model
+      assert :sys.get_state(pid).model_provider.() == :my_model
       assert Coder.get_compaction_settings(pid) == expected
     end
   end
