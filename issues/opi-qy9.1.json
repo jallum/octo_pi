@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-qy9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Move tree-of-record into SessionStore; Coder.Loop carries :path",
   "type": "task",
-  "updated_at": "2026-04-29T17:22:15.468143Z"
+  "updated_at": "2026-04-29T17:39:57.707903Z"
 }
