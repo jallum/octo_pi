@@ -152,7 +152,7 @@ defmodule OctoPi.Coder.Loop do
     %{messages: seed} = SessionStore.build_session_context(store_pid)
     :ok = OctoPi.Agent.set_messages(agent_pid, seed)
 
-    settings_manager = resolve_settings_manager(opts)
+    settings_manager = resolve_settings_manager(opts, store_pid)
 
     # Flow the configured reserve into Agent so mid-run auto-compact
     # has a threshold to check against. Without this, Agent's
@@ -900,10 +900,13 @@ defmodule OctoPi.Coder.Loop do
     )
   end
 
-  defp resolve_settings_manager(opts) do
+  defp resolve_settings_manager(opts, store_pid) do
     case Keyword.get(opts, :settings_manager) do
       nil ->
-        {:ok, pid} = SettingsManager.in_memory()
+        # Production default: load global + project settings from disk
+        # (~/.pi/agent/settings.json + <cwd>/.pi/settings.json). Tests
+        # that don't want disk I/O pass an explicit :settings_manager.
+        {:ok, pid} = SettingsManager.create(SessionStore.get_cwd(store_pid))
         pid
 
       pid ->
