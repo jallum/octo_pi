@@ -2,6 +2,13 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "comments": [
+    {
+      "author": "",
+      "text": "Closing as YAGNI. Premise is still factually accurate (manual emit via `Telemetry.request_start/2` + `request_stop/3` in `apps/octo_pi_ai/lib/octo_pi/ai/telemetry.ex`, no shared ref between start/stop), but no current consumer needs the correlation — compaction, TUI footer, cost tracking, and session persistence all read tokens off `:stop` alone, and Tracer logs events independently. Reopen when a consumer (latency analytics, request-lifecycle dashboard) actually needs it; the fix is small (switch to `:telemetry.span/3` or thread a `make_ref()` through metadata).",
+      "timestamp": "2026-04-29T13:09:14.452407Z"
+    }
+  ],
   "created": "2026-04-27T23:53:35Z",
   "description": "Both OpenAI and Anthropic producers emit :request, :start and :request, :stop telemetry events, but there is no shared correlation ID to tie them together. The decoder captures the provider's response_id (OpenAI's 'id' / Anthropic's 'message.id') on the message object, but it never reaches telemetry.\\n\\nFix: Add a unique request_id (e.g. generated at :start time) to both start and stop events as metadata, so downstream consumers can correlate token counts with their corresponding request lifecycle.",
   "id": "opi-9cc",
@@ -10,5 +17,5 @@
   "status": "open",
   "title": "Add request correlation ID to AI telemetry events",
   "type": "task",
-  "updated_at": "2026-04-27T23:53:35Z"
+  "updated_at": "2026-04-29T13:09:14.452407Z"
 }
