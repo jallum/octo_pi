@@ -56,8 +56,7 @@ defmodule OctoPi.Coder.Loop do
           cwd: String.t(),
           agent_pid: OctoPi.Agent.t(),
           model_provider: model_provider(),
-          settings_manager: pid(),
-          pending_compact_from: GenServer.from() | nil
+          settings_manager: pid()
         }
 
   defmodule State do
@@ -71,8 +70,7 @@ defmodule OctoPi.Coder.Loop do
       :cwd,
       :agent_pid,
       :model_provider,
-      :settings_manager,
-      pending_compact_from: nil
+      :settings_manager
     ]
   end
 
@@ -206,6 +204,11 @@ defmodule OctoPi.Coder.Loop do
   end
 
   def handle_call({:agent_prompt, save_text, send_text}, _from, state) do
+    # Pre-prompt auto-compact: if the current context is over
+    # threshold, compact before forwarding the new user message.
+    # Mirrors upstream `_handleNewUserMessage` line 1027.
+    state = maybe_pre_prompt_compact(state)
+
     user_msg = %User{
       content: [%OctoPi.AI.Content.Text{text: save_text}],
       timestamp: :os.system_time(:millisecond)
@@ -259,17 +262,22 @@ defmodule OctoPi.Coder.Loop do
 
   # -------------------------------------------------------------------------
 
-  def handle_call({:compact, _opts}, _from, %State{pending_compact_from: pending} = state) when not is_nil(pending) do
-    {:reply, {:error, :busy}, state}
-  end
+  def handle_call({:compact, opts}, _from, state) do
+    # Manual compact: synchronous in Coder. Abort the agent first
+    # (no-op if idle), do the work, set Agent's transcript, return.
+    # Mid-run auto-compact stays on a separate path: Agent emits
+    # CompactionRequested and the handle_info path below runs the
+    # work.
+    OctoPi.Agent.abort(state.agent_pid)
 
-  def handle_call({:compact, opts}, from, %State{agent_pid: agent_pid} = state) do
-    # Route through the agent FSM: Agent emits CompactionRequested, our
-    # handle_info handler runs the LLM, calls finish_compaction (which
-    # writes the entry + compaction_response). The reply to the original
-    # caller is deferred until the work resolves — see resolve_compact/2.
-    OctoPi.Agent.compact(agent_pid, opts)
-    {:noreply, %{state | pending_compact_from: from}}
+    case do_compact(state, opts) do
+      {:ok, %{result: result, from_extension?: from_ext?}} = ok ->
+        new_state = finalize_compact(state, result, from_ext?)
+        {:reply, ok, new_state}
+
+      other ->
+        {:reply, other, state}
+    end
   end
 
   def handle_call({:fork, opts}, _from, state) do
@@ -304,14 +312,106 @@ defmodule OctoPi.Coder.Loop do
 
   def handle_call(:get_entries, _from, state), do: {:reply, SessionStore.get_entries(state.store_pid), state}
 
-  # Pop pending_compact_from and reply with the compact_result. Also
-  # routes the equivalent payload back through Agent.compaction_response
-  # so the agent FSM can settle.
-  defp resolve_compact(%State{pending_compact_from: nil} = state, _result), do: state
+  # ---- compact (manual + pre-prompt) --------------------------------------
 
-  defp resolve_compact(%State{pending_compact_from: from} = state, result) do
-    GenServer.reply(from, result)
-    %{state | pending_compact_from: nil}
+  # Pre-prompt threshold check: run a synchronous compact before
+  # forwarding a user prompt when the current context exceeds the
+  # configured threshold. Returns the (possibly updated) state.
+  defp maybe_pre_prompt_compact(%State{} = state) do
+    if pre_prompt_should_compact?(state) do
+      case do_compact(state, auto?: true) do
+        {:ok, %{result: result, from_extension?: from_ext?}} ->
+          finalize_compact(state, result, from_ext?)
+
+        _ ->
+          state
+      end
+    else
+      state
+    end
+  end
+
+  defp pre_prompt_should_compact?(%State{} = state) do
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+
+    with true <- settings.enabled,
+         %{tokens: t, context_window: cw} when is_integer(t) and is_integer(cw) <-
+           do_get_context_usage(state) do
+      Tokens.should_compact?(t, cw, settings)
+    else
+      _ -> false
+    end
+  end
+
+  defp do_compact(%State{} = state, opts) do
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+
+    case Preparation.prepare(state.path, settings) do
+      nil -> {:error, :nothing_to_compact}
+      %Preparation{} = prep -> dispatch_compact(state, prep, opts)
+    end
+  end
+
+  defp dispatch_compact(%State{} = state, prep, opts) do
+    ctx = build_ctx(state)
+
+    event =
+      Event.new(:session_before_compact, %{
+        preparation: prep,
+        custom_instructions: Keyword.get(opts, :custom_instructions)
+      })
+
+    case Dispatcher.halt_on_result(state.extensions, event, ctx) do
+      {:cancel, reason} -> {:cancel, reason}
+      {:override, %Result{} = result} -> {:ok, %{result: result, from_extension?: true}}
+      :ok -> run_default_compact(state, prep, opts)
+    end
+  end
+
+  defp run_default_compact(%State{} = state, prep, opts) do
+    case state.model_provider.() do
+      nil ->
+        {:error, :no_model}
+
+      model ->
+        case Compaction.compact(prep, model, opts) do
+          {:ok, %Result{} = result} -> {:ok, %{result: result, from_extension?: false}}
+          {:error, _} = err -> err
+        end
+    end
+  end
+
+  # Persist the Compaction entry, refresh the cached path, rewrite
+  # Agent's transcript, and emit the `:session_compact` extension
+  # event. Used by both the manual path (handle_call({:compact, _}))
+  # and the mid-run auto path (handle_info({:CompactionRequested,_})).
+  defp finalize_compact(%State{} = state, %Result{} = result, from_ext?) do
+    entry = %Entry.Compaction{
+      id: nil,
+      timestamp: nil,
+      summary: result.summary,
+      first_kept_entry_id: result.first_kept_entry_id,
+      tokens_before: result.tokens_before,
+      from_hook: if(from_ext?, do: true),
+      details: result.details
+    }
+
+    {state, _materialized} = append_to_store(state, entry, [])
+
+    %{messages: msgs} = SessionStore.build_session_context(state.store_pid)
+    :ok = OctoPi.Agent.set_messages(state.agent_pid, msgs)
+
+    sm = SessionStore.get_session_manager(state.store_pid)
+    ctx = Context.bind_session_manager(%Context{cwd: sm.cwd}, fn -> sm end)
+    stored = sm.file_entries |> Enum.reverse() |> Enum.find(&match?(%Entry.Compaction{}, &1))
+
+    Dispatcher.emit(
+      state.extensions,
+      Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}),
+      ctx
+    )
+
+    state
   end
 
   # ---- fork ----------------------------------------------------------------
@@ -520,68 +620,36 @@ defmodule OctoPi.Coder.Loop do
         {:octo_pi_agent_event, %OctoPi.Agent.Event.CompactionRequested{ref: ref, opts: opts}},
         %State{agent_pid: agent_pid} = state
       ) do
-    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+    # Mid-run auto-compact: Agent paused between turns and asked the
+    # host to compact. Use the same do_compact pipeline as manual
+    # compact, then thread the result back through Agent's FSM via
+    # compaction_response/3.
+    case do_compact(state, opts) do
+      {:ok, %{result: result, from_extension?: from_ext?}} = ok ->
+        new_state = finalize_compact(state, result, from_ext?)
+        OctoPi.Agent.compaction_response(agent_pid, ref, agent_compaction_payload(ok, from_ext?))
+        {:noreply, new_state}
 
-    case Preparation.prepare(state.path, settings) do
-      nil ->
-        OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :nothing_to_compact})
-        {:noreply, resolve_compact(state, {:error, :nothing_to_compact})}
-
-      %Preparation{} = prep ->
-        ctx = build_ctx(state)
-
-        before_event =
-          Event.new(:session_before_compact, %{
-            preparation: prep,
-            custom_instructions: Keyword.get(opts, :custom_instructions)
-          })
-
-        case Dispatcher.halt_on_result(state.extensions, before_event, ctx) do
-          {:cancel, reason} ->
-            OctoPi.Agent.compaction_response(agent_pid, ref, {:cancel, reason})
-            {:noreply, resolve_compact(state, {:cancel, reason})}
-
-          {:override, %Result{} = result} ->
-            spawn_finish_compaction(self(), agent_pid, ref, result, true, state.extensions)
-            {:noreply, state}
-
-          :ok ->
-            dispatch_compaction(state, agent_pid, ref, prep, opts)
-        end
-    end
-  end
-
-  def handle_info({:compact_resolved, result}, state), do: {:noreply, resolve_compact(state, result)}
-
-  def handle_info(_msg, state), do: {:noreply, state}
-
-  defp dispatch_compaction(state, agent_pid, ref, prep, opts) do
-    case state.model_provider.() do
-      nil ->
-        OctoPi.Agent.compaction_response(agent_pid, ref, {:error, :no_model})
-        {:noreply, resolve_compact(state, {:error, :no_model})}
-
-      model ->
-        spawn_compact_and_finish(self(), agent_pid, ref, prep, model, opts, state.extensions)
+      other ->
+        OctoPi.Agent.compaction_response(agent_pid, ref, other)
         {:noreply, state}
     end
   end
 
-  defp spawn_finish_compaction(loop_pid, agent_pid, ref, result, override?, extensions) do
-    spawn(fn -> finish_compaction(loop_pid, agent_pid, ref, result, override?, extensions) end)
-  end
+  def handle_info(_msg, state), do: {:noreply, state}
 
-  defp spawn_compact_and_finish(loop_pid, agent_pid, ref, prep, model, opts, extensions) do
-    spawn(fn ->
-      case Compaction.compact(prep, model, opts) do
-        {:ok, %Result{} = result} ->
-          finish_compaction(loop_pid, agent_pid, ref, result, false, extensions)
-
-        {:error, reason} ->
-          OctoPi.Agent.compaction_response(agent_pid, ref, {:error, reason})
-          send(loop_pid, {:compact_resolved, {:error, reason}})
-      end
-    end)
+  # Translate the Coder-shaped compact_result into the payload Agent's
+  # FSM expects on compaction_response/3 (a flatter map without the
+  # Result struct nesting).
+  defp agent_compaction_payload({:ok, %{result: %Result{} = r}}, from_ext?) do
+    {:ok,
+     %{
+       summary: r.summary,
+       first_kept_entry_id: r.first_kept_entry_id,
+       tokens_before: r.tokens_before,
+       details: r.details,
+       from_extension?: from_ext?
+     }}
   end
 
   # ---- get_context_usage / get_session_stats --------------------------------
@@ -683,48 +751,6 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-  defp finish_compaction(loop_pid, agent_pid, ref, %Result{} = result, from_ext?, extensions) do
-    persist_compaction(loop_pid, result, from_ext?, extensions)
-
-    OctoPi.Agent.compaction_response(
-      agent_pid,
-      ref,
-      {:ok,
-       %{
-         summary: result.summary,
-         first_kept_entry_id: result.first_kept_entry_id,
-         tokens_before: result.tokens_before,
-         details: result.details,
-         from_extension?: from_ext?
-       }}
-    )
-
-    send(loop_pid, {:compact_resolved, {:ok, %{result: result, from_extension?: from_ext?}}})
-  end
-
-  defp persist_compaction(loop_pid, %Result{} = result, from_ext?, extensions) do
-    entry = %Entry.Compaction{
-      id: nil,
-      timestamp: nil,
-      summary: result.summary,
-      first_kept_entry_id: result.first_kept_entry_id,
-      tokens_before: result.tokens_before,
-      from_hook: if(from_ext?, do: true),
-      details: result.details
-    }
-
-    {:ok, _id} = GenServer.call(loop_pid, {:add_entry, entry, []})
-    sm = GenServer.call(loop_pid, :get_session_manager)
-    ctx = Context.bind_session_manager(%Context{cwd: sm.cwd}, fn -> sm end)
-
-    stored = sm.file_entries |> Enum.reverse() |> Enum.find(&match?(%Entry.Compaction{}, &1))
-
-    Dispatcher.emit(
-      extensions,
-      Event.new(:session_compact, %{compaction_entry: stored, from_extension?: from_ext?}),
-      ctx
-    )
-  end
 
   # -- helpers --
 
