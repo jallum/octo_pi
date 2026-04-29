@@ -15,6 +15,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.CustomMessage
   alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Components.LoginDialog
