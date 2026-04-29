@@ -141,10 +141,6 @@ defmodule OctoPi.Agent do
   def subscribe(loop_pid, listener_pid, mode) when is_pid(listener_pid),
     do: Subscribers.subscribe(loop_pid, listener_pid, mode)
 
-  @doc "Read the loop's current state."
-  @spec state(t()) :: State.t()
-  def state(pid), do: Loop.state(pid)
-
   @doc "Block until the loop is idle, or timeout."
   @spec wait_for_idle(t(), timeout()) :: :ok | :timeout
   def wait_for_idle(pid, timeout \\ 30_000) do
