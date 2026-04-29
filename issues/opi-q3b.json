@@ -14,8 +14,8 @@
   "id": "opi-q3b",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Act on AI telemetry token counts instead of just logging them",
   "type": "task",
-  "updated_at": "2026-04-29T13:06:39.978294Z"
+  "updated_at": "2026-04-29T13:06:43.907828Z"
 }
