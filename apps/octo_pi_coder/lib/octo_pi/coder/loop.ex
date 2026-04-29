@@ -44,7 +44,7 @@ defmodule OctoPi.Coder.Loop do
           extensions: [Extension.t()],
           session_manager: SessionManager.t(),
           store_pid: pid(),
-          agent_pid: pid() | nil,
+          agent_pid: OctoPi.Agent.t() | nil,
           model_provider: model_provider(),
           settings_manager: pid()
         }
@@ -67,7 +67,7 @@ defmodule OctoPi.Coder.Loop do
           extensions: [Extension.t()],
           session_manager: SessionManager.t(),
           store_pid: pid(),
-          agent_pid: pid() | nil,
+          agent_pid: OctoPi.Agent.t() | nil,
           model_provider: Loop.model_provider(),
           settings_manager: pid(),
           name: GenServer.name()
@@ -250,7 +250,7 @@ defmodule OctoPi.Coder.Loop do
 
   # -------------------------------------------------------------------------
 
-  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state) when is_pid(agent_pid) do
+  def handle_call({:compact, _opts}, from, %{agent_pid: agent_pid} = state) when not is_nil(agent_pid) do
     # Route through the agent FSM: Agent emits CompactionRequested, our
     # handle_info handler runs the LLM, calls finish_compaction (which
     # writes the entry + compaction_response). Reply immediately so we

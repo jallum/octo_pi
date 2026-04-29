@@ -25,7 +25,7 @@ defmodule OctoPi.Agent do
   alias OctoPi.Agent.Subscribers
   alias OctoPi.AI.Model
 
-  @type loop :: pid()
+  @opaque t :: pid()
   @type subscribe_mode :: :sync | :async
 
   @type loop_opt ::
@@ -49,23 +49,23 @@ defmodule OctoPi.Agent do
 
   Required: `:model`. All others are optional.
   """
-  @spec start_loop(loop_opts()) :: {:ok, loop()}
+  @spec start_loop(loop_opts()) :: {:ok, t()}
   def start_loop(opts) when is_list(opts), do: Loop.start_link(opts)
 
   @doc "Append message(s) to the transcript and start a new run."
-  @spec prompt(loop(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
+  @spec prompt(t(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
   def prompt(pid, msg_or_msgs), do: Loop.prompt(pid, msg_or_msgs)
 
   @doc "Continue the current conversation with no new user input."
-  @spec continue(loop()) :: :ok | {:error, :already_streaming}
+  @spec continue(t()) :: :ok | {:error, :already_streaming}
   def continue(pid), do: Loop.continue(pid)
 
   @doc "Enqueue a message for injection before the next LLM call of the current run."
-  @spec steer(loop(), String.t() | Message.t()) :: :ok | {:error, :full}
+  @spec steer(t(), String.t() | Message.t()) :: :ok | {:error, :full}
   def steer(pid, msg), do: Loop.steer(pid, msg)
 
   @doc "Enqueue a message for injection when the current run would otherwise stop."
-  @spec follow_up(loop(), String.t() | Message.t()) :: :ok | {:error, :full}
+  @spec follow_up(t(), String.t() | Message.t()) :: :ok | {:error, :full}
   def follow_up(pid, msg), do: Loop.follow_up(pid, msg)
 
   @doc """
@@ -73,11 +73,11 @@ defmodule OctoPi.Agent do
   queues. `:one_at_a_time` drains one item per pass; `:all` drains
   every queued item in one shot.
   """
-  @spec set_queue_mode(loop(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
+  @spec set_queue_mode(t(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
   def set_queue_mode(pid, queue, mode), do: Loop.set_queue_mode(pid, queue, mode)
 
   @doc "Abort the current run. No-op if the loop is idle."
-  @spec abort(loop()) :: :ok
+  @spec abort(t()) :: :ok
   def abort(pid), do: Loop.abort(pid)
 
   @doc """
@@ -91,7 +91,7 @@ defmodule OctoPi.Agent do
   `%Event.CompactionEnd{result}` to all subscribers. Callers who need
   to synchronize use `wait_for_idle/2` or watch for `CompactionEnd`.
   """
-  @spec compact(loop(), keyword()) :: :ok | {:error, :busy}
+  @spec compact(t(), keyword()) :: :ok | {:error, :busy}
   def compact(pid, opts \\ []), do: Loop.compact(pid, opts)
 
   @doc """
@@ -104,27 +104,27 @@ defmodule OctoPi.Agent do
   match Agent's currently active compaction (e.g. the request was
   superseded or the agent was aborted).
   """
-  @spec compaction_response(loop(), reference(), term()) :: :ok | {:error, :stale}
+  @spec compaction_response(t(), reference(), term()) :: :ok | {:error, :stale}
   def compaction_response(pid, ref, result), do: Loop.compaction_response(pid, ref, result)
 
   @doc "Change the thinking level for future runs."
-  @spec set_thinking_level(loop(), atom()) :: :ok
+  @spec set_thinking_level(t(), atom()) :: :ok
   def set_thinking_level(pid, level), do: Loop.set_thinking_level(pid, level)
 
   @doc "Change the model for future runs."
-  @spec set_model(loop(), Model.t()) :: :ok
+  @spec set_model(t(), Model.t()) :: :ok
   def set_model(pid, model), do: Loop.set_model(pid, model)
 
   @doc "Add a tool to the loop's active tool list. No-op if a tool with the same name already exists."
-  @spec add_tool(loop(), map()) :: :ok
+  @spec add_tool(t(), map()) :: :ok
   def add_tool(pid, tool), do: Loop.add_tool(pid, tool)
 
   @doc "Drain all messages from the steering queue and return them."
-  @spec drain_steering(loop()) :: [Message.t()]
+  @spec drain_steering(t()) :: [Message.t()]
   def drain_steering(pid), do: Loop.drain_steering(pid)
 
   @doc "Drain all messages from the follow-up queue and return them."
-  @spec drain_follow_up(loop()) :: [Message.t()]
+  @spec drain_follow_up(t()) :: [Message.t()]
   def drain_follow_up(pid), do: Loop.drain_follow_up(pid)
 
   @doc """
@@ -132,22 +132,22 @@ defmodule OctoPi.Agent do
   function. The 1- and 2-arity forms default the listener to
   `self()`.
   """
-  @spec subscribe(loop()) :: (-> :ok)
+  @spec subscribe(t()) :: (-> :ok)
   def subscribe(loop_pid), do: subscribe(loop_pid, self(), :async)
 
-  @spec subscribe(loop(), subscribe_mode()) :: (-> :ok)
+  @spec subscribe(t(), subscribe_mode()) :: (-> :ok)
   def subscribe(loop_pid, mode) when mode in [:sync, :async], do: subscribe(loop_pid, self(), mode)
 
-  @spec subscribe(loop(), pid(), subscribe_mode()) :: (-> :ok)
+  @spec subscribe(t(), pid(), subscribe_mode()) :: (-> :ok)
   def subscribe(loop_pid, listener_pid, mode) when is_pid(listener_pid),
     do: Subscribers.subscribe(loop_pid, listener_pid, mode)
 
   @doc "Read the loop's current state."
-  @spec state(loop()) :: State.t()
+  @spec state(t()) :: State.t()
   def state(pid), do: Loop.state(pid)
 
   @doc "Block until the loop is idle, or timeout."
-  @spec wait_for_idle(loop(), timeout()) :: :ok | :timeout
+  @spec wait_for_idle(t(), timeout()) :: :ok | :timeout
   def wait_for_idle(pid, timeout \\ 30_000) do
     Loop.wait_for_idle(pid, timeout)
   catch
