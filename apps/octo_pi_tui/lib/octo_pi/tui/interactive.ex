@@ -685,9 +685,16 @@ defmodule OctoPi.TUI.Interactive do
         model_provider: fn -> model end
       )
 
+    messages_provider = build_messages_provider(coder_pid)
+
     agent_opts =
       put_if_present(
-        [model: model, tools: tools, system_prompt: system_prompt],
+        [
+          model: model,
+          tools: tools,
+          system_prompt: system_prompt,
+          messages_provider: messages_provider
+        ],
         :transport,
         opts[:transport]
       )
@@ -714,14 +721,16 @@ defmodule OctoPi.TUI.Interactive do
             model_provider: fn -> model end
           )
 
-        messages_provider = fn _session ->
-          ctx = Coder.build_session_context(coder_pid)
-          SessionMessages.to_llm(ctx.messages)
-        end
+        messages_provider = build_messages_provider(coder_pid)
 
         agent_opts =
           put_if_present(
-            [model: model, tools: tools, system_prompt: system_prompt, messages_provider: messages_provider],
+            [
+              model: model,
+              tools: tools,
+              system_prompt: system_prompt,
+              messages_provider: messages_provider
+            ],
             :transport,
             opts[:transport]
           )
@@ -729,6 +738,16 @@ defmodule OctoPi.TUI.Interactive do
         {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
         :ok = Coder.set_agent_pid(coder_pid, agent_pid)
         coder_pid
+    end
+  end
+
+  # Wire-edge transform for the agent loop: synthetic message types
+  # (CompactionSummaryMessage, BranchSummaryMessage) flatten into plain
+  # user messages here before reaching the provider.
+  defp build_messages_provider(coder_pid) do
+    fn _session ->
+      ctx = Coder.build_session_context(coder_pid)
+      SessionMessages.to_llm(ctx.messages)
     end
   end
 

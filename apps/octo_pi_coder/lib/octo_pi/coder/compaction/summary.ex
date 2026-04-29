@@ -37,6 +37,7 @@ defmodule OctoPi.Coder.Compaction.Summary do
   alias OctoPi.AI.Model
   alias OctoPi.Coder.Compaction.Prompts
   alias OctoPi.Coder.Compaction.Serialize
+  alias OctoPi.Coder.Session.Messages
 
   @type variant :: :default | :turn_prefix
 
@@ -66,7 +67,12 @@ defmodule OctoPi.Coder.Compaction.Summary do
       |> base_prompt(previous_summary)
       |> append_custom(custom_instructions)
 
-    convo = Serialize.conversation(messages)
+    # Wire-edge transform: synthetic message types
+    # (CompactionSummaryMessage, BranchSummaryMessage, …) flatten into
+    # plain user messages here before they touch the provider. Same
+    # rule applied in `BranchSummarization.generate/2` and the agent
+    # loop's `messages_provider`.
+    convo = messages |> Messages.to_llm() |> Serialize.conversation()
     prompt_text = build_prompt(convo, previous_summary, base_prompt)
 
     user_message = %User{
