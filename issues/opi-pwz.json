@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-29T17:20:20.128614Z",
+  "description": "## What\n\nPort upstream pi-mono's \"deferred-flush\" semantics: a new session file is not written to disk until the first assistant message arrives in the buffer. Until then, the header + any user/system entries are held in memory; on the first assistant entry the entire prefix is flushed in one shot, then the file becomes append-only as it is today (`tmp/pi-mono/.../session-manager.ts:801-819`).\n\n## Why\n\nToday every `SessionStore.append/2` writes immediately. A session that produces a prompt but never gets a response (model error, network failure, user abort before any assistant tokens) leaves a half-formed `.jsonl` file on disk that gets picked up by `find_recent` and shown in session pickers.\n\nUpstream avoids this by buffering. The behavior was in scope for the original port but not implemented (gap noted in the deep-research snapshot from 2026-04).\n\n## Why this is a follow-on, not part of opi-qy9\n\nToday buffering would have to live in `Coder.Loop` (which has the entry list) while the writer lives in `SessionStore` (which has the file handle). Splitting buffer state and writer state across processes is awkward.\n\nOnce **opi-qy9** lands and the `SessionStore` GenServer holds both the tree-of-record AND the file handle, deferred-flush is a small local change inside `SessionStore`: maintain a `flushed?: false` flag, hold appends in `file_entries` only until an assistant entry arrives, then write the prefix.\n\n## Done when\n\n- New session: header + user entries do NOT touch disk until first assistant entry.\n- After first assistant entry: header + everything before flushes in one shot; subsequent appends are immediate.\n- Sessions that never see an assistant entry leave no file on disk.\n- `find_recent` / `list` ignore in-memory-only sessions (they wouldn't see them anyway since the file doesn't exist).\n- Round-trip parity with upstream pi-mono session files preserved.\n\n## Files (anticipated)\n\n- `apps/octo_pi_coder/lib/octo_pi/coder/session_store.ex` — add `flushed?` flag, gate writes on first assistant entry\n- Tests covering: prompt-then-abort produces no file; prompt-then-response produces a complete file with header at line 1.\n\n## Depends on\n\nopi-qy9 (the rebalance epic) — not for correctness but for cohesion. Could technically be done before, but the implementation is much cleaner after.",
+  "id": "opi-pwz",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Deferred-flush: buffer session JSONL writes until first assistant message",
+  "type": "task",
+  "updated_at": "2026-04-29T17:20:20.128614Z"
+}
