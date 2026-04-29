@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-y0a.3"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-29T19:45:06.065211Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Branch summary and navigate_tree mirror the compaction pattern",
   "type": "task",
-  "updated_at": "2026-04-29T19:45:06.065211Z"
+  "updated_at": "2026-04-29T19:46:05.304313Z"
 }
