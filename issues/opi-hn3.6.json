@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-hn3",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Move `Renderer.resize` side-effect from `handle_info` into `render_frame`",
   "type": "task",
-  "updated_at": "2026-04-28T11:42:28.518723Z"
+  "updated_at": "2026-04-29T12:46:30.835577Z"
 }
