@@ -14,7 +14,7 @@ defmodule OctoPi.Agent.TestSupport.EchoTool do
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content
 
-  @doc "Return the `%Tool{}` struct callers register on a session."
+  @doc "Return the `%Tool{}` struct callers register on a loop."
   @spec tool() :: Tool.t()
   def tool do
     %Tool{

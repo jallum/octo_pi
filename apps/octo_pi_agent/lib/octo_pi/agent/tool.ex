@@ -1,6 +1,6 @@
 defmodule OctoPi.Agent.Tool do
   @moduledoc """
-  A tool registered with a session. Mirrors pi-agent-core's
+  A tool registered with a loop. Mirrors pi-agent-core's
   `AgentTool` (`tmp/pi-mono/packages/agent/src/types.ts` L306-330).
 
   - `name` / `description` / `parameters` feed the LLM's tool schema

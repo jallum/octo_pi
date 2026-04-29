@@ -1,4 +1,4 @@
-defmodule OctoPi.Agent.SessionCompactTest do
+defmodule OctoPi.Agent.LoopCompactTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.Agent
@@ -29,16 +29,16 @@ defmodule OctoPi.Agent.SessionCompactTest do
     }
   end
 
-  defp start_session(opts \\ []) do
+  defp start_loop(opts \\ []) do
     opts = Keyword.merge([model: model(), transport: FakeTransport], opts)
-    {:ok, pid} = Agent.start_session(opts)
+    {:ok, pid} = Agent.start_loop(opts)
     pid
   end
 
   describe "compact/2 — happy path" do
     test "returns :ok immediately, emits CompactionRequested then CompactionEnd" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
       summary = %{
         summary: "rolled-up",
@@ -48,7 +48,7 @@ defmodule OctoPi.Agent.SessionCompactTest do
         from_extension?: false
       }
 
-      assert :ok = Agent.compact(session, custom_instructions: "summarize")
+      assert :ok = Agent.compact(loop, custom_instructions: "summarize")
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref, opts: opts}},
                      1_000
@@ -56,50 +56,50 @@ defmodule OctoPi.Agent.SessionCompactTest do
       assert opts == [custom_instructions: "summarize"]
       assert is_reference(ref)
 
-      assert :ok = Agent.compaction_response(session, ref, {:ok, summary})
+      assert :ok = Agent.compaction_response(loop, ref, {:ok, summary})
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, ^summary}}}, 1_000
 
-      refute Agent.state(session).is_streaming?
+      refute Agent.state(loop).is_streaming?
     end
 
     test "{:cancel, reason} surfaces via CompactionEnd" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
 
-      assert :ok = Agent.compaction_response(session, ref, {:cancel, "user said no"})
+      assert :ok = Agent.compaction_response(loop, ref, {:cancel, "user said no"})
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:cancel, "user said no"}}},
                      1_000
 
-      refute Agent.state(session).is_streaming?
+      refute Agent.state(loop).is_streaming?
     end
 
     test "{:error, reason} surfaces via CompactionEnd" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
 
-      assert :ok = Agent.compaction_response(session, ref, {:error, :no_model})
+      assert :ok = Agent.compaction_response(loop, ref, {:error, :no_model})
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:error, :no_model}}},
                      1_000
     end
 
     test "wait_for_idle/2 unblocks after CompactionEnd" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
-      Agent.compaction_response(session, ref, {:ok, %{summary: "x"}})
+      Agent.compaction_response(loop, ref, {:ok, %{summary: "x"}})
 
-      assert :ok = Agent.wait_for_idle(session, 1_000)
+      assert :ok = Agent.wait_for_idle(loop, 1_000)
     end
   end
 
@@ -125,50 +125,50 @@ defmodule OctoPi.Agent.SessionCompactTest do
       FakeTransport.set_gate()
       FakeTransport.set_script([stream])
 
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.prompt(session, "hi")
-      assert {:error, :busy} = Agent.compact(session)
+      :ok = Agent.prompt(loop, "hi")
+      assert {:error, :busy} = Agent.compact(loop)
 
       FakeTransport.release_gate()
-      :ok = Agent.wait_for_idle(session, 2_000)
+      :ok = Agent.wait_for_idle(loop, 2_000)
     end
 
     test "{:error, :busy} when a previous compact is still in flight" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
 
-      assert {:error, :busy} = Agent.compact(session)
+      assert {:error, :busy} = Agent.compact(loop)
 
-      Agent.compaction_response(session, ref, {:ok, %{summary: "x"}})
-      :ok = Agent.wait_for_idle(session, 1_000)
+      Agent.compaction_response(loop, ref, {:ok, %{summary: "x"}})
+      :ok = Agent.wait_for_idle(loop, 1_000)
     end
   end
 
   describe "compaction_response/3 — staleness" do
     test "{:error, :stale} when ref doesn't match the active turn" do
-      session = start_session()
+      loop = start_loop()
 
       assert {:error, :stale} =
-               Agent.compaction_response(session, make_ref(), {:ok, %{summary: "x"}})
+               Agent.compaction_response(loop, make_ref(), {:ok, %{summary: "x"}})
     end
 
     test "{:error, :stale} when ref is from a superseded compact" do
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: first_ref}}, 1_000
 
-      :ok = Agent.compaction_response(session, first_ref, {:ok, %{summary: "first"}})
-      :ok = Agent.wait_for_idle(session, 1_000)
+      :ok = Agent.compaction_response(loop, first_ref, {:ok, %{summary: "first"}})
+      :ok = Agent.wait_for_idle(loop, 1_000)
 
       assert {:error, :stale} =
-               Agent.compaction_response(session, first_ref, {:ok, %{summary: "late"}})
+               Agent.compaction_response(loop, first_ref, {:ok, %{summary: "late"}})
     end
   end
 
@@ -191,15 +191,15 @@ defmodule OctoPi.Agent.SessionCompactTest do
         ]
       ])
 
-      session = start_session()
-      Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      Agent.subscribe(loop, self(), :async)
 
-      :ok = Agent.prompt(session, "hi")
-      :ok = Agent.wait_for_idle(session, 2_000)
+      :ok = Agent.prompt(loop, "hi")
+      :ok = Agent.wait_for_idle(loop, 2_000)
 
-      :ok = Agent.compact(session)
+      :ok = Agent.compact(loop)
       assert_receive {:octo_pi_agent_event, %Event.CompactionRequested{ref: ref}}, 1_000
-      :ok = Agent.compaction_response(session, ref, {:ok, %{summary: "post-stream"}})
+      :ok = Agent.compaction_response(loop, ref, {:ok, %{summary: "post-stream"}})
 
       assert_receive {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, %{summary: "post-stream"}}}},
                      1_000

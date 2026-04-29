@@ -420,7 +420,7 @@ defmodule OctoPi.Coder.SessionTest do
     end
   end
 
-  describe "messages_provider closure for Agent.Session (E5a)" do
+  describe "messages_provider closure for Agent.Loop (E5a)" do
     alias OctoPi.AI.Content.Text
     alias OctoPi.AI.Message.User
     alias OctoPi.Coder.Session.Messages
@@ -435,8 +435,8 @@ defmodule OctoPi.Coder.SessionTest do
       %{pid: pid}
     end
 
-    # The coder app builds this closure when starting an Agent.Session
-    # bound to a Coder.Session. Agent.Session calls it per turn to get
+    # The coder app builds this closure when starting an Agent.Loop
+    # bound to a Coder.Session. Agent.Loop calls it per turn to get
     # the LLM messages list (replacing MessageLog.to_list/1).
     defp build_provider(coder_session) do
       fn _agent_state ->

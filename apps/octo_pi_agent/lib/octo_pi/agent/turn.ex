@@ -1,8 +1,8 @@
 defmodule OctoPi.Agent.Turn do
   @moduledoc """
-  Pure FSM for a single agent turn. Driven by `OctoPi.Agent.Session`
+  Pure FSM for a single agent turn. Driven by `OctoPi.Agent.Loop`
   (lands in F2 / opi-ixp.50); no process, no I/O, no funs in struct
-  fields. Session feeds events in via `handle_event/2` and executes
+  fields. Loop feeds events in via `handle_event/2` and executes
   the returned action list, then feeds the next event.
 
   Compaction states (`:compacting`) and auto-compact handling extend
@@ -19,7 +19,7 @@ defmodule OctoPi.Agent.Turn do
     * `:cancelling` — abort requested while busy. Late completion
       events from the cancelled Task are absorbed and produce a
       synthetic aborted `:turn_done`.
-    * `:compacting` (F3) — `compact/1` invoked. Session has emitted
+    * `:compacting` (F3) — `compact/1` invoked. Loop has emitted
       `%Event.CompactionRequested{}` to subscribers and is awaiting
       a `compaction_response/3` call.
 
@@ -36,16 +36,16 @@ defmodule OctoPi.Agent.Turn do
 
   ## Actions
 
-  Descriptors only — Session is the executor.
+  Descriptors only — Loop is the executor.
 
     * `:start_stream` — spawn the stream Task; on completion feed
       `{:stream_done, assistant}` or `{:stream_failed, reason}`.
     * `{:start_tool_batch, calls}` — spawn the tool batch Task; on
       completion feed `{:tool_batch_done, results}`. Parallel vs
-      sequential dispatch is Session's responsibility (resolved from
+      sequential dispatch is Loop's responsibility (resolved from
       the tool definitions Turn does not carry).
     * `:cancel_active_task` — `Task.shutdown/2` on the tracked ref.
-    * `{:start_compaction, opts}` (F3) — Session emits
+    * `{:start_compaction, opts}` (F3) — Loop emits
       `%Event.CompactionRequested{ref, opts}` via Subscribers and
       sets `turn_ref` so the eventual response is ref-gateable.
     * `{:emit_event, struct}` — subscriber event (`%Event.TurnStart{}`
@@ -53,7 +53,7 @@ defmodule OctoPi.Agent.Turn do
     * `{:turn_done, assistant, tool_results, stop_reason}` — normal
       completion; assistant is the LLM-produced struct.
     * `{:turn_synth_done, stop_reason, error_message}` — synthesized
-      completion (`:error` / `:aborted`). Session builds the
+      completion (`:error` / `:aborted`). Loop builds the
       aborted/error assistant from its own model + provider — Turn
       does not carry those.
 
@@ -61,7 +61,7 @@ defmodule OctoPi.Agent.Turn do
   > `{:start_tool_batch, calls}` (no mode arg) and a synth variant of
   > `:turn_done` for error/abort cases. Both because Turn cannot
   > author an `Assistant.t()` (its `@enforce_keys` need provider/model)
-  > and shouldn't know about parallel-vs-sequential — Session has both
+  > and shouldn't know about parallel-vs-sequential — Loop has both
   > pieces.
   """
 

@@ -1,6 +1,6 @@
 defmodule OctoPi.Agent.Event do
   @moduledoc """
-  Canonical event union emitted by an agent session. Mirrors
+  Canonical event union emitted by an agent loop. Mirrors
   pi-agent-core's `AgentEvent` (`types.ts` L349-364).
 
   Lifecycle (high level):
@@ -122,10 +122,10 @@ defmodule OctoPi.Agent.Event do
 
   defmodule CompactionRequested do
     @moduledoc """
-    Emitted when the Session enters the `:compacting` Turn state.
+    Emitted when the Loop enters the `:compacting` Turn state.
     Exactly one subscriber is expected to perform the compaction and
     respond via `OctoPi.Agent.compaction_response/3`. The `ref`
-    carried here matches the one Session will check on the response —
+    carried here matches the one Loop will check on the response —
     late or stale responses get rejected.
 
     `opts` is the keyword list passed to `OctoPi.Agent.compact/2`,

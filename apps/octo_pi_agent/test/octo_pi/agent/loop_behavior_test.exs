@@ -1,9 +1,9 @@
-defmodule OctoPi.Agent.SessionBehaviorTest do
+defmodule OctoPi.Agent.LoopBehaviorTest do
   use ExUnit.Case, async: false
 
-  # End-to-end Session behavior driven through the public Agent
+  # End-to-end Loop behavior driven through the public Agent
   # facade. Renamed from LoopTest after F2 (.50) folded Loop into
-  # Session as a Turn-FSM-driven executor.
+  # Loop as a Turn-FSM-driven executor.
   #
   # Stream and tool-batch run as Tasks under TurnTaskSupervisor;
   # transport-level abort/error tests deliberately leave the scripted
@@ -55,9 +55,9 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
     }
   end
 
-  defp start_session(opts \\ []) do
+  defp start_loop(opts \\ []) do
     opts = Keyword.merge([model: model(), transport: FakeTransport], opts)
-    {:ok, pid} = OctoPi.Agent.start_session(opts)
+    {:ok, pid} = OctoPi.Agent.start_loop(opts)
     pid
   end
 
@@ -105,11 +105,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session()
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "hi")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "hi")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentStart{}}
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
@@ -141,11 +141,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [EchoTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [EchoTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "use the echo tool please")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "use the echo tool please")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       # Two turns fired, one tool execution, terminal AgentEnd :stop.
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
@@ -191,13 +191,13 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
       {elapsed_us, :ok} =
         :timer.tc(fn ->
-          :ok = OctoPi.Agent.prompt(session, "run both")
-          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+          :ok = OctoPi.Agent.prompt(loop, "run both")
+          :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
         end)
 
       assert elapsed_us < 180_000,
@@ -233,13 +233,13 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool("slow_seq", :sequential)])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool("slow_seq", :sequential)])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
       {elapsed_us, :ok} =
         :timer.tc(fn ->
-          :ok = OctoPi.Agent.prompt(session, "run both serial")
-          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+          :ok = OctoPi.Agent.prompt(loop, "run both serial")
+          :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
         end)
 
       assert elapsed_us >= 195_000,
@@ -271,11 +271,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "order test")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "order test")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
@@ -305,11 +305,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "stream")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "stream")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionUpdate{
@@ -344,11 +344,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "break please")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "break please")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
@@ -392,17 +392,17 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "go")
+      :ok = OctoPi.Agent.prompt(loop, "go")
       # Sync on the tool actually starting, then steer while the
       # probe is still inside its 80ms sleep.
       assert_receive {:tool_started, "c1"}, 2_000
-      :ok = OctoPi.Agent.steer(session, "midway note")
+      :ok = OctoPi.Agent.steer(loop, "midway note")
 
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
@@ -427,12 +427,12 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session()
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.follow_up(session, "and then?")
-      :ok = OctoPi.Agent.prompt(session, "hi")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.follow_up(loop, "and then?")
+      :ok = OctoPi.Agent.prompt(loop, "hi")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 2}}
@@ -443,10 +443,10 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
     end
 
     test "follow_up during idle does not start a run; next prompt drains" do
-      session = start_session()
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.follow_up(session, "carried over")
+      :ok = OctoPi.Agent.follow_up(loop, "carried over")
       refute_receive {:octo_pi_agent_event, _}, 50
 
       only = assistant([%Text{text: "ok"}], :stop)
@@ -471,8 +471,8 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      :ok = OctoPi.Agent.prompt(session, "now")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "now")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
@@ -494,15 +494,15 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session()
-      :ok = OctoPi.Agent.set_queue_mode(session, :follow_up, :all)
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      :ok = OctoPi.Agent.set_queue_mode(loop, :follow_up, :all)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.follow_up(session, "a")
-      :ok = OctoPi.Agent.follow_up(session, "b")
-      :ok = OctoPi.Agent.prompt(session, "hi")
+      :ok = OctoPi.Agent.follow_up(loop, "a")
+      :ok = OctoPi.Agent.follow_up(loop, "b")
+      :ok = OctoPi.Agent.prompt(loop, "hi")
 
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       # Only two turns should have run (initial + one combined
       # follow-up turn) because :all drained both in one pass.
@@ -538,18 +538,18 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "long task")
+      :ok = OctoPi.Agent.prompt(loop, "long task")
       # Sync on the tool actually entering its sleep before we abort.
       assert_receive {:tool_started, "long"}, 2_000
 
       {elapsed_us, :ok} =
         :timer.tc(fn ->
-          :ok = OctoPi.Agent.abort(session)
-          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+          :ok = OctoPi.Agent.abort(loop)
+          :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
         end)
 
       # Well under the tool's 1s sleep — brutal kill, not cooperative
@@ -562,8 +562,8 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
       # Synthesized assistant with :aborted stop reason.
       assert %Assistant{stop_reason: :aborted} = List.last(msgs)
 
-      # Session should now be idle.
-      refute OctoPi.Agent.state(session).is_streaming?
+      # Loop should now be idle.
+      refute OctoPi.Agent.state(loop).is_streaming?
     end
 
     test "double abort is a no-op (single AgentEnd, returns :ok both times)" do
@@ -587,16 +587,16 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "x")
+      :ok = OctoPi.Agent.prompt(loop, "x")
       assert_receive {:tool_started, "c"}, 2_000
 
-      assert :ok = OctoPi.Agent.abort(session)
-      assert :ok = OctoPi.Agent.abort(session)
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      assert :ok = OctoPi.Agent.abort(loop)
+      assert :ok = OctoPi.Agent.abort(loop)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted}}
       refute_received {:octo_pi_agent_event, %Event.AgentEnd{}}
@@ -620,16 +620,16 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session =
-        start_session(
+      loop =
+        start_loop(
           tools: [ProbeTool.tool()],
           before_tool_call: fn _ctx -> :allow end
         )
 
-      OctoPi.Agent.subscribe(session, self(), :async)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "allow")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "allow")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
@@ -661,18 +661,18 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session =
-        start_session(
+      loop =
+        start_loop(
           tools: [ProbeTool.tool()],
           before_tool_call: fn _ctx -> {:block, "not today"} end
         )
 
-      OctoPi.Agent.subscribe(session, self(), :async)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
       {elapsed_us, :ok} =
         :timer.tc(fn ->
-          :ok = OctoPi.Agent.prompt(session, "deny me")
-          :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+          :ok = OctoPi.Agent.prompt(loop, "deny me")
+          :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
         end)
 
       # Tool would sleep 500ms if allowed — the block prevents it.
@@ -711,16 +711,16 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         {:patch, %{content: [%Text{text: "patched"}], details: %{tag: :after}}}
       end
 
-      session =
-        start_session(
+      loop =
+        start_loop(
           tools: [ProbeTool.tool()],
           after_tool_call: patch_fn
         )
 
-      OctoPi.Agent.subscribe(session, self(), :async)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "patch me")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "patch me")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
@@ -747,16 +747,16 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session =
-        start_session(
+      loop =
+        start_loop(
           tools: [ProbeTool.tool()],
           after_tool_call: fn _ctx -> raise "hook boom" end
         )
 
-      OctoPi.Agent.subscribe(session, self(), :async)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "x")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "x")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event,
                        %Event.ToolExecutionEnd{
@@ -772,7 +772,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
   end
 
   describe "telemetry emissions" do
-    test "session + turn + tool events fire with expected metadata" do
+    test "loop + turn + tool events fire with expected metadata" do
       tool_call = %ToolCall{id: "c", name: "probe", arguments: %{"label" => "ok"}}
       tool_turn = assistant([tool_call], :tool_use)
       final_turn = assistant([%Text{text: "done"}], :stop)
@@ -792,8 +792,8 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
       test_pid = self()
 
       events = [
-        [:octo_pi_agent, :session, :start],
-        [:octo_pi_agent, :session, :stop],
+        [:octo_pi_agent, :loop, :start],
+        [:octo_pi_agent, :loop, :stop],
         [:octo_pi_agent, :turn, :start],
         [:octo_pi_agent, :turn, :stop],
         [:octo_pi_agent, :tool, :start],
@@ -809,11 +809,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
 
-      session = start_session(tools: [ProbeTool.tool()])
-      :ok = OctoPi.Agent.prompt(session, "hi")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.prompt(loop, "hi")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :start], _, %{model: "fake-model"}}
+      assert_received {:telemetry, [:octo_pi_agent, :loop, :start], _, %{model: "fake-model"}}
 
       assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 1}}
       assert_received {:telemetry, [:octo_pi_agent, :turn, :stop], %{duration: _}, %{turn: 1}}
@@ -824,7 +824,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       assert_received {:telemetry, [:octo_pi_agent, :turn, :start], _, %{turn: 2}}
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _}, %{reason: :stop}}
+      assert_received {:telemetry, [:octo_pi_agent, :loop, :stop], %{duration: _}, %{reason: :stop}}
     end
 
     test "tool :stop fires with is_error?: true for error results" do
@@ -855,18 +855,18 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
 
-      session = start_session(tools: [ProbeTool.tool()])
-      :ok = OctoPi.Agent.prompt(session, "fail")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.prompt(loop, "fail")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:telemetry, [:octo_pi_agent, :tool, :stop], _, %{is_error?: true}}
     end
   end
 
   describe "hard abort telemetry + synthesized transcript" do
-    # Verify the abnormal on_loop_down path fires :session :stop
+    # Verify the abnormal on_loop_down path fires :loop :stop
     # so run-duration meters don't silently drop aborted runs.
-    test "hard abort emits [:octo_pi_agent, :session, :stop] with reason :aborted" do
+    test "hard abort emits [:octo_pi_agent, :loop, :stop] with reason :aborted" do
       call = %ToolCall{
         id: "c",
         name: "probe",
@@ -887,22 +887,22 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       :telemetry.attach(
         handler_id,
-        [:octo_pi_agent, :session, :stop],
+        [:octo_pi_agent, :loop, :stop],
         &__MODULE__.telemetry_forward/4,
         %{pid: test_pid}
       )
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
 
-      session = start_session(tools: [ProbeTool.tool()])
+      loop = start_loop(tools: [ProbeTool.tool()])
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "go")
+      :ok = OctoPi.Agent.prompt(loop, "go")
       assert_receive {:tool_started, "c"}, 2_000
-      :ok = OctoPi.Agent.abort(session)
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.abort(loop)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
-      assert_received {:telemetry, [:octo_pi_agent, :session, :stop], %{duration: _}, %{reason: :aborted}}
+      assert_received {:telemetry, [:octo_pi_agent, :loop, :stop], %{duration: _}, %{reason: :aborted}}
     end
 
     test "synthesized aborted Assistant carries error_message on both paths" do
@@ -922,14 +922,14 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "abort soon")
+      :ok = OctoPi.Agent.prompt(loop, "abort soon")
       assert_receive {:tool_started, "c"}, 2_000
-      :ok = OctoPi.Agent.abort(session)
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.abort(loop)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted, messages: msgs}}
       synth = List.last(msgs)
@@ -962,11 +962,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "batch of 20")
-      :ok = OctoPi.Agent.wait_for_idle(session, 5_000)
+      :ok = OctoPi.Agent.prompt(loop, "batch of 20")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 5_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       tool_results = Enum.filter(msgs, &match?(%ToolResult{}, &1))
@@ -982,11 +982,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         [%AIEvent.Start{partial: assistant([], nil)}]
       ])
 
-      session = start_session()
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "truncated")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "truncated")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :error, messages: msgs}}
       last = List.last(msgs)
@@ -996,7 +996,7 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
   end
 
   describe "defensive: double-abort" do
-    test "rapid double abort does not crash the session" do
+    test "rapid double abort does not crash the loop" do
       call = %ToolCall{
         id: "rapid",
         name: "probe",
@@ -1012,34 +1012,34 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "x")
+      :ok = OctoPi.Agent.prompt(loop, "x")
       assert_receive {:tool_started, "rapid"}, 2_000
 
       # Fire two aborts back-to-back without yielding — the second
       # must not blow up on a dead loop pid.
-      :ok = OctoPi.Agent.abort(session)
-      :ok = OctoPi.Agent.abort(session)
+      :ok = OctoPi.Agent.abort(loop)
+      :ok = OctoPi.Agent.abort(loop)
 
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
-      assert Process.alive?(session)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+      assert Process.alive?(loop)
     end
   end
 
   describe "queue-full at facade" do
     test "steer/2 returns {:error, :full} when the steering queue is at bound" do
-      session = start_session(steering_queue_bound: 1)
-      assert :ok = OctoPi.Agent.steer(session, "first")
-      assert {:error, :full} = OctoPi.Agent.steer(session, "second")
+      loop = start_loop(steering_queue_bound: 1)
+      assert :ok = OctoPi.Agent.steer(loop, "first")
+      assert {:error, :full} = OctoPi.Agent.steer(loop, "second")
     end
 
     test "follow_up/2 returns {:error, :full} when the follow-up queue is at bound" do
-      session = start_session(follow_up_queue_bound: 1)
-      assert :ok = OctoPi.Agent.follow_up(session, "first")
-      assert {:error, :full} = OctoPi.Agent.follow_up(session, "second")
+      loop = start_loop(follow_up_queue_bound: 1)
+      assert :ok = OctoPi.Agent.follow_up(loop, "first")
+      assert {:error, :full} = OctoPi.Agent.follow_up(loop, "second")
     end
   end
 
@@ -1065,17 +1065,17 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session(tools: [ProbeTool.tool()])
-      :ok = OctoPi.Agent.set_queue_mode(session, :steering, :all)
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop(tools: [ProbeTool.tool()])
+      :ok = OctoPi.Agent.set_queue_mode(loop, :steering, :all)
+      OctoPi.Agent.subscribe(loop, self(), :async)
       attach_tool_start_signal()
 
-      :ok = OctoPi.Agent.prompt(session, "go")
+      :ok = OctoPi.Agent.prompt(loop, "go")
       assert_receive {:tool_started, "c1"}, 2_000
-      :ok = OctoPi.Agent.steer(session, "note a")
-      :ok = OctoPi.Agent.steer(session, "note b")
+      :ok = OctoPi.Agent.steer(loop, "note a")
+      :ok = OctoPi.Agent.steer(loop, "note b")
 
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
@@ -1099,32 +1099,32 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
 
       on_exit(fn -> :telemetry.detach(handler_id) end)
 
-      {:ok, session} =
-        OctoPi.Agent.start_session(model: model(), transport: BlockingTransport)
+      {:ok, loop} =
+        OctoPi.Agent.start_loop(model: model(), transport: BlockingTransport)
 
-      OctoPi.Agent.subscribe(session, self(), :async)
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "stuck")
+      :ok = OctoPi.Agent.prompt(loop, "stuck")
       assert_receive {:turn_started, 1}, 2_000
 
-      :ok = OctoPi.Agent.abort(session)
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.abort(loop)
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :aborted}}
     end
   end
 
   describe "error stop_reason exits the loop" do
-    test "set_thinking_level/2 changes session thinking_level (opi-0g4.11)" do
-      session = start_session()
-      assert OctoPi.Agent.state(session).thinking_level == :off
-      :ok = OctoPi.Agent.set_thinking_level(session, :medium)
-      assert OctoPi.Agent.state(session).thinking_level == :medium
+    test "set_thinking_level/2 changes loop thinking_level (opi-0g4.11)" do
+      loop = start_loop()
+      assert OctoPi.Agent.state(loop).thinking_level == :off
+      :ok = OctoPi.Agent.set_thinking_level(loop, :medium)
+      assert OctoPi.Agent.state(loop).thinking_level == :medium
     end
 
-    test "set_model/2 changes session model (opi-0g4.12)" do
-      session = start_session()
-      original_id = OctoPi.Agent.state(session).model.id
+    test "set_model/2 changes loop model (opi-0g4.12)" do
+      loop = start_loop()
+      original_id = OctoPi.Agent.state(loop).model.id
 
       new_model = %Model{
         id: "new-model",
@@ -1136,9 +1136,9 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         max_tokens: 100
       }
 
-      :ok = OctoPi.Agent.set_model(session, new_model)
-      assert OctoPi.Agent.state(session).model.id == "new-model"
-      assert OctoPi.Agent.state(session).model.id != original_id
+      :ok = OctoPi.Agent.set_model(loop, new_model)
+      assert OctoPi.Agent.state(loop).model.id == "new-model"
+      assert OctoPi.Agent.state(loop).model.id != original_id
     end
 
     test "assistant with :error stops, AgentEnd carries :error" do
@@ -1151,11 +1151,11 @@ defmodule OctoPi.Agent.SessionBehaviorTest do
         ]
       ])
 
-      session = start_session()
-      OctoPi.Agent.subscribe(session, self(), :async)
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
 
-      :ok = OctoPi.Agent.prompt(session, "fail please")
-      :ok = OctoPi.Agent.wait_for_idle(session, 2_000)
+      :ok = OctoPi.Agent.prompt(loop, "fail please")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :error}}
     end

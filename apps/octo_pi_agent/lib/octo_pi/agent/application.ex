@@ -11,10 +11,10 @@ defmodule OctoPi.Agent.Application do
 
     OctoPi.Tracer.register(%{
       id: :agent,
-      description: "Agent session, turn, and tool lifecycle events",
+      description: "Agent loop, turn, and tool lifecycle events",
       events: [
-        [:octo_pi_agent, :session, :start],
-        [:octo_pi_agent, :session, :stop],
+        [:octo_pi_agent, :loop, :start],
+        [:octo_pi_agent, :loop, :stop],
         [:octo_pi_agent, :turn, :start],
         [:octo_pi_agent, :turn, :stop],
         [:octo_pi_agent, :turn, :exception],

@@ -1,6 +1,6 @@
 defmodule OctoPi.Agent.Transport do
   @moduledoc """
-  Behaviour that abstracts how the session reaches an LLM provider.
+  Behaviour that abstracts how the loop reaches an LLM provider.
 
   Two concrete transports are planned:
 
@@ -11,9 +11,9 @@ defmodule OctoPi.Agent.Transport do
       provider call server-side and streams events back; see
       `tmp/pi-mono/packages/agent/src/proxy.ts` for the upstream.
 
-  Per-session transport via session opts:
+  Per-loop transport via loop opts:
 
-      OctoPi.Agent.start_session(model: model, transport: OctoPi.Agent.Transport.Direct, ...)
+      OctoPi.Agent.start_loop(model: model, transport: OctoPi.Agent.Transport.Direct, ...)
   """
 
   alias OctoPi.AI.Context

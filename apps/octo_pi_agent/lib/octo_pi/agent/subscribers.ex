@@ -1,8 +1,8 @@
 defmodule OctoPi.Agent.Subscribers do
   @moduledoc """
-  Per-session subscriber list. Uses `Registry` (`:duplicate` keys)
+  Per-loop subscriber list. Uses `Registry` (`:duplicate` keys)
   started by the app supervisor. Each subscriber registers under the
-  session's pid with its `:sync | :async` mode as the value.
+  loop's pid with its `:sync | :async` mode as the value.
 
   Dispatch order is **registration order within a mode** — `:sync`
   listeners are awaited in order, then `:async` listeners get
@@ -19,32 +19,32 @@ defmodule OctoPi.Agent.Subscribers do
   @type mode :: :sync | :async
 
   @doc """
-  Subscribe `listener_pid` to `session_pid`'s events. Returns an
+  Subscribe `listener_pid` to `loop_pid`'s events. Returns an
   unsubscribe function.
   """
   @spec subscribe(pid(), pid(), mode()) :: (-> :ok)
-  def subscribe(session_pid, listener_pid, mode) when mode in [:sync, :async] do
-    {:ok, _} = Registry.register(@registry, session_pid, {listener_pid, mode})
+  def subscribe(loop_pid, listener_pid, mode) when mode in [:sync, :async] do
+    {:ok, _} = Registry.register(@registry, loop_pid, {listener_pid, mode})
 
-    fn -> unsubscribe(session_pid, listener_pid) end
+    fn -> unsubscribe(loop_pid, listener_pid) end
   end
 
-  @doc "Remove a listener from a session."
+  @doc "Remove a listener from a loop."
   @spec unsubscribe(pid(), pid()) :: :ok
-  def unsubscribe(session_pid, listener_pid) do
-    Registry.unregister_match(@registry, session_pid, {listener_pid, :_})
+  def unsubscribe(loop_pid, listener_pid) do
+    Registry.unregister_match(@registry, loop_pid, {listener_pid, :_})
     :ok
   end
 
   @doc """
-  Send `event` to every listener registered for `session_pid`.
+  Send `event` to every listener registered for `loop_pid`.
   `:sync` listeners are awaited via `GenServer.call` (5s timeout per
   listener; on timeout we log and continue). `:async` listeners get
   `send/2` and we don't wait.
   """
   @spec dispatch(pid(), term()) :: :ok
-  def dispatch(session_pid, event) do
-    Registry.dispatch(@registry, session_pid, fn entries ->
+  def dispatch(loop_pid, event) do
+    Registry.dispatch(@registry, loop_pid, fn entries ->
       {sync, async} =
         Enum.split_with(entries, fn {_pid, {_listener, mode}} -> mode == :sync end)
 
@@ -70,5 +70,5 @@ defmodule OctoPi.Agent.Subscribers do
 
   @doc false
   @spec count(pid()) :: non_neg_integer()
-  def count(session_pid), do: length(Registry.lookup(@registry, session_pid))
+  def count(loop_pid), do: length(Registry.lookup(@registry, loop_pid))
 end

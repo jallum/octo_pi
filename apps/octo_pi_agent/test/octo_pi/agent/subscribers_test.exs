@@ -6,36 +6,36 @@ defmodule OctoPi.Agent.SubscribersTest do
   alias OctoPi.Agent.TestSupport.RecordingListener
 
   setup do
-    # Use an arbitrary pid as the "session" key — Subscribers just
+    # Use an arbitrary pid as the "loop" key — Subscribers just
     # uses it as the Registry key, it doesn't need to be a real
-    # session.
-    {:ok, session: self()}
+    # loop.
+    {:ok, loop: self()}
   end
 
   describe "subscribe/unsubscribe" do
-    test "subscribe returns an unsubscribe closure", %{session: session} do
-      unsubscribe = Subscribers.subscribe(session, self(), :async)
-      assert Subscribers.count(session) == 1
+    test "subscribe returns an unsubscribe closure", %{loop: loop} do
+      unsubscribe = Subscribers.subscribe(loop, self(), :async)
+      assert Subscribers.count(loop) == 1
       assert :ok = unsubscribe.()
-      assert Subscribers.count(session) == 0
+      assert Subscribers.count(loop) == 0
     end
   end
 
   describe ":sync dispatch" do
-    test "calls listeners in registration order, awaits replies", %{session: session} do
+    test "calls listeners in registration order, awaits replies", %{loop: loop} do
       {:ok, first} = RecordingListener.start_link({self(), :first})
       {:ok, second} = RecordingListener.start_link({self(), :second})
 
-      Subscribers.subscribe(session, first, :sync)
-      Subscribers.subscribe(session, second, :sync)
+      Subscribers.subscribe(loop, first, :sync)
+      Subscribers.subscribe(loop, second, :sync)
 
-      :ok = Subscribers.dispatch(session, %Event.AgentStart{})
+      :ok = Subscribers.dispatch(loop, %Event.AgentStart{})
 
       assert_received {:first, %Event.AgentStart{}}
       assert_received {:second, %Event.AgentStart{}}
     end
 
-    test "logs and continues when a sync listener exits mid-dispatch", %{session: session} do
+    test "logs and continues when a sync listener exits mid-dispatch", %{loop: loop} do
       # Bare dead pid → GenServer.call will :exit. Subscribers should
       # log a warning and still deliver to the second live listener.
       {dead, ref} = spawn_monitor(fn -> :ok end)
@@ -44,12 +44,12 @@ defmodule OctoPi.Agent.SubscribersTest do
 
       {:ok, live} = RecordingListener.start_link({self(), :live})
 
-      Subscribers.subscribe(session, dead, :sync)
-      Subscribers.subscribe(session, live, :sync)
+      Subscribers.subscribe(loop, dead, :sync)
+      Subscribers.subscribe(loop, live, :sync)
 
       log =
         ExUnit.CaptureLog.capture_log(fn ->
-          :ok = Subscribers.dispatch(session, %Event.AgentStart{})
+          :ok = Subscribers.dispatch(loop, %Event.AgentStart{})
         end)
 
       assert log =~ "sync listener"
@@ -58,9 +58,9 @@ defmodule OctoPi.Agent.SubscribersTest do
   end
 
   describe ":async dispatch" do
-    test "sends without waiting", %{session: session} do
-      Subscribers.subscribe(session, self(), :async)
-      :ok = Subscribers.dispatch(session, %Event.AgentStart{})
+    test "sends without waiting", %{loop: loop} do
+      Subscribers.subscribe(loop, self(), :async)
+      :ok = Subscribers.dispatch(loop, %Event.AgentStart{})
       assert_received {:octo_pi_agent_event, %Event.AgentStart{}}
     end
   end

@@ -1,21 +1,21 @@
-defmodule OctoPi.Agent.Session do
+defmodule OctoPi.Agent.Loop do
   @moduledoc """
-  Per-session GenServer owning the transcript, queues, tools,
+  Per-loop GenServer owning the transcript, queues, tools,
   subscribers, and turn iteration. Called via the `OctoPi.Agent`
   facade; no one should import this module directly.
 
   Drives the run via the `OctoPi.Agent.Turn` FSM. Each turn:
-  Session feeds an event into `Turn.handle_event/2`, walks the
+  Loop feeds an event into `Turn.handle_event/2`, walks the
   returned action list, and executes each action — spawning the
   stream Task, the tool-batch Task, dispatching subscriber events,
   appending the assistant + tool results, and deciding whether to
   spawn the next turn or end the run.
 
   Stream and tool-batch Tasks `send/2` ref-tagged messages back to
-  Session: `{:agent_event, ref, event}`, `{:stream_done, ref,
+  Loop: `{:agent_event, ref, event}`, `{:stream_done, ref,
   assistant}`, `{:stream_failed, ref, reason}`, `{:tool_batch_done,
-  ref, results}`. Session's `handle_info` ref-gates against
-  `state.session.turn_ref` — messages from a killed Task are
+  ref, results}`. Loop's `handle_info` ref-gates against
+  `state.loop.turn_ref` — messages from a killed Task are
   silently dropped.
 
   State invariants:
@@ -30,10 +30,10 @@ defmodule OctoPi.Agent.Session do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message
   alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
-  alias OctoPi.Agent.Session
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Transport
@@ -102,7 +102,7 @@ defmodule OctoPi.Agent.Session do
   @impl true
   def init(opts) do
     state =
-      %Session.State{
+      %Loop.State{
         model: Keyword.fetch!(opts, :model),
         system_prompt: Keyword.get(opts, :system_prompt),
         tools: Keyword.get(opts, :tools, []),
@@ -120,7 +120,7 @@ defmodule OctoPi.Agent.Session do
 
     {:ok,
      %{
-       session: state,
+       loop: state,
        idle_waiters: [],
        turn_id: 0,
        turn_started_at_mono: nil
@@ -136,16 +136,16 @@ defmodule OctoPi.Agent.Session do
 
   @impl true
   def handle_call({:prompt, msgs}, _from, store) do
-    if store.session.is_streaming? do
+    if store.loop.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      session = %{store.session | messages: MessageLog.append_many(store.session.messages, msgs)}
-      {:reply, :ok, %{store | session: session}, {:continue, :start_run}}
+      loop = %{store.loop | messages: MessageLog.append_many(store.loop.messages, msgs)}
+      {:reply, :ok, %{store | loop: loop}, {:continue, :start_run}}
     end
   end
 
   def handle_call(:continue, _from, store) do
-    if store.session.is_streaming? do
+    if store.loop.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
       {:reply, :ok, store, {:continue, :start_run}}
@@ -153,48 +153,48 @@ defmodule OctoPi.Agent.Session do
   end
 
   def handle_call({:steer, msg}, _from, store) do
-    case PendingMessageQueue.enqueue(store.session.steering_queue, msg) do
-      {:ok, q} -> {:reply, :ok, put_in(store.session.steering_queue, q)}
+    case PendingMessageQueue.enqueue(store.loop.steering_queue, msg) do
+      {:ok, q} -> {:reply, :ok, put_in(store.loop.steering_queue, q)}
       {:error, :full} = err -> {:reply, err, store}
     end
   end
 
   def handle_call({:follow_up, msg}, _from, store) do
-    case PendingMessageQueue.enqueue(store.session.follow_up_queue, msg) do
-      {:ok, q} -> {:reply, :ok, put_in(store.session.follow_up_queue, q)}
+    case PendingMessageQueue.enqueue(store.loop.follow_up_queue, msg) do
+      {:ok, q} -> {:reply, :ok, put_in(store.loop.follow_up_queue, q)}
       {:error, :full} = err -> {:reply, err, store}
     end
   end
 
   def handle_call({:set_queue_mode, :steering, mode}, _from, store),
-    do: {:reply, :ok, put_in(store.session.steering_queue.mode, mode)}
+    do: {:reply, :ok, put_in(store.loop.steering_queue.mode, mode)}
 
   def handle_call({:set_queue_mode, :follow_up, mode}, _from, store),
-    do: {:reply, :ok, put_in(store.session.follow_up_queue.mode, mode)}
+    do: {:reply, :ok, put_in(store.loop.follow_up_queue.mode, mode)}
 
   def handle_call({:set_thinking_level, level}, _from, store),
-    do: {:reply, :ok, put_in(store.session.thinking_level, level)}
+    do: {:reply, :ok, put_in(store.loop.thinking_level, level)}
 
-  def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.session.model, model)}
+  def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
 
   def handle_call({:add_tool, tool}, _from, store) do
-    tools = store.session.tools
+    tools = store.loop.tools
     new_tools = if Enum.any?(tools, &(&1.name == tool.name)), do: tools, else: tools ++ [tool]
-    {:reply, :ok, put_in(store.session.tools, new_tools)}
+    {:reply, :ok, put_in(store.loop.tools, new_tools)}
   end
 
   def handle_call(:drain_steering, _from, store) do
-    {msgs, q} = PendingMessageQueue.drain(store.session.steering_queue)
-    {:reply, msgs, put_in(store.session.steering_queue, q)}
+    {msgs, q} = PendingMessageQueue.drain(store.loop.steering_queue)
+    {:reply, msgs, put_in(store.loop.steering_queue, q)}
   end
 
   def handle_call(:drain_follow_up, _from, store) do
-    {msgs, q} = PendingMessageQueue.drain(store.session.follow_up_queue)
-    {:reply, msgs, put_in(store.session.follow_up_queue, q)}
+    {msgs, q} = PendingMessageQueue.drain(store.loop.follow_up_queue)
+    {:reply, msgs, put_in(store.loop.follow_up_queue, q)}
   end
 
   def handle_call(:abort, _from, store) do
-    if store.session.is_streaming? do
+    if store.loop.is_streaming? do
       # 1. Flip ETS abort flag (cooperative backstop for tools).
       # 2. Brutal-kill the active Task (stream or tool-batch).
       # 3. Feed :abort_requested into Turn — emits :cancel_active_task
@@ -202,16 +202,16 @@ defmodule OctoPi.Agent.Session do
       # 4. Clear turn_ref so any in-flight {:agent_event, ref, _}
       #    from the dying Task fails the ref-gate.
       # 5. Synthesize aborted assistant + AgentEnd, end the run.
-      if store.session.abort_ref, do: AbortRef.abort(store.session.abort_ref)
+      if store.loop.abort_ref, do: AbortRef.abort(store.loop.abort_ref)
 
-      if is_pid(store.session.turn_pid) and Process.alive?(store.session.turn_pid) do
-        Process.exit(store.session.turn_pid, :kill)
+      if is_pid(store.loop.turn_pid) and Process.alive?(store.loop.turn_pid) do
+        Process.exit(store.loop.turn_pid, :kill)
       end
 
       store =
         store
-        |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
-        |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+        |> put_in([Access.key(:loop), Access.key(:turn_pid)], nil)
+        |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
 
       {:reply, :ok, end_run_aborted(store, :killed)}
     else
@@ -222,12 +222,12 @@ defmodule OctoPi.Agent.Session do
   # F3: fire-and-forget compact — returns :ok immediately. Completion
   # is observable via %Event.CompactionEnd{} on the subscriber stream;
   # callers who need to synchronize use wait_for_idle/2.
-  def handle_call({:compact, _opts}, _from, %{session: %{is_streaming?: true}} = store) do
+  def handle_call({:compact, _opts}, _from, %{loop: %{is_streaming?: true}} = store) do
     {:reply, {:error, :busy}, store}
   end
 
   def handle_call({:compact, opts}, _from, store) do
-    store = put_in(store.session.is_streaming?, true)
+    store = put_in(store.loop.is_streaming?, true)
     store = advance(store, {:compact_requested, opts})
     {:reply, :ok, store}
   end
@@ -236,7 +236,7 @@ defmodule OctoPi.Agent.Session do
   # against the active turn_ref — late or stale responses get
   # {:error, :stale} and don't perturb Turn state.
   def handle_call({:compaction_response, ref, result}, _from, store) do
-    if ref == store.session.turn_ref do
+    if ref == store.loop.turn_ref do
       store = advance(store, {:compaction_response, result})
       {:reply, :ok, after_compaction(store, result)}
     else
@@ -244,10 +244,10 @@ defmodule OctoPi.Agent.Session do
     end
   end
 
-  def handle_call(:state, _from, store), do: {:reply, store.session, store}
+  def handle_call(:state, _from, store), do: {:reply, store.loop, store}
 
   def handle_call(:wait_for_idle, from, store) do
-    if store.session.is_streaming? do
+    if store.loop.is_streaming? do
       {:noreply, %{store | idle_waiters: [from | store.idle_waiters]}}
     else
       {:reply, :ok, store}
@@ -261,7 +261,7 @@ defmodule OctoPi.Agent.Session do
     {:noreply, start_run(store)}
   end
 
-  # ---------- handle_info: Task → Session messages ----------
+  # ---------- handle_info: Task → Loop messages ----------
 
   @impl true
 
@@ -269,7 +269,7 @@ defmodule OctoPi.Agent.Session do
   # only when the ref matches the *current* turn_ref; events from a
   # killed/cancelled Task are dropped.
   def handle_info({:agent_event, ref, event}, store) do
-    if ref == store.session.turn_ref do
+    if ref == store.loop.turn_ref do
       Subscribers.dispatch(self(), event)
     end
 
@@ -279,7 +279,7 @@ defmodule OctoPi.Agent.Session do
   # Stream Task finished cleanly. Feed `:stream_done` into Turn and
   # execute the resulting actions (start_tool_batch or turn_done).
   def handle_info({:stream_done, ref, %Assistant{} = assistant}, store) do
-    if ref == store.session.turn_ref do
+    if ref == store.loop.turn_ref do
       {:noreply, advance(store, {:stream_done, assistant})}
     else
       {:noreply, store}
@@ -287,7 +287,7 @@ defmodule OctoPi.Agent.Session do
   end
 
   def handle_info({:stream_failed, ref, reason}, store) do
-    if ref == store.session.turn_ref do
+    if ref == store.loop.turn_ref do
       {:noreply, advance(store, {:stream_failed, reason})}
     else
       {:noreply, store}
@@ -295,7 +295,7 @@ defmodule OctoPi.Agent.Session do
   end
 
   def handle_info({:tool_batch_done, ref, results}, store) do
-    if ref == store.session.turn_ref do
+    if ref == store.loop.turn_ref do
       {:noreply, advance(store, {:tool_batch_done, results})}
     else
       {:noreply, store}
@@ -306,11 +306,11 @@ defmodule OctoPi.Agent.Session do
   # backstop). If the dying pid matches turn_pid, treat as a stream
   # failure.
   def handle_info({:DOWN, _mref, :process, pid, reason}, store) do
-    if pid == store.session.turn_pid and reason != :normal do
+    if pid == store.loop.turn_pid and reason != :normal do
       store =
         store
-        |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
-        |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+        |> put_in([Access.key(:loop), Access.key(:turn_pid)], nil)
+        |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
 
       {:noreply, end_run_aborted(store, reason)}
     else
@@ -327,15 +327,15 @@ defmodule OctoPi.Agent.Session do
     session_id = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
 
     :telemetry.execute(
-      [:octo_pi_agent, :session, :start],
+      [:octo_pi_agent, :loop, :start],
       %{system_time: System.system_time()},
-      %{model: store.session.model.id, session_id: session_id}
+      %{model: store.loop.model.id, session_id: session_id}
     )
 
     Subscribers.dispatch(self(), %Event.AgentStart{})
 
-    session = %{
-      store.session
+    loop = %{
+      store.loop
       | is_streaming?: true,
         error_message: nil,
         abort_ref: abort_ref,
@@ -345,15 +345,15 @@ defmodule OctoPi.Agent.Session do
         compaction_overflow_attempted?: false
     }
 
-    advance(%{store | session: session, turn_id: 0}, :prompt_received)
+    advance(%{store | loop: loop, turn_id: 0}, :prompt_received)
   end
 
   # Feed an event into Turn, then execute the returned action list
   # against `store`. May recursively re-enter (e.g. `:turn_done`
   # action triggers a fresh `:prompt_received` for the next turn).
   defp advance(store, event) do
-    {turn, actions} = Turn.handle_event(store.session.turn, event)
-    store = put_in(store.session.turn, turn)
+    {turn, actions} = Turn.handle_event(store.loop.turn, event)
+    store = put_in(store.loop.turn, turn)
     execute_actions(store, actions)
   end
 
@@ -366,7 +366,7 @@ defmodule OctoPi.Agent.Session do
     :telemetry.execute(
       [:octo_pi_agent, :turn, :start],
       %{system_time: System.system_time()},
-      %{turn: t, session_id: store.session.session_id}
+      %{turn: t, session_id: store.loop.session_id}
     )
 
     %{store | turn_id: t, turn_started_at_mono: System.monotonic_time()}
@@ -386,8 +386,8 @@ defmodule OctoPi.Agent.Session do
   defp execute_action(:start_stream, store) do
     ref = make_ref()
     parent = self()
-    ctx = build_turn_context(store.session)
-    session = store.session
+    ctx = build_turn_context(store.loop)
+    loop = store.loop
 
     {:ok, pid} =
       Task.Supervisor.start_child(
@@ -395,8 +395,8 @@ defmodule OctoPi.Agent.Session do
         fn ->
           Worker.stream(parent, ref, %{
             context: ctx,
-            model: session.model,
-            transport: session.transport
+            model: loop.model,
+            transport: loop.transport
           })
         end,
         restart: :temporary
@@ -405,8 +405,8 @@ defmodule OctoPi.Agent.Session do
     Process.monitor(pid)
 
     store
-    |> put_in([Access.key(:session), Access.key(:turn_pid)], pid)
-    |> put_in([Access.key(:session), Access.key(:turn_ref)], ref)
+    |> put_in([Access.key(:loop), Access.key(:turn_pid)], pid)
+    |> put_in([Access.key(:loop), Access.key(:turn_ref)], ref)
   end
 
   # `{:start_tool_batch, calls}` — spawn the tool-batch Task; mode
@@ -414,16 +414,16 @@ defmodule OctoPi.Agent.Session do
   defp execute_action({:start_tool_batch, calls}, store) do
     ref = make_ref()
     parent = self()
-    session = store.session
-    mode = Worker.resolve_mode(calls, session.tools)
+    loop = store.loop
+    mode = Worker.resolve_mode(calls, loop.tools)
 
     opts = %{
-      abort_ref: session.abort_ref,
-      tools: session.tools,
+      abort_ref: loop.abort_ref,
+      tools: loop.tools,
       mode: mode,
-      before_tool_call: session.before_tool_call,
-      after_tool_call: session.after_tool_call,
-      session_id: session.session_id
+      before_tool_call: loop.before_tool_call,
+      after_tool_call: loop.after_tool_call,
+      session_id: loop.session_id
     }
 
     {:ok, pid} =
@@ -436,8 +436,8 @@ defmodule OctoPi.Agent.Session do
     Process.monitor(pid)
 
     store
-    |> put_in([Access.key(:session), Access.key(:turn_pid)], pid)
-    |> put_in([Access.key(:session), Access.key(:turn_ref)], ref)
+    |> put_in([Access.key(:loop), Access.key(:turn_pid)], pid)
+    |> put_in([Access.key(:loop), Access.key(:turn_ref)], ref)
   end
 
   # `:cancel_active_task` — abort/1 already brutal-killed the pid;
@@ -453,8 +453,8 @@ defmodule OctoPi.Agent.Session do
     Subscribers.dispatch(self(), %Event.CompactionRequested{ref: ref, opts: opts})
 
     store
-    |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
-    |> put_in([Access.key(:session), Access.key(:turn_ref)], ref)
+    |> put_in([Access.key(:loop), Access.key(:turn_pid)], nil)
+    |> put_in([Access.key(:loop), Access.key(:turn_ref)], ref)
   end
 
   # `{:turn_done, assistant, tool_results, reason}` — append to
@@ -467,7 +467,7 @@ defmodule OctoPi.Agent.Session do
   # synthesize an Assistant.t() (no provider/model in pure data).
   # Build it here and proceed identically to :turn_done.
   defp execute_action({:turn_synth_done, reason, error_message}, store) do
-    assistant = synth_assistant(store.session.model, reason, error_message)
+    assistant = synth_assistant(store.loop.model, reason, error_message)
     finish_turn(store, assistant, [], reason)
   end
 
@@ -475,24 +475,24 @@ defmodule OctoPi.Agent.Session do
     emit_turn_stop(store, reason)
 
     messages =
-      store.session.messages
+      store.loop.messages
       |> MessageLog.push(assistant)
       |> MessageLog.append_many(tool_results)
 
     store =
       store
-      |> put_in([Access.key(:session), Access.key(:messages)], messages)
-      |> put_in([Access.key(:session), Access.key(:turn_pid)], nil)
-      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:loop), Access.key(:messages)], messages)
+      |> put_in([Access.key(:loop), Access.key(:turn_pid)], nil)
+      |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
 
     case decide_next(reason, store) do
       {:continue, store} ->
         if over_threshold?(assistant, store) do
-          store = put_in(store.session.compaction_auto?, :continue)
+          store = put_in(store.loop.compaction_auto?, :continue)
           advance(store, {:compact_requested, [auto?: true]})
         else
-          {turn, actions} = Turn.handle_event(store.session.turn, :prompt_received)
-          store = put_in(store.session.turn, turn)
+          {turn, actions} = Turn.handle_event(store.loop.turn, :prompt_received)
+          store = put_in(store.loop.turn, turn)
           execute_actions(store, actions)
         end
 
@@ -500,7 +500,7 @@ defmodule OctoPi.Agent.Session do
         cond do
           # Overflow: context too long for the model — compact and retry.
           # On second overflow in the same run, emit error and end.
-          overflow_error?(assistant, store) and store.session.compaction_overflow_attempted? ->
+          overflow_error?(assistant, store) and store.loop.compaction_overflow_attempted? ->
             Subscribers.dispatch(self(), %Event.CompactionEnd{
               result: {:error, :overflow_recovery_failed}
             })
@@ -510,14 +510,14 @@ defmodule OctoPi.Agent.Session do
           overflow_error?(assistant, store) ->
             store =
               store
-              |> put_in([Access.key(:session), Access.key(:compaction_overflow_attempted?)], true)
-              |> put_in([Access.key(:session), Access.key(:compaction_auto?)], :overflow_retry)
+              |> put_in([Access.key(:loop), Access.key(:compaction_overflow_attempted?)], true)
+              |> put_in([Access.key(:loop), Access.key(:compaction_auto?)], :overflow_retry)
               # Remove the overflow error message from the transcript — it's
-              # saved to session history by the Coder, but mustn't appear in
+              # saved to conversation history by the Coder, but mustn't appear in
               # the LLM context on retry.
               |> put_in(
-                [Access.key(:session), Access.key(:messages)],
-                MessageLog.pop(store.session.messages)
+                [Access.key(:loop), Access.key(:messages)],
+                MessageLog.pop(store.loop.messages)
               )
 
             advance(store, {:compact_requested, [auto?: true]})
@@ -526,7 +526,7 @@ defmodule OctoPi.Agent.Session do
           # Uses last successful assistant's token count as the estimate when
           # the current error message carries zero usage data.
           over_threshold_on_error?(assistant, store) ->
-            store = put_in(store.session.compaction_auto?, :end_after)
+            store = put_in(store.loop.compaction_auto?, :end_after)
             advance(store, {:compact_requested, [auto?: true]})
 
           true ->
@@ -539,21 +539,21 @@ defmodule OctoPi.Agent.Session do
   defp decide_next(reason, store) when reason in [:error, :aborted], do: {:terminate, store}
 
   defp decide_next(:tool_use, store) do
-    {steers, q} = PendingMessageQueue.drain(store.session.steering_queue)
+    {steers, q} = PendingMessageQueue.drain(store.loop.steering_queue)
 
     store =
       store
-      |> put_in([Access.key(:session), Access.key(:steering_queue)], q)
+      |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
       |> put_in(
-        [Access.key(:session), Access.key(:messages)],
-        MessageLog.append_many(store.session.messages, steers)
+        [Access.key(:loop), Access.key(:messages)],
+        MessageLog.append_many(store.loop.messages, steers)
       )
 
     {:continue, store}
   end
 
   defp decide_next(_terminal_reason, store) do
-    {followups, q} = PendingMessageQueue.drain(store.session.follow_up_queue)
+    {followups, q} = PendingMessageQueue.drain(store.loop.follow_up_queue)
 
     case followups do
       [] ->
@@ -562,10 +562,10 @@ defmodule OctoPi.Agent.Session do
       msgs ->
         store =
           store
-          |> put_in([Access.key(:session), Access.key(:follow_up_queue)], q)
+          |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], q)
           |> put_in(
-            [Access.key(:session), Access.key(:messages)],
-            MessageLog.append_many(store.session.messages, msgs)
+            [Access.key(:loop), Access.key(:messages)],
+            MessageLog.append_many(store.loop.messages, msgs)
           )
 
         {:continue, store}
@@ -579,27 +579,27 @@ defmodule OctoPi.Agent.Session do
   # assembly), the closure produces the messages list. Otherwise
   # falls back to `MessageLog.to_list/1` so the Agent app stays
   # runnable standalone.
-  defp build_turn_context(session) do
+  defp build_turn_context(loop) do
     messages =
-      case session.messages_provider do
-        nil -> MessageLog.to_list(session.messages)
-        fun when is_function(fun, 1) -> fun.(session)
+      case loop.messages_provider do
+        nil -> MessageLog.to_list(loop.messages)
+        fun when is_function(fun, 1) -> fun.(loop)
       end
 
     %AIContext{
-      system_prompt: session.system_prompt,
+      system_prompt: loop.system_prompt,
       messages: messages,
-      tools: Enum.map(session.tools, &agent_tool_to_ai_tool/1)
+      tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)
     }
   end
 
   defp end_run(store, reason) do
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: reason,
-      messages: MessageLog.to_list(store.session.messages)
+      messages: MessageLog.to_list(store.loop.messages)
     })
 
-    emit_session_stop(store.session, reason, store.turn_id, MessageLog.count(store.session.messages))
+    emit_loop_stop(store.loop, reason, store.turn_id, MessageLog.count(store.loop.messages))
     flip_idle(store)
   end
 
@@ -610,93 +610,93 @@ defmodule OctoPi.Agent.Session do
   end
 
   defp end_run_aborted(store, _reason) do
-    messages = MessageLog.push(store.session.messages, aborted_assistant(store.session.model))
+    messages = MessageLog.push(store.loop.messages, aborted_assistant(store.loop.model))
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: :aborted,
       messages: MessageLog.to_list(messages)
     })
 
-    emit_session_stop(store.session, :aborted, store.turn_id, MessageLog.count(messages))
+    emit_loop_stop(store.loop, :aborted, store.turn_id, MessageLog.count(messages))
 
-    store = put_in(store.session.messages, messages)
-    store = put_in(store.session.error_message, "aborted by caller")
+    store = put_in(store.loop.messages, messages)
+    store = put_in(store.loop.error_message, "aborted by caller")
     flip_idle(store)
   end
 
   # F3: manual compaction — update last_compaction_at_ms on success, then flip idle.
-  defp after_compaction(%{session: %{compaction_auto?: false}} = store, {:ok, _}) do
-    store = put_in(store.session.last_compaction_at_ms, System.system_time(:millisecond))
+  defp after_compaction(%{loop: %{compaction_auto?: false}} = store, {:ok, _}) do
+    store = put_in(store.loop.last_compaction_at_ms, System.system_time(:millisecond))
     flip_compaction_idle(store)
   end
 
-  defp after_compaction(%{session: %{compaction_auto?: false}} = store, _failure) do
+  defp after_compaction(%{loop: %{compaction_auto?: false}} = store, _failure) do
     flip_compaction_idle(store)
   end
 
   # F4/:continue — drain any messages that arrived during compaction, then resume run.
-  defp after_compaction(%{session: %{compaction_auto?: :continue}} = store, {:ok, _}) do
+  defp after_compaction(%{loop: %{compaction_auto?: :continue}} = store, {:ok, _}) do
     store = drain_queues_into_transcript(store)
 
     store =
       store
-      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
-      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
-      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+      |> put_in([Access.key(:loop), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:loop), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
 
     advance(store, :prompt_received)
   end
 
   # F5/:overflow_retry — error message was already popped; resume run to retry.
-  defp after_compaction(%{session: %{compaction_auto?: :overflow_retry}} = store, {:ok, _}) do
+  defp after_compaction(%{loop: %{compaction_auto?: :overflow_retry}} = store, {:ok, _}) do
     store = drain_queues_into_transcript(store)
 
     store =
       store
-      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
-      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
-      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+      |> put_in([Access.key(:loop), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:loop), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
 
     advance(store, :prompt_received)
   end
 
   # F5/:end_after — compact was triggered by a high-context error; end the run after.
-  defp after_compaction(%{session: %{compaction_auto?: :end_after}} = store, {:ok, _}) do
+  defp after_compaction(%{loop: %{compaction_auto?: :end_after}} = store, {:ok, _}) do
     store =
       store
-      |> put_in([Access.key(:session), Access.key(:compaction_auto?)], false)
-      |> put_in([Access.key(:session), Access.key(:turn_ref)], nil)
-      |> put_in([Access.key(:session), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
+      |> put_in([Access.key(:loop), Access.key(:compaction_auto?)], false)
+      |> put_in([Access.key(:loop), Access.key(:turn_ref)], nil)
+      |> put_in([Access.key(:loop), Access.key(:last_compaction_at_ms)], System.system_time(:millisecond))
 
     end_run(store, :error)
   end
 
   # Any auto-compact failure or cancel — clear flag, end the run.
   defp after_compaction(store, _failure) do
-    store = put_in(store.session.compaction_auto?, false)
+    store = put_in(store.loop.compaction_auto?, false)
     end_run(store, :error)
   end
 
   # Drain steering + follow-up queues into the transcript. Used when resuming
   # after auto-compact to pick up messages enqueued during the compaction window.
   defp drain_queues_into_transcript(store) do
-    {steers, sq} = PendingMessageQueue.drain(store.session.steering_queue)
-    {followups, fq} = PendingMessageQueue.drain(store.session.follow_up_queue)
+    {steers, sq} = PendingMessageQueue.drain(store.loop.steering_queue)
+    {followups, fq} = PendingMessageQueue.drain(store.loop.follow_up_queue)
 
     store
-    |> put_in([Access.key(:session), Access.key(:steering_queue)], sq)
-    |> put_in([Access.key(:session), Access.key(:follow_up_queue)], fq)
+    |> put_in([Access.key(:loop), Access.key(:steering_queue)], sq)
+    |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
     |> put_in(
-      [Access.key(:session), Access.key(:messages)],
-      MessageLog.append_many(store.session.messages, steers ++ followups)
+      [Access.key(:loop), Access.key(:messages)],
+      MessageLog.append_many(store.loop.messages, steers ++ followups)
     )
   end
 
   # F4: returns true when this assistant's context tokens plus the configured
   # reserve exceed the model context window.  Used on the :continue path.
-  defp over_threshold?(%Assistant{usage: usage}, %{session: session}) do
-    reserve = session.auto_compact_reserve_tokens
-    ctx = session.model && session.model.context_window
+  defp over_threshold?(%Assistant{usage: usage}, %{loop: loop}) do
+    reserve = loop.auto_compact_reserve_tokens
+    ctx = loop.model && loop.model.context_window
     tokens = context_tokens_from_usage(usage)
 
     is_integer(reserve) and is_integer(ctx) and is_integer(tokens) and
@@ -720,14 +720,14 @@ defmodule OctoPi.Agent.Session do
   # usage) but a prior successful assistant in the transcript is over the
   # threshold.  Used on the :terminate/:error path so persistent API errors
   # (e.g. 529 overloaded) can still trigger compaction.
-  defp over_threshold_on_error?(%Assistant{stop_reason: :error}, %{session: session}) do
-    reserve = session.auto_compact_reserve_tokens
-    ctx = session.model && session.model.context_window
+  defp over_threshold_on_error?(%Assistant{stop_reason: :error}, %{loop: loop}) do
+    reserve = loop.auto_compact_reserve_tokens
+    ctx = loop.model && loop.model.context_window
 
     with r when is_integer(r) <- reserve,
          c when is_integer(c) <- ctx,
          tokens when is_integer(tokens) <-
-           find_last_successful_context_tokens(session.messages, session.last_compaction_at_ms) do
+           find_last_successful_context_tokens(loop.messages, loop.last_compaction_at_ms) do
       tokens + r > c
     else
       _ -> false
@@ -761,11 +761,11 @@ defmodule OctoPi.Agent.Session do
   # current model, and the message is not stale (i.e. it arrived after the
   # last compaction boundary, if any).
   defp overflow_error?(%Assistant{stop_reason: :error, error_message: msg, model: model_id, timestamp: ts}, %{
-         session: session
+         loop: loop
        })
        when is_binary(msg) do
-    same_model = session.model != nil and session.model.id == model_id
-    not_stale = is_nil(session.last_compaction_at_ms) or ts > session.last_compaction_at_ms
+    same_model = loop.model != nil and loop.model.id == model_id
+    not_stale = is_nil(loop.last_compaction_at_ms) or ts > loop.last_compaction_at_ms
     same_model and not_stale and context_overflow_msg?(msg)
   end
 
@@ -805,25 +805,25 @@ defmodule OctoPi.Agent.Session do
   # abort_ref, run_started_at_mono, or turn_id (those are run-scoped,
   # and compaction isn't a run).
   defp flip_compaction_idle(store) do
-    session = %{
-      store.session
+    loop = %{
+      store.loop
       | is_streaming?: false,
         turn_pid: nil,
         turn_ref: nil,
         turn: Turn.new()
     }
 
-    store = %{store | session: session}
+    store = %{store | loop: loop}
 
     for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
     %{store | idle_waiters: []}
   end
 
   defp flip_idle(store) do
-    session = %{
-      store.session
+    loop = %{
+      store.loop
       | is_streaming?: false,
-        abort_ref: maybe_forget_ref(store.session.abort_ref),
+        abort_ref: maybe_forget_ref(store.loop.abort_ref),
         turn_pid: nil,
         turn_ref: nil,
         run_started_at_mono: nil,
@@ -831,7 +831,7 @@ defmodule OctoPi.Agent.Session do
         compaction_overflow_attempted?: false
     }
 
-    store = %{store | session: session, turn_id: 0, turn_started_at_mono: nil}
+    store = %{store | loop: loop, turn_id: 0, turn_started_at_mono: nil}
 
     for from <- Enum.reverse(store.idle_waiters), do: GenServer.reply(from, :ok)
     %{store | idle_waiters: []}
@@ -865,11 +865,11 @@ defmodule OctoPi.Agent.Session do
     }
   end
 
-  defp emit_session_stop(%Session.State{run_started_at_mono: nil}, _reason, _turn_count, _message_count), do: :ok
+  defp emit_loop_stop(%Loop.State{run_started_at_mono: nil}, _reason, _turn_count, _message_count), do: :ok
 
-  defp emit_session_stop(%Session.State{} = state, reason, turn_count, message_count) do
+  defp emit_loop_stop(%Loop.State{} = state, reason, turn_count, message_count) do
     :telemetry.execute(
-      [:octo_pi_agent, :session, :stop],
+      [:octo_pi_agent, :loop, :stop],
       %{duration: System.monotonic_time() - state.run_started_at_mono},
       %{reason: reason, turn_count: turn_count, message_count: message_count, session_id: state.session_id}
     )
@@ -877,7 +877,7 @@ defmodule OctoPi.Agent.Session do
 
   defp emit_turn_stop(%{turn_started_at_mono: nil}, _reason), do: :ok
 
-  defp emit_turn_stop(%{turn_id: turn_id, turn_started_at_mono: started, session: %{session_id: session_id}}, reason) do
+  defp emit_turn_stop(%{turn_id: turn_id, turn_started_at_mono: started, loop: %{session_id: session_id}}, reason) do
     :telemetry.execute(
       [:octo_pi_agent, :turn, :stop],
       %{duration: System.monotonic_time() - started},

@@ -1,6 +1,6 @@
 defmodule OctoPi.Agent.Message do
   @moduledoc """
-  The message union stored in a session's transcript.
+  The message union stored in a loop's transcript.
 
   Three LLM-relevant roles: user input, assistant replies, and tool
   results (sent back to the model on the next turn). Matches
@@ -10,7 +10,7 @@ defmodule OctoPi.Agent.Message do
   Each member reuses the struct from `octo_pi_ai` — same shape, same
   invariants.
 
-  Extension state that needs to survive a session reload but stay
+  Extension state that needs to survive a loop reload but stay
   invisible to the LLM lives outside this union, persisted as a
   `OctoPi.Coder.Session.Entry.Custom` in the entry stream (the right
   architectural home — matches upstream `CustomEntry`).

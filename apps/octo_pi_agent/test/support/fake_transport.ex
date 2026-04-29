@@ -5,7 +5,7 @@ defmodule OctoPi.Agent.TestSupport.FakeTransport do
 
   The script lives in an `Agent` process started on demand under the
   supervision tree of the test run. Tests are `async: false` so a
-  single global script works — no per-session plumbing.
+  single global script works — no per-loop plumbing.
 
       FakeTransport.set_script([
         [%Event.Start{...}, %Event.TextDelta{...}, %Event.Done{...}],

@@ -1,17 +1,17 @@
 defmodule OctoPi.Agent.Turn.Worker do
   @moduledoc """
   Stream and tool-batch worker entry points spawned as Tasks by
-  `OctoPi.Agent.Session`. The two phases of a turn (stream the
+  `OctoPi.Agent.Loop`. The two phases of a turn (stream the
   assistant, then dispatch any tool calls) live as separate Task
-  invocations driven by the `OctoPi.Agent.Turn` FSM in Session.
+  invocations driven by the `OctoPi.Agent.Turn` FSM in Loop.
 
   Lifted from the now-deleted `OctoPi.Agent.Loop`. The behavioral
   contract is identical — same telemetry, same subscriber-event
   shapes, same `Tool.Result` semantics, same parallel/sequential
   dispatch. The only change is the message channel: Loop cast events
-  via `GenServer.cast(session, {:agent_event, pid, event})` and pid-
+  via `GenServer.cast(loop, {:agent_event, pid, event})` and pid-
   gated; the Worker `send/2`s `{:agent_event, ref, event}` and
-  Session ref-gates against the active `turn_ref` set when each Task
+  Loop ref-gates against the active `turn_ref` set when each Task
   spawned.
 
   ## Entry points
@@ -21,12 +21,12 @@ defmodule OctoPi.Agent.Turn.Worker do
       finishes with `{:stream_done, ref, %Assistant{}}` or
       `{:stream_failed, ref, reason}` to the parent.
     * `tool_batch/5` — runs the parallel/sequential dispatch (mode
-      resolved from tool defs by Session, passed in via `mode`).
+      resolved from tool defs by Loop, passed in via `mode`).
       Sends `{:agent_event, ref, %Event.ToolExecutionStart|...{}}`
       events for each call, then `{:tool_batch_done, ref, results}`.
 
   Both entry points return `:ok`; Task `:DOWN` reflects abnormal
-  exits which Session also handles via ref-gated `handle_info`.
+  exits which Loop also handles via ref-gated `handle_info`.
   """
 
   alias OctoPi.Agent.AbortRef
@@ -136,7 +136,7 @@ defmodule OctoPi.Agent.Turn.Worker do
   # ---------- tool batch phase ----------
 
   @doc """
-  Run a tool batch — mode resolved by Session from tool defs. Sends
+  Run a tool batch — mode resolved by Loop from tool defs. Sends
   per-tool `{:agent_event, ref, ...}` events, then
   `{:tool_batch_done, ref, results}` to `parent`. `results` is a list
   of `OctoPi.AI.Message.ToolResult` in source order.

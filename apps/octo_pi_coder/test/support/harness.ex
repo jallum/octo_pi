@@ -218,7 +218,7 @@ defmodule OctoPi.Coder.Test.Harness do
     extensions = load_factories(factories) ++ extra_extensions
 
     {:ok, session} =
-      OctoPi.Agent.start_session(
+      OctoPi.Agent.start_loop(
         model: @faux_model,
         transport: FauxTransport,
         tools: tools,

@@ -46,7 +46,7 @@ defmodule OctoPi.Agent.AbortRef do
   end
 
   @doc """
-  Delete the ref's row. Called at session end. `aborted?/1` on a
+  Delete the ref's row. Called at loop end. `aborted?/1` on a
   forgotten ref returns `false`.
   """
   @spec forget(t()) :: :ok

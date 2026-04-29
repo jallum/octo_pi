@@ -6,7 +6,7 @@ defmodule OctoPi.TUI.Interactive do
   assembles cooked stdin sequences, and parses them into key events;
   the `Input` component accumulates the prompt, and the `Renderer`
   paints the transcript + input to the screen. Agent events from
-  `OctoPi.Agent.Session` drive the transcript updates.
+  `OctoPi.Agent.Loop` drive the transcript updates.
 
   The state machine is a pure function: `handle_event/2` takes a
   state and an event (key, agent event, or resize) and returns a
@@ -695,7 +695,7 @@ defmodule OctoPi.TUI.Interactive do
         opts[:transport]
       )
 
-    {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
+    {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
     :ok = Coder.set_agent_pid(coder_pid, agent_pid)
     coder_pid
   end
@@ -731,7 +731,7 @@ defmodule OctoPi.TUI.Interactive do
             opts[:transport]
           )
 
-        {:ok, agent_pid} = OctoPi.Agent.start_session(agent_opts)
+        {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
         :ok = Coder.set_agent_pid(coder_pid, agent_pid)
         coder_pid
     end

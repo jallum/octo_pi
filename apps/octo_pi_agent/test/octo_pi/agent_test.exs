@@ -3,10 +3,10 @@ defmodule OctoPi.AgentTest do
 
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
+  alias OctoPi.Agent.Loop
   alias OctoPi.Agent.Message
   alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
-  alias OctoPi.Agent.Session
   alias OctoPi.Agent.TestSupport.EchoTool
   alias OctoPi.Agent.Tool
   alias OctoPi.Agent.Transport
@@ -61,8 +61,8 @@ defmodule OctoPi.AgentTest do
                %Tool.Result{content: []}
     end
 
-    test "Session.State enforces :model and :transport" do
-      state = %Session.State{
+    test "Loop.State enforces :model and :transport" do
+      state = %Loop.State{
         model: fake_model(),
         transport: Transport.Direct
       }
@@ -187,59 +187,59 @@ defmodule OctoPi.AgentTest do
     end
   end
 
-  describe "Session lifecycle" do
+  describe "Loop lifecycle" do
     setup do
-      {:ok, session} = OctoPi.Agent.start_session(model: fake_model())
-      {:ok, session: session}
+      {:ok, loop} = OctoPi.Agent.start_loop(model: fake_model())
+      {:ok, loop: loop}
     end
 
-    test "state/1 returns the current Session.State", %{session: session} do
-      state = OctoPi.Agent.state(session)
+    test "state/1 returns the current Loop.State", %{loop: loop} do
+      state = OctoPi.Agent.state(loop)
       assert state.model.id == "claude-haiku-4-5"
       refute state.is_streaming?
       assert MessageLog.to_list(state.messages) == []
     end
 
-    test "subscribe/3 returns an unsubscribe fn", %{session: session} do
-      unsubscribe = OctoPi.Agent.subscribe(session, self(), :async)
+    test "subscribe/3 returns an unsubscribe fn", %{loop: loop} do
+      unsubscribe = OctoPi.Agent.subscribe(loop, self(), :async)
       assert is_function(unsubscribe, 0)
       assert :ok = unsubscribe.()
     end
 
-    test "abort on idle is a no-op", %{session: session} do
-      OctoPi.Agent.subscribe(session, self(), :async)
-      :ok = OctoPi.Agent.abort(session)
+    test "abort on idle is a no-op", %{loop: loop} do
+      OctoPi.Agent.subscribe(loop, self(), :async)
+      :ok = OctoPi.Agent.abort(loop)
       refute_receive {:octo_pi_agent_event, _}, 50
     end
 
-    test "steer/2 enqueues into the steering queue", %{session: session} do
-      :ok = OctoPi.Agent.steer(session, "next, do X")
-      state = OctoPi.Agent.state(session)
+    test "steer/2 enqueues into the steering queue", %{loop: loop} do
+      :ok = OctoPi.Agent.steer(loop, "next, do X")
+      state = OctoPi.Agent.state(loop)
       assert state.steering_queue.count == 1
     end
 
-    test "follow_up/2 enqueues into the follow-up queue", %{session: session} do
-      :ok = OctoPi.Agent.follow_up(session, "anything else?")
-      state = OctoPi.Agent.state(session)
+    test "follow_up/2 enqueues into the follow-up queue", %{loop: loop} do
+      :ok = OctoPi.Agent.follow_up(loop, "anything else?")
+      state = OctoPi.Agent.state(loop)
       assert state.follow_up_queue.count == 1
     end
 
-    test "wait_for_idle/2 returns :ok immediately when session is idle", %{session: session} do
-      assert :ok = OctoPi.Agent.wait_for_idle(session, 100)
+    test "wait_for_idle/2 returns :ok immediately when loop is idle", %{loop: loop} do
+      assert :ok = OctoPi.Agent.wait_for_idle(loop, 100)
     end
 
-    test "add_tool/2 appends a tool to the session's tool list", %{session: session} do
+    test "add_tool/2 appends a tool to the loop's tool list", %{loop: loop} do
       tool = %{name: "search", description: "search tool", input_schema: %{}}
-      :ok = OctoPi.Agent.add_tool(session, tool)
-      state = OctoPi.Agent.state(session)
+      :ok = OctoPi.Agent.add_tool(loop, tool)
+      state = OctoPi.Agent.state(loop)
       assert Enum.any?(state.tools, &(&1.name == "search"))
     end
 
-    test "add_tool/2 is a no-op if a tool with the same name already exists", %{session: session} do
+    test "add_tool/2 is a no-op if a tool with the same name already exists", %{loop: loop} do
       tool = %{name: "search", description: "first", input_schema: %{}}
-      :ok = OctoPi.Agent.add_tool(session, tool)
-      :ok = OctoPi.Agent.add_tool(session, %{name: "search", description: "second", input_schema: %{}})
-      state = OctoPi.Agent.state(session)
+      :ok = OctoPi.Agent.add_tool(loop, tool)
+      :ok = OctoPi.Agent.add_tool(loop, %{name: "search", description: "second", input_schema: %{}})
+      state = OctoPi.Agent.state(loop)
       tools = Enum.filter(state.tools, &(&1.name == "search"))
       assert length(tools) == 1
       assert hd(tools).description == "first"

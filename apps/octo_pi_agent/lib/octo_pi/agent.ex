@@ -2,13 +2,13 @@ defmodule OctoPi.Agent do
   @moduledoc """
   Phase 2 — the stateful agent kernel. Ported from pi-agent-core.
 
-  Start a session with `start_session/1`, then drive it with
+  Start a loop with `start_loop/1`, then drive it with
   `prompt/2`, `continue/1`, `steer/2`, `follow_up/2`, and `abort/1`.
   Observe events with `subscribe/3`; read state with `state/1`; wait
   for a run to finish with `wait_for_idle/2`.
 
   Subscriber modes:
-    - `:sync` — Session uses `GenServer.call` (5s timeout); honors
+    - `:sync` — Loop uses `GenServer.call` (5s timeout); honors
       pi-agent-core's listener-barrier semantics.
     - `:async` — `send/2` fire-and-forget; cheap for UI or logging.
 
@@ -19,16 +19,16 @@ defmodule OctoPi.Agent do
   See `docs/port-map/agent.md` for the full porting spec.
   """
 
+  alias OctoPi.Agent.Loop
+  alias OctoPi.Agent.Loop.State
   alias OctoPi.Agent.Message
-  alias OctoPi.Agent.Session
-  alias OctoPi.Agent.Session.State
   alias OctoPi.Agent.Subscribers
   alias OctoPi.AI.Model
 
-  @type session :: pid()
+  @type loop :: pid()
   @type subscribe_mode :: :sync | :async
 
-  @type session_opt ::
+  @type loop_opt ::
           {:model, Model.t()}
           | {:system_prompt, String.t() | nil}
           | {:tools, [OctoPi.Agent.Tool.t()]}
@@ -42,57 +42,57 @@ defmodule OctoPi.Agent do
           | {:steering_queue_bound, pos_integer()}
           | {:follow_up_queue_bound, pos_integer()}
 
-  @type session_opts :: [session_opt()]
+  @type loop_opts :: [loop_opt()]
 
   @doc """
-  Start a session GenServer.
+  Start a loop GenServer.
 
   Required: `:model`. All others are optional.
   """
-  @spec start_session(session_opts()) :: {:ok, session()}
-  def start_session(opts) when is_list(opts), do: Session.start_link(opts)
+  @spec start_loop(loop_opts()) :: {:ok, loop()}
+  def start_loop(opts) when is_list(opts), do: Loop.start_link(opts)
 
   @doc "Append message(s) to the transcript and start a new run."
-  @spec prompt(session(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
-  def prompt(pid, msg_or_msgs), do: Session.prompt(pid, msg_or_msgs)
+  @spec prompt(loop(), String.t() | Message.t() | [Message.t() | String.t()]) :: :ok | {:error, :already_streaming}
+  def prompt(pid, msg_or_msgs), do: Loop.prompt(pid, msg_or_msgs)
 
   @doc "Continue the current conversation with no new user input."
-  @spec continue(session()) :: :ok | {:error, :already_streaming}
-  def continue(pid), do: Session.continue(pid)
+  @spec continue(loop()) :: :ok | {:error, :already_streaming}
+  def continue(pid), do: Loop.continue(pid)
 
   @doc "Enqueue a message for injection before the next LLM call of the current run."
-  @spec steer(session(), String.t() | Message.t()) :: :ok | {:error, :full}
-  def steer(pid, msg), do: Session.steer(pid, msg)
+  @spec steer(loop(), String.t() | Message.t()) :: :ok | {:error, :full}
+  def steer(pid, msg), do: Loop.steer(pid, msg)
 
   @doc "Enqueue a message for injection when the current run would otherwise stop."
-  @spec follow_up(session(), String.t() | Message.t()) :: :ok | {:error, :full}
-  def follow_up(pid, msg), do: Session.follow_up(pid, msg)
+  @spec follow_up(loop(), String.t() | Message.t()) :: :ok | {:error, :full}
+  def follow_up(pid, msg), do: Loop.follow_up(pid, msg)
 
   @doc """
-  Switch the drainage mode of one of the session's pending-message
+  Switch the drainage mode of one of the loop's pending-message
   queues. `:one_at_a_time` drains one item per pass; `:all` drains
   every queued item in one shot.
   """
-  @spec set_queue_mode(session(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
-  def set_queue_mode(pid, queue, mode), do: Session.set_queue_mode(pid, queue, mode)
+  @spec set_queue_mode(loop(), :steering | :follow_up, :one_at_a_time | :all) :: :ok
+  def set_queue_mode(pid, queue, mode), do: Loop.set_queue_mode(pid, queue, mode)
 
-  @doc "Abort the current run. No-op if the session is idle."
-  @spec abort(session()) :: :ok
-  def abort(pid), do: Session.abort(pid)
+  @doc "Abort the current run. No-op if the loop is idle."
+  @spec abort(loop()) :: :ok
+  def abort(pid), do: Loop.abort(pid)
 
   @doc """
   Request a manual compaction. Fire-and-forget — returns `:ok`
   immediately (or `{:error, :busy}` if a run or compaction is already
   in flight).
 
-  Session emits `%Event.CompactionRequested{ref, opts}` to subscribers;
+  Loop emits `%Event.CompactionRequested{ref, opts}` to subscribers;
   exactly one subscriber performs the work and calls
-  `compaction_response/3` when done. Session then emits
+  `compaction_response/3` when done. Loop then emits
   `%Event.CompactionEnd{result}` to all subscribers. Callers who need
   to synchronize use `wait_for_idle/2` or watch for `CompactionEnd`.
   """
-  @spec compact(session(), keyword()) :: :ok | {:error, :busy}
-  def compact(pid, opts \\ []), do: Session.compact(pid, opts)
+  @spec compact(loop(), keyword()) :: :ok | {:error, :busy}
+  def compact(pid, opts \\ []), do: Loop.compact(pid, opts)
 
   @doc """
   Subscriber-side response API for `%Event.CompactionRequested{}`.
@@ -104,52 +104,52 @@ defmodule OctoPi.Agent do
   match Agent's currently active compaction (e.g. the request was
   superseded or the agent was aborted).
   """
-  @spec compaction_response(session(), reference(), term()) :: :ok | {:error, :stale}
-  def compaction_response(pid, ref, result), do: Session.compaction_response(pid, ref, result)
+  @spec compaction_response(loop(), reference(), term()) :: :ok | {:error, :stale}
+  def compaction_response(pid, ref, result), do: Loop.compaction_response(pid, ref, result)
 
   @doc "Change the thinking level for future runs."
-  @spec set_thinking_level(session(), atom()) :: :ok
-  def set_thinking_level(pid, level), do: Session.set_thinking_level(pid, level)
+  @spec set_thinking_level(loop(), atom()) :: :ok
+  def set_thinking_level(pid, level), do: Loop.set_thinking_level(pid, level)
 
   @doc "Change the model for future runs."
-  @spec set_model(session(), Model.t()) :: :ok
-  def set_model(pid, model), do: Session.set_model(pid, model)
+  @spec set_model(loop(), Model.t()) :: :ok
+  def set_model(pid, model), do: Loop.set_model(pid, model)
 
-  @doc "Add a tool to the session's active tool list. No-op if a tool with the same name already exists."
-  @spec add_tool(session(), map()) :: :ok
-  def add_tool(pid, tool), do: Session.add_tool(pid, tool)
+  @doc "Add a tool to the loop's active tool list. No-op if a tool with the same name already exists."
+  @spec add_tool(loop(), map()) :: :ok
+  def add_tool(pid, tool), do: Loop.add_tool(pid, tool)
 
   @doc "Drain all messages from the steering queue and return them."
-  @spec drain_steering(session()) :: [Message.t()]
-  def drain_steering(pid), do: Session.drain_steering(pid)
+  @spec drain_steering(loop()) :: [Message.t()]
+  def drain_steering(pid), do: Loop.drain_steering(pid)
 
   @doc "Drain all messages from the follow-up queue and return them."
-  @spec drain_follow_up(session()) :: [Message.t()]
-  def drain_follow_up(pid), do: Session.drain_follow_up(pid)
+  @spec drain_follow_up(loop()) :: [Message.t()]
+  def drain_follow_up(pid), do: Loop.drain_follow_up(pid)
 
   @doc """
-  Subscribe `listener_pid` to session events. Returns an unsubscribe
+  Subscribe `listener_pid` to loop events. Returns an unsubscribe
   function. The 1- and 2-arity forms default the listener to
   `self()`.
   """
-  @spec subscribe(session()) :: (-> :ok)
-  def subscribe(session_pid), do: subscribe(session_pid, self(), :async)
+  @spec subscribe(loop()) :: (-> :ok)
+  def subscribe(loop_pid), do: subscribe(loop_pid, self(), :async)
 
-  @spec subscribe(session(), subscribe_mode()) :: (-> :ok)
-  def subscribe(session_pid, mode) when mode in [:sync, :async], do: subscribe(session_pid, self(), mode)
+  @spec subscribe(loop(), subscribe_mode()) :: (-> :ok)
+  def subscribe(loop_pid, mode) when mode in [:sync, :async], do: subscribe(loop_pid, self(), mode)
 
-  @spec subscribe(session(), pid(), subscribe_mode()) :: (-> :ok)
-  def subscribe(session_pid, listener_pid, mode) when is_pid(listener_pid),
-    do: Subscribers.subscribe(session_pid, listener_pid, mode)
+  @spec subscribe(loop(), pid(), subscribe_mode()) :: (-> :ok)
+  def subscribe(loop_pid, listener_pid, mode) when is_pid(listener_pid),
+    do: Subscribers.subscribe(loop_pid, listener_pid, mode)
 
-  @doc "Read the session's current state."
-  @spec state(session()) :: State.t()
-  def state(pid), do: Session.state(pid)
+  @doc "Read the loop's current state."
+  @spec state(loop()) :: State.t()
+  def state(pid), do: Loop.state(pid)
 
-  @doc "Block until the session is idle, or timeout."
-  @spec wait_for_idle(session(), timeout()) :: :ok | :timeout
+  @doc "Block until the loop is idle, or timeout."
+  @spec wait_for_idle(loop(), timeout()) :: :ok | :timeout
   def wait_for_idle(pid, timeout \\ 30_000) do
-    Session.wait_for_idle(pid, timeout)
+    Loop.wait_for_idle(pid, timeout)
   catch
     :exit, {:timeout, _} -> :timeout
   end

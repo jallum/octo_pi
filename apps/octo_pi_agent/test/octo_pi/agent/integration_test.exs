@@ -5,7 +5,7 @@ defmodule OctoPi.Agent.IntegrationTest do
 
       ANTHROPIC_API_KEY=sk-... mix test --only integration
 
-  Proves the full kernel + provider stack — Session, loop, tool
+  Proves the full kernel + provider stack — Loop, loop, tool
   dispatch, Transport.Direct → OctoPi.AI.stream → Anthropic
   Producer — runs end-to-end on live traffic.
   """
@@ -35,8 +35,8 @@ defmodule OctoPi.Agent.IntegrationTest do
       max_tokens: 6000
     }
 
-    {:ok, session} =
-      OctoPi.Agent.start_session(
+    {:ok, loop} =
+      OctoPi.Agent.start_loop(
         model: model,
         tools: [EchoTool.tool()],
         system_prompt:
@@ -44,10 +44,10 @@ defmodule OctoPi.Agent.IntegrationTest do
             "then say 'done' and stop."
       )
 
-    OctoPi.Agent.subscribe(session, self(), :async)
+    OctoPi.Agent.subscribe(loop, self(), :async)
 
-    :ok = OctoPi.Agent.prompt(session, "Please call the echo tool now.")
-    :ok = OctoPi.Agent.wait_for_idle(session, 30_000)
+    :ok = OctoPi.Agent.prompt(loop, "Please call the echo tool now.")
+    :ok = OctoPi.Agent.wait_for_idle(loop, 30_000)
 
     assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: msgs}}
 

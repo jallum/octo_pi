@@ -1,10 +1,10 @@
-defmodule OctoPi.Agent.Session.State do
+defmodule OctoPi.Agent.Loop.State do
   @moduledoc """
-  Per-session state held by the Session GenServer. Ported from
+  Per-loop state held by the Loop GenServer. Ported from
   pi-agent-core's `Agent` class state (see `docs/port-map/agent.md`
   §1). This ticket (`octo-z1d.1`) only pins the struct shape — the
-  Session GenServer that manipulates it lands in `octo-z1d.2`, and
-  the loop / queues / cancellation layers fill in behaviour in later
+  Loop GenServer that manipulates it lands in `octo-z1d.2`, and
+  the queues / cancellation layers fill in behaviour in later
   children.
 
   Fields:
@@ -29,7 +29,7 @@ defmodule OctoPi.Agent.Session.State do
     * `:before_tool_call` / `:after_tool_call` — optional hooks
     * `:transport` — `OctoPi.Agent.Transport` impl module
     * `:messages_provider` — optional 1-arity closure
-      `(Session.State -> [Message.t()])` used to build the per-turn
+      `(Loop.State -> [Message.t()])` used to build the per-turn
       LLM messages list. `nil` falls back to
       `MessageLog.to_list(state.messages)`. The coder app passes a
       closure that delegates to

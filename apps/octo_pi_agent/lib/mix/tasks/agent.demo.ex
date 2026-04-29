@@ -3,8 +3,8 @@ defmodule Mix.Tasks.Agent.Demo do
 
   @moduledoc """
   End-to-end demo of `OctoPi.Agent` against live Anthropic traffic.
-  Starts a session with an echo tool registered and streams events
-  to stdout. Proves the full kernel (Session, loop, tool dispatch,
+  Starts a loop with an echo tool registered and streams events
+  to stdout. Proves the full kernel (Loop, loop, tool dispatch,
   subscribers, transport) round-trips end-to-end.
 
   ## Usage
@@ -48,18 +48,18 @@ defmodule Mix.Tasks.Agent.Demo do
       "You have an 'echo' tool that returns whatever text you pass it. " <>
         "Use it if the user asks you to echo something."
 
-    {:ok, session} =
-      OctoPi.Agent.start_session(
+    {:ok, loop} =
+      OctoPi.Agent.start_loop(
         model: model,
         system_prompt: system_prompt,
         tools: [echo_tool()]
       )
 
-    OctoPi.Agent.subscribe(session, self(), :async)
+    OctoPi.Agent.subscribe(loop, self(), :async)
 
     Mix.shell().info("-> #{model.id}\n")
 
-    :ok = OctoPi.Agent.prompt(session, prompt)
+    :ok = OctoPi.Agent.prompt(loop, prompt)
     loop_until_end("")
   end
 

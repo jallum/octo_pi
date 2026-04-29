@@ -8,13 +8,13 @@ defmodule OctoPi.Agent.MessageLog do
   uses the BIF `:lists.reverse/1` (runs in C).
 
   Replaces the `list ++ [item]` append pattern that dominated the
-  Session/Loop hot paths and was O(n²) over a long transcript. A
+  Loop/Loop hot paths and was O(n²) over a long transcript. A
   cached `count` field also turns `length(messages)` callers (telemetry
   metadata, etc.) into O(1) reads.
 
   Opaque struct: callers should always go through the API. Anything
   that needs a plain list calls `to_list/1`; anything that constructs
-  a log from an oldest-first list (e.g. session init from opts) calls
+  a log from an oldest-first list (e.g. loop init from opts) calls
   `new/1`.
   """
 

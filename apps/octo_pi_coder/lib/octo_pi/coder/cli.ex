@@ -201,7 +201,7 @@ defmodule OctoPi.Coder.CLI do
     system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
 
     {:ok, session} =
-      OctoPi.Agent.start_session(
+      OctoPi.Agent.start_loop(
         model: opts.model,
         tools: tools,
         system_prompt: system_prompt
