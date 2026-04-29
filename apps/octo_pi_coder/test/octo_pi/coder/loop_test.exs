@@ -68,7 +68,6 @@ defmodule OctoPi.Coder.LoopTest do
       state = :sys.get_state(pid)
       assert state.extensions == []
       assert state.store_pid == store
-      assert state.path == []
       assert state.agent_pid == agent
     end
 
@@ -459,33 +458,6 @@ defmodule OctoPi.Coder.LoopTest do
       assert length(rest) == 2
     end
 
-    # opi-qy9.3: after a compaction is appended, Loop's :path resets to
-    # start at the latest compaction's first_kept_entry_id. The kept
-    # window + post-compaction tail are preserved; everything before
-    # firstKept is dropped from the cache so the next compaction's
-    # input window inch-worms forward.
-    test "appending Compaction resets state.path to start at firstKeptEntryId", %{pid: pid} do
-      {:ok, id1} = Coder.add_entry(pid, message_entry("first"))
-      {:ok, id2} = Coder.add_entry(pid, message_entry("second"))
-      {:ok, id3} = Coder.add_entry(pid, message_entry("third"))
-
-      assert Enum.map(:sys.get_state(pid).path, & &1.id) == [id1, id2, id3]
-
-      compaction = %Entry.Compaction{
-        id: nil,
-        timestamp: nil,
-        summary: "summary",
-        first_kept_entry_id: id2,
-        tokens_before: 100
-      }
-
-      {:ok, comp_id} = Coder.add_entry(pid, compaction)
-      {:ok, id4} = Coder.add_entry(pid, message_entry("fourth"))
-
-      # id1 is dropped from the cache (pre-cut history); id2..id3 are
-      # the kept window; comp anchors; id4 is post-compaction tail.
-      assert Enum.map(:sys.get_state(pid).path, & &1.id) == [id2, id3, comp_id, id4]
-    end
   end
 
   describe "messages_provider closure for Agent.Loop (E5a)" do
@@ -724,11 +696,8 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
       {:ok, id2} = Coder.add_entry(pid, message_entry("branch A"))
-      # Navigate back to id1 to create a fork point for id3 — move the
-      # leaf in the store and reset the loop's path cache to the
-      # truncated branch so the next add_entry parents under id1.
+      # Navigate back to id1 to create a fork point for id3.
       :ok = SessionStore.set_leaf(store, id1)
-      :sys.replace_state(pid, fn state -> %{state | path: SessionStore.get_branch(store)} end)
 
       {:ok, id3} = Coder.add_entry(pid, message_entry("branch B"))
 

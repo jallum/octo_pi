@@ -52,8 +52,6 @@ defmodule OctoPi.Coder.Loop do
   @type state :: %__MODULE__.State{
           extensions: [Extension.t()],
           store_pid: SessionStore.t(),
-          path: [Entry.t()],
-          cwd: String.t(),
           agent_pid: OctoPi.Agent.t(),
           model_provider: model_provider(),
           settings_manager: pid()
@@ -62,12 +60,10 @@ defmodule OctoPi.Coder.Loop do
   defmodule State do
     @moduledoc false
 
-    @enforce_keys [:extensions, :store_pid, :path, :cwd, :agent_pid, :model_provider, :settings_manager]
+    @enforce_keys [:extensions, :store_pid, :agent_pid, :model_provider, :settings_manager]
     defstruct [
       :extensions,
       :store_pid,
-      :path,
-      :cwd,
       :agent_pid,
       :model_provider,
       :settings_manager
@@ -159,8 +155,6 @@ defmodule OctoPi.Coder.Loop do
     state = %State{
       extensions: extensions,
       store_pid: store_pid,
-      path: SessionStore.path(store_pid, :leaf, to: :latest_compaction),
-      cwd: SessionStore.get_cwd(store_pid),
       agent_pid: agent_pid,
       model_provider: Keyword.get(opts, :model_provider, fn -> nil end),
       settings_manager: resolve_settings_manager(opts)
@@ -176,7 +170,7 @@ defmodule OctoPi.Coder.Loop do
   def handle_call(:get_extensions, _from, state), do: {:reply, state.extensions, state}
 
   def handle_call(:build_session_context, _from, state),
-    do: {:reply, SessionManager.build_context_from_path(state.path), state}
+    do: {:reply, SessionStore.build_session_context(state.store_pid), state}
 
   def handle_call({:add_user_message, %User{} = msg}, _from, state) do
     entry = %Entry.Message{
@@ -351,8 +345,9 @@ defmodule OctoPi.Coder.Loop do
 
   defp do_compact(%State{} = state, opts) do
     settings = SettingsManager.get_compaction_settings(state.settings_manager)
+    path = SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)
 
-    case Preparation.prepare(state.path, settings) do
+    case Preparation.prepare(path, settings) do
       nil -> {:error, :nothing_to_compact}
       %Preparation{} = prep -> dispatch_compact(state, prep, opts)
     end
@@ -572,12 +567,12 @@ defmodule OctoPi.Coder.Loop do
     }
 
     {:ok, _materialized} = SessionStore.append_entry(state.store_pid, entry, [])
-    refresh_path(state)
+    state
   end
 
   defp set_new_leaf(state, target_entry, target_id) do
     :ok = SessionStore.set_leaf(state.store_pid, compute_new_leaf_id(target_entry, target_id))
-    refresh_path(state)
+    state
   end
 
   defp compute_new_leaf_id(%Entry.Message{message: %{"role" => "user"}, parent_id: pid}, _target_id), do: pid
@@ -662,11 +657,13 @@ defmodule OctoPi.Coder.Loop do
   # Mirrors upstream AgentSession.getContextUsage / getSessionStats
   # (agent-session.ts:2932-2973, 2887-2932).
 
-  defp do_get_context_usage(%State{model_provider: mp, path: path}) do
+  defp do_get_context_usage(%State{model_provider: mp, store_pid: store_pid}) do
     case mp.() do
       %{context_window: cw} when is_integer(cw) and cw > 0 ->
+        path = SessionStore.path(store_pid, :leaf, to: :root)
+
         if context_tokens_known?(path) do
-          messages = SessionManager.build_context_from_path(path).messages
+          messages = SessionStore.build_session_context(store_pid).messages
           estimate = Tokens.estimate_context_tokens(messages)
           percent = estimate.tokens / cw * 100
           %{tokens: estimate.tokens, context_window: cw, percent: percent}
@@ -679,8 +676,8 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-  defp do_get_session_stats(%State{path: path} = state) do
-    messages = SessionManager.build_context_from_path(path).messages
+  defp do_get_session_stats(%State{} = state) do
+    messages = SessionStore.build_session_context(state.store_pid).messages
 
     {input, output, cache_read, cache_write} =
       Enum.reduce(messages, {0, 0, 0, 0}, fn
@@ -762,8 +759,7 @@ defmodule OctoPi.Coder.Loop do
 
   defp append_to_store(state, entry, opts) do
     {:ok, materialized} = SessionStore.append_entry(state.store_pid, entry, opts)
-    state = %{state | path: state.path ++ [materialized]}
-    {reset_path_after_compaction(state, materialized), materialized}
+    {state, materialized}
   end
 
   # Mirror Coder-originated entries into Agent's working transcript.
@@ -784,19 +780,9 @@ defmodule OctoPi.Coder.Loop do
     :ok
   end
 
-  # Compaction is the inch-worm anchor: after appending one, the loop's
-  # cached path should start at that compaction so the next compaction's
-  # input window is just `[compaction, kept tail]` and the LLM context
-  # built from `:path` is `[summary, kept tail]`. Same shape navigate-
-  # tree converges to via `refresh_path/1`.
-  defp reset_path_after_compaction(state, %Entry.Compaction{}), do: refresh_path(state)
-  defp reset_path_after_compaction(state, _entry), do: state
-
-  defp refresh_path(state), do: %{state | path: SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)}
-
   defp build_ctx(state) do
     Context.bind_session_manager(
-      %Context{cwd: state.cwd},
+      %Context{cwd: SessionStore.get_cwd(state.store_pid)},
       fn -> SessionStore.get_session_manager(state.store_pid) end
     )
   end
