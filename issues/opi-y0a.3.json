@@ -14,8 +14,8 @@
   "labels": [],
   "parent": "opi-y0a",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Streamline manual compact and add pre-prompt check; keep mid-run Agent trigger",
   "type": "task",
-  "updated_at": "2026-04-29T20:34:49.322492Z"
+  "updated_at": "2026-04-29T20:39:01.302037Z"
 }
