@@ -5,7 +5,8 @@
     "opi-4dx.6"
   ],
   "blocks": [
-    "opi-4dx.10"
+    "opi-4dx.10",
+    "opi-4dx.9"
   ],
   "comments": [],
   "created": "2026-04-30T17:47:19.259970Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Transcript module: stable-cell render state",
   "type": "task",
-  "updated_at": "2026-04-30T18:40:08.779386Z"
+  "updated_at": "2026-04-30T18:40:11.450050Z"
 }

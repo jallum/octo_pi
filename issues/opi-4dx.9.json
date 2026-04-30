@@ -3,7 +3,8 @@
   "assignee": "",
   "blocked_by": [
     "opi-4dx.6",
-    "opi-4dx.7"
+    "opi-4dx.7",
+    "opi-4dx.8"
   ],
   "blocks": [
     "opi-4dx.10"
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "AssistantMessage: nest the Transcript shape for content blocks",
   "type": "task",
-  "updated_at": "2026-04-30T18:40:10.146358Z"
+  "updated_at": "2026-04-30T18:40:11.450050Z"
 }
