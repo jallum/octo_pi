@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T18:38:31.727778Z",
+  "description": "## Why\n\nThe `MessageEnd{message: Assistant.t()}` event ships a finalized assistant message structurally. Consumers that receive it (replay, persistence, debug dumps, tests) need the same `block_id` that streaming events carried, without re-deriving from list position.\n\n## Shape\n\nAdd a `content_index :: non_neg_integer() | nil` field to:\n\n- `OctoPi.AI.Content.Text`\n- `OctoPi.AI.Content.Thinking`\n\n(`OctoPi.AI.ToolCall` already has provider-assigned `id`, leave it alone.)\n\nDecoders populate the field at block-construction time:\n\n- `apps/octo_pi_ai_anthropic/lib/.../decoder.ex:248-258` — `build_content_item` takes `position` and stamps `content_index: position` on Text/Thinking variants.\n- `apps/octo_pi_ai_openai/lib/.../decoder.ex:197, 223` — `Content.Text{}` / `Content.Thinking{}` constructors at `open_block` sites take `content_index: state.content_count`.\n\n## Acceptance\n\n- Every `Content.Text` / `Content.Thinking` in a `Decoder.message/1` or `MessageEnd.message` snapshot has `content_index` set, matching the `block_id` carried by the per-block events from `.6`.\n- Decoder unit tests assert `content_index` on the finalized message content.\n\n## Tests\n\n- Anthropic: a multi-block stream (text, thinking, text) finalizes with `content_index: 0, 1, 2` on the three blocks.\n- OpenAI: same.\n\n## Out of scope\n\n- The agent-event redesign (`.6` proper).\n- Persistence format changes — the field is additive on existing structs and any serialization that picks `text`/`thinking` keys will ignore it harmlessly.",
+  "id": "opi-4dx.6b",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Stamp content_index onto Content.Text and Content.Thinking",
+  "type": "task",
+  "updated_at": "2026-04-30T18:38:31.727778Z"
+}
