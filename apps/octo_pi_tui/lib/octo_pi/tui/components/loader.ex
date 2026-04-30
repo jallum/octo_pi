@@ -51,8 +51,7 @@ defmodule OctoPi.TUI.Components.Loader do
       end
 
     line = String.slice(line, 0, max(width, 0))
-    cancel_lines = if loader.cancellable, do: ["", "  Press Esc to cancel"], else: []
-    ["", line | cancel_lines]
+    ["", line]
   end
 
   @impl true

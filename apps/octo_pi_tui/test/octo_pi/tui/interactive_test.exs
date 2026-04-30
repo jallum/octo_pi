@@ -710,20 +710,23 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — agent events" do
-    test "MessageBlockDelta appends a streaming assistant entry" do
+    test "MessageBlockDelta appends a streaming assistant entry (after flush)" do
       s = %Interactive{}
 
+      # opi-4dx.3 + .6: block-delta events stash into streaming_blocks;
+      # pull-tick flush materializes them into the transcript.
       s =
-        Interactive.handle_event(
-          s,
+        s
+        |> Interactive.handle_event(
           {:octo_pi_agent_event,
            %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hello", snapshot: "hello"}}
         )
+        |> Interactive.flush_pending_partial()
 
       assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
     end
 
-    test "subsequent MessageBlockDeltas replace the streaming entry's text" do
+    test "subsequent MessageBlockDeltas replace the streaming entry's text (after flush)" do
       existing = AssistantMessage.new(nil, content: [text: "he"])
 
       s = %Interactive{
@@ -732,11 +735,12 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       s =
-        Interactive.handle_event(
-          s,
+        s
+        |> Interactive.handle_event(
           {:octo_pi_agent_event,
            %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "llo", snapshot: "hello"}}
         )
+        |> Interactive.flush_pending_partial()
 
       assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
     end
@@ -825,8 +829,8 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       # Turn 2: model responds with new text after tool results
       s =
-        Interactive.handle_event(
-          s,
+        s
+        |> Interactive.handle_event(
           {:octo_pi_agent_event,
            %Event.MessageBlockDelta{
              block_id: 0,
@@ -835,6 +839,7 @@ defmodule OctoPi.TUI.InteractiveTest do
              snapshot: "here is the answer"
            }}
         )
+        |> Interactive.flush_pending_partial()
 
       # The continuation text must be a NEW entry BELOW the tool, not
       # merged into the first AssistantMessage above it.
@@ -865,8 +870,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{transcript: [{:user, "first prompt"}, finalized]}
 
       s =
-        Interactive.handle_event(
-          s,
+        s
+        |> Interactive.handle_event(
           {:octo_pi_agent_event,
            %Event.MessageBlockDelta{
              block_id: 0,
@@ -875,6 +880,7 @@ defmodule OctoPi.TUI.InteractiveTest do
              snapshot: "second"
            }}
         )
+        |> Interactive.flush_pending_partial()
 
       # First-turn assistant preserved, new partial appended.
       assert [

@@ -28,6 +28,31 @@ defmodule OctoPi.TUI.TracerHandlersTest do
       level: :debug
     })
 
+    OctoPi.Tracer.register(%{
+      id: :tui_render,
+      description: "TUI renderer frame timing + transcript/markdown render spans",
+      events: [
+        [:octo_pi_tui, :renderer, :render],
+        [:octo_pi_tui, :transcript, :render, :start],
+        [:octo_pi_tui, :transcript, :render, :stop],
+        [:octo_pi_tui, :markdown, :render, :start],
+        [:octo_pi_tui, :markdown, :render, :stop]
+      ],
+      level: :debug
+    })
+
+    OctoPi.Tracer.register(%{
+      id: :tui_interactive,
+      description: "TUI Interactive handle_info spans, mailbox depth, key arrival latency",
+      events: [
+        [:octo_pi_tui, :interactive, :handle_info, :start],
+        [:octo_pi_tui, :interactive, :handle_info, :stop],
+        [:octo_pi_tui, :interactive, :mailbox],
+        [:octo_pi_tui, :key, :latency]
+      ],
+      level: :debug
+    })
+
     OctoPi.Tracer.attach_all()
     :ok
   end
@@ -46,6 +71,26 @@ defmodule OctoPi.TUI.TracerHandlersTest do
     test ":tui_raw description mentions high-frequency" do
       spec = Enum.find(OctoPi.Tracer.registered(), &(&1.id == :tui_raw))
       assert spec.description =~ "high-frequency"
+    end
+
+    test "Tracer registers :tui_render with transcript + markdown spans" do
+      spec = Enum.find(OctoPi.Tracer.registered(), &(&1.id == :tui_render))
+      assert spec
+      events = spec.events
+      assert [:octo_pi_tui, :transcript, :render, :start] in events
+      assert [:octo_pi_tui, :transcript, :render, :stop] in events
+      assert [:octo_pi_tui, :markdown, :render, :start] in events
+      assert [:octo_pi_tui, :markdown, :render, :stop] in events
+    end
+
+    test "Tracer registers :tui_interactive with handle_info + mailbox + key.latency" do
+      spec = Enum.find(OctoPi.Tracer.registered(), &(&1.id == :tui_interactive))
+      assert spec
+      events = spec.events
+      assert [:octo_pi_tui, :interactive, :handle_info, :start] in events
+      assert [:octo_pi_tui, :interactive, :handle_info, :stop] in events
+      assert [:octo_pi_tui, :interactive, :mailbox] in events
+      assert [:octo_pi_tui, :key, :latency] in events
     end
   end
 
@@ -75,6 +120,71 @@ defmodule OctoPi.TUI.TracerHandlersTest do
         end)
 
       assert log =~ "octo_pi_tui.raw_mode.exit.stop"
+    end
+
+    test "transcript.render.stop event logs via :tui_render" do
+      log =
+        capture_log([level: :debug], fn ->
+          :telemetry.execute(
+            [:octo_pi_tui, :transcript, :render, :stop],
+            %{duration: 1234, line_count: 5},
+            %{msg_count: 1, streaming?: true}
+          )
+        end)
+
+      assert log =~ "octo_pi_tui.transcript.render.stop"
+    end
+
+    test "markdown.render.stop event logs via :tui_render" do
+      log =
+        capture_log([level: :debug], fn ->
+          :telemetry.execute(
+            [:octo_pi_tui, :markdown, :render, :stop],
+            %{duration: 999, text_bytes: 42, line_count: 3},
+            %{msg_id: "m1", streaming?: false, width: 80}
+          )
+        end)
+
+      assert log =~ "octo_pi_tui.markdown.render.stop"
+    end
+
+    test "interactive.handle_info.stop event logs via :tui_interactive" do
+      log =
+        capture_log([level: :debug], fn ->
+          :telemetry.execute(
+            [:octo_pi_tui, :interactive, :handle_info, :stop],
+            %{duration: 1000},
+            %{kind: :hid_event}
+          )
+        end)
+
+      assert log =~ "octo_pi_tui.interactive.handle_info.stop"
+    end
+
+    test "key.latency event logs via :tui_interactive" do
+      log =
+        capture_log([level: :debug], fn ->
+          :telemetry.execute(
+            [:octo_pi_tui, :key, :latency],
+            %{duration_us: 250},
+            %{mailbox_len_at_arrival: 0}
+          )
+        end)
+
+      assert log =~ "octo_pi_tui.key.latency"
+    end
+
+    test "interactive.mailbox event logs via :tui_interactive" do
+      log =
+        capture_log([level: :debug], fn ->
+          :telemetry.execute(
+            [:octo_pi_tui, :interactive, :mailbox],
+            %{message_queue_len: 7},
+            %{at: :handle_info_entry}
+          )
+        end)
+
+      assert log =~ "octo_pi_tui.interactive.mailbox"
     end
   end
 end

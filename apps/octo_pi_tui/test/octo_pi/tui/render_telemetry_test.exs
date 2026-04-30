@@ -1,0 +1,175 @@
+defmodule OctoPi.TUI.RenderTelemetryTest do
+  @moduledoc """
+  Telemetry contract tests for opi-4dx.1: render-path observability.
+
+  Tests the helper module `OctoPi.TUI.RenderTelemetry` and verifies that
+  call sites in AssistantMessage / Interactive emit the expected events.
+  """
+
+  use ExUnit.Case, async: false
+
+  alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.RenderTelemetry
+  alias OctoPi.TUI.Theme
+
+  @theme Theme.load_builtin(:dark, :truecolor)
+
+  setup do
+    parent = self()
+    handler_id = "render-telem-#{System.unique_integer([:positive])}"
+
+    events = [
+      [:octo_pi_tui, :markdown, :render, :start],
+      [:octo_pi_tui, :markdown, :render, :stop],
+      [:octo_pi_tui, :transcript, :render, :start],
+      [:octo_pi_tui, :transcript, :render, :stop],
+      [:octo_pi_tui, :interactive, :handle_info, :start],
+      [:octo_pi_tui, :interactive, :handle_info, :stop],
+      [:octo_pi_tui, :interactive, :mailbox],
+      [:octo_pi_tui, :key, :latency]
+    ]
+
+    :telemetry.attach_many(
+      handler_id,
+      events,
+      fn event, measurements, metadata, _ ->
+        send(parent, {:telemetry, event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    :ok
+  end
+
+  describe "markdown.render span (via AssistantMessage.render/2)" do
+    test "fires start/stop with width, msg_id, streaming? in metadata" do
+      msg =
+        AssistantMessage.new(@theme,
+          content: [{:text, "# Hello\n\nWorld."}],
+          msg_id: "msg-abc",
+          streaming?: true
+        )
+
+      lines = AssistantMessage.render(msg, 80)
+      assert is_list(lines)
+
+      assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, start_meta}
+      assert start_meta.msg_id == "msg-abc"
+      assert start_meta.streaming? == true
+      assert start_meta.width == 80
+
+      assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :stop], stop_meas, stop_meta}
+      assert is_integer(stop_meas.duration)
+      assert stop_meas.duration >= 0
+      assert is_integer(stop_meta.text_bytes)
+      assert stop_meta.text_bytes > 0
+      assert is_integer(stop_meta.line_count)
+      assert stop_meta.line_count > 0
+    end
+
+    test "passes streaming?: false for finalized messages" do
+      msg =
+        AssistantMessage.new(@theme,
+          content: [{:text, "ok"}],
+          msg_id: "final-1",
+          streaming?: false
+        )
+
+      AssistantMessage.render(msg, 40)
+
+      assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, start_meta}
+      assert start_meta.streaming? == false
+      assert start_meta.msg_id == "final-1"
+    end
+
+    test "skips empty content (no span fires)" do
+      msg = AssistantMessage.new(@theme, content: [{:text, ""}])
+      AssistantMessage.render(msg, 40)
+      refute_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, _}
+    end
+  end
+
+  describe "RenderTelemetry.with_transcript_render/3" do
+    test "fires start/stop with msg_count, streaming?, line_count" do
+      lines =
+        RenderTelemetry.with_transcript_render(%{msg_count: 3, streaming?: true}, fn ->
+          ["one", "two", "three"]
+        end)
+
+      assert lines == ["one", "two", "three"]
+
+      assert_received {:telemetry, [:octo_pi_tui, :transcript, :render, :start], _, start_meta}
+      assert start_meta.msg_count == 3
+      assert start_meta.streaming? == true
+
+      assert_received {:telemetry, [:octo_pi_tui, :transcript, :render, :stop], stop_meas, stop_meta}
+      assert is_integer(stop_meas.duration)
+      assert stop_meta.line_count == 3
+    end
+  end
+
+  describe "RenderTelemetry.with_handle_info/2" do
+    alias OctoPi.TUI.Key
+
+    test "fires handle_info span + mailbox sample for hid_event" do
+      mono_us = System.monotonic_time(:microsecond)
+
+      result =
+        RenderTelemetry.with_handle_info({:hid_event, %Key{key: ?h}, mono_us}, fn ->
+          :handled
+        end)
+
+      assert result == :handled
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :start], _, %{kind: :hid_event}}
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :mailbox], %{message_queue_len: q},
+                       %{at: :handle_info_entry}}
+
+      assert is_integer(q) and q >= 0
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :stop], %{duration: _},
+                       %{kind: :hid_event}}
+    end
+
+    test "emits key.latency for 3-tuple hid_event" do
+      mono_us = System.monotonic_time(:microsecond) - 1_000
+
+      RenderTelemetry.with_handle_info({:hid_event, %Key{key: ?j}, mono_us}, fn -> :ok end)
+
+      assert_received {:telemetry, [:octo_pi_tui, :key, :latency], %{duration_us: dur}, meta}
+
+      assert is_integer(dur)
+      assert dur >= 1_000
+      assert is_integer(meta.mailbox_len_at_arrival)
+    end
+
+    test "no key.latency for 2-tuple hid_event (legacy)" do
+      RenderTelemetry.with_handle_info({:hid_event, %Key{key: ?k}}, fn -> :ok end)
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :start], _, %{kind: :hid_event}}
+
+      refute_received {:telemetry, [:octo_pi_tui, :key, :latency], _, _}
+    end
+
+    test "kind metadata for :octo_pi_agent_event" do
+      RenderTelemetry.with_handle_info({:octo_pi_agent_event, :anything}, fn -> :ok end)
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :start], _, %{kind: :octo_pi_agent_event}}
+    end
+
+    test "kind metadata for :timeout" do
+      RenderTelemetry.with_handle_info(:timeout, fn -> :ok end)
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :start], _, %{kind: :timeout}}
+    end
+
+    test "kind metadata for :other catch-all" do
+      RenderTelemetry.with_handle_info({:something_unexpected, "x"}, fn -> :ok end)
+
+      assert_received {:telemetry, [:octo_pi_tui, :interactive, :handle_info, :start], _, %{kind: :other}}
+    end
+  end
+end

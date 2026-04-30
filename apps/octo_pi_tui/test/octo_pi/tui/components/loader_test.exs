@@ -43,15 +43,17 @@ defmodule OctoPi.TUI.Components.LoaderTest do
       assert line =~ "X" or line =~ "Y"
     end
 
-    test "renders cancel hint when cancellable" do
-      loader = Loader.new(cancellable: true)
-      lines = Loader.render(loader, 40)
-      assert Enum.any?(lines, &(&1 =~ "Esc"))
+    test "does not add a separate cancel-hint line (upstream parity: hint is inline in message)" do
+      loader = Loader.new(message: "Working... (Esc to cancel)", cancellable: true)
+      lines = Loader.render(loader, 80)
+      joined = Enum.join(lines, "\n")
+      esc_count = joined |> String.split("Esc") |> length() |> Kernel.-(1)
+      assert esc_count == 1, "expected exactly 1 'Esc' occurrence, got #{esc_count}: #{inspect(lines)}"
     end
 
-    test "no cancel hint when not cancellable" do
-      loader = Loader.new(cancellable: false)
-      lines = Loader.render(loader, 40)
+    test "no cancel hint rendered when cancellable but message has none" do
+      loader = Loader.new(message: "Working...", cancellable: true)
+      lines = Loader.render(loader, 80)
       refute Enum.any?(lines, &(&1 =~ "Esc"))
     end
 
