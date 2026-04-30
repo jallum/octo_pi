@@ -5,7 +5,8 @@
     "opi-4dx.1"
   ],
   "blocks": [
-    "opi-4dx.3"
+    "opi-4dx.3",
+    "opi-4dx.4"
   ],
   "comments": [],
   "created": "2026-04-30T13:48:27.822170Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Spike: characterize the streaming-render bottleneck from a tmux trace",
   "type": "task",
-  "updated_at": "2026-04-30T14:04:20.252230Z"
+  "updated_at": "2026-04-30T14:04:25.382994Z"
 }
