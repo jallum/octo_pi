@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-4dx.10"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-30T17:48:16.092255Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Re-trace and validate the redesign",
   "type": "task",
-  "updated_at": "2026-04-30T17:48:16.092255Z"
+  "updated_at": "2026-04-30T17:48:52.958897Z"
 }
