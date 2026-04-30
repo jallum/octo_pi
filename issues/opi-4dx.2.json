@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-4dx.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-4dx.3"
+  ],
   "comments": [],
   "created": "2026-04-30T13:48:27.822170Z",
   "description": "Use the telemetry from opi-4dx.1 to confirm — with numbers — what's actually slow during streaming. Outcome decides which follow-up tickets are needed under this epic.\n\n## Setup\n\n- Run `mix pi` in tmux.\n- Tracer's `FileBackend` writes to `.pi/trace.log`.\n- Trigger a long streaming response (~4–8 KB of mixed prose + code fences). Type continuously while it streams.\n- Capture one full turn's trace.\n\n## Analyses\n\n1. **Per-message-kind handle_info duration** — distribution of `[:octo_pi_tui, :interactive, :handle_info]` split by `kind`. Median + p99 for `:octo_pi_agent_event`.\n2. **Markdown render scaling** — scatter `markdown.render.duration` vs `text_bytes`. Linear, super-linear, or flat?\n3. **Key latency vs mailbox depth** — scatter `key.latency.duration_us` vs `mailbox_len_at_arrival`. Confirms or refutes head-of-line blocking.\n4. **Transcript-render cost vs message count** — does cost grow with `msg_count` (full conversation) or only with the streaming message's `text_bytes`?\n\n## Decision criteria\n\n- p99 `:octo_pi_agent_event` < ~5 ms → no bottleneck; close the epic.\n- `markdown.render` grows with streaming-message `text_bytes` → schedule the incremental-lexer ticket (opi-4dx.3).\n- `transcript.render` grows with `msg_count` independent of streaming → schedule the per-message line cache ticket.\n- Mailbox depth correlates with key latency → confirms HOL hypothesis; the pull-tick coalescing ticket is justified.\n\n## Output\n\n- A short note with the four plots/tables and one paragraph naming the bottleneck.\n- Concrete tickets opened (or unblocked) under this epic for whichever fixes the data points to.\n- A baseline of `key.latency` p50/p99 and `markdown.render` p99 — the bar any fix must clear.\n\n## Constraints\n\n- No code changes to the render path during this spike — collect and analyze only.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Spike: characterize the streaming-render bottleneck from a tmux trace",
   "type": "task",
-  "updated_at": "2026-04-30T14:03:24.074508Z"
+  "updated_at": "2026-04-30T14:04:20.252230Z"
 }

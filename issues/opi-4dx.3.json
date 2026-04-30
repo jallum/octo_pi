@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-4dx.2"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-30T14:03:39.259689Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Pull-tick render coalescing in Interactive",
   "type": "task",
-  "updated_at": "2026-04-30T14:03:39.259689Z"
+  "updated_at": "2026-04-30T14:04:20.252230Z"
 }
