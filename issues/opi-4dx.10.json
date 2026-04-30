@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-4dx.6"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-04-30T17:47:58.173252Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Wire-up: Interactive uses Transcript; thread agent ids end-to-end",
   "type": "task",
-  "updated_at": "2026-04-30T17:47:58.173252Z"
+  "updated_at": "2026-04-30T17:48:32.957136Z"
 }
