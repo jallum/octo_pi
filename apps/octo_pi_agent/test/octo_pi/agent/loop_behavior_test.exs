@@ -409,6 +409,113 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       users = Enum.filter(msgs, &match?(%User{}, &1))
       assert Enum.map(users, & &1.content) == ["go", "midway note"]
     end
+
+    # Steer a message *before* prompt() is called. Upstream's runLoop
+    # drains steering before the very first stream call (agent-loop.ts
+    # L165). Octo_pi previously only drained on :tool_use turns, so a
+    # pre-prompt steer was stranded across a single-turn run.
+    test "steered messages enqueued before prompt land in turn 1's transcript" do
+      final = assistant([%Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.steer(loop, "steer-pre")
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      assert Enum.map(users, & &1.content) == ["go", "steer-pre"]
+    end
+
+    # Steer during a streaming non-tool turn. Upstream's inner-loop
+    # tail (agent-loop.ts L208) drains steering after every turn and
+    # re-enters the inner loop if any items arrived, regardless of
+    # stop_reason. Octo_pi previously only drained on :tool_use, so
+    # a steer mid-stream of a :stop turn was stranded.
+    test "steered messages during a non-tool streaming turn run as a follow-up turn" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.steer(loop, "steer-mid")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      assert Enum.map(users, & &1.content) == ["go", "steer-mid"]
+    end
+
+    # When BOTH steering and follow-up are queued at a non-tool stop,
+    # steering takes precedence: upstream's inner-loop tail drains
+    # steering before falling through to the outer follow-up check
+    # (agent-loop.ts L208 + L222).
+    test "steering takes precedence over follow_up at non-tool stop" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+      third = assistant([%Text{text: "third"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: third}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.follow_up(loop, "fup-after")
+      :ok = OctoPi.Agent.steer(loop, "steer-first")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      # steer drained at end of turn 1 → "steer-first" runs as turn 2;
+      # turn 2 is a non-tool stop with empty steering → outer loop
+      # picks up follow_up → "fup-after" runs as turn 3.
+      assert Enum.map(users, & &1.content) == ["go", "steer-first", "fup-after"]
+    end
   end
 
   describe "follow-up queue drainage" do

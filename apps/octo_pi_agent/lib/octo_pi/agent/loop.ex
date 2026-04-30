@@ -313,7 +313,12 @@ defmodule OctoPi.Agent.Loop do
         compaction_overflow_attempted?: false
     }
 
-    advance(%{store | loop: loop, turn_id: 0}, :prompt_received)
+    # Parity with upstream agent-loop.ts: drain any steering messages
+    # enqueued before the run started (e.g. user typed while waiting)
+    # so they're injected before the very first LLM call. See L165 in
+    # tmp/pi-mono/packages/agent/src/agent-loop.ts.
+    store = drain_steering_into_messages(%{store | loop: loop, turn_id: 0})
+    advance(store, :prompt_received)
   end
 
   # Feed an event into Turn, then execute the returned action list
@@ -503,27 +508,56 @@ defmodule OctoPi.Agent.Loop do
   defp decide_next(reason, store) when reason in [:error, :aborted], do: {:terminate, store}
 
   defp decide_next(:tool_use, store) do
-    {steers, q} = PendingMessageQueue.drain(store.loop.steering_queue)
-
-    store =
-      store
-      |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
-      |> put_in(
-        [Access.key(:loop), Access.key(:messages)],
-        prepend_oldest_first(store.loop.messages, steers)
-      )
-
-    {:continue, store}
+    # Tool-use turn always continues. Drain any steering messages
+    # enqueued during this turn so they're injected before the next
+    # LLM call (parity with agent-loop.ts L208 inner-loop tail).
+    {:continue, drain_steering_into_messages(store)}
   end
 
   defp decide_next(_terminal_reason, store) do
-    {followups, q} = PendingMessageQueue.drain(store.loop.follow_up_queue)
+    # Non-tool terminal stop. Upstream's inner loop drains steering
+    # at the tail of every iteration; if any items arrived, the inner
+    # loop continues for another turn before falling through to the
+    # outer follow-up check (agent-loop.ts L164,208,221). So steering
+    # takes precedence over follow_up here.
+    case PendingMessageQueue.drain(store.loop.steering_queue) do
+      {[], _} ->
+        drain_follow_up_into_messages(store)
 
-    case followups do
-      [] ->
+      {steers, q} ->
+        store =
+          store
+          |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
+          |> put_in(
+            [Access.key(:loop), Access.key(:messages)],
+            prepend_oldest_first(store.loop.messages, steers)
+          )
+
+        {:continue, store}
+    end
+  end
+
+  # Drain the steering queue (using its configured drainage mode) and
+  # prepend the items to the transcript. Returns the updated store.
+  defp drain_steering_into_messages(store) do
+    {steers, q} = PendingMessageQueue.drain(store.loop.steering_queue)
+
+    store
+    |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
+    |> put_in(
+      [Access.key(:loop), Access.key(:messages)],
+      prepend_oldest_first(store.loop.messages, steers)
+    )
+  end
+
+  # Drain the follow-up queue. If any items arrived, prepend and
+  # signal `:continue`; otherwise `:terminate`.
+  defp drain_follow_up_into_messages(store) do
+    case PendingMessageQueue.drain(store.loop.follow_up_queue) do
+      {[], _} ->
         {:terminate, store}
 
-      msgs ->
+      {msgs, q} ->
         store =
           store
           |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], q)
