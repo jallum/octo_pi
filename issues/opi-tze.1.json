@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T12:06:27Z",
+  "description": "**Repro (.pi/tmp/queue-test/probe_queue.exs)**\n- Start an Agent loop with FakeTransport scripted to a single text-only turn.\n- Call OctoPi.Agent.steer(loop, \\\"steer-1\\\") **before** prompt().\n- Call OctoPi.Agent.prompt(loop, \\\"user-1\\\"); wait_for_idle.\n- Inspect Agent.state(loop).messages — only the user prompt and assistant\n  reply are present. \\\"steer-1\\\" is missing from the transcript.\n- Agent.drain_steering(loop) still returns the queued message — it never\n  got injected.\n\n**Upstream behavior (tmp/pi-mono/packages/agent/src/agent-loop.ts)**\n\\`\\`\\`\nasync function runLoop(...) {\n  let firstTurn = true;\n  // Check for steering messages at start (user may have typed while waiting)\n  let pendingMessages = (await config.getSteeringMessages?.()) || [];   // ← L165\n\n  while (true) {\n    let hasMoreToolCalls = true;\n    while (hasMoreToolCalls || pendingMessages.length \u003e 0) {\n      ...\n      // Stream assistant response\n      const message = await streamAssistantResponse(...);\n      ...\n      pendingMessages = (await config.getSteeringMessages?.()) || [];   // ← L208\n    }\n    ...\n  }\n}\n\\`\\`\\`\n\nUpstream drains steering BEFORE the first LLM call and AFTER every turn,\nregardless of stop reason.\n\n**Octo_pi behavior (apps/octo_pi_agent/lib/octo_pi/agent/loop.ex)**\n- start_run/1 (L290-…) advances directly into :prompt_received without\n  draining the steering queue.\n- decide_next/2 only drains steering on :tool_use:\n  \\`\\`\\`elixir\n  defp decide_next(:tool_use, store) do\n    {steers, q} = PendingMessageQueue.drain(store.loop.steering_queue)\n    ...\n  end\n  \\`\\`\\`\n- For all other stop reasons (:stop, :max_tokens, :error, :aborted) only\n  the follow-up queue is consulted. Steering messages are stranded.\n\n**Fix sketch**\n- In start_run/1 (or just before the very first :prompt_received advance),\n  drain the steering queue and prepend the items to messages.\n- In decide_next/2, also drain steering for :stop / non-tool terminal stops\n  *before* consulting follow_up_queue. Behaves like upstream's\n  \\\"check steering after every turn\\\" then \\\"check follow-up only at outer loop\\\".",
+  "id": "opi-tze.1",
+  "labels": [],
+  "parent": "opi-tze",
+  "priority": 1,
+  "status": "open",
+  "title": "[BUG] Steering queue not drained at run start or after non-tool turns",
+  "type": "bug",
+  "updated_at": "2026-04-30T12:06:27Z"
+}
