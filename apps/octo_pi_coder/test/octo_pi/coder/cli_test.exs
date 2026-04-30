@@ -264,7 +264,7 @@ defmodule OctoPi.Coder.CLITest do
                "agent_start",
                "turn_start",
                "message_start",
-               "message_update",
+               "message_block_delta",
                "message_end",
                "turn_end",
                "agent_end"

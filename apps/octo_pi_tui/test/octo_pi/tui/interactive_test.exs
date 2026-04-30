@@ -710,42 +710,32 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — agent events" do
-    test "MessageUpdate appends a streaming assistant entry" do
+    test "MessageBlockDelta appends a streaming assistant entry" do
       s = %Interactive{}
-
-      partial = %Assistant{
-        content: [%Content.Text{text: "hello"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0
-      }
 
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hello", snapshot: "hello"}}
         )
 
       assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
     end
 
-    test "subsequent MessageUpdates replace the streaming entry's text" do
+    test "subsequent MessageBlockDeltas replace the streaming entry's text" do
       existing = AssistantMessage.new(nil, content: [text: "he"])
-      s = %Interactive{transcript: [existing]}
 
-      partial = %Assistant{
-        content: [%Content.Text{text: "hello"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0
+      s = %Interactive{
+        transcript: [existing],
+        streaming_blocks: %{order: [0], data: %{0 => {:text, "he"}}}
       }
 
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "llo", snapshot: "hello"}}
         )
 
       assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
@@ -834,18 +824,16 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{transcript: [msg1, te]}
 
       # Turn 2: model responds with new text after tool results
-      partial = %Assistant{
-        content: [%Content.Text{text: "here is the answer"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0
-      }
-
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{
+             block_id: 0,
+             kind: :text,
+             delta: "here is the answer",
+             snapshot: "here is the answer"
+           }}
         )
 
       # The continuation text must be a NEW entry BELOW the tool, not
@@ -870,24 +858,22 @@ defmodule OctoPi.TUI.InteractiveTest do
     # must treat the previous turn's finalized assistant as a boundary;
     # otherwise the next turn's MessageUpdate finds it via
     # find_last_assistant and overwrites it with the new turn's partial.
-    test "MessageUpdate after a finalized assistant appends a new entry" do
+    test "MessageBlockDelta after a finalized assistant appends a new entry" do
       finalized =
         AssistantMessage.new(nil, content: [text: "first reply"], finalized?: true)
 
       s = %Interactive{transcript: [{:user, "first prompt"}, finalized]}
 
-      partial = %Assistant{
-        content: [%Content.Text{text: "second"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0
-      }
-
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{
+             block_id: 0,
+             kind: :text,
+             delta: "second",
+             snapshot: "second"
+           }}
         )
 
       # First-turn assistant preserved, new partial appended.
@@ -943,7 +929,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: %{partial2 | content: [%Content.Text{text: "r1"}]}}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{
+             block_id: 0,
+             kind: :text,
+             delta: "r1",
+             snapshot: "r1"
+           }}
         )
 
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg1}})
@@ -952,7 +944,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       s =
         Interactive.handle_event(
           s,
-          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial2}}
+          {:octo_pi_agent_event,
+           %Event.MessageBlockDelta{
+             block_id: 0,
+             kind: :text,
+             delta: "r2",
+             snapshot: "r2"
+           }}
         )
 
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg2}})
@@ -1219,6 +1217,76 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{loader: nil}
       s2 = Interactive.handle_event(s, :loader_tick)
       assert s2 == s
+    end
+  end
+
+  describe "spinner animation (opi-owj.2)" do
+    test "handle_info(:timeout) reschedules an 80ms timeout while loader is set" do
+      loader = Loader.new(message: "Working...")
+
+      s = %Interactive{
+        loader: loader,
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 40,
+        render_loop: self()
+      }
+
+      assert {:noreply, _new_state, 80} = Interactive.handle_info(:timeout, s)
+    end
+
+    test "handle_info(:timeout) emits a render to render_loop with a spinner frame" do
+      loader = Loader.new(message: "Working...", frames: ["X", "Y", "Z"])
+
+      s = %Interactive{
+        loader: loader,
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 40,
+        render_loop: self()
+      }
+
+      Interactive.handle_info(:timeout, s)
+      assert_receive {:render, lines, _cursor}, 100
+      text = Enum.join(lines, "\n")
+      assert text =~ ~r/[XYZ] Working\.\.\./
+    end
+
+    test "consecutive ticks animate the spinner frame" do
+      loader = Loader.new(message: "Working...", frames: ["A", "B", "C", "D", "E"])
+
+      s = %Interactive{
+        loader: loader,
+        transcript: [],
+        input: %Input{value: "", cursor: 0},
+        width: 80,
+        height: 40,
+        render_loop: self()
+      }
+
+      Interactive.handle_info(:timeout, s)
+      assert_receive {:render, lines1, _}, 100
+      Process.sleep(90)
+      Interactive.handle_info(:timeout, s)
+      assert_receive {:render, lines2, _}, 100
+
+      frame_of = fn lines ->
+        lines
+        |> Enum.join("\n")
+        |> then(&Regex.run(~r/([A-E]) Working\.\.\./, &1))
+        |> case do
+          [_, ch] -> ch
+          _ -> nil
+        end
+      end
+
+      f1 = frame_of.(lines1)
+      f2 = frame_of.(lines2)
+      assert f1 in ~w(A B C D E)
+      assert f2 in ~w(A B C D E)
+      assert f1 != f2, "expected spinner frame to advance between ticks (got #{inspect(f1)} -> #{inspect(f2)})"
     end
   end
 

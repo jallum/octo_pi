@@ -35,7 +35,9 @@ defmodule OctoPi.AgentTest do
       assert %Event.TurnStart{turn: 1}
       assert %Event.TurnEnd{turn: 1}
       assert %Event.MessageStart{partial: partial}
-      assert %Event.MessageUpdate{partial: partial}
+      assert %Event.MessageBlockStart{block_id: 0, kind: :text}
+      assert %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hi", snapshot: "hi"}
+      assert %Event.MessageBlockEnd{block_id: 0, kind: :text, content: "hi"}
       assert %Event.MessageEnd{message: partial}
       assert %Event.ToolExecutionStart{tool_call_id: "x", tool_name: "echo"}
 

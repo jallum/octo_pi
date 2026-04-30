@@ -65,10 +65,13 @@ defmodule OctoPi.Agent.Turn.Worker do
   def stream(parent, ref, %{context: ctx, model: model, transport: transport}) do
     {:ok, producer_pid} = transport.stream_to(model, ctx, [], self())
 
+    final_assistant =
+      receive_stream(parent, ref, producer_pid, %{partial: nil, snapshots: %{}})
+
     assistant =
-      case receive_stream(parent, ref, producer_pid, nil) do
+      case final_assistant do
         %Assistant{stop_reason: r} = a when not is_nil(r) -> a
-        _partial_or_nil -> truncated_stream_assistant(model)
+        _ -> truncated_stream_assistant(model)
       end
 
     send(parent, {:stream_done, ref, assistant})
@@ -85,38 +88,106 @@ defmodule OctoPi.Agent.Turn.Worker do
         receive_stream(parent, ref, producer_pid, handle_ai_event(parent, ref, event, acc))
 
       {^producer_pid, :done} ->
-        acc
+        acc.partial
     end
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.Start{partial: p}, _acc) do
+  defp handle_ai_event(parent, ref, %AIEvent.Start{partial: p}, acc) do
     send(parent, {:agent_event, ref, %Event.MessageStart{partial: p}})
-    p
+    %{acc | partial: p}
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.TextDelta{partial: p}, _acc) do
-    send(parent, {:agent_event, ref, %Event.MessageUpdate{partial: p}})
-    p
+  defp handle_ai_event(parent, ref, %AIEvent.TextStart{content_index: idx}, acc) do
+    send(parent, {:agent_event, ref, %Event.MessageBlockStart{block_id: idx, kind: :text}})
+    %{acc | snapshots: Map.put(acc.snapshots, idx, "")}
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.ThinkingDelta{partial: p}, _acc) do
-    send(parent, {:agent_event, ref, %Event.MessageUpdate{partial: p}})
-    p
+  defp handle_ai_event(parent, ref, %AIEvent.TextDelta{content_index: idx, delta: delta, partial: p}, acc) do
+    snapshot = Map.get(acc.snapshots, idx, "") <> delta
+
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockDelta{block_id: idx, kind: :text, delta: delta, snapshot: snapshot}}
+    )
+
+    %{acc | partial: p, snapshots: Map.put(acc.snapshots, idx, snapshot)}
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.ToolCallDelta{partial: p}, _acc) do
-    send(parent, {:agent_event, ref, %Event.MessageUpdate{partial: p}})
-    p
+  defp handle_ai_event(parent, ref, %AIEvent.TextEnd{content_index: idx, content: content}, acc) do
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockEnd{block_id: idx, kind: :text, content: content}}
+    )
+
+    %{acc | snapshots: Map.put(acc.snapshots, idx, content)}
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.Done{message: msg}, _acc) do
+  defp handle_ai_event(parent, ref, %AIEvent.ThinkingStart{content_index: idx}, acc) do
+    send(parent, {:agent_event, ref, %Event.MessageBlockStart{block_id: idx, kind: :thinking}})
+    %{acc | snapshots: Map.put(acc.snapshots, idx, "")}
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.ThinkingDelta{content_index: idx, delta: delta, partial: p}, acc) do
+    snapshot = Map.get(acc.snapshots, idx, "") <> delta
+
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockDelta{block_id: idx, kind: :thinking, delta: delta, snapshot: snapshot}}
+    )
+
+    %{acc | partial: p, snapshots: Map.put(acc.snapshots, idx, snapshot)}
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.ThinkingEnd{content_index: idx, content: content}, acc) do
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockEnd{block_id: idx, kind: :thinking, content: content}}
+    )
+
+    %{acc | snapshots: Map.put(acc.snapshots, idx, content)}
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.ToolCallStart{content_index: idx}, acc) do
+    send(parent, {:agent_event, ref, %Event.MessageBlockStart{block_id: idx, kind: :tool_call}})
+    %{acc | snapshots: Map.put(acc.snapshots, idx, "")}
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.ToolCallDelta{content_index: idx, delta: delta, partial: p}, acc) do
+    snapshot = Map.get(acc.snapshots, idx, "") <> delta
+
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockDelta{block_id: idx, kind: :tool_call, delta: delta, snapshot: snapshot}}
+    )
+
+    %{acc | partial: p, snapshots: Map.put(acc.snapshots, idx, snapshot)}
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.ToolCallEnd{content_index: idx}, acc) do
+    content = Map.get(acc.snapshots, idx, "")
+
+    send(
+      parent,
+      {:agent_event, ref,
+       %Event.MessageBlockEnd{block_id: idx, kind: :tool_call, content: content}}
+    )
+
+    acc
+  end
+
+  defp handle_ai_event(parent, ref, %AIEvent.Done{message: msg}, acc) do
     send(parent, {:agent_event, ref, %Event.MessageEnd{message: msg}})
-    msg
+    %{acc | partial: msg}
   end
 
-  defp handle_ai_event(parent, ref, %AIEvent.Error{message: msg}, _acc) do
+  defp handle_ai_event(parent, ref, %AIEvent.Error{message: msg}, acc) do
     send(parent, {:agent_event, ref, %Event.MessageEnd{message: msg}})
-    msg
+    %{acc | partial: msg}
   end
 
   defp handle_ai_event(_parent, _ref, _other, acc), do: acc

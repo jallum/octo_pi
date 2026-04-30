@@ -176,17 +176,40 @@ defmodule OctoPi.Coder.Modes.RpcTest do
                Rpc.event_to_json(%Event.TurnEnd{turn: 3})
     end
 
-    test "MessageUpdate carries current full assistant text" do
-      partial = %Assistant{
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0,
-        content: [%Content.Text{text: "hello"}]
-      }
+    test "MessageBlockStart carries block_id + kind" do
+      json =
+        Rpc.event_to_json(%Event.MessageBlockStart{block_id: 0, kind: :text})
 
-      json = Rpc.event_to_json(%Event.MessageUpdate{partial: partial})
-      assert json["data"]["text"] == "hello"
+      assert json["event"] == "message_block_start"
+      assert json["data"] == %{"block_id" => 0, "kind" => "text"}
+    end
+
+    test "MessageBlockDelta carries delta + snapshot" do
+      json =
+        Rpc.event_to_json(%Event.MessageBlockDelta{
+          block_id: 0,
+          kind: :text,
+          delta: "lo",
+          snapshot: "hello"
+        })
+
+      assert json["event"] == "message_block_delta"
+      assert json["data"]["block_id"] == 0
+      assert json["data"]["kind"] == "text"
+      assert json["data"]["delta"] == "lo"
+      assert json["data"]["snapshot"] == "hello"
+    end
+
+    test "MessageBlockEnd carries final content" do
+      json =
+        Rpc.event_to_json(%Event.MessageBlockEnd{
+          block_id: 0,
+          kind: :text,
+          content: "hello"
+        })
+
+      assert json["event"] == "message_block_end"
+      assert json["data"] == %{"block_id" => 0, "kind" => "text", "content" => "hello"}
     end
 
     test "MessageEnd carries finalized text + stop_reason" do

@@ -63,54 +63,32 @@ defmodule Mix.Tasks.Agent.Demo do
     loop_until_end("")
   end
 
-  # `printed` tracks how much of the current partial assistant's
-  # text we've already written to stdout so each MessageUpdate only
-  # prints the new delta. It resets to "" when the assistant message
-  # ends.
-  defp loop_until_end(printed) do
+  defp loop_until_end(_unused) do
     receive do
-      {:octo_pi_agent_event, %Event.MessageUpdate{partial: p}} ->
-        loop_until_end(print_latest_text_delta(p, printed))
-
-      {:octo_pi_agent_event, %Event.MessageEnd{}} ->
-        loop_until_end("")
+      {:octo_pi_agent_event, %Event.MessageBlockDelta{kind: :text, delta: delta}} ->
+        IO.write(delta)
+        loop_until_end(nil)
 
       {:octo_pi_agent_event, %Event.ToolExecutionStart{tool_name: name}} ->
         IO.write("\n[tool_use: #{name}] ")
-        loop_until_end(printed)
+        loop_until_end(nil)
 
       {:octo_pi_agent_event, %Event.ToolExecutionEnd{result: result}} ->
         text = Enum.map_join(result.content, "", fn %Content.Text{text: t} -> t end)
         IO.write("<- #{text}\n")
-        loop_until_end(printed)
+        loop_until_end(nil)
 
       {:octo_pi_agent_event, %Event.AgentEnd{reason: reason}} ->
         IO.write("\n\n-- stop: #{reason}\n")
 
       {:octo_pi_agent_event, _} ->
-        loop_until_end(printed)
+        loop_until_end(nil)
     after
       60_000 ->
         Mix.shell().error("\n[timeout] agent didn't finish in 60s")
         exit({:shutdown, 1})
     end
   end
-
-  defp print_latest_text_delta(%{content: content}, printed) do
-    text =
-      content
-      |> Enum.filter(&match?(%Content.Text{}, &1))
-      |> Enum.map_join("", & &1.text)
-
-    if String.starts_with?(text, printed) do
-      IO.write(String.slice(text, String.length(printed)..-1//1))
-      text
-    else
-      printed
-    end
-  end
-
-  defp print_latest_text_delta(_, printed), do: printed
 
   defp echo_tool do
     %OctoPi.Agent.Tool{

@@ -129,7 +129,11 @@ defmodule OctoPi.TUI.Interactive do
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
-          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
+          streaming_blocks: %{
+            order: [non_neg_integer()],
+            data: %{non_neg_integer() => {atom(), binary()}}
+          }
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
@@ -181,7 +185,8 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
-            focused_component: :input
+            focused_component: :input,
+            streaming_blocks: %{order: [], data: %{}}
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -1058,6 +1063,28 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader_stash: state.loader, loader: new_loader, is_compacting?: true}
   end
 
+  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{result: {:ok, data}} = ev}) do
+    Terminal.set_progress(state.terminal, false)
+    theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())
+
+    csm =
+      TUICSM.new(
+        CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now())),
+        theme
+      )
+
+    state = %{
+      state
+      | loader: state.loader_stash,
+        loader_stash: nil,
+        is_compacting?: false,
+        transcript: state.transcript ++ [csm],
+        footer: update_footer(state.footer, ev)
+    }
+
+    flush_compaction_queue(state)
+  end
+
   def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
     Terminal.set_progress(state.terminal, false)
 
@@ -1069,8 +1096,6 @@ defmodule OctoPi.TUI.Interactive do
         footer: update_footer(state.footer, ev)
     }
 
-    # Replay any prompts the user submitted while compacting. Mirrors
-    # upstream's `flushCompactionQueue`.
     flush_compaction_queue(state)
   end
 
@@ -1095,14 +1120,37 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do
-    theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())
-    coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now()))
-    csm = TUICSM.new(coder_msg, theme)
-    %{state | transcript: [csm]}
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageStart{} = event}) do
+    %{
+      state
+      | streaming_blocks: %{order: [], data: %{}},
+        transcript: update_transcript(state.transcript, event, state.theme)
+    }
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{}}), do: state
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockStart{block_id: id, kind: kind}}) do
+    state = put_streaming_block(state, id, kind, "")
+    %{state | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme)}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockDelta{block_id: id, kind: kind, snapshot: snapshot}}) do
+    state = put_streaming_block(state, id, kind, snapshot)
+    %{state | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme)}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockEnd{block_id: id, kind: kind, content: content}}) do
+    state = put_streaming_block(state, id, kind, content)
+    %{state | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme)}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{} = event}) do
+    %{
+      state
+      | streaming_blocks: %{order: [], data: %{}},
+        transcript: update_transcript(state.transcript, event, state.theme),
+        footer: update_footer(state.footer, event)
+    }
+  end
 
   def handle_event(state, {:octo_pi_agent_event, event}) do
     %{
@@ -1533,9 +1581,6 @@ defmodule OctoPi.TUI.Interactive do
 
   # --- transcript updates ---
 
-  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageUpdate} = ev, theme),
-    do: apply_partial(transcript, ev.partial, theme)
-
   defp update_transcript(transcript, %{__struct__: MessageEnd} = ev, theme),
     do: finalize_assistant(transcript, ev.message, theme)
 
@@ -1600,8 +1645,22 @@ defmodule OctoPi.TUI.Interactive do
 
   defp current_context_tokens(_), do: nil
 
-  defp apply_partial(transcript, partial, theme) do
-    content = extract_content_blocks(partial)
+  defp put_streaming_block(state, id, kind, snapshot) do
+    %{order: order, data: data} = state.streaming_blocks
+    order = if Enum.member?(order, id), do: order, else: order ++ [id]
+    data = Map.put(data, id, {kind, snapshot})
+    %{state | streaming_blocks: %{order: order, data: data}}
+  end
+
+  defp apply_streaming_blocks(transcript, %{order: order, data: data}, theme) do
+    content =
+      Enum.flat_map(order, fn id ->
+        case Map.get(data, id) do
+          {:text, t} -> [{:text, t}]
+          {:thinking, t} -> [{:thinking, t}]
+          _ -> []
+        end
+      end)
 
     case find_last_assistant(transcript) do
       {idx, %AssistantMessage{} = msg} ->

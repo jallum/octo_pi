@@ -57,7 +57,7 @@ defmodule OctoPi.Coder.Modes.Print do
     OctoPi.Agent.subscribe(session, self(), :async)
 
     :ok = OctoPi.Agent.prompt(session, prompt)
-    reason = loop("")
+    reason = loop()
     :ok = OctoPi.Agent.wait_for_idle(session, 60_000)
 
     case reason do
@@ -69,53 +69,33 @@ defmodule OctoPi.Coder.Modes.Print do
   defp maybe_put(kw, _, nil), do: kw
   defp maybe_put(kw, k, v), do: Keyword.put(kw, k, v)
 
-  # `printed` is how much of the current partial assistant's text
-  # has already been written to stdout.
-  defp loop(printed) do
+  defp loop do
     receive do
-      {:octo_pi_agent_event, %Event.MessageUpdate{partial: p}} ->
-        loop(print_new_text(p, printed))
-
-      {:octo_pi_agent_event, %Event.MessageEnd{}} ->
-        loop("")
+      {:octo_pi_agent_event, %Event.MessageBlockDelta{kind: :text, delta: delta}} ->
+        IO.write(delta)
+        loop()
 
       {:octo_pi_agent_event, %Event.ToolExecutionStart{tool_name: name}} ->
         IO.write("\n[tool_use: #{name}] ")
-        loop(printed)
+        loop()
 
       {:octo_pi_agent_event, %Event.ToolExecutionEnd{result: result}} ->
         text = tool_text(result)
         IO.write("<- #{text}\n")
-        loop(printed)
+        loop()
 
       {:octo_pi_agent_event, %Event.AgentEnd{reason: reason}} ->
         IO.write("\n")
         reason
 
       {:octo_pi_agent_event, _} ->
-        loop(printed)
+        loop()
     after
       60_000 ->
         IO.write("\n[timeout] agent didn't finish in 60s\n")
         :error
     end
   end
-
-  defp print_new_text(%{content: content}, printed) do
-    text =
-      content
-      |> Enum.filter(&match?(%Content.Text{}, &1))
-      |> Enum.map_join("", & &1.text)
-
-    if String.starts_with?(text, printed) do
-      IO.write(String.slice(text, String.length(printed)..-1//1))
-      text
-    else
-      printed
-    end
-  end
-
-  defp print_new_text(_, printed), do: printed
 
   defp tool_text(%{content: content}) do
     content

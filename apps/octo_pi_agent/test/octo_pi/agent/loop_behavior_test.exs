@@ -119,7 +119,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentStart{}}
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
       assert_received {:octo_pi_agent_event, %Event.MessageStart{}}
-      assert_received {:octo_pi_agent_event, %Event.MessageUpdate{}}
+      assert_received {:octo_pi_agent_event, %Event.MessageBlockDelta{kind: :text, delta: "hello"}}
       assert_received {:octo_pi_agent_event, %Event.MessageEnd{}}
       assert_received {:octo_pi_agent_event, %Event.TurnEnd{turn: 1}}
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: msgs}}

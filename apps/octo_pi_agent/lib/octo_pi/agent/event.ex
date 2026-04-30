@@ -7,7 +7,10 @@ defmodule OctoPi.Agent.Event do
 
       AgentStart
         TurnStart
-          MessageStart → many MessageUpdate → MessageEnd
+          MessageStart
+            MessageBlockStart → many MessageBlockDelta → MessageBlockEnd
+            (repeat per content block: text / thinking / tool_call)
+          MessageEnd
           ToolExecutionStart → many ToolExecutionUpdate → ToolExecutionEnd
           (repeat per tool)
         TurnEnd
@@ -20,10 +23,13 @@ defmodule OctoPi.Agent.Event do
   arrive at any time, including before `AgentStart` and after
   `AgentEnd`.
 
-  `partial` fields, where present, carry the in-progress
-  `OctoPi.AI.Message.Assistant.t()` snapshot — consumers can render
-  current state without tracking deltas themselves. `message` (on
-  `MessageEnd`, `AgentEnd`) carries the finalized shape.
+  `MessageStart`'s `partial` carries the empty Assistant skeleton
+  (model/provider metadata, no content yet). Per-chunk updates ride
+  on `MessageBlockDelta` as `{block_id, kind, delta, snapshot}` — both
+  `delta` and `snapshot` are binaries (refcounted refc binaries cross
+  processes zero-copy). `message` (on `MessageEnd`, `AgentEnd`) carries
+  the finalized full shape — the only point in the stream where a
+  full `Assistant.t()` crosses a process boundary.
 
   `ToolExecutionUpdate` carries a `Tool.Result.t()` partial — tool
   handlers can stream progress via the `on_update` callback.
@@ -40,7 +46,9 @@ defmodule OctoPi.Agent.Event do
           | Event.TurnStart.t()
           | Event.TurnEnd.t()
           | Event.MessageStart.t()
-          | Event.MessageUpdate.t()
+          | Event.MessageBlockStart.t()
+          | Event.MessageBlockDelta.t()
+          | Event.MessageBlockEnd.t()
           | Event.MessageEnd.t()
           | Event.ToolExecutionStart.t()
           | Event.ToolExecutionUpdate.t()
@@ -88,11 +96,54 @@ defmodule OctoPi.Agent.Event do
     defstruct [:partial]
   end
 
-  defmodule MessageUpdate do
-    @moduledoc "Assistant message partial snapshot mid-stream."
-    @enforce_keys [:partial]
-    @type t :: %__MODULE__{partial: Assistant.t()}
-    defstruct [:partial]
+  defmodule MessageBlockStart do
+    @moduledoc """
+    A single content block (text / thinking / tool_call) has begun
+    streaming. `block_id` is the decoder's `content_index` — a stable
+    forward-order integer per assistant message. `kind` discriminates
+    the block type.
+    """
+    @enforce_keys [:block_id, :kind]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{block_id: non_neg_integer(), kind: kind()}
+    defstruct [:block_id, :kind]
+  end
+
+  defmodule MessageBlockDelta do
+    @moduledoc """
+    An incremental chunk for a content block. `delta` is the new
+    fragment for this chunk; `snapshot` is the cumulative text of
+    *this block* so far (delta inclusive).
+
+    For `:tool_call`, `delta` is a JSON fragment and `snapshot` is
+    the accumulated partial-JSON buffer.
+
+    Both are refcounted refc binaries — zero-copy across processes.
+    """
+    @enforce_keys [:block_id, :kind, :delta, :snapshot]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{
+            block_id: non_neg_integer(),
+            kind: kind(),
+            delta: binary(),
+            snapshot: binary()
+          }
+    defstruct [:block_id, :kind, :delta, :snapshot]
+  end
+
+  defmodule MessageBlockEnd do
+    @moduledoc """
+    A content block has finished. `content` is the full accumulated
+    text (or partial-JSON buffer for `:tool_call`).
+    """
+    @enforce_keys [:block_id, :kind, :content]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{
+            block_id: non_neg_integer(),
+            kind: kind(),
+            content: binary()
+          }
+    defstruct [:block_id, :kind, :content]
   end
 
   defmodule MessageEnd do
