@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Add render-path telemetry to observe streaming keyboard latency",
   "type": "task",
-  "updated_at": "2026-04-30T14:15:14.006660Z"
+  "updated_at": "2026-04-30T18:37:22.237745Z"
 }
