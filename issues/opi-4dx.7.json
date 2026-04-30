@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Markdown renderer: \"what's still pending render?\" line emitter",
   "type": "task",
-  "updated_at": "2026-04-30T17:48:38.389341Z"
+  "updated_at": "2026-04-30T17:50:07.710367Z"
 }
