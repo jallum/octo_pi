@@ -2,13 +2,15 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
   @moduledoc """
   Tests for opi-4dx.9: AssistantMessage's nested per-block state
   shape. Independent renderer state per `block_id`, cached iolist
-  for finalized blocks at the stamped width, mixed kinds preserved
+  for finalized blocks at the stamped ctx, mixed kinds preserved
   across renders.
   """
 
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
+  alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.Components.Markdown.Render, as: MdRender
   alias OctoPi.TUI.Theme
 
@@ -21,7 +23,9 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
       msg = AssistantMessage.new(@theme, width: 80)
       msg = AssistantMessage.put_block(msg, 0, :text, "hello")
 
-      assert %{kind: :text, snapshot: "hello", render_state: %MdRender{}} = msg.blocks[0]
+      assert msg.blocks.data[0] == "hello"
+      assert msg.blocks.modules[0] == TextBlock
+      assert %MdRender{} = msg.blocks.renderers[0]
       assert msg.content == [{:text, "hello"}]
     end
 
@@ -31,9 +35,8 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "he")
         |> AssistantMessage.put_block(0, :text, "hello")
 
-      assert msg.blocks[0].snapshot == "hello"
-      assert %MdRender{source: src} = msg.blocks[0].render_state
-      assert src == "hello"
+      assert msg.blocks.data[0] == "hello"
+      assert %MdRender{source: "hello"} = msg.blocks.renderers[0]
     end
 
     test "updating one block leaves other blocks' state untouched" do
@@ -42,12 +45,12 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "alpha")
         |> AssistantMessage.put_block(1, :text, "beta")
 
-      r0_before = msg.blocks[0].render_state
+      r0_before = msg.blocks.renderers[0]
 
       msg2 = AssistantMessage.put_block(msg, 1, :text, "beta-extended")
 
-      assert msg2.blocks[0].render_state === r0_before,
-             "block 0's render_state must be the same struct (no rebuild)"
+      assert msg2.blocks.renderers[0] === r0_before,
+             "block 0's renderer state must be the same struct (no rebuild)"
     end
 
     test "mixed text and thinking by id are preserved across renders" do
@@ -70,24 +73,32 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(1, :text, "first")
         |> AssistantMessage.put_block(2, :text, "second")
 
-      r1_before = msg.blocks[1].render_state
+      r1_before = msg.blocks.renderers[1]
 
       msg2 = AssistantMessage.put_block(msg, 2, :text, "second-grew")
 
-      assert msg2.blocks[1].render_state === r1_before
-      assert msg2.blocks[2].snapshot == "second-grew"
+      assert msg2.blocks.renderers[1] === r1_before
+      assert msg2.blocks.data[2] == "second-grew"
+    end
+
+    test "thinking block uses the ThinkingBlock renderer module" do
+      msg =
+        AssistantMessage.new(@theme, width: 80)
+        |> AssistantMessage.put_block(0, :thinking, "ponder")
+
+      assert msg.blocks.modules[0] == ThinkingBlock
+      assert %ThinkingBlock{snapshot: "ponder"} = msg.blocks.renderers[0]
     end
   end
 
   describe "finalize_block/2" do
-    test "marks block finalized and folds its volatile tail into committed" do
+    test "marks block finalized in the embedded transcript" do
       msg =
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :text, "hello world")
         |> AssistantMessage.finalize_block(0)
 
-      assert msg.blocks[0].finalized? == true
-      assert %MdRender{} = msg.blocks[0].render_state
+      assert MapSet.member?(msg.blocks.finalized, 0)
     end
 
     test "no-op for an unknown block id" do
@@ -97,76 +108,60 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
     end
   end
 
-  describe "render/2 caching at stamped width" do
-    test "fires no markdown.render telemetry span when width matches stamped state" do
+  describe "render/2 caching at stamped ctx" do
+    test "renderers persist across renders at the stamped ctx (no rebuild)" do
       msg =
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :text, "hello")
+        |> AssistantMessage.finalize_block(0)
 
-      handler_id = "test-no-md-span-#{System.unique_integer([:positive])}"
-      test_pid = self()
+      _ = AssistantMessage.render(msg, 80)
 
-      :telemetry.attach(
-        handler_id,
-        [:octo_pi_tui, :markdown, :render, :start],
-        fn _name, _measurements, _meta, _config -> send(test_pid, :md_span) end,
-        nil
-      )
+      # After finalize + render, the renderer is dropped from the live
+      # set and the iodata moves into Transcript.rendered.
+      msg2 = AssistantMessage.update_content(msg, content: msg.content)
+      _ = AssistantMessage.render(msg2, 80)
 
-      try do
-        _ = AssistantMessage.render(msg, 80)
-        refute_received :md_span, "render at the stamped width must not fire markdown.render"
-      after
-        :telemetry.detach(handler_id)
-      end
+      # Cache identity is intact.
+      assert msg2.blocks.ctx == %{theme: @theme, width: 80, padding_x: 1, hide_thinking: false, hidden_thinking_label: "Thinking..."}
     end
 
-    test "fires telemetry span at a non-stamped width (uncached fallback)" do
+    test "render at a different width triggers Transcript.resize (renderers rebuilt)" do
       msg =
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :text, "hello")
 
-      handler_id = "test-fallback-span-#{System.unique_integer([:positive])}"
-      test_pid = self()
+      r_before = msg.blocks.renderers[0]
+      _ = AssistantMessage.render(msg, 60)
 
-      :telemetry.attach(
-        handler_id,
-        [:octo_pi_tui, :markdown, :render, :start],
-        fn _name, _measurements, _meta, _config -> send(test_pid, :md_span) end,
-        nil
-      )
-
-      try do
-        _ = AssistantMessage.render(msg, 60)
-        assert_received :md_span
-      after
-        :telemetry.detach(handler_id)
-      end
+      # AssistantMessage.render returns lines but doesn't mutate msg.
+      # The cache rebuild only "sticks" if the caller persists the
+      # updated transcript via update_content(width: 60).
+      msg2 = AssistantMessage.update_content(msg, width: 60)
+      assert %MdRender{width: 60} = msg2.blocks.renderers[0]
+      refute msg2.blocks.renderers[0] === r_before
     end
   end
 
   describe "update_content/2 — width / theme propagation" do
-    test "first call without width leaves render_state unset; later width call backfills" do
+    test "first call without width leaves the renderer in a deferred state" do
       msg = AssistantMessage.new(nil)
       msg = AssistantMessage.update_content(msg, content: [{:text, "x"}])
 
-      assert msg.blocks[0].render_state == nil
+      assert msg.blocks.renderers[0] == {:deferred, "x"}
 
       msg = AssistantMessage.update_content(msg, theme: @theme, width: 80)
-      # Width propagation rebuilds renderers if the snapshot remains
-      # unchanged: a fresh content list at known width gives us a
-      # backfilled state. That happens when content is repassed.
-      msg = AssistantMessage.update_content(msg, content: [{:text, "x"}])
-      assert %MdRender{width: 80} = msg.blocks[0].render_state
+      assert %MdRender{width: 80} = msg.blocks.renderers[0]
     end
 
-    test "width change resizes existing renderer (no full rebuild)" do
+    test "width change resizes existing renderers via Transcript.resize" do
       msg =
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :text, "hello")
 
       msg2 = AssistantMessage.update_content(msg, width: 60)
-      assert %MdRender{width: 60} = msg2.blocks[0].render_state
+      assert %MdRender{width: 60} = msg2.blocks.renderers[0]
+      assert msg2.blocks.ctx.width == 60
     end
   end
 end

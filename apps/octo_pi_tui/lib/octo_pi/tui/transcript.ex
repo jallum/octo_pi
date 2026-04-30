@@ -1,59 +1,63 @@
 defmodule OctoPi.TUI.Transcript do
   @moduledoc """
-  Stable-cell render state for a transcript of streamed entries.
+  Stable-cell render state for an append-only transcript.
 
   An "entry" is opaque — text, thinking, tool call, anything. Each
   entry has a stable `id`, a piece of canonical `data`, and a
-  `Renderer`-behaviour module that turns a state + theme + width
-  into iodata.
+  `Renderer`-behaviour module that turns its state into iodata.
+
+  A render context (`ctx`) — an opaque caller-defined map — is held
+  on the struct and threaded into `Renderer.new/2`. Concretely
+  callers pass `%{theme: ..., width: ..., ...}`. When the ctx
+  changes, every renderer is rebuilt via `mod.new(entry, new_ctx)`.
 
   Order is append-only with one mutable slot at a time; entries
-  never move once added. The struct is shaped for O(1) append and
-  O(pending) per-entry render — finalized entries hit a cache.
+  never move once added. Render is O(pending) per streaming entry
+  and O(1) per finalized entry — finalized entries hit a cache.
 
   Internal layout:
 
       %Transcript{
         order:     [id, ...],          # newest-head; append by [id | order]
-        data:      %{id => entry},     # current value for every entry
-        modules:   %{id => mod},       # renderer module per entry
+        data:      %{id => entry},     # current value per slot
+        modules:   %{id => mod},       # renderer module per slot
         renderers: %{id => state},     # only present while pending render
-        finalized: MapSet of ids that have been finalized
-        rendered:  %{id => iodata()}   # cached output per entry
+        finalized: MapSet of finalized ids
+        rendered:  %{id => iodata()}   # cached output per slot
+        ctx:       term() | nil        # current render context
       }
-
-  Lifecycle: `append` → many `update` → `finalize`. Each transition
-  feeds the renderer; `render/3` materializes pending state into
-  `rendered` and drops finalized renderers from `renderers`. After
-  finalize + one render, that entry is fully cached — subsequent
-  renders emit it verbatim.
   """
 
   defmodule Renderer do
     @moduledoc """
-    Behaviour for entry-level renderers. Transcript dispatches every
-    chunk through these callbacks; it knows nothing about entry
-    kinds.
+    Behaviour for entry-level renderers. The Transcript dispatches
+    every chunk through these callbacks; it knows nothing about
+    entry kinds.
 
-    `new/1` must produce a state fully derivable from `entry` — the
-    Transcript replays it on `resize/3` without any history.
+    `new/2` receives the entry and the Transcript's current `ctx`
+    (typically `%{theme: ..., width: ..., ...}`). The state is
+    expected to be self-contained — `to_iolist/1` takes no extra
+    args. When `ctx` changes, Transcript discards the renderer and
+    calls `new/2` again with the new context.
     """
 
-    @callback new(entry :: term()) :: state :: term()
+    @callback new(entry :: term(), ctx :: term()) :: state :: term()
     @callback put(state :: term(), entry :: term()) :: state :: term()
     @callback finalize(state :: term(), entry :: term()) :: state :: term()
-    @callback to_iolist(state :: term(), theme :: term(), width :: pos_integer()) :: iodata()
+    @callback to_iolist(state :: term()) :: iodata()
   end
 
   @type id :: term()
   @type entry :: term()
+  @type ctx :: term()
   @type t :: %__MODULE__{
           order: [id()],
           data: %{id() => entry()},
           modules: %{id() => module()},
           renderers: %{id() => term()},
           finalized: MapSet.t(),
-          rendered: %{id() => iodata()}
+          rendered: %{id() => iodata()},
+          ctx: ctx()
         }
 
   defstruct order: [],
@@ -61,10 +65,11 @@ defmodule OctoPi.TUI.Transcript do
             modules: %{},
             renderers: %{},
             finalized: MapSet.new(),
-            rendered: %{}
+            rendered: %{},
+            ctx: nil
 
-  @spec new() :: t()
-  def new, do: %__MODULE__{}
+  @spec new(ctx()) :: t()
+  def new(ctx \\ nil), do: %__MODULE__{ctx: ctx}
 
   @doc "Append a new entry. `mod` must implement `Renderer`."
   @spec append(t(), id(), entry(), module()) :: t()
@@ -74,7 +79,7 @@ defmodule OctoPi.TUI.Transcript do
       | order: [id | t.order],
         data: Map.put(t.data, id, entry),
         modules: Map.put(t.modules, id, mod),
-        renderers: Map.put(t.renderers, id, mod.new(entry))
+        renderers: Map.put(t.renderers, id, mod.new(entry, t.ctx))
     }
   end
 
@@ -87,7 +92,7 @@ defmodule OctoPi.TUI.Transcript do
   end
 
   @doc """
-  Finalize an entry. The next `render/3` will materialize its iodata
+  Finalize an entry. The next `render/2` will materialize its iodata
   into `rendered` and drop the renderer.
   """
   @spec finalize(t(), id(), entry()) :: t()
@@ -104,20 +109,27 @@ defmodule OctoPi.TUI.Transcript do
   end
 
   @doc """
-  Render the transcript at `theme` × `width`. Returns the emitted
-  iodata (oldest-first) and the updated transcript: pending renderers
-  are folded into `rendered`, and finalized renderers are dropped.
+  Render the transcript. If `ctx` is given and differs from the
+  stored ctx, every renderer is rebuilt first via `Renderer.new/2`
+  (with finalized entries replayed through `finalize/2`).
 
-  Subsequent calls without state changes emit purely from `rendered`.
+  Returns the emitted iodata (oldest-first) and the updated
+  transcript: pending renderers are folded into `rendered`, and
+  finalized renderers are dropped.
+
+  Subsequent calls with the same ctx and unchanged data emit
+  purely from `rendered`.
   """
-  @spec render(t(), term(), pos_integer()) :: {iodata(), t()}
-  def render(%__MODULE__{} = t, theme, width) do
+  @spec render(t(), ctx() | nil) :: {iodata(), t()}
+  def render(%__MODULE__{} = t, ctx \\ nil) do
+    t = if ctx != nil and ctx != t.ctx, do: resize(t, ctx), else: t
+
     {rendered, renderers} =
       Enum.reduce(t.order, {t.rendered, t.renderers}, fn id, {rmap, rrmap} ->
         case Map.fetch(rrmap, id) do
           {:ok, state} ->
             mod = Map.fetch!(t.modules, id)
-            io = mod.to_iolist(state, theme, width)
+            io = mod.to_iolist(state)
             rmap2 = Map.put(rmap, id, io)
             rrmap2 = if MapSet.member?(t.finalized, id), do: Map.delete(rrmap, id), else: rrmap
             {rmap2, rrmap2}
@@ -136,21 +148,20 @@ defmodule OctoPi.TUI.Transcript do
   end
 
   @doc """
-  Resize / re-theme: rebuild every entry's renderer from its `data`
-  and re-render once. `Renderer.new/1` must therefore be a complete
-  snapshot for the entry — Transcript holds no replay history.
+  Resize / re-context: rebuild every renderer via `Renderer.new(entry, ctx)`,
+  replaying `finalize/2` for finalized entries. Clears the rendered
+  cache; the next `render/2` re-materializes everything.
   """
-  @spec resize(t(), term(), pos_integer()) :: t()
-  def resize(%__MODULE__{} = t, theme, width) do
+  @spec resize(t(), ctx()) :: t()
+  def resize(%__MODULE__{} = t, ctx) do
     renderers =
       Enum.reduce(t.data, %{}, fn {id, entry}, acc ->
         mod = Map.fetch!(t.modules, id)
-        state = mod.new(entry)
+        state = mod.new(entry, ctx)
         state = if MapSet.member?(t.finalized, id), do: mod.finalize(state, entry), else: state
         Map.put(acc, id, state)
       end)
 
-    {_, t2} = render(%{t | renderers: renderers, rendered: %{}}, theme, width)
-    t2
+    %{t | renderers: renderers, rendered: %{}, ctx: ctx}
   end
 end

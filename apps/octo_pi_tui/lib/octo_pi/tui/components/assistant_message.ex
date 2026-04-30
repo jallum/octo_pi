@@ -1,31 +1,29 @@
 defmodule OctoPi.TUI.Components.AssistantMessage do
   @moduledoc """
-  Renders an assistant turn as a stack of content blocks. Mirrors the
-  `Transcript` shape from `opi-4dx.8` at the message-internal level:
-  blocks are keyed by stable `block_id` (the index assigned by the
-  decoder + agent), each with its own renderer state that persists
-  across delta arrivals. Rendering a finalized block at a known width
-  reuses cached iodata — no re-lex, no `markdown.render` telemetry.
+  Renders an assistant turn as a stack of content blocks. Backed by
+  the shared `OctoPi.TUI.Transcript` shape from `opi-4dx.8`: blocks
+  are keyed by stable `block_id`, each with its own renderer state
+  that persists across delta arrivals. Rendering a finalized block
+  at the stamped ctx reuses cached iodata.
 
-  Per-kind dispatch:
+  Per-kind dispatch via small `Transcript.Renderer` adapters in
+  `AssistantMessage.{TextBlock,ThinkingBlock}`:
 
-    * `:text` → `Markdown.Render` (incremental lexer + cached committed
-      iodata; consumes successive snapshots via `put/2`).
-    * `:thinking` → simple ANSI-italic wrap; no per-block cache, the
-      cost is dominated by `WrapAnsi.wrap`.
-    * `:tool_call` → not rendered here (tool execution is its own
-      transcript entry).
+    * `:text` → wraps `Markdown.Render` (incremental lex + cached
+      committed iodata).
+    * `:thinking` → simple ANSI-italic wrap.
+    * `:tool_call` → not rendered here.
 
-  Caching identity is `(theme, width)`. Caller threads both through
-  `update_content/2` (or directly via `put_block/4`); on changes the
-  module rebuilds renderer state.
+  Cache identity is `%{theme:, width:}`. Caller threads both
+  through `update_content/2` (or directly via `put_block/4`); on
+  changes Transcript rebuilds renderer state.
   """
 
   @behaviour OctoPi.TUI.Component
 
-  alias OctoPi.TUI.Components.Markdown.Render, as: MdRender
+  alias OctoPi.TUI.Components.AssistantMessage.{TextBlock, ThinkingBlock}
   alias OctoPi.TUI.Theme
-  alias OctoPi.TUI.WrapAnsi
+  alias OctoPi.TUI.Transcript
 
   @osc133_zone_start "\e]133;A\a"
   @osc133_zone_end "\e]133;B\a"
@@ -34,18 +32,11 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @type kind :: :text | :thinking | :tool_call
   @type content_block :: {kind(), String.t()}
 
-  @type block_state :: %{
-          required(:kind) => kind(),
-          required(:snapshot) => binary(),
-          required(:finalized?) => boolean(),
-          optional(:render_state) => MdRender.t() | nil
-        }
-
   @type t :: %__MODULE__{
           theme: Theme.t() | nil,
           msg_id: String.t() | nil,
           content: [content_block()],
-          blocks: %{non_neg_integer() => block_state()},
+          blocks: Transcript.t(),
           width: pos_integer() | nil,
           stop_reason: nil | :aborted | :error,
           error_message: String.t() | nil,
@@ -59,7 +50,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   defstruct theme: nil,
             msg_id: nil,
             content: [],
-            blocks: %{},
+            blocks: %Transcript{},
             width: nil,
             stop_reason: nil,
             error_message: nil,
@@ -72,16 +63,18 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @spec new(Theme.t() | nil, keyword()) :: t()
   def new(theme, opts \\ []) do
     msg = struct!(__MODULE__, Keyword.put(opts, :theme, theme))
-    %{msg | blocks: build_blocks(%{}, msg.content, msg.theme, msg.width)}
+    blocks = Transcript.new(ctx_for(msg, msg.width))
+    blocks = build_initial(blocks, msg.content)
+    %{msg | blocks: blocks}
   end
 
   @doc """
   Apply meta + content updates. Recognised keys:
 
-    * `:content` — replace the content list (per-block state is
-      preserved when the kind at a given index is unchanged).
-    * `:theme`, `:width` — change the cache identity. Existing text
-      renderers are rethemed/resized rather than rebuilt from scratch.
+    * `:content` — replace the content list. Per-block state is
+      preserved when the kind at a given index is unchanged.
+    * `:theme`, `:width` — change the cache identity. Existing
+      renderers are rebuilt via `Transcript.resize/2` with the new ctx.
     * everything else (`:stop_reason`, `:finalized?`, `:streaming?`,
       `:has_tool_calls`, `:error_message`, `:msg_id`) — set verbatim.
   """
@@ -91,24 +84,25 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     msg = struct!(msg, meta)
 
     msg =
-      case Keyword.fetch(updates, :theme) do
-        {:ok, t} when t != msg.theme -> %{msg | theme: t, blocks: retheme_blocks(msg.blocks, t)}
-        _ -> msg
-      end
+      case {Keyword.fetch(updates, :theme), Keyword.fetch(updates, :width)} do
+        {:error, :error} ->
+          msg
 
-    msg =
-      case Keyword.fetch(updates, :width) do
-        {:ok, w} when w != msg.width -> %{msg | width: w, blocks: resize_blocks(msg.blocks, w)}
-        _ -> msg
+        {theme_kv, width_kv} ->
+          theme = with({:ok, t} <- theme_kv, do: t, else: (_ -> msg.theme))
+          width = with({:ok, w} <- width_kv, do: w, else: (_ -> msg.width))
+
+          if theme == msg.theme and width == msg.width do
+            msg
+          else
+            new_msg = %{msg | theme: theme, width: width}
+            %{new_msg | blocks: Transcript.resize(new_msg.blocks, ctx_for(new_msg, width))}
+          end
       end
 
     case Keyword.fetch(updates, :content) do
-      {:ok, content} ->
-        blocks = build_blocks(msg.blocks, content, msg.theme, msg.width)
-        %{msg | content: content, blocks: blocks}
-
-      :error ->
-        msg
+      {:ok, content} -> apply_content(msg, content)
+      :error -> msg
     end
   end
 
@@ -118,108 +112,94 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   """
   @spec put_block(t(), non_neg_integer(), kind(), binary()) :: t()
   def put_block(%__MODULE__{} = msg, block_id, kind, snapshot) when is_integer(block_id) do
-    prior = Map.get(msg.blocks, block_id)
-    new_block = build_block(prior, kind, snapshot, msg.theme, msg.width)
-    blocks = Map.put(msg.blocks, block_id, new_block)
+    blocks =
+      if Map.has_key?(msg.blocks.data, block_id) do
+        Transcript.update(msg.blocks, block_id, snapshot)
+      else
+        Transcript.append(msg.blocks, block_id, snapshot, renderer_for(kind))
+      end
+
     %{msg | blocks: blocks, content: blocks_to_content(blocks)}
   end
 
   @doc "Mark a block finalized; the next render folds its volatile tail into cache."
   @spec finalize_block(t(), non_neg_integer()) :: t()
   def finalize_block(%__MODULE__{} = msg, block_id) do
-    case Map.get(msg.blocks, block_id) do
-      nil ->
-        msg
-
-      %{render_state: %MdRender{} = r} = b ->
-        {_io, r2} = MdRender.finalize(r)
-        %{msg | blocks: Map.put(msg.blocks, block_id, %{b | finalized?: true, render_state: r2})}
-
-      b ->
-        %{msg | blocks: Map.put(msg.blocks, block_id, %{b | finalized?: true})}
+    case Map.get(msg.blocks.data, block_id) do
+      nil -> msg
+      entry -> %{msg | blocks: Transcript.finalize(msg.blocks, block_id, entry)}
     end
   end
 
-  # ── block-state construction ────────────────────────────────────
+  # ── internal: building blocks from a content list ───────────────
 
-  defp build_blocks(prior, content, theme, width) do
+  defp build_initial(blocks, content) do
     content
     |> Enum.with_index()
-    |> Enum.into(%{}, fn {{kind, snapshot}, idx} ->
-      {idx, build_block(Map.get(prior, idx), kind, snapshot, theme, width)}
+    |> Enum.reduce(blocks, fn {{kind, snapshot}, idx}, acc ->
+      Transcript.append(acc, idx, snapshot, renderer_for(kind))
     end)
   end
 
-  defp build_block(nil, kind, snapshot, theme, width),
-    do: fresh_block(kind, snapshot, theme, width)
+  # `apply_content` reconciles a freshly-passed content list with
+  # the current Transcript. For each index: if the kind is unchanged,
+  # update; otherwise re-append. Indices not in the new list are
+  # dropped (rare — content only grows mid-stream).
+  defp apply_content(msg, content) do
+    new_blocks =
+      content
+      |> Enum.with_index()
+      |> Enum.reduce(reset_blocks(msg), fn {{kind, snapshot}, idx}, acc ->
+        case current_kind(msg.blocks, idx) do
+          ^kind ->
+            cond do
+              Map.has_key?(acc.data, idx) -> Transcript.update(acc, idx, snapshot)
+              true -> Transcript.append(acc, idx, snapshot, renderer_for(kind))
+            end
 
-  # Same kind + same snapshot: backfill a missing renderer if theme +
-  # width are now known, otherwise no-op.
-  defp build_block(%{kind: :text, snapshot: snapshot, render_state: nil} = b, :text, snapshot, theme, width)
-       when not is_nil(theme) and is_integer(width) do
-    r = MdRender.new(theme, width, padding_x: 1)
-    %{b | render_state: MdRender.put(r, normalize_md(snapshot))}
+          _ ->
+            Transcript.append(acc, idx, snapshot, renderer_for(kind))
+        end
+      end)
+
+    %{msg | content: content, blocks: new_blocks}
   end
 
-  defp build_block(%{kind: kind, snapshot: snapshot} = b, kind, snapshot, _theme, _width), do: b
+  defp reset_blocks(msg), do: Transcript.new(msg.blocks.ctx)
 
-  defp build_block(%{kind: :text, render_state: %MdRender{} = r} = b, :text, snapshot, _theme, _width) do
-    %{b | snapshot: snapshot, render_state: MdRender.put(r, normalize_md(snapshot))}
+  defp current_kind(%Transcript{modules: modules}, idx) do
+    case Map.get(modules, idx) do
+      TextBlock -> :text
+      ThinkingBlock -> :thinking
+      _ -> nil
+    end
   end
 
-  defp build_block(%{kind: :text, render_state: nil} = b, :text, snapshot, theme, width)
-       when not is_nil(theme) and is_integer(width) do
-    r = MdRender.new(theme, width, padding_x: 1)
-    %{b | snapshot: snapshot, render_state: MdRender.put(r, normalize_md(snapshot))}
-  end
+  defp renderer_for(:text), do: TextBlock
+  defp renderer_for(:thinking), do: ThinkingBlock
+  defp renderer_for(_), do: ThinkingBlock
 
-  defp build_block(%{kind: kind} = b, kind, snapshot, _theme, _width) do
-    %{b | snapshot: snapshot}
-  end
-
-  defp build_block(_, kind, snapshot, theme, width),
-    do: fresh_block(kind, snapshot, theme, width)
-
-  defp fresh_block(:text, snapshot, theme, width) when not is_nil(theme) and is_integer(width) do
-    r = MdRender.new(theme, width, padding_x: 1)
-    %{kind: :text, snapshot: snapshot, finalized?: false, render_state: MdRender.put(r, normalize_md(snapshot))}
-  end
-
-  defp fresh_block(:text, snapshot, _theme, _width) do
-    %{kind: :text, snapshot: snapshot, finalized?: false, render_state: nil}
-  end
-
-  defp fresh_block(kind, snapshot, _theme, _width) do
-    %{kind: kind, snapshot: snapshot, finalized?: false}
-  end
-
-  defp blocks_to_content(blocks) do
-    blocks
+  defp blocks_to_content(%Transcript{data: data, modules: modules}) do
+    data
     |> Enum.sort_by(fn {idx, _} -> idx end)
-    |> Enum.map(fn {_idx, %{kind: k, snapshot: s}} -> {k, s} end)
+    |> Enum.map(fn {idx, snapshot} -> {kind_for(Map.get(modules, idx)), snapshot} end)
   end
 
-  defp retheme_blocks(blocks, theme) do
-    Map.new(blocks, fn
-      {idx, %{kind: :text, render_state: %MdRender{} = r} = b} ->
-        {idx, %{b | render_state: MdRender.retheme(r, theme)}}
+  defp kind_for(TextBlock), do: :text
+  defp kind_for(ThinkingBlock), do: :thinking
+  defp kind_for(_), do: :text
 
-      pair ->
-        pair
-    end)
+  defp ctx_from(theme, width, opts \\ []) do
+    base = %{theme: theme, width: width, padding_x: 1}
+    Enum.into(opts, base)
   end
 
-  defp resize_blocks(blocks, width) do
-    Map.new(blocks, fn
-      {idx, %{kind: :text, render_state: %MdRender{} = r} = b} ->
-        {idx, %{b | render_state: MdRender.resize(r, width)}}
-
-      pair ->
-        pair
-    end)
+  defp ctx_for(%__MODULE__{} = msg, width) do
+    ctx_from(msg.theme, width,
+      hide_thinking: msg.hide_thinking,
+      hidden_thinking_label: msg.hidden_thinking_label
+    )
   end
-
-  defp normalize_md(text), do: text |> String.trim() |> String.replace("\t", "   ")
 
   # ── render ──────────────────────────────────────────────────────
 
@@ -233,28 +213,47 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   end
 
   defp render_content(%__MODULE__{} = msg, width) do
-    # Walk content with index — block_id is the position. If a
-    # per-block state exists in `msg.blocks` use it (cached path);
-    # otherwise materialize ad-hoc (struct-literal construction or
-    # uncached tests).
-    indexed =
+    visible =
       msg.content
       |> Enum.with_index()
-      |> Enum.filter(fn {{k, s}, _idx} ->
-        k in [:text, :thinking] and String.trim(s) != ""
-      end)
+      |> Enum.filter(fn {{k, s}, _idx} -> k in [:text, :thinking] and String.trim(s) != "" end)
 
-    has_visible = indexed != []
+    has_visible = visible != []
 
     content_lines =
       if has_visible do
-        block_count = length(indexed)
+        text_bytes = Enum.reduce(visible, 0, fn {{_k, s}, _idx}, acc -> acc + byte_size(s) end)
 
-        [""] ++
-          Enum.flat_map(Enum.with_index(indexed), fn {{{kind, snapshot}, idx}, i} ->
-            block = Map.get(msg.blocks, idx) || %{kind: kind, snapshot: snapshot, finalized?: false}
-            render_block(block, msg, width, i < block_count - 1)
-          end)
+        start_meta = %{msg_id: msg.msg_id, streaming?: msg.streaming?, width: width}
+
+        :telemetry.span(
+          [:octo_pi_tui, :markdown, :render],
+          start_meta,
+          fn ->
+            ctx = ctx_for(msg, width)
+
+            # Tolerate struct-literal construction (`%AssistantMessage{content: [...]}`)
+            # that bypasses `new/2`: build the Transcript on the fly.
+            blocks =
+              if msg.blocks.order == [] and msg.content != [],
+                do: build_initial(Transcript.new(ctx), msg.content),
+                else: msg.blocks
+
+            {iodata, _t} = Transcript.render(blocks, ctx)
+
+            bin = IO.iodata_to_binary(iodata)
+            block_lines = if bin == "", do: [], else: String.split(bin, "\n")
+            lines = [""] ++ interleave_blocks(visible, block_lines)
+
+            stop_meta =
+              Map.merge(start_meta, %{
+                text_bytes: text_bytes,
+                line_count: length(lines)
+              })
+
+            {lines, stop_meta}
+          end
+        )
       else
         []
       end
@@ -262,79 +261,12 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     content_lines ++ render_status(msg, has_visible)
   end
 
-  defp render_block(%{kind: :text, snapshot: snapshot} = block, msg, width, _has_after) do
-    render_markdown_with_telemetry(block, msg, width, snapshot)
-  end
-
-  defp render_block(%{kind: :thinking, snapshot: snapshot}, msg, width, has_after) do
-    lines = render_thinking(snapshot, msg, width)
-    if has_after, do: lines ++ [""], else: lines
-  end
-
-  defp render_block(_, _msg, _width, _has_after), do: []
-
-  defp render_markdown_with_telemetry(%{render_state: %MdRender{width: w}} = block, msg, width, snapshot)
-       when w == width do
-    # Cache hit: width matches stamped state. Emit `to_lines` directly,
-    # no telemetry span — the renderer's committed iodata covers the
-    # bulk; only the volatile tail (if any) re-lexes inside `to_lines`.
-    case block.render_state do
-      %MdRender{} = r ->
-        case MdRender.to_lines(r) do
-          [] -> []
-          lines -> lines
-        end
-
-      _ ->
-        render_markdown_uncached(msg, width, snapshot)
-    end
-  end
-
-  defp render_markdown_with_telemetry(_block, msg, width, snapshot),
-    do: render_markdown_uncached(msg, width, snapshot)
-
-  defp render_markdown_uncached(msg, width, snapshot) do
-    start_meta = %{
-      msg_id: msg.msg_id,
-      streaming?: msg.streaming?,
-      width: width
-    }
-
-    :telemetry.span(
-      [:octo_pi_tui, :markdown, :render],
-      start_meta,
-      fn ->
-        r =
-          MdRender.new(msg.theme, width, padding_x: 1)
-          |> MdRender.put(normalize_md(snapshot))
-
-        lines = MdRender.to_lines(r)
-
-        stop_meta =
-          Map.merge(start_meta, %{
-            text_bytes: byte_size(snapshot),
-            line_count: length(lines)
-          })
-
-        {lines, stop_meta}
-      end
-    )
-  end
-
-  defp render_thinking(_text, %{hide_thinking: true} = msg, _width) do
-    label = msg.hidden_thinking_label
-    [" " <> Theme.fg(msg.theme, :thinking_text, Theme.italic(label))]
-  end
-
-  defp render_thinking(text, %{theme: theme}, width) do
-    content_width = max(1, width - 1)
-
-    text
-    |> WrapAnsi.wrap(content_width)
-    |> Enum.map(fn line ->
-      " " <> Theme.fg(theme, :thinking_text, Theme.italic(line))
-    end)
-  end
+  # Each block emits its own iodata into the Transcript's iolist.
+  # Thinking-block separators (a blank line if a non-thinking block
+  # follows) are handled by emitting blank lines at appropriate
+  # transitions. For now, the simple split-by-newline reproduces the
+  # legacy stack-of-lines visual.
+  defp interleave_blocks(_visible, lines), do: lines
 
   defp render_status(%{stop_reason: nil}, _has_visible), do: []
   defp render_status(%{has_tool_calls: true}, _has_visible), do: []

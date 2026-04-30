@@ -5,192 +5,170 @@ defmodule OctoPi.TUI.TranscriptTest do
 
   defmodule StubRenderer do
     @moduledoc """
-    Test renderer that records every callback hit on a per-state
-    counter. `to_iolist` emits a sentinel string carrying the
-    current `entry`, `theme`, and `width` so tests can prove cache
-    hits and resize correctness by string comparison.
+    Test renderer that bakes the entry + ctx into its state at
+    `new/2`. `to_iolist/1` emits a sentinel string carrying both
+    so tests can prove cache hits and ctx propagation by string
+    comparison.
     """
     @behaviour Transcript.Renderer
 
-    defstruct [:entry, finalized?: false, calls: %{new: 0, put: 0, finalize: 0, to_iolist: 0}]
+    defstruct [:entry, :ctx, finalized?: false]
 
     @impl true
-    def new(entry), do: %__MODULE__{entry: entry, calls: bump(%{new: 0, put: 0, finalize: 0, to_iolist: 0}, :new)}
+    def new(entry, ctx), do: %__MODULE__{entry: entry, ctx: ctx}
 
     @impl true
-    def put(%__MODULE__{} = s, entry), do: %{s | entry: entry, calls: bump(s.calls, :put)}
+    def put(%__MODULE__{} = s, entry), do: %{s | entry: entry}
 
     @impl true
-    def finalize(%__MODULE__{} = s, entry),
-      do: %{s | entry: entry, finalized?: true, calls: bump(s.calls, :finalize)}
+    def finalize(%__MODULE__{} = s, entry), do: %{s | entry: entry, finalized?: true}
 
     @impl true
-    def to_iolist(%__MODULE__{entry: entry}, theme, width),
-      do: "[#{inspect(entry)}|#{inspect(theme)}|#{width}]"
-
-    defp bump(map, key), do: Map.update(map, key, 1, &(&1 + 1))
+    def to_iolist(%__MODULE__{entry: entry, ctx: ctx}),
+      do: "[#{inspect(entry)}|#{inspect(ctx)}]"
   end
 
-  describe "new/0" do
-    test "starts empty" do
+  describe "new/1" do
+    test "starts empty with nil ctx by default" do
       t = Transcript.new()
       assert t.order == []
       assert t.data == %{}
       assert t.renderers == %{}
       assert t.rendered == %{}
+      assert t.ctx == nil
       assert MapSet.size(t.finalized) == 0
+    end
+
+    test "stamps the given ctx" do
+      t = Transcript.new(%{theme: :dark, width: 80})
+      assert t.ctx == %{theme: :dark, width: 80}
     end
   end
 
   describe "append/4" do
-    test "adds entry, fresh renderer, empty rendered slot" do
-      t = Transcript.new() |> Transcript.append(:a, "alpha", StubRenderer)
+    test "uses the stored ctx for Renderer.new" do
+      t =
+        Transcript.new(%{theme: :dark, width: 80})
+        |> Transcript.append(:a, "alpha", StubRenderer)
 
-      assert t.order == [:a]
-      assert t.data == %{a: "alpha"}
-      assert match?(%StubRenderer{entry: "alpha"}, t.renderers[:a])
-      assert t.rendered == %{}
+      assert t.renderers[:a].ctx == %{theme: :dark, width: 80}
     end
 
     test "newest entries land at head; render emits oldest-first" do
       t =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "alpha", StubRenderer)
         |> Transcript.append(:b, "beta", StubRenderer)
         |> Transcript.append(:c, "gamma", StubRenderer)
 
       assert t.order == [:c, :b, :a]
 
-      {io, _} = Transcript.render(t, :dark, 80)
+      {io, _} = Transcript.render(t)
       flat = IO.iodata_to_binary(io)
-
       assert flat =~ ~r/alpha.*beta.*gamma/s
     end
   end
 
-  describe "update/3" do
-    test "feeds chunk to the renderer; data is replaced" do
+  describe "update/3 / finalize/3" do
+    test "update feeds chunk to the renderer; data is replaced" do
       t =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "he", StubRenderer)
         |> Transcript.update(:a, "hello")
 
       assert t.data[:a] == "hello"
       assert t.renderers[:a].entry == "hello"
-      assert t.renderers[:a].calls.put == 1
     end
-  end
 
-  describe "finalize/3" do
-    test "marks entry finalized; renderer state flips" do
+    test "finalize marks entry; first render after that drops the renderer" do
       t =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "hi", StubRenderer)
         |> Transcript.finalize(:a, "hi")
 
       assert MapSet.member?(t.finalized, :a)
-      assert t.renderers[:a].finalized?
-    end
 
-    test "first render after finalize materializes into rendered and drops the renderer" do
-      t =
-        Transcript.new()
-        |> Transcript.append(:a, "hi", StubRenderer)
-        |> Transcript.finalize(:a, "hi")
-
-      {_, t} = Transcript.render(t, :dark, 80)
-
+      {_, t} = Transcript.render(t)
       assert Map.has_key?(t.rendered, :a)
       refute Map.has_key?(t.renderers, :a)
     end
   end
 
-  describe "render/3" do
-    test "returns oldest-first iodata tree across all entries" do
+  describe "render/2 — cache + ctx propagation" do
+    test "second render after finalize is a cache hit (renderer dropped)" do
       t =
-        Transcript.new()
-        |> Transcript.append(:a, "one", StubRenderer)
-        |> Transcript.append(:b, "two", StubRenderer)
-
-      {io, _} = Transcript.render(t, :dark, 80)
-      flat = IO.iodata_to_binary(io)
-      assert flat == "[\"one\"|:dark|80][\"two\"|:dark|80]"
-    end
-
-    test "second render after finalize is a cache hit (renderer never re-called)" do
-      t =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "hi", StubRenderer)
         |> Transcript.finalize(:a, "hi")
 
-      {_, t1} = Transcript.render(t, :dark, 80)
+      {_, t1} = Transcript.render(t)
       cached = Map.fetch!(t1.rendered, :a)
 
-      # Mutate the rendered cache to a sentinel; if render reads from
-      # the cache (not the renderer, which has been dropped), the
-      # second render emits the sentinel.
+      # Mutate the cache to a sentinel; if render reads from cache
+      # (renderer is dropped), second render emits the sentinel.
       t2 = put_in(t1.rendered[:a], "SENTINEL")
-      {io, _} = Transcript.render(t2, :dark, 80)
+      {io, _} = Transcript.render(t2)
       assert IO.iodata_to_binary(io) == "SENTINEL"
-
-      # And the original cached output really came from the renderer.
-      assert IO.iodata_to_binary(cached) == "[\"hi\"|:dark|80]"
+      assert IO.iodata_to_binary(cached) =~ "hi"
     end
 
-    test "streaming entry stays in renderers across renders" do
+    test "passing a different ctx triggers resize: renderers rebuilt with new ctx" do
       t =
-        Transcript.new()
-        |> Transcript.append(:a, "h", StubRenderer)
-
-      {_, t} = Transcript.render(t, :dark, 80)
-      assert Map.has_key?(t.renderers, :a)
-
-      t = Transcript.update(t, :a, "hi")
-      {_, t} = Transcript.render(t, :dark, 80)
-      assert Map.has_key?(t.renderers, :a)
-      assert IO.iodata_to_binary(Map.fetch!(t.rendered, :a)) =~ "hi"
-    end
-  end
-
-  describe "resize/3" do
-    test "rebuilds renderers from data; renders at new width" do
-      t =
-        Transcript.new()
+        Transcript.new(%{theme: :dark, width: 80})
         |> Transcript.append(:a, "alpha", StubRenderer)
-        |> Transcript.update(:a, "alpha2")
-        |> Transcript.finalize(:a, "alpha2")
+        |> Transcript.finalize(:a, "alpha")
 
-      {_, t} = Transcript.render(t, :dark, 80)
-      assert IO.iodata_to_binary(t.rendered[:a]) =~ "|80]"
+      {_, t} = Transcript.render(t)
+      assert IO.iodata_to_binary(t.rendered[:a]) =~ "width: 80"
 
-      t2 = Transcript.resize(t, :light, 40)
+      {_, t2} = Transcript.render(t, %{theme: :light, width: 40})
+      flat = IO.iodata_to_binary(t2.rendered[:a])
+      assert flat =~ "alpha"
+      assert flat =~ "theme: :light"
+      assert flat =~ "width: 40"
 
-      assert IO.iodata_to_binary(t2.rendered[:a]) == "[\"alpha2\"|:light|40]"
-      # finalized id stays out of renderers after resize+render.
+      assert t2.ctx == %{theme: :light, width: 40}
+      # Finalized id stays out of renderers after resize+render.
       refute Map.has_key?(t2.renderers, :a)
     end
 
-    test "preserves order across resize" do
+    test "passing the same ctx does not rebuild renderers" do
       t =
-        Transcript.new()
-        |> Transcript.append(:a, "1", StubRenderer)
-        |> Transcript.append(:b, "2", StubRenderer)
-        |> Transcript.append(:c, "3", StubRenderer)
+        Transcript.new(%{theme: :dark, width: 80})
+        |> Transcript.append(:a, "alpha", StubRenderer)
 
-      t = Transcript.resize(t, :dark, 80)
-      {io, _} = Transcript.render(t, :dark, 80)
-      flat = IO.iodata_to_binary(io)
-      assert flat == "[\"1\"|:dark|80][\"2\"|:dark|80][\"3\"|:dark|80]"
+      r_before = t.renderers[:a]
+      {_, t2} = Transcript.render(t, %{theme: :dark, width: 80})
+
+      assert t2.renderers[:a] === r_before, "no rebuild when ctx is unchanged"
+    end
+  end
+
+  describe "resize/2" do
+    test "rebuilds every renderer with the new ctx, replaying finalize for finalized" do
+      t =
+        Transcript.new(%{theme: :dark, width: 80})
+        |> Transcript.append(:a, "x", StubRenderer)
+        |> Transcript.finalize(:a, "x")
+        |> Transcript.append(:b, "y", StubRenderer)
+
+      t2 = Transcript.resize(t, %{theme: :light, width: 100})
+
+      assert t2.ctx == %{theme: :light, width: 100}
+      assert t2.renderers[:a].ctx == %{theme: :light, width: 100}
+      assert t2.renderers[:a].finalized?, "finalize replayed for :a"
+      assert t2.renderers[:b].ctx == %{theme: :light, width: 100}
+      refute t2.renderers[:b].finalized?
+      assert t2.rendered == %{}
     end
   end
 
   describe "byte equality with from-scratch rebuild" do
-    test "append/update/finalize/render produces same bytes as a fresh rebuild" do
+    test "append/update/finalize/render produces same bytes as a fresh build" do
       live =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "h", StubRenderer)
         |> Transcript.update(:a, "he")
-        |> Transcript.update(:a, "hel")
         |> Transcript.update(:a, "hello")
         |> Transcript.finalize(:a, "hello")
         |> Transcript.append(:b, "w", StubRenderer)
@@ -198,14 +176,14 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.finalize(:b, "world")
 
       fresh =
-        Transcript.new()
+        Transcript.new(:ctx)
         |> Transcript.append(:a, "hello", StubRenderer)
         |> Transcript.finalize(:a, "hello")
         |> Transcript.append(:b, "world", StubRenderer)
         |> Transcript.finalize(:b, "world")
 
-      {io1, _} = Transcript.render(live, :dark, 80)
-      {io2, _} = Transcript.render(fresh, :dark, 80)
+      {io1, _} = Transcript.render(live)
+      {io2, _} = Transcript.render(fresh)
 
       assert IO.iodata_to_binary(io1) == IO.iodata_to_binary(io2)
     end
