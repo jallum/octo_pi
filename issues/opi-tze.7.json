@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-30T12:20:56Z",
   "created": "2026-04-30T12:07:50Z",
   "description": "**Site (apps/octo_pi_coder/lib/octo_pi/coder/loop.ex L262-271)**\n\\`\\`\\`elixir\ndef handle_call({:agent_follow_up, text}, _from, state) do\n  OctoPi.Agent.follow_up(state.agent_pid, text)   # returns :ok | {:error, :full}\n  {:reply, :ok, state}\nend\n\ndef handle_call({:agent_steer, text}, _from, state) do\n  OctoPi.Agent.steer(state.agent_pid, text)\n  {:reply, :ok, state}\nend\n\\`\\`\\`\n\nThe result of OctoPi.Agent.steer / follow_up is discarded; Coder always\nreturns :ok. Callers (the TUI, RPC mode, extensions) cannot detect when\nthe queue rejected an enqueue because of the bound.\n\n**Spec mismatch (apps/octo_pi_coder/lib/octo_pi/coder.ex L84-88)**\n\\`\\`\\`elixir\n@spec follow_up(t(), String.t()) :: :ok\ndef follow_up(server, text), ...\n\n@spec steer(t(), String.t()) :: :ok\ndef steer(server, text), ...\n\\`\\`\\`\nThe spec is :ok-only and matches the swallow behavior; both the spec\nand the implementation should propagate :full.\n\n**Fix**\n1. Update specs to :ok | {:error, :full}.\n2. Forward the agent's return value:\n   \\`\\`\\`elixir\n   {:reply, OctoPi.Agent.follow_up(state.agent_pid, text), state}\n   \\`\\`\\`\n3. TUI / RPC / extension callers should surface a notification on :full.",
   "id": "opi-tze.7",
   "labels": [],
   "parent": "opi-tze",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "[BUG] Coder.steer / Coder.follow_up swallow {:error, :full}",
   "type": "bug",
-  "updated_at": "2026-04-30T12:18:20Z"
+  "updated_at": "2026-04-30T12:20:56Z"
 }
