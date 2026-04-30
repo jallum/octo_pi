@@ -118,3 +118,83 @@ trace, lower priority than .3 and .5.
   and the streaming window.
 - Single sample. Numbers aren't statistical bounds; they're directional
   evidence sufficient to gate the follow-up tickets.
+
+## opi-4dx.5 post-implementation re-trace (`.pi/trace3.log`)
+
+Captured after the AST shape refactor (commit `73bcd74`) and the
+`Markdown.Stream` incremental wrapper (commit `44cd7fe`). Prompt asked
+the agent to produce a comprehensive Markdown demo (~90-line response
+exercising H1–H6, fenced code, ordered/unordered lists with nesting,
+blockquote, HR, and a 3×4 table). Keystrokes hammered during streaming
+via `tmux send-keys`. Local model (`ollama/qwen3.5`) instead of
+`claude-haiku-4-5` — apples-to-apples for the renderer, different
+chunking cadence than the original.
+
+### Q1 — handle_info duration (µs) by kind, before vs after
+
+| kind | median (old → new) | p99 (old → new) | max (old → new) |
+|---|---|---|---|
+| `hid_event` | 1640 → **614** | 4880 → **5095** | 59980 → **13787** |
+| `octo_pi_agent_event` | 2900 → **114** | 9310 → **1879** | 9310 → **8533** |
+| `timeout` | 3090 → **2809** | 5210 → **6777** | 5410 → **14726** |
+
+The `octo_pi_agent_event` kind is the streaming hot path
+(stream-chunk → AssistantMessage.update_content → Stream.put → render).
+**Median dropped 96% (2.90 ms → 0.11 ms); p99 dropped 80%** — the
+incremental lexer cuts the per-chunk cost by an order of magnitude.
+
+### Q2 — `markdown.render` scaling
+
+| text_bytes | n | median | p99 |
+|---|---|---|---|
+| 0–256 | 55 | 0.26 ms | 0.84 ms |
+| 256–1024 | 54 | 0.46 ms | 1.20 ms |
+
+Top bucket sample at ~624 bytes: p99 0.87 ms (n=6). Even on the
+*growing* streaming message (full assistant text re-rendered each
+chunk), the cost stays sub-millisecond because the committed paragraph
+prefix is served from cache and only the tail paragraph is freshly
+lexed. Compare to the trace2 finding that 18.7 KB messages hit p99
+~53 ms on the prior path.
+
+### Q3 — `key.latency` vs `mailbox_len_at_arrival`
+
+| mailbox_len | n | median | p99 |
+|---|---|---|---|
+| 0 | 378 | 0.10 ms | 3.58 ms |
+| 1 | 4 | 4.45 ms | 221.10 ms |
+| 5 | 1 | 220.35 ms | 220.35 ms |
+| 50 | 2 | 210.49 ms | 210.49 ms |
+| 200+ | … | 80–135 ms | … |
+
+Mailbox=0 is now 0.10 ms median (vs 1.83 ms / 194 ms bimodal in
+trace2): the great majority of keystrokes arrive to an idle process and
+are handled in microseconds. The 220 ms tail at low mailbox depth
+persists in this trace, but represents a much smaller share of events
+(the bimodal `mailbox=0` "barely missed" regime is essentially gone).
+
+### Q4 — `transcript.render` duration vs `msg_count` (streaming)
+
+| msg_count | streaming n | streaming p50 | streaming p99 |
+|---|---|---|---|
+| 2 | 1003 | 1.91 ms | 4.79 ms |
+| 4 | 162 | 2.81 ms | 5.89 ms |
+| 6 | 108 | 3.24 ms | 6.21 ms |
+
+Comparable to trace2 (msg_count=4 streaming p99 4.10 ms). Frequency is
+unchanged — every streaming chunk and every keystroke still re-walks
+the transcript — but per-call cost remains bounded.
+
+### Headline comparison
+
+| Metric | trace2 | trace3 |
+|---|---|---|
+| key.latency p50 (overall) | 105.86 ms | **14.85 ms** |
+| key.latency p50 at mailbox=0 | ~190 ms (bimodal) | **0.10 ms** |
+| `octo_pi_agent_event` p50 | 2.90 ms | **0.11 ms** |
+| `markdown.render` p99 (largest sampled) | 1.31 ms (~265 B) | 1.20 ms (~1 KB) |
+| `markdown.render` p99 (extrapolated 18.7 KB on prior path) | ~53 ms | bounded by current paragraph |
+
+**opi-4dx.5 cleared its bar.** The streaming hot path (`octo_pi_agent_event`)
+is 25× faster at the median, and `markdown.render` no longer scales
+linearly with cumulative message size during streaming.
