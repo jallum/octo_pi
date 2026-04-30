@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T12:06:44Z",
+  "description": "**Repro (tmux harness, .pi/tmp/queue-test/run_faux_tui.sh)**\n1. Boot the TUI against FakeTransport with a held gate.\n2. Type \\\"first prompt\\\" + Enter — agent enters streaming.\n3. Type \\\"queued one\\\" + Enter, \\\"queued two\\\" + Enter, \\\"queued three\\\" + Enter.\n4. Observe transcript: all three queued messages render as user turns\n   in the local transcript, but the agent's queue is empty (Alt+Up shows\n   \\\"No queued messages\\\") and they receive no responses.\n\n**Root cause (apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex)**\ndo_handle_submit/3 (around L1411-1428) unconditionally calls:\n\\`\\`\\`elixir\nTask.start(fn -\u003e Coder.prompt(session, value, send_text) end)\n\\`\\`\\`\nwithout checking whether the agent is already streaming. Coder.prompt\ndelegates to OctoPi.Agent.prompt which returns {:error, :already_streaming},\nbut the Task.start fork discards the return. Meanwhile the TUI appends\nthe user message to its own transcript regardless.\n\n**Upstream behavior (tmp/pi-mono/packages/coding-agent/src/core/agent-session.ts L987-997)**\n\\`\\`\\`ts\nif (this.isStreaming) {\n  if (!options?.streamingBehavior) {\n    throw new Error(\\\"Agent is already processing. Specify streamingBehavior…\\\");\n  }\n  if (options.streamingBehavior === \\\"followUp\\\") {\n    await this._queueFollowUp(expandedText, currentImages);\n  } else {\n    await this._queueSteer(expandedText, currentImages);\n  }\n  ...\n  return;\n}\n\\`\\`\\`\nUpstream routes Enter-while-streaming through steer() (default) or followUp()\n(Alt+Enter / handleFollowUp).\n\n**Fix sketch**\n- In do_handle_submit/3 (and Coder.prompt itself if needed), check\n  agent streaming state. If streaming, route to Coder.steer/2 (default)\n  or Coder.follow_up/2 (Alt+Enter handler at L1228 already exists).\n- Keep the local transcript update so the user sees their message,\n  but tag it visually as \\\"queued\\\" rather than as a settled turn\n  (see opi-tze.3 for the pending-indicator UX).\n\nNote: opi-tze.1 (steering drain bug) must also be fixed for steered\nmessages to actually be processed once routed correctly.",
+  "id": "opi-tze.2",
+  "labels": [],
+  "parent": "opi-tze",
+  "priority": 1,
+  "status": "open",
+  "title": "[BUG] TUI Enter while streaming calls Coder.prompt; messages silently lost",
+  "type": "bug",
+  "updated_at": "2026-04-30T12:06:44Z"
+}
