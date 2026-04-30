@@ -21,6 +21,19 @@ defmodule OctoPi.Coder.Tools.LsTest do
 
   defp exec(args, ref, cwd), do: Ls.execute("call_1", Map.put(args, "_cwd", cwd), ref, fn _ -> :ok end)
 
+  test "missing :path defaults to current directory", %{tmp: tmp, ref: ref} do
+    File.write!(Path.join(tmp, "a.txt"), "hi")
+    cwd = File.cwd!()
+
+    try do
+      File.cd!(tmp)
+      assert {:ok, %Result{content: [%Content.Text{text: text}], is_error?: false}} = exec(%{}, ref, tmp)
+      assert text =~ "a.txt"
+    after
+      File.cd!(cwd)
+    end
+  end
+
   test "lists files and dirs in a directory", %{tmp: tmp, ref: ref} do
     File.write!(Path.join(tmp, "a.txt"), "hi")
     File.mkdir_p!(Path.join(tmp, "sub"))

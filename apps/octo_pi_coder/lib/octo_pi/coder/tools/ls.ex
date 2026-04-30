@@ -31,8 +31,7 @@ defmodule OctoPi.Coder.Tools.Ls do
             "type" => "integer",
             "description" => "Maximum number of entries to return (default: #{@default_limit})."
           }
-        },
-        "required" => ["path"]
+        }
       },
       prepare_arguments: fn args -> Map.put(args, "_cwd", cwd) end,
       handler: __MODULE__
@@ -40,6 +39,10 @@ defmodule OctoPi.Coder.Tools.Ls do
   end
 
   @impl true
+  def execute(id, args, abort_ref, on_update) when not is_map_key(args, "path") do
+    execute(id, Map.put(args, "path", "."), abort_ref, on_update)
+  end
+
   def execute(_id, %{"path" => path} = args, _abort_ref, _on_update) do
     _cwd = Map.fetch!(args, "_cwd")
     limit = Map.get(args, "limit", @default_limit)
