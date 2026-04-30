@@ -73,6 +73,12 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Transcript
+  alias OctoPi.TUI.Transcript.AssistantHeader
+  alias OctoPi.TUI.Transcript.AssistantStatus
+  alias OctoPi.TUI.Transcript.ComponentWrapper
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
+  alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -91,7 +97,7 @@ defmodule OctoPi.TUI.Interactive do
           send_sigtstp_fn: (-> :ok),
           keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
-          transcript: [struct()],
+          transcript: Transcript.t(),
           footer: Footer.t(),
           footer_data: pid() | nil,
           theme: Theme.t() | nil,
@@ -131,10 +137,9 @@ defmodule OctoPi.TUI.Interactive do
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
           focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
-          streaming_blocks: %{
-            order: [non_neg_integer()],
-            data: %{non_neg_integer() => {atom(), binary()}}
-          }
+          turn_seq: non_neg_integer(),
+          current_msg_id: String.t() | nil,
+          current_has_tool_calls?: boolean()
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
@@ -147,7 +152,7 @@ defmodule OctoPi.TUI.Interactive do
             send_sigtstp_fn: &__MODULE__.default_send_sigtstp/0,
             keybindings: nil,
             input: %Components.Input{},
-            transcript: [],
+            transcript: %Transcript{},
             footer: %Footer{},
             footer_data: nil,
             theme: nil,
@@ -187,13 +192,14 @@ defmodule OctoPi.TUI.Interactive do
             extension_shortcuts: [],
             extensions: [],
             focused_component: :input,
-            streaming_blocks: %{order: [], data: %{}},
-            # Streaming coalescing (opi-4dx.3): block deltas stash
-            # the latest snapshot per block_id in `streaming_blocks`;
-            # a periodic tick flushes pending streaming state into
-            # the transcript at `streaming_tick_at`.
-            pending_partial: nil,
-            streaming_tick_at: nil
+            # Streaming-tick coalescing (opi-4dx.3 / .13): block events
+            # update the Transcript directly and stamp `streaming_tick_at`;
+            # the eventual :timeout fires a single render rather than
+            # one per delta.
+            streaming_tick_at: nil,
+            turn_seq: 0,
+            current_msg_id: nil,
+            current_has_tool_calls?: false
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -1169,11 +1175,19 @@ defmodule OctoPi.TUI.Interactive do
       | loader: state.loader_stash,
         loader_stash: nil,
         is_compacting?: false,
-        transcript: state.transcript ++ [csm],
+        transcript: append_csm(state.transcript, csm),
         footer: update_footer(state.footer, ev)
     }
 
     flush_compaction_queue(state)
+  end
+
+  defp append_csm(transcript, csm) do
+    key = compaction_key()
+
+    transcript
+    |> Transcript.append(key, csm, ComponentWrapper)
+    |> Transcript.finalize(key, csm)
   end
 
   def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
@@ -1211,45 +1225,75 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.MessageStart{} = event}) do
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageStart{}}) do
+    seq = state.turn_seq + 1
+    msg_id = "turn-#{seq}"
+
+    header = %AssistantHeader{msg_id: msg_id, has_tool_calls?: false}
+
     %{
       state
-      | streaming_blocks: %{order: [], data: %{}},
+      | turn_seq: seq,
+        current_msg_id: msg_id,
+        current_has_tool_calls?: false,
         streaming_tick_at: nil,
-        transcript: update_transcript(state.transcript, event, state.theme)
+        transcript: Transcript.append(state.transcript, header_key(msg_id), header, AssistantHeader)
     }
   end
 
-  # opi-4dx.3 + .6: block delta events stash into streaming_blocks
-  # and stamp the streaming-tick deadline; the heavy transcript-render
-  # is deferred to the next tick or to the next non-block agent event,
-  # which flushes first for ordering.
+  # opi-4dx.13: block events update the top-level Transcript directly,
+  # keyed by `<msg_id>:<block_id>`. The streaming-tick deadline is stamped
+  # so :timeout fires a single render pass per coalescing window rather
+  # than re-rendering on every delta.
   def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockStart{block_id: id, kind: kind}}) do
-    put_streaming_block(state, id, kind, "")
+    state
+    |> stamp_streaming_tick()
+    |> append_block(id, kind, "")
   end
 
   def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockDelta{block_id: id, kind: kind, snapshot: snapshot}}) do
-    put_streaming_block(state, id, kind, snapshot)
+    state
+    |> stamp_streaming_tick()
+    |> upsert_block(id, kind, snapshot)
   end
 
   def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockEnd{block_id: id, kind: kind, content: content}}) do
-    put_streaming_block(state, id, kind, content)
+    state
+    |> stamp_streaming_tick()
+    |> upsert_block(id, kind, content)
+    |> finalize_block(id)
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{} = event}) do
-    state = flush_pending_partial(state)
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{message: msg} = event}) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    has_tool_calls? = has_tool_calls?(msg)
+    stop_reason = extract_stop_reason(msg)
+    error_message = Map.get(msg, :error_message)
+
+    status = %AssistantStatus{
+      stop_reason: stop_reason,
+      error_message: error_message,
+      has_tool_calls?: has_tool_calls?
+    }
+
+    transcript =
+      state.transcript
+      |> maybe_update_header_tool_flag(msg_id, has_tool_calls?)
+      |> Transcript.append(status_key(msg_id), status, AssistantStatus)
+      |> Transcript.finalize(status_key(msg_id), status)
+      |> Transcript.finalize(header_key(msg_id), header_for(state.transcript, msg_id) || %AssistantHeader{msg_id: msg_id, has_tool_calls?: has_tool_calls?})
 
     %{
       state
-      | streaming_blocks: %{order: [], data: %{}},
-        transcript: update_transcript(state.transcript, event, state.theme),
+      | streaming_tick_at: nil,
+        current_msg_id: nil,
+        current_has_tool_calls?: false,
+        transcript: transcript,
         footer: update_footer(state.footer, event)
     }
   end
 
   def handle_event(state, {:octo_pi_agent_event, event}) do
-    state = flush_pending_partial(state)
-
     %{
       state
       | transcript: update_transcript(state.transcript, event, state.theme),
@@ -1263,16 +1307,25 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(%{loader: %Components.Loader{}} = state, :loader_tick), do: state
 
   def handle_event(state, {:bash_done, id, output, exit_code}) do
-    transcript =
-      Enum.map(state.transcript, fn
-        %BashExecution{id: ^id} = be ->
-          be |> BashExecution.append_output(output) |> BashExecution.set_complete(exit_code)
+    key = bash_key(id)
 
-        other ->
-          other
-      end)
+    case Map.get(state.transcript.data, key) do
+      %BashExecution{} = be ->
+        updated =
+          be
+          |> BashExecution.append_output(output)
+          |> BashExecution.set_complete(exit_code)
 
-    %{state | transcript: transcript}
+        transcript =
+          state.transcript
+          |> Transcript.update(key, updated)
+          |> Transcript.finalize(key, updated)
+
+        %{state | transcript: transcript}
+
+      _ ->
+        state
+    end
   end
 
   def handle_event(state, _), do: state
@@ -1507,7 +1560,11 @@ defmodule OctoPi.TUI.Interactive do
       send(interactive_pid, {:bash_done, id, output, exit_code})
     end)
 
-    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: Transcript.append(state.transcript, bash_key(id), be, ComponentWrapper)
+    }
   end
 
   defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
@@ -1562,7 +1619,7 @@ defmodule OctoPi.TUI.Interactive do
     %{
       state
       | input: %{new_input | value: "", cursor: 0},
-        transcript: state.transcript ++ [user_msg],
+        transcript: append_user_msg(state.transcript, user_msg),
         compaction_queue: state.compaction_queue ++ [value]
     }
   end
@@ -1588,7 +1645,7 @@ defmodule OctoPi.TUI.Interactive do
     %{
       state
       | input: %{new_input | value: "", cursor: 0},
-        transcript: state.transcript ++ [user_msg],
+        transcript: append_user_msg(state.transcript, user_msg),
         notification: notification
     }
   end
@@ -1608,10 +1665,18 @@ defmodule OctoPi.TUI.Interactive do
     end
 
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
-    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
+    %{state | input: %{new_input | value: "", cursor: 0}, transcript: append_user_msg(state.transcript, user_msg)}
   end
 
-  defp dispatch_slash_command("clear", state), do: %{state | transcript: []}
+  defp dispatch_slash_command("clear", state), do: %{state | transcript: %Transcript{}}
+
+  defp append_user_msg(transcript, user_msg) do
+    key = user_key()
+
+    transcript
+    |> Transcript.append(key, user_msg, ComponentWrapper)
+    |> Transcript.finalize(key, user_msg)
+  end
 
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
@@ -1678,20 +1743,27 @@ defmodule OctoPi.TUI.Interactive do
 
   # --- transcript updates ---
 
-  defp update_transcript(transcript, %{__struct__: MessageEnd} = ev, theme),
-    do: finalize_assistant(transcript, ev.message, theme)
-
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev, theme) do
     te = ToolExecution.new(ev.tool_name, ev.tool_call_id, ev.args, theme)
-    transcript ++ [te]
+    Transcript.append(transcript, tool_key(ev.tool_call_id), te, ComponentWrapper)
   end
 
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev, _theme) do
-    update_tool_execution(transcript, ev.tool_call_id, fn te ->
-      result_text = extract_tool_result_text(ev.result)
-      is_error = Map.get(ev.result, :is_error?, false)
-      ToolExecution.set_result(te, result_text, is_error)
-    end)
+    key = tool_key(ev.tool_call_id)
+
+    case Map.get(transcript.data, key) do
+      %ToolExecution{} = te ->
+        result_text = extract_tool_result_text(ev.result)
+        is_error = Map.get(ev.result, :is_error?, false)
+        updated = ToolExecution.set_result(te, result_text, is_error)
+
+        transcript
+        |> Transcript.update(key, updated)
+        |> Transcript.finalize(key, updated)
+
+      _ ->
+        transcript
+    end
   end
 
   defp update_transcript(transcript, _, _theme), do: transcript
@@ -1742,165 +1814,109 @@ defmodule OctoPi.TUI.Interactive do
 
   defp current_context_tokens(_), do: nil
 
-  # opi-4dx.3 + .6: streaming coalescing.
+  # opi-4dx.13: streaming-tick coalescing.
   #
-  # Block delta events stash into `streaming_blocks` and stamp
-  # `streaming_tick_at`; the transcript-render is deferred to the
-  # next tick (or to the next non-block agent event, which flushes
-  # first to preserve ordering).
+  # Block events update the top-level Transcript directly (latest-snapshot-
+  # wins per block_id is automatic since Transcript.update only mutates
+  # one slot). The streaming-tick deadline is stamped so :timeout fires a
+  # single advance() per coalescing window rather than rendering once
+  # per delta.
   @stream_tick_ms 33
 
-  defp put_streaming_block(state, id, kind, snapshot) do
-    %{order: order, data: data} = state.streaming_blocks
-    order = if Enum.member?(order, id), do: order, else: order ++ [id]
-    data = Map.put(data, id, {kind, snapshot})
-    deadline = state.streaming_tick_at || System.monotonic_time(:millisecond) + @stream_tick_ms
-    %{state | streaming_blocks: %{order: order, data: data}, streaming_tick_at: deadline}
+  defp stamp_streaming_tick(%{streaming_tick_at: nil} = state) do
+    %{state | streaming_tick_at: System.monotonic_time(:millisecond) + @stream_tick_ms}
   end
+
+  defp stamp_streaming_tick(state), do: state
 
   @doc """
-  Apply any pending streaming-block updates into the transcript and
-  clear the coalescing deadline. No-op when nothing is pending. Safe
-  to call from any handler that needs to preserve event ordering
-  before processing a non-block-delta event.
+  No-op shim for the legacy flush API. With `.13`, block events update
+  the Transcript directly so there is nothing to flush — but the helper
+  is kept callable so existing callers (and tests written against the
+  pre-`.13` shape) compile and pass through unchanged.
   """
   @spec flush_pending_partial(Interactive.t()) :: Interactive.t()
-  def flush_pending_partial(%{streaming_tick_at: nil} = state), do: state
-
-  def flush_pending_partial(state) do
-    %{
-      state
-      | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme, state.width),
-        streaming_tick_at: nil
-    }
-  end
+  def flush_pending_partial(state), do: %{state | streaming_tick_at: nil}
 
   @doc false
   def streaming_tick_due?(%{streaming_tick_at: nil}, _now_ms), do: false
   def streaming_tick_due?(%{streaming_tick_at: at}, now_ms) when is_integer(at), do: now_ms >= at
 
-  # Drive AssistantMessage.put_block directly per block_id so each
-  # delta only touches its own slot — no content-list rebuild, no
-  # diff-and-rewrite of unchanged blocks.
-  defp apply_streaming_blocks(transcript, %{order: order, data: data}, theme, width) do
-    case find_last_assistant(transcript) do
-      {idx, %AssistantMessage{} = msg} ->
-        updated =
-          msg
-          |> ensure_dims(theme, width)
-          |> Map.put(:streaming?, true)
-          |> apply_blocks(order, data)
+  # --- block routing ---------------------------------------------
 
-        List.replace_at(transcript, idx, updated)
-
-      _ ->
-        msg =
-          AssistantMessage.new(theme, streaming?: true, width: width)
-          |> apply_blocks(order, data)
-
-        transcript ++ [msg]
-    end
+  defp append_block(state, block_id, kind, snapshot) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
+    mod = renderer_for_kind(kind)
+    %{state | transcript: Transcript.append(state.transcript, key, snapshot, mod)}
   end
 
-  defp apply_blocks(msg, order, data) do
-    Enum.reduce(order, msg, fn id, acc ->
-      case Map.get(data, id) do
-        {kind, snapshot} -> AssistantMessage.put_block(acc, id, kind, snapshot)
-        _ -> acc
+  defp upsert_block(state, block_id, kind, snapshot) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
+
+    transcript =
+      if Map.has_key?(state.transcript.data, key) do
+        Transcript.update(state.transcript, key, snapshot)
+      else
+        Transcript.append(state.transcript, key, snapshot, renderer_for_kind(kind))
       end
-    end)
+
+    %{state | transcript: transcript}
   end
 
-  defp ensure_dims(%AssistantMessage{theme: theme, width: width} = msg, theme, width), do: msg
+  defp finalize_block(state, block_id) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
 
-  defp ensure_dims(%AssistantMessage{} = msg, theme, width),
-    do: AssistantMessage.update_content(msg, theme: theme, width: width)
+    case Map.get(state.transcript.data, key) do
+      nil -> state
+      entry -> %{state | transcript: Transcript.finalize(state.transcript, key, entry)}
+    end
+  end
 
-  defp finalize_assistant(transcript, msg, theme) do
-    content = extract_content_blocks(msg)
-    stop_reason = extract_stop_reason(msg)
-    error_message = Map.get(msg, :error_message)
-    has_tool_calls = has_tool_calls?(msg)
-    msg_id = Map.get(msg, :response_id)
+  defp renderer_for_kind(:text), do: TextBlock
+  defp renderer_for_kind(:thinking), do: ThinkingBlock
+  defp renderer_for_kind(_), do: ThinkingBlock
 
-    updates = [
-      content: content,
-      stop_reason: stop_reason,
-      error_message: error_message,
-      has_tool_calls: has_tool_calls,
-      finalized?: true,
-      streaming?: false,
-      msg_id: msg_id
-    ]
+  # --- key minting -----------------------------------------------
 
-    case find_last_assistant(transcript) do
-      {idx, %AssistantMessage{} = existing} ->
-        updates_with_id =
-          Keyword.put(updates, :msg_id, msg_id || existing.msg_id)
+  defp header_key(msg_id), do: "#{msg_id}:hdr"
+  defp status_key(msg_id), do: "#{msg_id}:end"
+  defp block_key(msg_id, idx), do: "#{msg_id}:#{idx}"
+  defp tool_key(tool_call_id), do: "tool:#{tool_call_id}"
+  defp bash_key(bash_id), do: "bash:#{bash_id}"
+  defp user_key, do: "user:#{:erlang.unique_integer([:positive, :monotonic])}"
+  defp compaction_key, do: "compaction:#{:erlang.unique_integer([:positive, :monotonic])}"
 
-        updated = AssistantMessage.update_content(existing, updates_with_id)
-        List.replace_at(transcript, idx, updated)
+  # --- header lookup / mutation ----------------------------------
+
+  defp header_for(transcript, msg_id) do
+    Map.get(transcript.data, header_key(msg_id))
+  end
+
+  defp maybe_update_header_tool_flag(transcript, msg_id, has_tool_calls?) do
+    key = header_key(msg_id)
+
+    case Map.get(transcript.data, key) do
+      %AssistantHeader{} = h ->
+        Transcript.update(transcript, key, %{h | has_tool_calls?: has_tool_calls?})
 
       _ ->
-        msg = AssistantMessage.new(theme, updates)
-        transcript ++ [msg]
+        transcript
     end
   end
 
-  # Locates the *currently streaming* assistant in the transcript so
-  # apply_partial / finalize_assistant can update it in place. A finalized
-  # assistant (one whose MessageEnd has already been processed, i.e.
-  # `finalized?: true`) is treated as a boundary — a subsequent
-  # MessageStart belongs to a NEW turn and must be appended, not used
-  # to overwrite the previous turn's reply.
-  #
-  # Returns nil when the most recent assistant is finalized OR when a
-  # user / tool-execution boundary appears after the last assistant.
-  defp find_last_assistant(transcript) do
-    result =
-      transcript
-      |> Enum.with_index()
-      |> Enum.reverse()
-      |> Enum.find(fn
-        {%AssistantMessage{}, _idx} -> true
-        _ -> false
-      end)
-
-    case result do
-      {%AssistantMessage{finalized?: true}, _idx} ->
-        nil
-
-      {msg, idx} ->
-        has_boundary_after =
-          transcript
-          |> Enum.drop(idx + 1)
-          |> Enum.any?(fn
-            %UserMessage{} -> true
-            {:user, _} -> true
-            %ToolExecution{} -> true
-            _ -> false
-          end)
-
-        if has_boundary_after, do: nil, else: {idx, msg}
-
-      nil ->
-        nil
+  # Locates the currently-streaming AssistantHeader entry — i.e., the
+  # most recently appended header whose matching `:end` status entry
+  # has not been added yet, AND whose msg_id matches state.current_msg_id.
+  defp find_streaming_header(state) do
+    case state.current_msg_id do
+      nil -> nil
+      msg_id -> Map.get(state.transcript.data, header_key(msg_id))
     end
   end
 
-  defp update_tool_execution(transcript, tool_call_id, update_fn) do
-    idx =
-      Enum.find_index(transcript, fn
-        %ToolExecution{tool_call_id: id} -> id == tool_call_id
-        _ -> false
-      end)
-
-    if idx do
-      List.update_at(transcript, idx, update_fn)
-    else
-      transcript
-    end
-  end
 
   defp extract_content_blocks(%{content: content}) when is_list(content) do
     Enum.flat_map(content, fn
@@ -1963,10 +1979,10 @@ defmodule OctoPi.TUI.Interactive do
     transcript_lines =
       RenderTelemetry.with_transcript_render(
         %{
-          msg_count: length(transcript),
+          msg_count: length(transcript.order),
           streaming?: RenderTelemetry.transcript_streaming?(transcript)
         },
-        fn -> render_transcript(transcript, width, state.thinking_visible) end
+        fn -> render_transcript(transcript, width, state.theme, state.thinking_visible) end
       )
 
     loader_lines = render_loader(loader, width, state.theme)
@@ -2404,31 +2420,45 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 
-  defp render_transcript(transcript, width, thinking_visible) do
+  defp render_transcript(%Transcript{} = transcript, width, theme, thinking_visible) do
+    ctx = %{
+      theme: theme,
+      width: width,
+      padding_x: 1,
+      hide_thinking: not thinking_visible,
+      hidden_thinking_label: "Thinking..."
+    }
+
+    {iodata, _t} = Transcript.render(transcript, ctx)
+
+    bin = IO.iodata_to_binary(iodata)
+    if bin == "", do: [], else: String.split(bin, "\n")
+  end
+
+  defp render_transcript(transcript, width, theme, thinking_visible) when is_list(transcript) do
     transcript
     |> Enum.with_index()
     |> Enum.flat_map(fn {entry, idx} ->
       spacer = if idx > 0 and match?(%UserMessage{}, entry), do: [""], else: []
-      spacer ++ render_entry(entry, width, thinking_visible)
+      spacer ++ render_entry(entry, width, theme, thinking_visible)
     end)
   end
 
-  defp render_entry(%AssistantMessage{} = msg, width, thinking_visible) do
+  defp render_entry(%AssistantMessage{} = msg, width, _theme, thinking_visible) do
     AssistantMessage.render(%{msg | hide_thinking: not thinking_visible}, width)
   end
 
-  # Diff does not implement Component.render/2 — route explicitly.
-  defp render_entry(%Diff{diff_text: diff_text, theme: theme}, _width, _thinking_visible) do
+  defp render_entry(%Diff{diff_text: diff_text, theme: theme}, _width, _outer_theme, _thinking_visible) do
     Diff.render_diff(diff_text, theme)
   end
 
-  defp render_entry(%mod{} = component, width, _thinking_visible), do: mod.render(component, width)
+  defp render_entry(%mod{} = component, width, _theme, _thinking_visible), do: mod.render(component, width)
 
-  defp render_entry({:user, text}, width, _thinking_visible) do
+  defp render_entry({:user, text}, width, _theme, _thinking_visible) do
     WrapAnsi.wrap("> #{text}", width)
   end
 
-  defp render_entry({:assistant, text, _}, width, _thinking_visible) do
+  defp render_entry({:assistant, text, _}, width, _theme, _thinking_visible) do
     WrapAnsi.wrap(Safe.sanitize(text), width)
   end
 end

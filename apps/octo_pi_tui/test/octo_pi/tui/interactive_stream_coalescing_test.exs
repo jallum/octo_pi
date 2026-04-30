@@ -36,10 +36,9 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
 
   defp base_state do
     %Interactive{
-      transcript: [],
+      transcript: %OctoPi.TUI.Transcript{},
       theme: @theme,
-      footer: %Footer{},
-      streaming_blocks: %{order: [], data: %{}}
+      footer: %Footer{}
     }
   end
 
