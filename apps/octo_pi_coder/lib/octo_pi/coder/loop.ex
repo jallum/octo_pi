@@ -52,10 +52,10 @@ defmodule OctoPi.Coder.Loop do
 
   @type compact_pending ::
           %{
-            task_pid: pid(),
+            worker_pid: pid(),
+            worker_ref: reference(),
             monitor_ref: reference(),
             source: :manual | :pre_prompt | :mid_run,
-            opts: keyword(),
             # Continuation describes what to do once compact resolves.
             # `{:reply, from}` for manual; `{:forward_prompt, from, save, send}`
             # for pre-prompt; `{:agent_response, ref}` for mid-run.
@@ -246,10 +246,11 @@ defmodule OctoPi.Coder.Loop do
 
   def handle_call(:agent_abort_compact, _from, %State{compact_pending: nil} = state), do: {:reply, :ok, state}
 
-  def handle_call(:agent_abort_compact, _from, %State{compact_pending: %{task_pid: pid}} = state) do
-    Process.exit(pid, :kill)
-    # The :DOWN handler from Process.monitor will fire next and
-    # send `{:cancel, :aborted}` back to the original caller.
+  def handle_call(:agent_abort_compact, _from, %State{compact_pending: %{worker_pid: pid}} = state) do
+    # Graceful cancel — the worker's recv loop will pick up :abort,
+    # kill its in-flight producer, and reply via {:compact_done, ref,
+    # {:cancel, :aborted}}.
+    send(pid, :abort)
     {:reply, :ok, state}
   end
 
@@ -415,13 +416,12 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-  # Spawn the compaction LLM call in a Task and stash the
-  # `compact_pending` map on state. The task sends
-  # `{:compact_complete, task_pid, result}` on success; a brutal kill
-  # (Process.exit/2 from :abort_compact) triggers `{:DOWN, ref, ...}`
-  # which we treat as `{:cancel, :aborted}`.
+  # Drive a compaction. The synchronous prep + extension hooks run
+  # inline (in the GenServer); only the LLM call is spawned via
+  # `Compaction.async/5`, which owns the worker process and its
+  # producer. Short-circuit cases (nothing-to-compact, no-model,
+  # extension cancel/override) finish without spawning at all.
   defp start_compact(%State{} = state, opts, source, continuation) do
-    parent = self()
     started_mono = System.monotonic_time()
     tokens_before = compact_tokens_before(state)
 
@@ -436,25 +436,68 @@ defmodule OctoPi.Coder.Loop do
       %OctoPi.Coder.Event.CompactionStart{reason: source}
     )
 
-    task_pid =
-      spawn(fn ->
-        result = do_compact(state, opts)
-        send(parent, {:compact_complete, self(), result})
-      end)
+    case prep_for_compact(state, opts) do
+      {:short_circuit, result} ->
+        # No LLM needed; skip the spawn and finalize inline.
+        pending = %{
+          source: source,
+          continuation: continuation,
+          started_mono: started_mono,
+          tokens_before: tokens_before
+        }
 
-    monitor_ref = Process.monitor(task_pid)
+        finish_compact(%{state | compact_pending: pending}, result, false)
 
-    pending = %{
-      task_pid: task_pid,
-      monitor_ref: monitor_ref,
-      source: source,
-      opts: opts,
-      continuation: continuation,
-      started_mono: started_mono,
-      tokens_before: tokens_before
-    }
+      {:run_llm, prep, model, llm_opts} ->
+        worker_ref = make_ref()
+        {:ok, worker_pid} = Compaction.async(self(), worker_ref, prep, model, llm_opts)
+        monitor_ref = Process.monitor(worker_pid)
 
-    %{state | compact_pending: pending}
+        pending = %{
+          worker_pid: worker_pid,
+          worker_ref: worker_ref,
+          monitor_ref: monitor_ref,
+          source: source,
+          continuation: continuation,
+          started_mono: started_mono,
+          tokens_before: tokens_before
+        }
+
+        %{state | compact_pending: pending}
+    end
+  end
+
+  defp prep_for_compact(%State{} = state, opts) do
+    settings = SettingsManager.get_compaction_settings(state.settings_manager)
+    path = SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)
+
+    case Preparation.prepare(path, settings) do
+      nil ->
+        {:short_circuit, {:error, :nothing_to_compact}}
+
+      %Preparation{} = prep ->
+        ctx = build_ctx(state)
+
+        event =
+          Event.new(:session_before_compact, %{
+            preparation: prep,
+            custom_instructions: Keyword.get(opts, :custom_instructions)
+          })
+
+        decide_compact(state, prep, opts, Dispatcher.halt_on_result(state.extensions, event, ctx))
+    end
+  end
+
+  defp decide_compact(_state, _prep, _opts, {:cancel, reason}), do: {:short_circuit, {:cancel, reason}}
+
+  defp decide_compact(_state, _prep, _opts, {:override, %Result{} = result}),
+    do: {:short_circuit, {:ok, %{result: result, from_extension?: true}}}
+
+  defp decide_compact(state, prep, opts, :ok) do
+    case state.model_provider.() do
+      nil -> {:short_circuit, {:error, :no_model}}
+      model -> {:run_llm, prep, model, opts}
+    end
   end
 
   # Run after the compact task settles (either via :compact_complete
@@ -463,7 +506,9 @@ defmodule OctoPi.Coder.Loop do
   defp finish_compact(%State{compact_pending: nil} = state, _result, _aborted?), do: state
 
   defp finish_compact(%State{compact_pending: pending} = state, result, aborted?) do
-    Process.demonitor(pending.monitor_ref, [:flush])
+    if monitor = Map.get(pending, :monitor_ref) do
+      Process.demonitor(monitor, [:flush])
+    end
 
     {final_result, state} =
       case result do
@@ -563,45 +608,6 @@ defmodule OctoPi.Coder.Loop do
 
     {state, _materialized} = append_to_store(state, entry, [])
     {:reply, OctoPi.Agent.prompt(state.agent_pid, send_text), state}
-  end
-
-  defp do_compact(%State{} = state, opts) do
-    settings = SettingsManager.get_compaction_settings(state.settings_manager)
-    path = SessionStore.path(state.store_pid, :leaf, to: :latest_compaction)
-
-    case Preparation.prepare(path, settings) do
-      nil -> {:error, :nothing_to_compact}
-      %Preparation{} = prep -> dispatch_compact(state, prep, opts)
-    end
-  end
-
-  defp dispatch_compact(%State{} = state, prep, opts) do
-    ctx = build_ctx(state)
-
-    event =
-      Event.new(:session_before_compact, %{
-        preparation: prep,
-        custom_instructions: Keyword.get(opts, :custom_instructions)
-      })
-
-    case Dispatcher.halt_on_result(state.extensions, event, ctx) do
-      {:cancel, reason} -> {:cancel, reason}
-      {:override, %Result{} = result} -> {:ok, %{result: result, from_extension?: true}}
-      :ok -> run_default_compact(state, prep, opts)
-    end
-  end
-
-  defp run_default_compact(%State{} = state, prep, opts) do
-    case state.model_provider.() do
-      nil ->
-        {:error, :no_model}
-
-      model ->
-        case Compaction.compact(prep, model, opts) do
-          {:ok, %Result{} = result} -> {:ok, %{result: result, from_extension?: false}}
-          {:error, _} = err -> err
-        end
-    end
   end
 
   # Persist the Compaction entry, refresh the cached path, rewrite
@@ -847,28 +853,37 @@ defmodule OctoPi.Coder.Loop do
     {:noreply, start_compact(state, opts, :mid_run, {:agent_response, ref})}
   end
 
-  def handle_info({:compact_complete, task_pid, result}, %State{compact_pending: pending} = state)
-      when not is_nil(pending) and pending.task_pid == task_pid do
-    {:noreply, finish_compact(state, result, _aborted? = false)}
+  def handle_info({:compact_done, worker_ref, result}, %State{compact_pending: pending} = state)
+      when not is_nil(pending) and pending.worker_ref == worker_ref do
+    # `Compaction.async` produces results in the `{:ok, %Result{}} |
+    # {:error, _} | {:cancel, :aborted}` shape; wrap into the
+    # `compact_result()` shape Coder.Loop's continuations expect
+    # (with `from_extension?` always false on this LLM path).
+    {wrapped, aborted?} =
+      case result do
+        {:ok, %Result{} = r} -> {{:ok, %{result: r, from_extension?: false}}, false}
+        {:cancel, :aborted} = c -> {c, true}
+        other -> {other, false}
+      end
+
+    {:noreply, finish_compact(state, wrapped, aborted?)}
   end
 
   def handle_info({:DOWN, monitor_ref, :process, _pid, :normal}, %State{compact_pending: pending} = state)
-      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
-    # Task exited cleanly — its :compact_complete message is either
-    # being processed already or in the mailbox. Drop the DOWN.
+      when is_map(pending) and is_map_key(pending, :monitor_ref) and
+             :erlang.map_get(:monitor_ref, pending) == monitor_ref do
+    # Worker exited cleanly — `:compact_done` is either being
+    # processed or sitting in the mailbox. Drop the DOWN.
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, monitor_ref, :process, _pid, :killed}, %State{compact_pending: pending} = state)
-      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
-    # Brutal-killed via :abort_compact — cancellation.
-    {:noreply, finish_compact(state, {:cancel, :aborted}, true)}
-  end
-
   def handle_info({:DOWN, monitor_ref, :process, _pid, reason}, %State{compact_pending: pending} = state)
-      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
-    # Unexpected crash — surface as an error.
-    {:noreply, finish_compact(state, {:error, {:task_crashed, reason}}, false)}
+      when is_map(pending) and is_map_key(pending, :monitor_ref) and
+             :erlang.map_get(:monitor_ref, pending) == monitor_ref do
+    # Worker crashed unexpectedly. (Brutal kill via Process.exit/2
+    # is no longer used — :abort_compact sends a graceful :abort
+    # message — so any non-:normal DOWN is a true crash.)
+    {:noreply, finish_compact(state, {:error, {:worker_crashed, reason}}, false)}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
