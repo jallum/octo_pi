@@ -50,12 +50,28 @@ defmodule OctoPi.Coder.Loop do
   @typedoc "Optional providers default to closures returning sensible nils / defaults."
   @type model_provider :: (-> term() | nil)
 
+  @type compact_pending ::
+          %{
+            task_pid: pid(),
+            monitor_ref: reference(),
+            source: :manual | :pre_prompt | :mid_run,
+            opts: keyword(),
+            # Continuation describes what to do once compact resolves.
+            # `{:reply, from}` for manual; `{:forward_prompt, from, save, send}`
+            # for pre-prompt; `{:agent_response, ref}` for mid-run.
+            continuation:
+              {:reply, GenServer.from()}
+              | {:forward_prompt, GenServer.from(), String.t(), String.t()}
+              | {:agent_response, reference()}
+          }
+
   @type state :: %__MODULE__.State{
           extensions: [Extension.t()],
           store_pid: SessionStore.t(),
           agent_pid: OctoPi.Agent.t(),
           model_provider: model_provider(),
-          settings_manager: pid()
+          settings_manager: pid(),
+          compact_pending: compact_pending() | nil
         }
 
   defmodule State do
@@ -67,7 +83,8 @@ defmodule OctoPi.Coder.Loop do
       :store_pid,
       :agent_pid,
       :model_provider,
-      :settings_manager
+      :settings_manager,
+      compact_pending: nil
     ]
   end
 
@@ -213,25 +230,27 @@ defmodule OctoPi.Coder.Loop do
     {:reply, :ok, state}
   end
 
-  def handle_call({:agent_prompt, save_text, send_text}, _from, state) do
+  def handle_call({:agent_prompt, save_text, send_text}, from, state) do
     # Pre-prompt auto-compact: if the current context is over
     # threshold, compact before forwarding the new user message.
     # Mirrors upstream `_handleNewUserMessage` line 1027.
-    state = maybe_pre_prompt_compact(state)
+    if pre_prompt_should_compact?(state) do
+      # Spawn the compact and defer the prompt forward until it
+      # finishes. Continuation tells the compact handler to call
+      # forward_prompt(from, save_text, send_text) once it lands.
+      {:noreply, start_compact(state, [auto?: true], :pre_prompt, {:forward_prompt, from, save_text, send_text})}
+    else
+      forward_prompt_now(state, from, save_text, send_text)
+    end
+  end
 
-    user_msg = %User{
-      content: [%OctoPi.AI.Content.Text{text: save_text}],
-      timestamp: :os.system_time(:millisecond)
-    }
+  def handle_call(:agent_abort_compact, _from, %State{compact_pending: nil} = state), do: {:reply, :ok, state}
 
-    entry = %Entry.Message{
-      id: nil,
-      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
-      message: MessageWriter.from_user(user_msg)
-    }
-
-    {state, _materialized} = append_to_store(state, entry, [])
-    {:reply, OctoPi.Agent.prompt(state.agent_pid, send_text), state}
+  def handle_call(:agent_abort_compact, _from, %State{compact_pending: %{task_pid: pid}} = state) do
+    Process.exit(pid, :kill)
+    # The :DOWN handler from Process.monitor will fire next and
+    # send `{:cancel, :aborted}` back to the original caller.
+    {:reply, :ok, state}
   end
 
   def handle_call(:agent_abort, _from, state) do
@@ -272,15 +291,17 @@ defmodule OctoPi.Coder.Loop do
 
   # -------------------------------------------------------------------------
 
-  def handle_call({:compact, opts}, _from, state) do
-    # Manual compact: synchronous in Coder. Abort the agent first
-    # (no-op if idle), do the work, set Agent's transcript, return.
-    # Mid-run auto-compact stays on a separate path: Agent emits
-    # CompactionRequested and the handle_info path below runs the
-    # work.
+  def handle_call({:compact, _opts}, _from, %State{compact_pending: %{}} = state) do
+    {:reply, {:error, :busy}, state}
+  end
+
+  def handle_call({:compact, opts}, from, state) do
+    # Manual compact: spawn the LLM work in a Task so the GenServer
+    # stays responsive. `:abort_compact` can kill the task; the
+    # original caller's reply is deferred until the task finishes
+    # or is killed.
     OctoPi.Agent.abort(state.agent_pid)
-    {result, new_state} = run_compact_with_telemetry(state, opts, :manual)
-    {:reply, result, new_state}
+    {:noreply, start_compact(state, opts, :manual, {:reply, from})}
   end
 
   def handle_call({:fork, opts}, _from, state) do
@@ -363,13 +384,13 @@ defmodule OctoPi.Coder.Loop do
 
   # ---- compact (manual + pre-prompt) --------------------------------------
 
-  # Pre-prompt threshold check: run a synchronous compact before
-  # forwarding a user prompt when the current context exceeds the
-  # configured threshold. Returns the (possibly updated) state.
-  defp maybe_pre_prompt_compact(%State{} = state) do
+  # Pre-prompt threshold check used by :agent_prompt to decide whether
+  # to compact before forwarding the prompt. Emits the
+  # :pre_prompt_check telemetry event and returns true/false.
+  defp pre_prompt_should_compact?(%State{} = state) do
     settings = SettingsManager.get_compaction_settings(state.settings_manager)
     usage = do_get_context_usage(state)
-    triggered? = pre_prompt_should_compact?(settings, usage)
+    triggered? = check_should_compact(settings, usage)
 
     :telemetry.execute(
       [:octo_pi_coder, :pre_prompt_check],
@@ -382,15 +403,10 @@ defmodule OctoPi.Coder.Loop do
       }
     )
 
-    if triggered? do
-      {_result, new_state} = run_compact_with_telemetry(state, [auto?: true], :pre_prompt)
-      new_state
-    else
-      state
-    end
+    triggered?
   end
 
-  defp pre_prompt_should_compact?(settings, usage) do
+  defp check_should_compact(settings, usage) do
     with true <- settings.enabled,
          %{tokens: t, context_window: cw} when is_integer(t) and is_integer(cw) <- usage do
       Tokens.should_compact?(t, cw, settings)
@@ -399,10 +415,13 @@ defmodule OctoPi.Coder.Loop do
     end
   end
 
-  # Wraps do_compact + finalize_compact with start/stop telemetry +
-  # subscriber events, tagged by `source` (:manual | :pre_prompt |
-  # :mid_run). Returns `{compact_result, state}`.
-  defp run_compact_with_telemetry(%State{} = state, opts, source) do
+  # Spawn the compaction LLM call in a Task and stash the
+  # `compact_pending` map on state. The task sends
+  # `{:compact_complete, task_pid, result}` on success; a brutal kill
+  # (Process.exit/2 from :abort_compact) triggers `{:DOWN, ref, ...}`
+  # which we treat as `{:cancel, :aborted}`.
+  defp start_compact(%State{} = state, opts, source, continuation) do
+    parent = self()
     started_mono = System.monotonic_time()
     tokens_before = compact_tokens_before(state)
 
@@ -417,10 +436,40 @@ defmodule OctoPi.Coder.Loop do
       %OctoPi.Coder.Event.CompactionStart{reason: source}
     )
 
-    {result, new_state} =
-      case do_compact(state, opts) do
+    task_pid =
+      spawn(fn ->
+        result = do_compact(state, opts)
+        send(parent, {:compact_complete, self(), result})
+      end)
+
+    monitor_ref = Process.monitor(task_pid)
+
+    pending = %{
+      task_pid: task_pid,
+      monitor_ref: monitor_ref,
+      source: source,
+      opts: opts,
+      continuation: continuation,
+      started_mono: started_mono,
+      tokens_before: tokens_before
+    }
+
+    %{state | compact_pending: pending}
+  end
+
+  # Run after the compact task settles (either via :compact_complete
+  # or :DOWN). Persists the result if successful, fires telemetry +
+  # CompactionEnd, runs the continuation, and clears compact_pending.
+  defp finish_compact(%State{compact_pending: nil} = state, _result, _aborted?), do: state
+
+  defp finish_compact(%State{compact_pending: pending} = state, result, aborted?) do
+    Process.demonitor(pending.monitor_ref, [:flush])
+
+    {final_result, state} =
+      case result do
         {:ok, %{result: r, from_extension?: from_ext?}} = ok ->
-          {ok, finalize_compact(state, r, from_ext?)}
+          new_state = finalize_compact(state, r, from_ext?)
+          {ok, new_state}
 
         other ->
           {other, state}
@@ -428,22 +477,50 @@ defmodule OctoPi.Coder.Loop do
 
     :telemetry.execute(
       [:octo_pi_coder, :compact, :stop],
-      %{duration: System.monotonic_time() - started_mono},
+      %{duration: System.monotonic_time() - pending.started_mono},
       %{
-        source: source,
-        result: compact_result_kind(result),
-        tokens_before: tokens_before,
-        tokens_after: compact_tokens_before(new_state),
-        from_extension?: from_extension?(result)
+        source: pending.source,
+        result: compact_result_kind(final_result),
+        tokens_before: pending.tokens_before,
+        tokens_after: compact_tokens_before(state),
+        from_extension?: from_extension?(final_result),
+        aborted?: aborted?
       }
     )
 
     Subscribers.dispatch(
       state.agent_pid,
-      %OctoPi.Coder.Event.CompactionEnd{result: result, reason: source}
+      %OctoPi.Coder.Event.CompactionEnd{
+        result: final_result,
+        reason: pending.source,
+        aborted?: aborted?
+      }
     )
 
-    {result, new_state}
+    state = %{state | compact_pending: nil}
+    apply_continuation(state, pending.continuation, final_result)
+  end
+
+  # Run the deferred continuation now that the compact has settled.
+  defp apply_continuation(state, {:reply, from}, result) do
+    GenServer.reply(from, result)
+    state
+  end
+
+  defp apply_continuation(state, {:forward_prompt, from, save_text, send_text}, _result) do
+    {:reply, reply, state} = forward_prompt_now(state, from, save_text, send_text)
+    GenServer.reply(from, reply)
+    state
+  end
+
+  defp apply_continuation(state, {:agent_response, ref}, {:ok, %{from_extension?: from_ext?}} = ok) do
+    OctoPi.Agent.compaction_response(state.agent_pid, ref, agent_compaction_payload(ok, from_ext?))
+    state
+  end
+
+  defp apply_continuation(state, {:agent_response, ref}, other) do
+    OctoPi.Agent.compaction_response(state.agent_pid, ref, other)
+    state
   end
 
   defp compact_tokens_before(state) do
@@ -467,6 +544,26 @@ defmodule OctoPi.Coder.Loop do
   defp navigate_result_kind({:cancel, _}), do: :cancel
   defp navigate_result_kind({:error, reason}), do: {:error, reason}
   defp navigate_result_kind(_), do: :unknown
+
+  # The body of `:agent_prompt` after pre-prompt-compact has settled.
+  # Returns a `{:reply, reply, state}` tuple — used both as the
+  # immediate handle_call return when no compact was needed and via
+  # apply_continuation/3 after a deferred compact lands.
+  defp forward_prompt_now(state, _from, save_text, send_text) do
+    user_msg = %User{
+      content: [%OctoPi.AI.Content.Text{text: save_text}],
+      timestamp: :os.system_time(:millisecond)
+    }
+
+    entry = %Entry.Message{
+      id: nil,
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
+      message: MessageWriter.from_user(user_msg)
+    }
+
+    {state, _materialized} = append_to_store(state, entry, [])
+    {:reply, OctoPi.Agent.prompt(state.agent_pid, send_text), state}
+  end
 
   defp do_compact(%State{} = state, opts) do
     settings = SettingsManager.get_compaction_settings(state.settings_manager)
@@ -742,25 +839,36 @@ defmodule OctoPi.Coder.Loop do
     {:noreply, state}
   end
 
-  def handle_info(
-        {:octo_pi_agent_event, %OctoPi.Agent.Event.CompactionRequested{ref: ref, opts: opts}},
-        %State{agent_pid: agent_pid} = state
-      ) do
+  def handle_info({:octo_pi_agent_event, %OctoPi.Agent.Event.CompactionRequested{ref: ref, opts: opts}}, state) do
     # Mid-run auto-compact: Agent paused between turns and asked the
-    # host to compact. Use the same do_compact pipeline as manual
-    # compact, then thread the result back through Agent's FSM via
-    # compaction_response/3.
-    {result, new_state} = run_compact_with_telemetry(state, opts, :mid_run)
+    # host to compact. Spawn the work; on completion (or kill), the
+    # `{:agent_response, ref}` continuation threads the result back
+    # to Agent's FSM via compaction_response/3.
+    {:noreply, start_compact(state, opts, :mid_run, {:agent_response, ref})}
+  end
 
-    case result do
-      {:ok, %{from_extension?: from_ext?}} ->
-        OctoPi.Agent.compaction_response(agent_pid, ref, agent_compaction_payload(result, from_ext?))
+  def handle_info({:compact_complete, task_pid, result}, %State{compact_pending: pending} = state)
+      when not is_nil(pending) and pending.task_pid == task_pid do
+    {:noreply, finish_compact(state, result, _aborted? = false)}
+  end
 
-      other ->
-        OctoPi.Agent.compaction_response(agent_pid, ref, other)
-    end
+  def handle_info({:DOWN, monitor_ref, :process, _pid, :normal}, %State{compact_pending: pending} = state)
+      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
+    # Task exited cleanly — its :compact_complete message is either
+    # being processed already or in the mailbox. Drop the DOWN.
+    {:noreply, state}
+  end
 
-    {:noreply, new_state}
+  def handle_info({:DOWN, monitor_ref, :process, _pid, :killed}, %State{compact_pending: pending} = state)
+      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
+    # Brutal-killed via :abort_compact — cancellation.
+    {:noreply, finish_compact(state, {:cancel, :aborted}, true)}
+  end
+
+  def handle_info({:DOWN, monitor_ref, :process, _pid, reason}, %State{compact_pending: pending} = state)
+      when not is_nil(pending) and pending.monitor_ref == monitor_ref do
+    # Unexpected crash — surface as an error.
+    {:noreply, finish_compact(state, {:error, {:task_crashed, reason}}, false)}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}

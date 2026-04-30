@@ -138,6 +138,14 @@ defmodule OctoPi.Coder do
   @spec compact(t(), keyword()) :: compact_result()
   def compact(server, opts \\ []), do: GenServer.call(server, {:compact, opts}, :infinity)
 
+  @doc """
+  Cancel an in-flight compaction. Brutal-kills the spawned compact
+  task; the original caller of `compact/2` (or pre-prompt prompt)
+  receives `{:cancel, :aborted}`. No-op if no compact is in flight.
+  """
+  @spec abort_compact(t()) :: :ok
+  def abort_compact(server), do: GenServer.call(server, :agent_abort_compact)
+
   @doc "Fork the current session into a new session file."
   @spec fork(t(), keyword()) :: fork_result()
   def fork(server, opts), do: GenServer.call(server, {:fork, opts}, :infinity)

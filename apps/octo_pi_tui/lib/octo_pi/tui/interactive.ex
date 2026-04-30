@@ -1148,6 +1148,12 @@ defmodule OctoPi.TUI.Interactive do
     %{state | input: %{state.input | value: "", cursor: 0}}
   end
 
+  defp dispatch_app_action("app.interrupt", %{is_compacting?: true, session: session} = state, _key)
+       when not is_nil(session) do
+    Coder.abort_compact(session)
+    state
+  end
+
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
     if state.session, do: Coder.abort(state.session)
     state
@@ -1157,6 +1163,12 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.clear", %{input: %{value: v}} = state, _key) when v != "",
     do: %{state | input: %{state.input | value: "", cursor: 0}}
+
+  defp dispatch_app_action("app.clear", %{is_compacting?: true, session: session} = state, _key)
+       when not is_nil(session) do
+    Coder.abort_compact(session)
+    state
+  end
 
   defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
     if state.session, do: Coder.abort(state.session)
@@ -1285,6 +1297,12 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_app_action(_action, state, _key), do: state
+
+  defp handle_event_key(%{is_compacting?: true, session: session} = state, %Key{key: :escape})
+       when not is_nil(session) do
+    Coder.abort_compact(session)
+    state
+  end
 
   defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}), do: %{state | exit: true}
 
