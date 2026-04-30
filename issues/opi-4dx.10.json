@@ -4,7 +4,8 @@
   "blocked_by": [
     "opi-4dx.6",
     "opi-4dx.7",
-    "opi-4dx.8"
+    "opi-4dx.8",
+    "opi-4dx.9"
   ],
   "blocks": [],
   "comments": [],
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Wire-up: Interactive uses Transcript; thread agent ids end-to-end",
   "type": "task",
-  "updated_at": "2026-04-30T17:48:42.780285Z"
+  "updated_at": "2026-04-30T17:48:47.669635Z"
 }
