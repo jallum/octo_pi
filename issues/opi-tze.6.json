@@ -4,14 +4,15 @@
     "opi-tze.5"
   ],
   "blocks": [],
+  "closed_at": "2026-04-30T12:49:34Z",
   "created": "2026-04-30T12:07:38Z",
   "description": "**Site (apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex L954-962)**\n\\`\\`\\`elixir\ndefp render_dequeue_items(items, selected, _width, theme) do\n  Enum.with_index(items, fn {type, msg}, idx -\u003e\n    ...\n    text = if is_map(msg) and Map.has_key?(msg, :content),\n             do: to_string(msg.content),\n             else: inspect(msg)\n    ...\n  end)\nend\n\\`\\`\\`\n\n%OctoPi.AI.Message.User.content can be either a binary OR a list of\n%Text{} / %Image{} structs (see apps/octo_pi_ai/lib/octo_pi/ai/message.ex).\n\nWhen the user steers via Coder.steer (which Message.normalize converts\nbinaries to a User struct with binary content), to_string works. But\nwhen the source message has list content (e.g. follow-up with images,\nor any message reconstructed from session state), to_string raises:\n   ** (Protocol.UndefinedError) protocol String.Chars not implemented\n   for [%OctoPi.AI.Content.Text{...}]\n\n**Fix**\nUse a small helper that handles both:\n\\`\\`\\`elixir\ndefp message_text(%{content: c}) when is_binary(c), do: c\ndefp message_text(%{content: c}) when is_list(c) do\n  c |\u003e Enum.flat_map(fn\n    %OctoPi.AI.Content.Text{text: t} -\u003e [t]\n    _ -\u003e []\n  end) |\u003e Enum.join(\\\"\\\\n\\\")\nend\n\\`\\`\\`\n\nIf we replace the overlay UX with the editor-restore flow (opi-tze.5),\nthis becomes part of that work.",
   "id": "opi-tze.6",
   "labels": [],
   "parent": "opi-tze",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "[BUG] Dequeue overlay rendering crashes for list-content user messages",
   "type": "bug",
-  "updated_at": "2026-04-30T12:48:35Z"
+  "updated_at": "2026-04-30T12:49:34Z"
 }
