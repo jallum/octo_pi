@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T13:09:20Z",
+  "description": "## Site\napps/octo_pi_agent/lib/octo_pi/agent/loop.ex L535-555\n\nThe non-tool decide_next clause inlines exactly the pattern that\n\\`drain_steering_into_messages/1\\` already encapsulates a few lines\nbelow:\n\n\\`\\`\\`elixir\ndefp decide_next(_terminal_reason, store) do\n  case PendingMessageQueue.drain(store.loop.steering_queue) do\n    {[], _} -\u003e drain_follow_up_into_messages(store)\n    {steers, q} -\u003e\n      store = ...put_in...\n      emit_queue_update(store)\n      {:continue, store}\n  end\nend\n\ndefp drain_steering_into_messages(store) do\n  case PendingMessageQueue.drain(store.loop.steering_queue) do\n    {[], _} -\u003e store\n    {steers, q} -\u003e\n      store = ...put_in...\n      emit_queue_update(store)\n      store\n  end\nend\n\\`\\`\\`\n\n## Change\nHave the helper return a tagged tuple so the caller knows whether\nanything moved:\n\n\\`\\`\\`elixir\n@spec drain_steering_into_messages(store) :: {:drained | :empty, store}\ndefp drain_steering_into_messages(store) do\n  case PendingMessageQueue.drain(store.loop.steering_queue) do\n    {[], _} -\u003e {:empty, store}\n    {steers, q} -\u003e\n      store = ...put_in...\n      emit_queue_update(store)\n      {:drained, store}\n  end\nend\n\\`\\`\\`\n\nThen:\n\n\\`\\`\\`elixir\ndefp decide_next(:tool_use, store) do\n  {_, store} = drain_steering_into_messages(store)\n  {:continue, store}\nend\n\ndefp decide_next(_terminal_reason, store) do\n  case drain_steering_into_messages(store) do\n    {:drained, store} -\u003e {:continue, store}\n    {:empty, store} -\u003e drain_follow_up_into_messages(store)\n  end\nend\n\\`\\`\\`\n\nstart_run/1 also calls drain_steering_into_messages and currently\nignores the tag — no semantic change there, just match against\n\\`{_, store}\\`.\n\n## Tests\n- All 138 octo_pi_agent tests should keep passing without changes.\n- The opi-tze.3 \\\"queue_update events\\\" describe stays green\n  (emit_queue_update is fired in exactly the same situations).\n\n## Why this isn't done in opi-tze\nSurfaced during post-review of the opi-tze epic; deferred so the\nqueueing fixes could land minimal/atomic. The duplication isn't a\nbug — both paths are correct — but it's a maintenance hazard:\nadding a new emission concern (e.g. telemetry around drain count)\nwould require the change in two places.",
+  "id": "opi-5ka.6",
+  "labels": [],
+  "parent": "opi-5ka",
+  "priority": 3,
+  "status": "open",
+  "title": "Consolidate decide_next non-tool branch into drain_steering_into_messages",
+  "type": "task",
+  "updated_at": "2026-04-30T13:09:20Z"
+}
