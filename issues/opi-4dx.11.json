@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T17:48:16.092255Z",
+  "description": "## Why\n\nAfter `.6` through `.10` land, capture a fresh tmux + tracing run and compare against `trace3.log`. The redesign should produce: per-tick render cost flat in finalized-message count; `octo_pi_agent_event` handle_info still sub-millisecond; key.latency at mailbox=0 stays sub-ms; allocation behavior dominated by pending-tail size, not message size or transcript length.\n\nAlso: investigate the unexplained 220 ms key.latency tail at low mailbox depth from `trace3.log`. Is it eliminated by the redesign, or does it persist (indicating a non-render culprit — terminal flush, telemetry handler, or scheduler artifact)?\n\n## Protocol\n\nSame as `opi-4dx.2` and the `trace3` capture documented in `docs/opi-4dx-spike.md`:\n\n1. `mix pi --log-telemetry .pi/trace4.log` inside tmux (200×50).\n2. Submit a multi-feature markdown demo prompt (~90+ lines exercising headings, lists, fenced code, blockquote, table).\n3. Hammer keystrokes throughout streaming via `tmux send-keys`.\n4. Exit cleanly; run `.pi/analyze_spike.exs` against `trace4.log`.\n\n## Output\n\n- Append a `trace4` section to `docs/opi-4dx-spike.md` with comparison vs `trace3`.\n- Headline numbers: octo_pi_agent_event handle_info p50/p99, key.latency p50/p99 at mailbox=0, transcript.render p99 at largest msg_count, allocations-per-tick (if quantifiable).\n- Either close out the 220 ms key.latency tail with a root cause + fix, or document it as a known-non-render artifact and file a follow-up ticket.\n\n## Acceptance\n\n- `transcript.render` p99 at msg_count=10+ is no greater than at msg_count=2 (flat in finalized count).\n- `octo_pi_agent_event` handle_info p50 stays at or below the trace3 0.11 ms baseline.\n- The 220 ms key.latency tail at mailbox=0 is either eliminated or characterized.",
+  "id": "opi-4dx.11",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Re-trace and validate the redesign",
+  "type": "task",
+  "updated_at": "2026-04-30T17:48:16.092255Z"
+}
