@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T13:09:44Z",
+  "description": "## Site\napps/octo_pi_tui/lib/octo_pi/tui/interactive.ex restore_queued_to_editor/2:\n\n\\`\\`\\`elixir\ninput = %{state.input | value: combined, cursor: String.length(combined)}\n\\`\\`\\`\n\nThis blasts a new value into the input struct directly, bypassing\n\\`Components.Input.set_value/2\\` which knows about cursor clamping\nand the input's internal contract.\n\n## Change\n\\`\\`\\`elixir\ninput =\n  state.input\n  |\u003e Components.Input.set_value(combined)\n  |\u003e Map.put(:cursor, String.length(combined))\n\\`\\`\\`\n\n(set_value clamps cursor to min(c, length(value)); we then push it\nto the end manually since we want the cursor placed AFTER the\nrestored text.)\n\nSame treatment for the streaming-submit clause in do_handle_submit\nwhich directly does \\`%{new_input | value: \\\"\\\", cursor: 0}\\` —\n\\`Components.Input.set_value(new_input, \\\"\\\")\\` does that and respects\ninput invariants.\n\n## Tests\nopi-tze.5 and opi-tze.2 tests already assert .value and .cursor;\nthey should keep passing. Adding tests for kill-ring / undo\npreservation is a stretch; the primary win is honoring the abstraction.\n\n## Why this isn't done in opi-tze\nCosmetic; deferred to keep opi-tze commits minimal.",
+  "id": "opi-5ka.8",
+  "labels": [],
+  "parent": "opi-5ka",
+  "priority": 4,
+  "status": "open",
+  "title": "Use Components.Input.set_value in restore_queued_to_editor",
+  "type": "task",
+  "updated_at": "2026-04-30T13:09:44Z"
+}
