@@ -1819,7 +1819,11 @@ defmodule OctoPi.TUI.Interactive do
         |> Enum.reject(&(String.trim(&1) == ""))
         |> Enum.join("\n\n")
 
-      input = %{state.input | value: combined, cursor: String.length(combined)}
+      input =
+        state.input
+        |> Components.Input.set_value(combined)
+        |> Map.put(:cursor, String.length(combined))
+
       {n, %{state | input: input}}
     end
   end
