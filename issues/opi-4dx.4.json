@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "deferred",
   "title": "Cache rendered lines per finalized message",
   "type": "task",
-  "updated_at": "2026-04-30T14:17:38.155561Z"
+  "updated_at": "2026-04-30T15:37:31.409078Z"
 }
