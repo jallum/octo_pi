@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-5ka.1"
+  ],
   "blocks": [],
   "created": "2026-04-30T13:08:15Z",
   "description": "## Site\napps/octo_pi_agent/lib/octo_pi/agent.ex L141:\n\n\\`\\`\\`elixir\n@spec set_messages(t(), [term()]) :: :ok\ndef set_messages(pid, msgs) when is_list(msgs), do: GenServer.call(pid, {:set_messages, msgs})\n\\`\\`\\`\n\nUnlike prompt/steer/follow_up, this does NOT route through\n\\`Message.normalize/1\\`. Coder.Loop calls it after compaction with\nmessages reconstructed from the session store — those happen to come\nout list-shape today (MessageReader.content_blocks/1 lifts strings\non read), but nothing in the API contract enforces that. Any future\ncaller passing a binary-content User struct silently breaks the\nlist-only invariant from opi-5ka.1.\n\n## Change\n\\`\\`\\`elixir\n@spec set_messages(t(), [Message.t() | String.t()]) :: :ok\ndef set_messages(pid, msgs) when is_list(msgs),\n  do: GenServer.call(pid, {:set_messages, Message.normalize(msgs)})\n\\`\\`\\`\n\n## Test\n- New test in agent_test.exs (or loop_behavior_test.exs): pass a\n  mixed list \\`[\\\"a\\\", %User{content: \\\"b\\\", ...}, %User{content: [%Text{text: \\\"c\\\"}], ...}]\\`\n  to set_messages and assert the resulting state.messages all have\n  list-shape content.\n\n## Depends on\nopi-5ka.1 (so normalize already lifts).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Plug Agent.set_messages/2 normalization gap",
   "type": "bug",
-  "updated_at": "2026-04-30T13:08:15Z"
+  "updated_at": "2026-04-30T13:09:53Z"
 }
