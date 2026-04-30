@@ -1298,12 +1298,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action(_action, state, _key), do: state
 
-  defp handle_event_key(%{is_compacting?: true, session: session} = state, %Key{key: :escape})
-       when not is_nil(session) do
-    Coder.abort_compact(session)
-    state
-  end
-
   defp handle_event_key(%{input: %{value: ""}} = state, %Key{key: :escape}), do: %{state | exit: true}
 
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
