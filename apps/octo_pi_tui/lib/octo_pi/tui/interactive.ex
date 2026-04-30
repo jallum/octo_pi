@@ -115,6 +115,8 @@ defmodule OctoPi.TUI.Interactive do
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
           loader_stash: Components.Loader.t() | nil,
+          is_compacting?: boolean(),
+          compaction_queue: [String.t()],
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -168,6 +170,8 @@ defmodule OctoPi.TUI.Interactive do
             thinking_visible: true,
             loader: nil,
             loader_stash: nil,
+            is_compacting?: false,
+            compaction_queue: [],
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -1048,23 +1052,28 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_event(state, {:octo_pi_agent_event, %OctoPi.Coder.Event.CompactionStart{reason: reason}}) do
-    # Stash the existing loader (e.g. "Working…" if mid-run); restore
+    # Stash the existing loader (e.g. "Thinking…" if mid-run); restore
     # on CompactionEnd. Mirrors upstream's compaction_start handling.
     label = compaction_label(reason)
     new_loader = Components.Loader.new(message: label, cancellable: true)
     Terminal.set_progress(state.terminal, true)
-    %{state | loader_stash: state.loader, loader: new_loader}
+    %{state | loader_stash: state.loader, loader: new_loader, is_compacting?: true}
   end
 
   def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
     Terminal.set_progress(state.terminal, false)
 
-    %{
+    state = %{
       state
       | loader: state.loader_stash,
         loader_stash: nil,
+        is_compacting?: false,
         footer: update_footer(state.footer, ev)
     }
+
+    # Replay any prompts the user submitted while compacting. Mirrors
+    # upstream's `flushCompactionQueue`.
+    flush_compaction_queue(state)
   end
 
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentEnd{} = event}) do
@@ -1370,6 +1379,22 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp notify_extension_result(_pid, _), do: :ok
+
+  defp do_handle_submit(%{is_compacting?: true} = state, new_input, value) do
+    # Compaction in flight — queue the prompt and replay it via
+    # flush_compaction_queue when CompactionEnd lands. Mirrors
+    # upstream's queueCompactionMessage. The user message lands in
+    # the transcript immediately so they have visual feedback that
+    # their input was accepted.
+    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: state.transcript ++ [user_msg],
+        compaction_queue: state.compaction_queue ++ [value]
+    }
+  end
 
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
@@ -1685,6 +1710,22 @@ defmodule OctoPi.TUI.Interactive do
   defp build_custom_theme(%{theme: theme}), do: %{fg: fn color, text -> Theme.fg(theme, color, text) end}
 
   defp default_working_message, do: "Thinking…"
+
+  defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
+
+  defp flush_compaction_queue(%{compaction_queue: queue, session: session} = state) do
+    # Use follow_up rather than prompt so the messages join the
+    # follow_up_queue and get drained at the next idle/run boundary.
+    # If we'd called Coder.prompt here, the second prompt onward
+    # would race with the run started by the first and get
+    # `{:error, :already_streaming}`. Mirrors upstream's
+    # flushCompactionQueue using session.followUp.
+    Enum.each(queue, fn text ->
+      Coder.follow_up(session, text)
+    end)
+
+    %{state | compaction_queue: []}
+  end
 
   defp compaction_label(:manual), do: "Compacting context… (Esc to cancel)"
   defp compaction_label(:pre_prompt), do: "Auto-compacting… (Esc to cancel)"
