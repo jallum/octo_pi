@@ -17,8 +17,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Wire-up: Interactive uses Transcript; thread agent ids end-to-end",
   "type": "task",
-  "updated_at": "2026-04-30T19:37:41.630620Z"
+  "updated_at": "2026-04-30T20:27:41.059120Z"
 }
