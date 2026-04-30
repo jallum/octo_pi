@@ -16,8 +16,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Spike: characterize the streaming-render bottleneck from a tmux trace",
   "type": "task",
-  "updated_at": "2026-04-30T14:15:42.757190Z"
+  "updated_at": "2026-04-30T18:37:24.525361Z"
 }
