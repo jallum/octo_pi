@@ -66,6 +66,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Paste
   alias OctoPi.TUI.RenderLoop
+  alias OctoPi.TUI.RenderTelemetry
   alias OctoPi.TUI.Safe
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Terminal.Image
@@ -500,50 +501,85 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
-    send(state.render_loop, {:resize, w, h})
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      send(state.render_loop, {:resize, w, h})
 
-    state
-    |> handle_event(event)
-    |> advance()
+      state
+      |> handle_event(event)
+      |> advance()
+    end)
   end
 
-  def handle_info({:hid_event, event}, state) do
-    state
-    |> Map.put(:notification, nil)
-    |> handle_event(event)
-    |> advance()
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event, _mono_us} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      send(state.render_loop, {:resize, w, h})
+
+      state
+      |> handle_event(event)
+      |> advance()
+    end)
+  end
+
+  def handle_info({:hid_event, event} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> Map.put(:notification, nil)
+      |> handle_event(event)
+      |> advance()
+    end)
+  end
+
+  def handle_info({:hid_event, event, _mono_us} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> Map.put(:notification, nil)
+      |> handle_event(event)
+      |> advance()
+    end)
   end
 
   def handle_info({:octo_pi_agent_event, _} = agent_msg, state) do
-    state
-    |> handle_event(agent_msg)
-    |> advance()
+    RenderTelemetry.with_handle_info(agent_msg, fn ->
+      state
+      |> handle_event(agent_msg)
+      |> advance()
+    end)
   end
 
-  def handle_info({:extension_result, text}, state) do
-    advance(%{state | notification: text})
+  def handle_info({:extension_result, text} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      advance(%{state | notification: text})
+    end)
   end
 
-  def handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do
-    GenServer.reply(from, result)
-    advance(%{state | custom_widget: nil})
+  def handle_info({:custom_done, from, result} = msg, %{custom_widget: {from, _}} = state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      GenServer.reply(from, result)
+      advance(%{state | custom_widget: nil})
+    end)
   end
 
-  def handle_info(:force_render, state) do
-    advance(state)
+  def handle_info(:force_render = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      advance(state)
+    end)
   end
 
   def handle_info({:bash_done, _id, _output, _exit_code} = msg, state) do
-    state
-    |> handle_event(msg)
-    |> advance()
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> handle_event(msg)
+      |> advance()
+    end)
   end
 
-  def handle_info(:timeout, state) do
-    state
-    |> handle_event(:loader_tick)
-    |> advance()
+  def handle_info(:timeout = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> handle_event(:loader_tick)
+      |> advance()
+    end)
   end
 
   def handle_info({:EXIT, pid, _reason}, %{sup: sup} = state) when pid == sup do
@@ -554,8 +590,10 @@ defmodule OctoPi.TUI.Interactive do
     {:noreply, state, loader_timeout(state)}
   end
 
-  def handle_info(_msg, state) do
-    {:noreply, state, loader_timeout(state)}
+  def handle_info(msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      {:noreply, state, loader_timeout(state)}
+    end)
   end
 
   @impl GenServer
@@ -1562,14 +1600,21 @@ defmodule OctoPi.TUI.Interactive do
 
   defp apply_partial(transcript, partial, theme) do
     content = extract_content_blocks(partial)
+    msg_id = Map.get(partial, :response_id)
 
     case find_last_assistant(transcript) do
       {idx, %AssistantMessage{} = msg} ->
-        updated = AssistantMessage.update_content(msg, content: content)
+        updated =
+          AssistantMessage.update_content(msg,
+            content: content,
+            streaming?: true,
+            msg_id: msg_id || msg.msg_id
+          )
+
         List.replace_at(transcript, idx, updated)
 
       _ ->
-        msg = AssistantMessage.new(theme, content: content)
+        msg = AssistantMessage.new(theme, content: content, streaming?: true, msg_id: msg_id)
         transcript ++ [msg]
     end
   end
@@ -1579,17 +1624,23 @@ defmodule OctoPi.TUI.Interactive do
     stop_reason = extract_stop_reason(msg)
     error_message = Map.get(msg, :error_message)
     has_tool_calls = has_tool_calls?(msg)
+    msg_id = Map.get(msg, :response_id)
 
     updates = [
       content: content,
       stop_reason: stop_reason,
       error_message: error_message,
-      has_tool_calls: has_tool_calls
+      has_tool_calls: has_tool_calls,
+      streaming?: false,
+      msg_id: msg_id
     ]
 
     case find_last_assistant(transcript) do
       {idx, %AssistantMessage{} = existing} ->
-        updated = AssistantMessage.update_content(existing, updates)
+        updates_with_id =
+          Keyword.put(updates, :msg_id, msg_id || existing.msg_id)
+
+        updated = AssistantMessage.update_content(existing, updates_with_id)
         List.replace_at(transcript, idx, updated)
 
       _ ->
@@ -1698,7 +1749,16 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
-    transcript_lines = render_transcript(transcript, width, state.thinking_visible)
+
+    transcript_lines =
+      RenderTelemetry.with_transcript_render(
+        %{
+          msg_count: length(transcript),
+          streaming?: RenderTelemetry.transcript_streaming?(transcript)
+        },
+        fn -> render_transcript(transcript, width, state.thinking_visible) end
+      )
+
     loader_lines = render_loader(loader, width, state.theme)
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)

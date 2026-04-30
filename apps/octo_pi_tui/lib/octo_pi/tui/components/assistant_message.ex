@@ -20,17 +20,21 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
           error_message: String.t() | nil,
           hide_thinking: boolean(),
           hidden_thinking_label: String.t(),
-          has_tool_calls: boolean()
+          has_tool_calls: boolean(),
+          msg_id: String.t() | nil,
+          streaming?: boolean()
         }
 
   defstruct [
     :theme,
+    :msg_id,
     content: [],
     stop_reason: nil,
     error_message: nil,
     hide_thinking: false,
     hidden_thinking_label: "Thinking...",
-    has_tool_calls: false
+    has_tool_calls: false,
+    streaming?: false
   ]
 
   @spec new(Theme.t(), keyword()) :: t()
@@ -86,14 +90,14 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     end)
   end
 
-  defp render_block({:text, text}, theme, _msg, width, _has_after, _more) do
+  defp render_block({:text, text}, theme, msg, width, _has_after, _more) do
     text = String.trim(text)
 
     if text == "" do
       []
     else
       md = Markdown.new(text, theme, padding_x: 1)
-      Markdown.render(md, width)
+      render_markdown_with_telemetry(md, width, msg, text)
     end
   end
 
@@ -106,6 +110,30 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
       lines = render_thinking(text, theme, msg, width)
       if has_after, do: lines ++ [""], else: lines
     end
+  end
+
+  defp render_markdown_with_telemetry(md, width, msg, text) do
+    start_meta = %{
+      msg_id: Map.get(msg, :msg_id),
+      streaming?: Map.get(msg, :streaming?, false),
+      width: width
+    }
+
+    :telemetry.span(
+      [:octo_pi_tui, :markdown, :render],
+      start_meta,
+      fn ->
+        lines = Markdown.render(md, width)
+
+        stop_meta =
+          Map.merge(start_meta, %{
+            text_bytes: byte_size(text),
+            line_count: length(lines)
+          })
+
+        {lines, stop_meta}
+      end
+    )
   end
 
   defp render_thinking(_text, theme, %{hide_thinking: true} = msg, _width) do
