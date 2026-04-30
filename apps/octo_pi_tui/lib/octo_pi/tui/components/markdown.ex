@@ -3,6 +3,7 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.Components.Markdown.Lexer
   alias OctoPi.TUI.SyntaxHighlight
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.WrapAnsi
@@ -40,7 +41,7 @@ defmodule OctoPi.TUI.Components.Markdown do
   defp do_render(%__MODULE__{text: text, theme: theme, padding_x: px, padding_y: py}, width) do
     content_width = max(1, width - px * 2)
     normalized = String.replace(text, "\t", "   ")
-    {_status, ast, _} = EarmarkParser.as_ast(normalized)
+    ast = Lexer.tokenize(normalized)
 
     lines = render_nodes(ast, content_width, theme)
     lines = clamp_width(lines, content_width)
