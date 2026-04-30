@@ -335,7 +335,7 @@ defmodule OctoPi.Agent.Loop do
     # enqueued before the run started (e.g. user typed while waiting)
     # so they're injected before the very first LLM call. See L165 in
     # tmp/pi-mono/packages/agent/src/agent-loop.ts.
-    store = drain_steering_into_messages(%{store | loop: loop, turn_id: 0})
+    {_, store} = drain_steering_into_messages(%{store | loop: loop, turn_id: 0})
     advance(store, :prompt_received)
   end
 
@@ -529,7 +529,8 @@ defmodule OctoPi.Agent.Loop do
     # Tool-use turn always continues. Drain any steering messages
     # enqueued during this turn so they're injected before the next
     # LLM call (parity with agent-loop.ts L208 inner-loop tail).
-    {:continue, drain_steering_into_messages(store)}
+    {_, store} = drain_steering_into_messages(store)
+    {:continue, store}
   end
 
   defp decide_next(_terminal_reason, store) do
@@ -538,30 +539,20 @@ defmodule OctoPi.Agent.Loop do
     # loop continues for another turn before falling through to the
     # outer follow-up check (agent-loop.ts L164,208,221). So steering
     # takes precedence over follow_up here.
-    case PendingMessageQueue.drain(store.loop.steering_queue) do
-      {[], _} ->
-        drain_follow_up_into_messages(store)
-
-      {steers, q} ->
-        store =
-          store
-          |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
-          |> put_in(
-            [Access.key(:loop), Access.key(:messages)],
-            prepend_oldest_first(store.loop.messages, steers)
-          )
-
-        emit_queue_update(store)
-        {:continue, store}
+    case drain_steering_into_messages(store) do
+      {:drained, store} -> {:continue, store}
+      {:empty, store} -> drain_follow_up_into_messages(store)
     end
   end
 
   # Drain the steering queue (using its configured drainage mode) and
-  # prepend the items to the transcript. Returns the updated store.
+  # prepend the items to the transcript. Returns `{:drained, store}`
+  # if any items were moved (and emits Event.QueueUpdate), or
+  # `{:empty, store}` otherwise.
   defp drain_steering_into_messages(store) do
     case PendingMessageQueue.drain(store.loop.steering_queue) do
       {[], _} ->
-        store
+        {:empty, store}
 
       {steers, q} ->
         store =
@@ -573,7 +564,7 @@ defmodule OctoPi.Agent.Loop do
           )
 
         emit_queue_update(store)
-        store
+        {:drained, store}
     end
   end
 
