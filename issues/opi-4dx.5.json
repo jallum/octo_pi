@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-4dx.2"
+    "opi-4dx.2",
+    "opi-4dx.3"
   ],
   "blocks": [],
   "comments": [],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Incremental Markdown lexer with line-checkpointed state",
   "type": "feature",
-  "updated_at": "2026-04-30T14:17:27.528988Z"
+  "updated_at": "2026-04-30T14:17:42.547028Z"
 }
