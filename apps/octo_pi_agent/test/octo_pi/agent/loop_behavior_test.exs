@@ -1150,6 +1150,36 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
     end
   end
 
+  # opi-tze.4: Agent.drain_steering / drain_follow_up are inspection /
+  # restore-to-editor APIs and must return ALL queued items regardless
+  # of the queue's configured drainage mode (which only controls the
+  # in-loop per-turn drain).
+  describe "public-API drain returns all items" do
+    test "drain_steering/1 returns all queued items in default :one_at_a_time mode" do
+      loop = start_loop()
+
+      :ok = OctoPi.Agent.steer(loop, "a")
+      :ok = OctoPi.Agent.steer(loop, "b")
+      :ok = OctoPi.Agent.steer(loop, "c")
+
+      drained = OctoPi.Agent.drain_steering(loop)
+      assert Enum.map(drained, & &1.content) == ["a", "b", "c"]
+      assert OctoPi.Agent.drain_steering(loop) == []
+    end
+
+    test "drain_follow_up/1 returns all queued items in default :one_at_a_time mode" do
+      loop = start_loop()
+
+      :ok = OctoPi.Agent.follow_up(loop, "a")
+      :ok = OctoPi.Agent.follow_up(loop, "b")
+      :ok = OctoPi.Agent.follow_up(loop, "c")
+
+      drained = OctoPi.Agent.drain_follow_up(loop)
+      assert Enum.map(drained, & &1.content) == ["a", "b", "c"]
+      assert OctoPi.Agent.drain_follow_up(loop) == []
+    end
+  end
+
   describe "steering queue :all mode" do
     test "set_queue_mode(:steering, :all) drains multiple steers in one pass" do
       tool_call = %ToolCall{

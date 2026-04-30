@@ -140,11 +140,22 @@ defmodule OctoPi.Agent do
   @spec set_messages(t(), [term()]) :: :ok
   def set_messages(pid, msgs) when is_list(msgs), do: GenServer.call(pid, {:set_messages, msgs})
 
-  @doc "Drain all messages from the steering queue and return them."
+  @doc """
+  Drain all messages from the steering queue and return them.
+
+  Always returns every queued item regardless of the queue's drainage
+  mode — the configured `:one_at_a_time` / `:all` mode only controls
+  the in-loop per-turn drain done internally by the run loop.
+  """
   @spec drain_steering(t()) :: [Message.t()]
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
-  @doc "Drain all messages from the follow-up queue and return them."
+  @doc """
+  Drain all messages from the follow-up queue and return them.
+
+  Always returns every queued item regardless of the queue's drainage
+  mode (see `drain_steering/1`).
+  """
   @spec drain_follow_up(t()) :: [Message.t()]
   def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
 

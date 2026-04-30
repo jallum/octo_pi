@@ -149,12 +149,16 @@ defmodule OctoPi.Agent.Loop do
   end
 
   def handle_call(:drain_steering, _from, store) do
-    {msgs, q} = PendingMessageQueue.drain(store.loop.steering_queue)
+    # Public-API drain: always return ALL queued items, regardless of
+    # the queue's drainage mode (which only controls the in-loop per-
+    # turn drain). Callers (TUI dequeue overlay, restore-to-editor)
+    # expect to see everything they steered.
+    {msgs, q} = PendingMessageQueue.drain_all(store.loop.steering_queue)
     {:reply, msgs, put_in(store.loop.steering_queue, q)}
   end
 
   def handle_call(:drain_follow_up, _from, store) do
-    {msgs, q} = PendingMessageQueue.drain(store.loop.follow_up_queue)
+    {msgs, q} = PendingMessageQueue.drain_all(store.loop.follow_up_queue)
     {:reply, msgs, put_in(store.loop.follow_up_queue, q)}
   end
 

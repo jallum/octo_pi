@@ -72,4 +72,18 @@ defmodule OctoPi.Agent.PendingMessageQueue do
   @doc "Clear the queue (no items returned)."
   @spec clear(t()) :: t()
   def clear(%__MODULE__{} = q), do: %{q | items: :queue.new(), count: 0}
+
+  @doc """
+  Drain every item, regardless of `mode`. Used by inspection /
+  restore-to-editor APIs (`Agent.drain_steering/1`,
+  `Agent.drain_follow_up/1`) that need to return the entire queue
+  contents to a caller; the in-loop per-turn drain uses `drain/1`
+  which honors the configured drainage mode.
+  """
+  @spec drain_all(t()) :: {[Message.t()], t()}
+  def drain_all(%__MODULE__{count: 0} = q), do: {[], q}
+
+  def drain_all(%__MODULE__{items: items} = q) do
+    {:queue.to_list(items), %{q | items: :queue.new(), count: 0}}
+  end
 end
