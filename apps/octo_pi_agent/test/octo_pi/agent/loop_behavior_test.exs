@@ -1158,6 +1158,33 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
     end
   end
 
+  # opi-5ka.2: set_messages/2 routes elements through
+  # Message.normalize_if_message/1, lifting User/ToolResult string
+  # content to list-shape while passing synthetic transcript types
+  # (raw JSON maps, compaction-summary structs) through unchanged.
+  describe "set_messages/2 normalization" do
+    test "lifts %User{} string content to list-shape; passes others through" do
+      loop = start_loop()
+
+      synthetic_map = %{"role" => "compactionSummary", "summary" => "earlier", "timestamp" => 0}
+
+      :ok =
+        OctoPi.Agent.set_messages(loop, [
+          %User{content: "hi", timestamp: 0},
+          %User{content: [%Text{text: "already-list"}], timestamp: 0},
+          synthetic_map
+        ])
+
+      state = OctoPi.Agent.state(loop)
+
+      assert [
+               %User{content: [%Text{text: "hi"}]},
+               %User{content: [%Text{text: "already-list"}]},
+               ^synthetic_map
+             ] = state.messages
+    end
+  end
+
   # opi-tze.4: Agent.drain_steering / drain_follow_up are inspection /
   # restore-to-editor APIs and must return ALL queued items regardless
   # of the queue's configured drainage mode (which only controls the

@@ -90,6 +90,22 @@ defmodule OctoPi.Agent.MessageTest do
     end
   end
 
+  describe "normalize_if_message/1" do
+    test "lifts User binary content; passes Assistant / ToolResult / synthetic terms through" do
+      synthetic_map = %{"role" => "compactionSummary", "summary" => "x"}
+      assistant_msg = assistant()
+      tool_result_msg = tool_result()
+
+      assert %User{content: [%Text{text: "hi"}]} =
+               Message.normalize_if_message(%User{content: "hi", timestamp: 0})
+
+      assert Message.normalize_if_message(assistant_msg) == assistant_msg
+      assert Message.normalize_if_message(tool_result_msg) == tool_result_msg
+      assert Message.normalize_if_message(synthetic_map) == synthetic_map
+      assert Message.normalize_if_message("a-bare-string") == "a-bare-string"
+    end
+  end
+
   describe "role/1" do
     test "returns :user for %User{}" do
       assert Message.role(%User{content: "hi", timestamp: 0}) == :user

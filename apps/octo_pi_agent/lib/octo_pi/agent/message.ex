@@ -54,6 +54,24 @@ defmodule OctoPi.Agent.Message do
 
   def normalize(invalid), do: raise(ArgumentError, "Expected Message.t() or String.t(), got: #{inspect(invalid)}")
 
+  @doc """
+  Same as `normalize/1` for `Message.t()` values, but passes any other
+  term through unchanged. Used at boundaries that traffic in the
+  agent's wider transcript shape (`[term()]` per `Loop.State.t()`),
+  which legitimately mixes `Message.t()` structs with synthetic types
+  (e.g. `OctoPi.Coder.Session.CompactionSummaryMessage`,
+  `BranchSummaryMessage`) and raw decoded JSON maps reconstituted from
+  the on-disk session log.
+
+  Lifts string content on User/ToolResult to `[%Text{text: bin}]`;
+  Assistant passes through; everything else passes through unchanged.
+  """
+  @spec normalize_if_message(term()) :: term()
+  def normalize_if_message(%User{} = m), do: normalize(m)
+  def normalize_if_message(%Assistant{} = m), do: m
+  def normalize_if_message(%ToolResult{} = m), do: normalize(m)
+  def normalize_if_message(other), do: other
+
   @spec role(t()) :: :user | :assistant | :tool_result
   def role(%User{}), do: :user
   def role(%Assistant{}), do: :assistant

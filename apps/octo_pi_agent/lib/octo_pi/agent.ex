@@ -136,9 +136,17 @@ defmodule OctoPi.Agent do
   Replace the working transcript wholesale. The host calls this on
   events that re-shape the LLM-visible chain end-to-end (compaction,
   branch navigation).
+
+  Inputs are routed through `Message.normalize_if_message/1`: any
+  `User.t()` / `ToolResult.t()` with binary content is lifted to
+  list-shape `[%Text{text: bin}]`, while synthetic transcript types
+  (compaction-summary structs, raw JSON maps) pass through unchanged.
+  This keeps the typed-Message subset of the transcript canonically
+  list-shape (see opi-5ka).
   """
   @spec set_messages(t(), [term()]) :: :ok
-  def set_messages(pid, msgs) when is_list(msgs), do: GenServer.call(pid, {:set_messages, msgs})
+  def set_messages(pid, msgs) when is_list(msgs),
+    do: GenServer.call(pid, {:set_messages, Enum.map(msgs, &Message.normalize_if_message/1)})
 
   @doc """
   Drain all messages from the steering queue and return them.
