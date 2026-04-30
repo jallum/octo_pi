@@ -1141,19 +1141,25 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_event_after_app(state, key), do: handle_event_key(state, key)
 
-  defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}, input: %{value: v}} = state, _key)
-       when v != "" do
-    %{state | input: %{state.input | value: "", cursor: 0}}
-  end
-
   defp dispatch_app_action("app.interrupt", %{is_compacting?: true, session: session} = state, _key)
        when not is_nil(session) do
     Coder.abort_compact(session)
     state
   end
 
+  # opi-tze.8: Escape (mapped to app.interrupt) while the agent is
+  # streaming — drain queued messages back into the editor AND
+  # abort the in-flight run, in one gesture. Mirrors upstream
+  # interactive-mode.ts L2316-2321:
+  #     if (this.loadingAnimation) {
+  #       this.restoreQueuedMessagesToEditor({ abort: true });
+  #     }
+  # The non-empty-input case used to just clear the input; that's
+  # subsumed by restore_queued_to_editor/2, which combines the
+  # current editor text with whatever was queued (or leaves it
+  # untouched when both queues are empty).
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: Coder.abort(state.session)
+    {_n, state} = restore_queued_to_editor(state, abort?: true)
     state
   end
 

@@ -226,11 +226,17 @@ defmodule OctoPi.TUI.InteractiveTest do
       refute s2.exit
     end
 
-    test "Escape with active loader and non-empty input clears input, does not exit" do
+    test "Escape with active loader and non-empty input preserves input (opi-tze.8)" do
+      # Upstream parity (interactive-mode.ts L2316-2321): Escape during
+      # streaming calls restoreQueuedMessagesToEditor({abort: true}),
+      # which leaves the editor untouched when no messages are queued.
+      # The previous octo_pi behavior of "Escape clears the input"
+      # diverged from upstream and made it impossible to keep a draft
+      # while killing a runaway response.
       s = %Interactive{input: %Input{value: "draft", cursor: 5}, loader: %Loader{}, session: nil}
       s2 = Interactive.handle_event(s, %Key{key: :escape})
       refute s2.exit
-      assert s2.input.value == ""
+      assert s2.input.value == "draft"
     end
 
     test "paste event inserts content atomically into the input field" do
@@ -397,6 +403,89 @@ defmodule OctoPi.TUI.InteractiveTest do
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
 
       assert s2.input.value == "first part\nsecond part"
+    end
+  end
+
+  # opi-tze.8: Escape while the agent is streaming should drain the
+  # steering and follow-up queues into the editor AND abort the
+  # in-flight run, in one gesture. Mirrors upstream
+  # interactive-mode.ts L2316-2321
+  # (`restoreQueuedMessagesToEditor({abort: true})`).
+  describe "handle_event — Escape during streaming (opi-tze.8)" do
+    alias Loop, as: CoderLoop
+    alias OctoPi.Coder.SessionManager
+    alias OctoPi.Coder.SessionStore
+
+    defp start_coder_session_for_escape! do
+      model = %OctoPi.AI.Model{
+        id: "fake",
+        name: "fake",
+        api: :fake,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      id = "test-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), "opi-escape-test-#{id}")
+      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+
+      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
+
+      coder =
+        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+
+      {coder, agent}
+    end
+
+    test "Escape during streaming with queued messages restores them and aborts" do
+      {coder, agent} = start_coder_session_for_escape!()
+      :ok = OctoPi.Agent.steer(agent, "queued one")
+      :ok = OctoPi.Agent.follow_up(agent, "and then")
+
+      s = %Interactive{
+        session: coder,
+        loader: %Loader{},
+        input: %Input{value: "my draft", cursor: 8}
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+
+      # Editor now has the queued items joined with "\n\n" plus the
+      # original draft.
+      assert s2.input.value == "queued one\n\nand then\n\nmy draft"
+      # Queues are drained.
+      assert OctoPi.Agent.drain_steering(agent) == []
+      assert OctoPi.Agent.drain_follow_up(agent) == []
+    end
+
+    test "Escape during streaming with empty queues preserves the draft (no clear)" do
+      {coder, _agent} = start_coder_session_for_escape!()
+
+      s = %Interactive{
+        session: coder,
+        loader: %Loader{},
+        input: %Input{value: "in flight thought", cursor: 17}
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+
+      # Upstream restoreQueuedMessagesToEditor leaves the editor alone
+      # when both queues are empty; only the abort fires.
+      assert s2.input.value == "in flight thought"
+    end
+
+    test "Escape during streaming with no session is a no-op (no crash)" do
+      s = %Interactive{
+        session: nil,
+        loader: %Loader{},
+        input: %Input{value: "draft", cursor: 5}
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.input.value == "draft"
     end
   end
 
