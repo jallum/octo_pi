@@ -19,8 +19,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Incremental Markdown lexer with line-checkpointed state",
   "type": "feature",
-  "updated_at": "2026-04-30T15:37:26.088340Z"
+  "updated_at": "2026-04-30T18:37:27.986543Z"
 }
