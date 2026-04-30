@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Move trim/tab normalization into Markdown.Render",
   "type": "task",
-  "updated_at": "2026-04-30T18:39:49.592501Z"
+  "updated_at": "2026-04-30T20:38:14.370172Z"
 }
