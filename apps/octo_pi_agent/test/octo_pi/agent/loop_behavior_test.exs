@@ -554,6 +554,9 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       OctoPi.Agent.subscribe(loop, self(), :async)
 
       :ok = OctoPi.Agent.follow_up(loop, "carried over")
+      # Enqueue emits a QueueUpdate snapshot (opi-tze.3) but must NOT
+      # emit any run-lifecycle event — idle stays idle.
+      assert_received {:octo_pi_agent_event, %Event.QueueUpdate{}}
       refute_receive {:octo_pi_agent_event, _}, 50
 
       only = assistant([%Text{text: "ok"}], :stop)
@@ -1177,6 +1180,97 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       drained = OctoPi.Agent.drain_follow_up(loop)
       assert Enum.map(drained, & &1.content) == ["a", "b", "c"]
       assert OctoPi.Agent.drain_follow_up(loop) == []
+    end
+  end
+
+  # opi-tze.3: Event.QueueUpdate fires whenever either queue is
+  # mutated (enqueue, public-API drain, in-loop drain). The TUI uses
+  # this to render the "Steering: … / Follow-up: …" indicator above
+  # the editor.
+  describe "queue_update events" do
+    test "steer/2 emits QueueUpdate carrying the new full snapshot" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.steer(loop, "a")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{steering: [%User{content: "a"}], follow_up: []}}
+
+      :ok = OctoPi.Agent.steer(loop, "b")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{
+                         steering: [%User{content: "a"}, %User{content: "b"}],
+                         follow_up: []
+                       }}
+    end
+
+    test "follow_up/2 emits QueueUpdate carrying the new full snapshot" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.follow_up(loop, "x")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{steering: [], follow_up: [%User{content: "x"}]}}
+    end
+
+    test "public-API drain emits QueueUpdate when items were drained" do
+      loop = start_loop()
+      :ok = OctoPi.Agent.steer(loop, "a")
+      :ok = OctoPi.Agent.steer(loop, "b")
+
+      # Subscribe AFTER enqueuing so we only see drain events.
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      _ = OctoPi.Agent.drain_steering(loop)
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{steering: [], follow_up: []}}
+    end
+
+    test "public-API drain on an empty queue does NOT emit QueueUpdate" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      _ = OctoPi.Agent.drain_steering(loop)
+      _ = OctoPi.Agent.drain_follow_up(loop)
+
+      refute_receive {:octo_pi_agent_event, %Event.QueueUpdate{}}, 50
+    end
+
+    test "in-loop steering drain emits QueueUpdate (parity with upstream queue_update)" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.steer(loop, "steer-mid")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      # Enqueue snapshot then in-loop drain snapshot.
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{steering: [%User{content: "steer-mid"}]}}
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{steering: [], follow_up: []}}
     end
   end
 

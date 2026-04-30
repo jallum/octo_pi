@@ -110,15 +110,25 @@ defmodule OctoPi.Agent.Loop do
 
   def handle_call({:steer, msg}, _from, store) do
     case PendingMessageQueue.enqueue(store.loop.steering_queue, msg) do
-      {:ok, q} -> {:reply, :ok, put_in(store.loop.steering_queue, q)}
-      {:error, :full} = err -> {:reply, err, store}
+      {:ok, q} ->
+        store = put_in(store.loop.steering_queue, q)
+        emit_queue_update(store)
+        {:reply, :ok, store}
+
+      {:error, :full} = err ->
+        {:reply, err, store}
     end
   end
 
   def handle_call({:follow_up, msg}, _from, store) do
     case PendingMessageQueue.enqueue(store.loop.follow_up_queue, msg) do
-      {:ok, q} -> {:reply, :ok, put_in(store.loop.follow_up_queue, q)}
-      {:error, :full} = err -> {:reply, err, store}
+      {:ok, q} ->
+        store = put_in(store.loop.follow_up_queue, q)
+        emit_queue_update(store)
+        {:reply, :ok, store}
+
+      {:error, :full} = err ->
+        {:reply, err, store}
     end
   end
 
@@ -154,12 +164,16 @@ defmodule OctoPi.Agent.Loop do
     # turn drain). Callers (TUI dequeue overlay, restore-to-editor)
     # expect to see everything they steered.
     {msgs, q} = PendingMessageQueue.drain_all(store.loop.steering_queue)
-    {:reply, msgs, put_in(store.loop.steering_queue, q)}
+    store = put_in(store.loop.steering_queue, q)
+    if msgs != [], do: emit_queue_update(store)
+    {:reply, msgs, store}
   end
 
   def handle_call(:drain_follow_up, _from, store) do
     {msgs, q} = PendingMessageQueue.drain_all(store.loop.follow_up_queue)
-    {:reply, msgs, put_in(store.loop.follow_up_queue, q)}
+    store = put_in(store.loop.follow_up_queue, q)
+    if msgs != [], do: emit_queue_update(store)
+    {:reply, msgs, store}
   end
 
   def handle_call(:abort, _from, store) do
@@ -537,6 +551,7 @@ defmodule OctoPi.Agent.Loop do
             prepend_oldest_first(store.loop.messages, steers)
           )
 
+        emit_queue_update(store)
         {:continue, store}
     end
   end
@@ -544,14 +559,22 @@ defmodule OctoPi.Agent.Loop do
   # Drain the steering queue (using its configured drainage mode) and
   # prepend the items to the transcript. Returns the updated store.
   defp drain_steering_into_messages(store) do
-    {steers, q} = PendingMessageQueue.drain(store.loop.steering_queue)
+    case PendingMessageQueue.drain(store.loop.steering_queue) do
+      {[], _} ->
+        store
 
-    store
-    |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
-    |> put_in(
-      [Access.key(:loop), Access.key(:messages)],
-      prepend_oldest_first(store.loop.messages, steers)
-    )
+      {steers, q} ->
+        store =
+          store
+          |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
+          |> put_in(
+            [Access.key(:loop), Access.key(:messages)],
+            prepend_oldest_first(store.loop.messages, steers)
+          )
+
+        emit_queue_update(store)
+        store
+    end
   end
 
   # Drain the follow-up queue. If any items arrived, prepend and
@@ -570,6 +593,7 @@ defmodule OctoPi.Agent.Loop do
             prepend_oldest_first(store.loop.messages, msgs)
           )
 
+        emit_queue_update(store)
         {:continue, store}
     end
   end
@@ -676,15 +700,19 @@ defmodule OctoPi.Agent.Loop do
     {steers, sq} = PendingMessageQueue.drain(store.loop.steering_queue)
     {followups, fq} = PendingMessageQueue.drain(store.loop.follow_up_queue)
 
+    store =
+      store
+      |> put_in([Access.key(:loop), Access.key(:steering_queue)], sq)
+      |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
+      |> put_in(
+        [Access.key(:loop), Access.key(:messages)],
+        store.loop.messages
+        |> prepend_oldest_first(steers)
+        |> prepend_oldest_first(followups)
+      )
+
+    if steers != [] or followups != [], do: emit_queue_update(store)
     store
-    |> put_in([Access.key(:loop), Access.key(:steering_queue)], sq)
-    |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
-    |> put_in(
-      [Access.key(:loop), Access.key(:messages)],
-      store.loop.messages
-      |> prepend_oldest_first(steers)
-      |> prepend_oldest_first(followups)
-    )
   end
 
   # Internal storage is newest-first; callers hand us oldest-first
@@ -692,6 +720,17 @@ defmodule OctoPi.Agent.Loop do
   # pass; flipped-arity here so it pipes naturally.
   defp prepend_oldest_first(newest_first_log, oldest_first_batch),
     do: Enum.reverse(oldest_first_batch, newest_first_log)
+
+  # Emit a `Event.QueueUpdate` snapshot reflecting the current state
+  # of the steering and follow-up queues, both in FIFO order. Called
+  # from every site that mutates either queue (enqueue, public-API
+  # drain, in-loop drain).
+  defp emit_queue_update(store) do
+    Subscribers.dispatch(self(), %Event.QueueUpdate{
+      steering: :queue.to_list(store.loop.steering_queue.items),
+      follow_up: :queue.to_list(store.loop.follow_up_queue.items)
+    })
+  end
 
   # F4: returns true when this assistant's context tokens plus the configured
   # reserve exceed the model context window.  Used on the :continue path.

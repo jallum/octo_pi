@@ -1128,6 +1128,96 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  # opi-tze.3: pending-messages indicator. The TUI mirrors the agent's
+  # steering / follow-up queues into local state via Event.QueueUpdate
+  # and renders a dim line per item just above the editor.
+  describe "handle_event — Event.QueueUpdate (opi-tze.3)" do
+    alias OctoPi.AI.Message.User
+
+    test "copies binary-content user messages into pending_steering / pending_follow_up" do
+      s = %Interactive{}
+
+      ev = %Event.QueueUpdate{
+        steering: [%User{content: "a", timestamp: 0}, %User{content: "b", timestamp: 0}],
+        follow_up: [%User{content: "x", timestamp: 0}]
+      }
+
+      s2 = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert s2.pending_steering == ["a", "b"]
+      assert s2.pending_follow_up == ["x"]
+    end
+
+    test "flattens list-content messages by joining %Text{} blocks" do
+      s = %Interactive{}
+
+      msg = %User{
+        content: [
+          %OctoPi.AI.Content.Text{text: "line1"},
+          %OctoPi.AI.Content.Text{text: "line2"}
+        ],
+        timestamp: 0
+      }
+
+      ev = %Event.QueueUpdate{steering: [msg], follow_up: []}
+      s2 = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert s2.pending_steering == ["line1\nline2"]
+    end
+
+    test "empty queues clear pending fields" do
+      s = %Interactive{pending_steering: ["old"], pending_follow_up: ["old2"]}
+
+      ev = %Event.QueueUpdate{steering: [], follow_up: []}
+      s2 = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+
+      assert s2.pending_steering == []
+      assert s2.pending_follow_up == []
+    end
+  end
+
+  describe "build_screen/2 — pending-messages rendering (opi-tze.3)" do
+    test "renders no extra lines when both queues are empty" do
+      s = %Interactive{pending_steering: [], pending_follow_up: [], width: 80}
+      {lines, _layout} = Interactive.build_screen(s, ["<input>"])
+      refute Enum.any?(lines, &String.contains?(&1, "Steering:"))
+      refute Enum.any?(lines, &String.contains?(&1, "Follow-up:"))
+    end
+
+    test "renders one dim line per queued steering / follow-up item plus the dequeue hint" do
+      s = %Interactive{
+        pending_steering: ["first steer", "second steer"],
+        pending_follow_up: ["a follow up"],
+        width: 80
+      }
+
+      {lines, _layout} = Interactive.build_screen(s, ["<input>"])
+
+      visible = Enum.map(lines, &String.replace(&1, ~r/\e\[[0-9;]*m/, ""))
+
+      assert Enum.any?(visible, &String.contains?(&1, "Steering: first steer"))
+      assert Enum.any?(visible, &String.contains?(&1, "Steering: second steer"))
+      assert Enum.any?(visible, &String.contains?(&1, "Follow-up: a follow up"))
+      assert Enum.any?(visible, &String.contains?(&1, "to edit all queued messages"))
+    end
+
+    test "steering items render before follow-up items" do
+      s = %Interactive{
+        pending_steering: ["S1"],
+        pending_follow_up: ["F1"],
+        width: 80
+      }
+
+      {lines, _layout} = Interactive.build_screen(s, ["<input>"])
+      visible = Enum.map(lines, &String.replace(&1, ~r/\e\[[0-9;]*m/, ""))
+
+      s_idx = Enum.find_index(visible, &String.contains?(&1, "Steering: S1"))
+      f_idx = Enum.find_index(visible, &String.contains?(&1, "Follow-up: F1"))
+
+      assert s_idx != nil and f_idx != nil and s_idx < f_idx
+    end
+  end
+
   describe "handle_event — loader tick" do
     test "loader_tick is a no-op on state" do
       loader = Loader.new(frames: ["a", "b", "c"])

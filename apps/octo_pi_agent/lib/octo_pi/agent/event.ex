@@ -14,6 +14,12 @@ defmodule OctoPi.Agent.Event do
         (repeat per turn until the loop exits)
       AgentEnd
 
+  `QueueUpdate` is asynchronous: it fires whenever the steering or
+  follow-up queue is mutated (enqueue, public-API drain, in-loop
+  drain). It is not part of the per-turn lifecycle above and may
+  arrive at any time, including before `AgentStart` and after
+  `AgentEnd`.
+
   `partial` fields, where present, carry the in-progress
   `OctoPi.AI.Message.Assistant.t()` snapshot — consumers can render
   current state without tracking deltas themselves. `message` (on
@@ -41,6 +47,7 @@ defmodule OctoPi.Agent.Event do
           | Event.ToolExecutionEnd.t()
           | Event.CompactionRequested.t()
           | Event.CompactionEnd.t()
+          | Event.QueueUpdate.t()
 
   defmodule AgentStart do
     @moduledoc "Emitted once at the start of a run."
@@ -151,5 +158,26 @@ defmodule OctoPi.Agent.Event do
     @enforce_keys [:result]
     @type t :: %__MODULE__{result: {:ok, map()} | {:cancel, term()} | {:error, term()}}
     defstruct [:result]
+  end
+
+  defmodule QueueUpdate do
+    @moduledoc """
+    Emitted whenever the steering or follow-up queue changes — on
+    enqueue (`steer/2` / `follow_up/2`), on public-API drain
+    (`drain_steering/1` / `drain_follow_up/1`), and on every in-loop
+    drain. Subscribers (notably the TUI's pending-messages indicator)
+    use this to render "Steering: …" / "Follow-up: …" lines above the
+    editor without having to call back into the Agent for state.
+
+    Both queues are reported in FIFO order (oldest first) at every
+    emission.
+
+    Mirrors upstream pi-mono's `queue_update` event emitted by
+    `AgentSession` (tmp/pi-mono/packages/coding-agent/src/core
+    /agent-session.ts).
+    """
+    @enforce_keys [:steering, :follow_up]
+    @type t :: %__MODULE__{steering: [Message.t()], follow_up: [Message.t()]}
+    defstruct [:steering, :follow_up]
   end
 end

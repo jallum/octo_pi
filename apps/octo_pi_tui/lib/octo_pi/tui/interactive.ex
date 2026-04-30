@@ -117,6 +117,8 @@ defmodule OctoPi.TUI.Interactive do
           loader_stash: Components.Loader.t() | nil,
           is_compacting?: boolean(),
           compaction_queue: [String.t()],
+          pending_steering: [String.t()],
+          pending_follow_up: [String.t()],
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -172,6 +174,8 @@ defmodule OctoPi.TUI.Interactive do
             loader_stash: nil,
             is_compacting?: false,
             compaction_queue: [],
+            pending_steering: [],
+            pending_follow_up: [],
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -1051,6 +1055,19 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader: Components.Loader.new(message: message)}
   end
 
+  # opi-tze.3: keep the in-state copy of the steering / follow-up
+  # queue snapshots in sync with the agent. Fires on every queue
+  # mutation (enqueue, public-API drain, in-loop drain). The
+  # pending-messages indicator above the editor renders directly
+  # from these fields.
+  def handle_event(state, {:octo_pi_agent_event, %Event.QueueUpdate{} = ev}) do
+    %{
+      state
+      | pending_steering: Enum.map(ev.steering, &message_text/1),
+        pending_follow_up: Enum.map(ev.follow_up, &message_text/1)
+    }
+  end
+
   def handle_event(state, {:octo_pi_agent_event, %OctoPi.Coder.Event.CompactionStart{reason: reason}}) do
     # Stash the existing loader (e.g. "Thinking…" if mid-run); restore
     # on CompactionEnd. Mirrors upstream's compaction_start handling.
@@ -1746,6 +1763,15 @@ defmodule OctoPi.TUI.Interactive do
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
     transcript_lines = render_transcript(transcript, width, state.thinking_visible)
     loader_lines = render_loader(loader, width, state.theme)
+
+    pending_lines =
+      render_pending_messages(
+        state.pending_steering,
+        state.pending_follow_up,
+        get_keybindings(state),
+        width
+      )
+
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
     footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
@@ -1753,7 +1779,9 @@ defmodule OctoPi.TUI.Interactive do
     all =
       banner_lines ++
         resource_lines ++
-        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
+        transcript_lines ++
+        loader_lines ++
+        pending_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
 
     layout = %{
       footer_height: length(footer_lines_val),
@@ -1799,6 +1827,45 @@ defmodule OctoPi.TUI.Interactive do
   defp render_notification(text, width) do
     [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
   end
+
+  # opi-tze.3: pending-messages indicator. Mirrors upstream
+  # interactive-mode.ts's pendingMessagesContainer
+  # (`updatePendingMessagesDisplay/0`, L3530-3548). One dim line per
+  # queued steering / follow-up message in FIFO order, plus a hint
+  # line showing the keybinding for the dequeue overlay.
+  defp render_pending_messages([], [], _kb, _width), do: []
+
+  defp render_pending_messages(steering, follow_up, kb, width) do
+    steering_lines = Enum.map(steering, fn t -> %TruncatedText{text: dim("Steering: " <> t)} end)
+    follow_up_lines = Enum.map(follow_up, fn t -> %TruncatedText{text: dim("Follow-up: " <> t)} end)
+
+    hint_text =
+      case Keybindings.get_keys(kb, "app.message.dequeue") do
+        [key | _] -> dim("↳ #{key} to edit all queued messages")
+        [] -> dim("↳ to edit all queued messages")
+      end
+
+    (steering_lines ++ follow_up_lines ++ [%TruncatedText{text: hint_text}])
+    |> Container.new()
+    |> Container.render(width)
+  end
+
+  # Extract a plain string from a queued message struct. Handles both
+  # the binary-content shape (steered/follow_up'd via Coder.steer/2 —
+  # Message.normalize wraps the binary into %User{content: bin}) and
+  # the list-of-content-blocks shape (e.g. messages reconstructed
+  # from session state with %Text{} blocks and possibly images).
+  defp message_text(%{content: c}) when is_binary(c), do: c
+
+  defp message_text(%{content: c}) when is_list(c) do
+    Enum.map_join(c, "\n", fn
+      %{__struct__: OctoPi.AI.Content.Text, text: t} -> t
+      %{text: t} when is_binary(t) -> t
+      _ -> ""
+    end)
+  end
+
+  defp message_text(other), do: inspect(other)
 
   defp next_thinking_level(:off), do: :low
   defp next_thinking_level(:low), do: :medium
