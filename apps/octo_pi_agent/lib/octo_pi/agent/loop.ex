@@ -65,7 +65,9 @@ defmodule OctoPi.Agent.Loop do
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
         convert_to_llm: Keyword.fetch!(opts, :convert_to_llm),
-        messages: Keyword.get(opts, :messages, []),
+        # Initial messages arrive oldest-first; flip to internal
+        # newest-first storage.
+        messages: opts |> Keyword.get(:messages, []) |> Enum.reverse(),
         auto_compact_reserve_tokens: Keyword.get(opts, :auto_compact_reserve_tokens),
         turn: Turn.new()
       }
@@ -93,7 +95,7 @@ defmodule OctoPi.Agent.Loop do
     if store.loop.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      loop = %{store.loop | messages: store.loop.messages ++ msgs}
+      loop = %{store.loop | messages: prepend_oldest_first(store.loop.messages, msgs)}
       {:reply, :ok, %{store | loop: loop}, {:continue, :start_run}}
     end
   end
@@ -132,9 +134,10 @@ defmodule OctoPi.Agent.Loop do
   def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
 
   def handle_call({:push_message, msg}, _from, store),
-    do: {:reply, :ok, put_in(store.loop.messages, store.loop.messages ++ [msg])}
+    do: {:reply, :ok, put_in(store.loop.messages, [msg | store.loop.messages])}
 
-  def handle_call({:set_messages, msgs}, _from, store), do: {:reply, :ok, put_in(store.loop.messages, msgs)}
+  def handle_call({:set_messages, msgs}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.messages, Enum.reverse(msgs))}
 
   def handle_call({:set_auto_compact_reserve_tokens, reserve}, _from, store),
     do: {:reply, :ok, put_in(store.loop.auto_compact_reserve_tokens, reserve)}
@@ -206,7 +209,10 @@ defmodule OctoPi.Agent.Loop do
     end
   end
 
-  def handle_call(:state, _from, store), do: {:reply, store.loop, store}
+  def handle_call(:state, _from, store) do
+    # Snapshot is exposed oldest-first; internal storage is newest-first.
+    {:reply, %{store.loop | messages: Enum.reverse(store.loop.messages)}, store}
+  end
 
   def handle_call(:wait_for_idle, from, store) do
     if store.loop.is_streaming? do
@@ -436,7 +442,7 @@ defmodule OctoPi.Agent.Loop do
   defp finish_turn(store, %Assistant{} = assistant, tool_results, reason) do
     emit_turn_stop(store, reason)
 
-    messages = store.loop.messages ++ [assistant | tool_results]
+    messages = prepend_oldest_first(store.loop.messages, [assistant | tool_results])
 
     store =
       store
@@ -474,10 +480,9 @@ defmodule OctoPi.Agent.Loop do
               # Remove the overflow error message from the transcript — it's
               # saved to conversation history by the Coder, but mustn't appear in
               # the LLM context on retry.
-              |> put_in(
-                [Access.key(:loop), Access.key(:messages)],
-                Enum.drop(store.loop.messages, -1)
-              )
+              # Drop the newest message (the overflow error). With
+              # newest-first storage that's just `tl/1`.
+              |> put_in([Access.key(:loop), Access.key(:messages)], tl(store.loop.messages))
 
             advance(store, {:compact_requested, [auto?: true]})
 
@@ -505,7 +510,7 @@ defmodule OctoPi.Agent.Loop do
       |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
       |> put_in(
         [Access.key(:loop), Access.key(:messages)],
-        store.loop.messages ++ steers
+        prepend_oldest_first(store.loop.messages, steers)
       )
 
     {:continue, store}
@@ -524,7 +529,7 @@ defmodule OctoPi.Agent.Loop do
           |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], q)
           |> put_in(
             [Access.key(:loop), Access.key(:messages)],
-            store.loop.messages ++ msgs
+            prepend_oldest_first(store.loop.messages, msgs)
           )
 
         {:continue, store}
@@ -538,7 +543,7 @@ defmodule OctoPi.Agent.Loop do
   defp build_turn_context(loop) do
     %AIContext{
       system_prompt: loop.system_prompt,
-      messages: loop.convert_to_llm.(loop.messages),
+      messages: loop.convert_to_llm.(Enum.reverse(loop.messages)),
       tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)
     }
   end
@@ -546,7 +551,7 @@ defmodule OctoPi.Agent.Loop do
   defp end_run(store, reason) do
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: reason,
-      messages: store.loop.messages
+      messages: Enum.reverse(store.loop.messages)
     })
 
     emit_loop_stop(store.loop, reason, store.turn_id, length(store.loop.messages))
@@ -560,11 +565,11 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp end_run_aborted(store, _reason) do
-    messages = store.loop.messages ++ [aborted_assistant(store.loop.model)]
+    messages = [aborted_assistant(store.loop.model) | store.loop.messages]
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: :aborted,
-      messages: messages
+      messages: Enum.reverse(messages)
     })
 
     emit_loop_stop(store.loop, :aborted, store.turn_id, length(messages))
@@ -638,9 +643,17 @@ defmodule OctoPi.Agent.Loop do
     |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
     |> put_in(
       [Access.key(:loop), Access.key(:messages)],
-      store.loop.messages ++ steers ++ followups
+      store.loop.messages
+      |> prepend_oldest_first(steers)
+      |> prepend_oldest_first(followups)
     )
   end
+
+  # Internal storage is newest-first; callers hand us oldest-first
+  # batches to append. `Enum.reverse/2` reverses + prepends in one
+  # pass; flipped-arity here so it pipes naturally.
+  defp prepend_oldest_first(newest_first_log, oldest_first_batch),
+    do: Enum.reverse(oldest_first_batch, newest_first_log)
 
   # F4: returns true when this assistant's context tokens plus the configured
   # reserve exceed the model context window.  Used on the :continue path.
@@ -690,10 +703,9 @@ defmodule OctoPi.Agent.Loop do
   # count of the first successful (non-error, non-aborted) assistant with a
   # positive token total that is NOT stale (i.e. its timestamp is after the
   # last compaction).  Returns nil when nothing qualifies.
+  # `messages` is stored newest-first internally, so iterate as-is.
   defp find_last_successful_context_tokens(messages, last_compaction_at_ms) do
-    messages
-    |> Enum.reverse()
-    |> Enum.find_value(fn
+    Enum.find_value(messages, fn
       %Assistant{stop_reason: stop, usage: usage, timestamp: ts}
       when stop not in [:error, :aborted] ->
         tokens = context_tokens_from_usage(usage)

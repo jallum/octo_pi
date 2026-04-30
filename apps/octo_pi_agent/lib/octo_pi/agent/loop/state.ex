@@ -12,8 +12,12 @@ defmodule OctoPi.Agent.Loop.State do
     * `:model` — the active provider model
     * `:thinking_level` — reasoning-effort knob
     * `:tools` — per-session list; can be mutated at runtime
-    * `:messages` — ordered transcript (oldest-first plain list of
-      `AgentMessage`)
+    * `:messages` — ordered transcript, **newest-first** plain list
+      of `AgentMessage` (push is `[msg | log]` — O(1)). External
+      consumers expecting oldest-first reverse on read; that happens
+      at three boundaries: `build_turn_context/1` (LLM input),
+      `%Event.AgentEnd{messages: ...}` dispatch, and the public
+      `OctoPi.Agent.state/1` snapshot.
     * `:is_streaming?` — true while a run is in flight
     * `:streaming_message` — partial assistant message during stream
     * `:pending_tool_calls` — ids of tools currently executing
