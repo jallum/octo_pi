@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-04-30T12:42:36Z",
   "created": "2026-04-30T12:06:58Z",
   "description": "**Gap**\nThere is no visual indicator showing what is currently in the steering\nor follow-up queue. Users press Enter while streaming, see their text\ndisappear into the transcript like a normal turn, and have no way to\ndistinguish \\\"sent\\\" from \\\"queued\\\".\n\n**Upstream reference (tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts)**\n- updatePendingMessagesDisplay/0 (around L3527-3547) renders dim\n  \\\"Steering: \u003ctext\u003e\\\" and \\\"Follow-up: \u003ctext\u003e\\\" lines plus a hint\n  \\\"↳ \u003ckey\u003e to edit all queued messages\\\" in a dedicated container\n  above the editor.\n- Triggered on every \\\"queue_update\\\" event emitted by AgentSession\n  (_emit({ type: \\\"queue_update\\\", steering, followUp })).\n\n**Octo_pi state**\n- No pendingMessagesContainer equivalent in interactive.ex.\n- Coder.Loop tracks pending messages indirectly via OctoPi.Agent's\n  PendingMessageQueue but never emits a queue_update event.\n\n**Fix sketch**\n1. Add a queue_update event to OctoPi.Agent.Event (or to Coder's\n   subscriber stream) emitted on every steer/follow_up enqueue and on\n   every drain (so the UI sees the \\\"removed when delivered\\\" transition).\n2. In octo_pi_tui interactive state, track {steering: [text], follow_up: [text]}\n   and render dim \\\"Steering: …\\\" / \\\"Follow-up: …\\\" lines just above the\n   input border, with the \\\"alt+up to edit queued messages\\\" hint.",
   "id": "opi-tze.3",
   "labels": [],
   "parent": "opi-tze",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "[FEATURE] Pending-messages indicator (Steering / Follow-up) above editor",
   "type": "task",
-  "updated_at": "2026-04-30T12:35:55Z"
+  "updated_at": "2026-04-30T12:42:36Z"
 }
