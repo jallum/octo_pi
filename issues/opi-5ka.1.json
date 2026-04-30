@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "opi-5ka.2"
+    "opi-5ka.2",
+    "opi-5ka.3"
   ],
   "created": "2026-04-30T13:08:04Z",
   "description": "## Scope\n- apps/octo_pi_agent/lib/octo_pi/agent/message.ex\n- apps/octo_pi_agent/test/octo_pi/agent/message_test.exs\n- apps/octo_pi_agent/test/octo_pi/agent/pending_message_queue_test.exs\n- apps/octo_pi_agent/test/octo_pi/agent/loop_behavior_test.exs\n\n## Change\n\\`Message.normalize/1\\` currently:\n\\`\\`\\`elixir\ndef normalize(str) when is_binary(str), do: %User{content: str, timestamp: ...}\ndef normalize(%User{} = m), do: m\ndef normalize(%ToolResult{} = m), do: m\n\\`\\`\\`\n\nBecomes:\n\\`\\`\\`elixir\ndef normalize(str) when is_binary(str),\n  do: %User{content: [%Text{text: str}], timestamp: ...}\n\ndef normalize(%User{content: c} = m) when is_binary(c),\n  do: %{m | content: [%Text{text: c}]}\n\ndef normalize(%User{content: c} = m) when is_list(c), do: m\n\ndef normalize(%ToolResult{content: c} = m) when is_binary(c),\n  do: %{m | content: [%Text{text: c}]}\n\ndef normalize(%ToolResult{content: c} = m) when is_list(c), do: m\n\\`\\`\\`\n\n(Assistant.t() is unaffected — its content was always list-shape.)\n\n## Tests\n- New unit tests in message_test.exs covering each lift path.\n- Existing tests that assert `assert %User{content: \\\"hi\\\"}` after\n  going through normalize/prompt/steer/follow_up update their\n  expectation to `[%Text{text: \\\"hi\\\"}]`. There are about 6 such\n  sites in pending_message_queue_test.exs and loop_behavior_test.exs\n  (the QueueUpdate snapshot tests added in opi-tze.3 land here).\n- All 138 octo_pi_agent tests pass.\n\n## Out of scope\n- Type tightening on User/ToolResult — happens in opi-5ka.2 once all\n  call sites are normalize-clean.\n- Downstream branch removal — opi-5ka.3 onward.",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "Lift string content to %Text{} list in Message.normalize/1",
   "type": "task",
-  "updated_at": "2026-04-30T13:09:53Z"
+  "updated_at": "2026-04-30T13:09:54Z"
 }
