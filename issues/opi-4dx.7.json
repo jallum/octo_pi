@@ -2,7 +2,9 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-4dx.9"
+  ],
   "comments": [],
   "created": "2026-04-30T17:46:57.366119Z",
   "description": "## Why\n\nReframe `Markdown.Stream` from \"lex-state cache\" to \"render-state holder.\" The output unit is rendered ANSI lines, not AST blocks. Per render call, only the *pending* tail is freshly lexed and rendered; previously-emitted lines are cached as iolist and never re-walked. Width and theme become part of the cache key.\n\nThis subsumes the deferred `opi-4dx.4` (line cache for finalized messages): a finalized message has zero pending tail, so subsequent renders are O(1).\n\n## Code references\n\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/markdown/stream.ex` — current `Markdown.Stream`; gets rewritten or replaced.\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/markdown.ex` — currently exposes `render_blocks_to_lines/4`; should become internal.\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/markdown/lexer.ex` — invoked only on the pending tail.\n\n## Shape\n\n```\n%Markdown.Render{\n  source:    binary,           # text seen so far\n  checkpoint: non_neg_integer, # byte offset; everything before is committed\n  committed: iolist,           # cached output for source[0..checkpoint-1], newest-head\n  width:     pos_integer,\n  theme_id:  term              # invalidate when this changes\n}\n```\n\nAPI:\n- `new(theme, width) :: t`\n- `put(t, full_source) :: t` — extends source; on prefix-extension, does not reset\n- `render(t) :: {iolist, t}` — returns lines for the *new* tail since last render and a state with that tail folded in; the iolist is just the new bytes' lines, not committed\n- `committed_iolist(t) :: iolist` — for the caller assembling final output\n- `resize(t, new_width) :: t` — clears committed, re-runs over full source\n- `retheme(t, new_theme_id) :: t` — same\n\nInternal: `committed` is stored newest-head (`[newest_seg | ... | oldest_seg]`). Promotion appends with `[new_seg | committed]` — O(1). Output assembly is `[older, new]` nested iolist; terminal flatten produces correct order.\n\n## Acceptance\n\n- Per `render/1` call on a finalized state (no pending tail) returns `{[], state}` and does no lex work — verify via telemetry.\n- Per `render/1` call on a streaming state does lex+render only on the pending tail (length-bounded by current paragraph).\n- `resize/2` reruns rendering over full source once; subsequent renders return `{[], _}`.\n- No `++` on `committed`; no `Enum.reverse` on the hot path.\n- Output is byte-equal to the current pipeline at the same width/theme — golden tests.\n\n## Tests\n\n- Pure unit tests on the new module covering: byte-by-byte growth, paragraph promotion, fence-spanning, width-change-triggers-rerun, finalized-render-is-noop.\n- Golden test: render same source via current pipeline and via `Markdown.Render` at a fixed width — assert byte-equal.\n\n## Out of scope\n\n- Wiring into `AssistantMessage` (that lives in `opi-4dx.10`).",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Markdown renderer: \"what's still pending render?\" line emitter",
   "type": "task",
-  "updated_at": "2026-04-30T17:46:57.366119Z"
+  "updated_at": "2026-04-30T17:48:28.032669Z"
 }
