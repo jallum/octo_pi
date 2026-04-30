@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T14:03:50.175104Z",
+  "description": "A long conversation re-lexes every prior assistant message every frame. Cache rendered output so finalized messages cost effectively zero to re-render.\n\n## Shape\n\nPer-message cache keyed on `(message_id, content_hash, width) → [iolist]`:\n\n- On render, if the key matches the cached entry, reuse the lines.\n- Width changes invalidate.\n- Entry is populated the first time a message is rendered (or when the streaming message finalizes).\n\n## Acceptance\n\n- `transcript.render` duration is flat in `msg_count` for finalized messages (verify against telemetry).\n- Memory is bounded by transcript size; no per-frame allocation churn for unchanged messages.\n- Theme/syntax-highlight changes invalidate cleanly (likely via cache reset, not key — keep the mechanism simple).\n\n## Notes\n\n- The cache stores both line bytes and line count. Off-screen messages still need line count for layout; the cache supplies it without traversing line bytes.\n- Keep cache scope per render owner, not global, to avoid lifetime hazards.",
+  "id": "opi-4dx.4",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Cache rendered lines per finalized message",
+  "type": "task",
+  "updated_at": "2026-04-30T14:03:50.175104Z"
+}
