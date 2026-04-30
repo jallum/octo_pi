@@ -3,7 +3,8 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
-    "opi-4dx.9"
+    "opi-4dx.9",
+    "opi-4dx.10"
   ],
   "comments": [],
   "created": "2026-04-30T17:46:57.366119Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Markdown renderer: \"what's still pending render?\" line emitter",
   "type": "task",
-  "updated_at": "2026-04-30T17:48:28.032669Z"
+  "updated_at": "2026-04-30T17:48:38.389341Z"
 }
