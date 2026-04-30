@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T14:03:39.259689Z",
+  "description": "Decouple stream-chunk arrival from rendering. Per-chunk handlers in `OctoPi.TUI.Interactive` become near-no-ops; rendering is driven by a tick.\n\n## Shape\n\nMirror the `RenderLoop` idle/deadline/drain pattern, but with **append-fold** semantics for stream deltas instead of replace-with-latest:\n\n- Idle at no scheduled tick.\n- First `MessageUpdate` since last tick arms a deadline (`tick_ms` from now).\n- Subsequent `MessageUpdate`s before the deadline fold into the pending partial without rendering.\n- On the deadline, render once and clear the pending state.\n- On stream-close, force-flush immediately rather than wait for the deadline.\n\n## Acceptance\n\n- `MessageUpdate` `handle_info` p99 (from telemetry) drops to sub-millisecond regardless of message length.\n- `transcript.render` call rate during streaming is bounded by the tick, not the chunk rate.\n- `key.latency` p99 during a long streaming response improves vs the baseline captured in opi-4dx.2.\n- No visible regression in streaming smoothness in tmux (deltas still appear at perceived real-time pace).\n\n## Notes\n\n- Tick budget is heavier than `RenderLoop`'s 16 ms (it does Markdown work). Likely 30–33 ms; confirm against telemetry.\n- Non-text events (tool-call boundaries, message finalize) must stay ordered with deltas. Either route them through the same pending state or flush before handling them.",
+  "id": "opi-4dx.3",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Pull-tick render coalescing in Interactive",
+  "type": "task",
+  "updated_at": "2026-04-30T14:03:39.259689Z"
+}
