@@ -23,6 +23,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
   alias OctoPi.Coder
+  alias OctoPi.Coder.Event.CompactionEnd
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
@@ -113,6 +114,7 @@ defmodule OctoPi.TUI.Interactive do
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
+          loader_stash: Components.Loader.t() | nil,
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -165,6 +167,7 @@ defmodule OctoPi.TUI.Interactive do
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
+            loader_stash: nil,
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -1044,6 +1047,26 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader: Components.Loader.new(message: message)}
   end
 
+  def handle_event(state, {:octo_pi_agent_event, %OctoPi.Coder.Event.CompactionStart{reason: reason}}) do
+    # Stash the existing loader (e.g. "Working…" if mid-run); restore
+    # on CompactionEnd. Mirrors upstream's compaction_start handling.
+    label = compaction_label(reason)
+    new_loader = Components.Loader.new(message: label, cancellable: true)
+    Terminal.set_progress(state.terminal, true)
+    %{state | loader_stash: state.loader, loader: new_loader}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
+    Terminal.set_progress(state.terminal, false)
+
+    %{
+      state
+      | loader: state.loader_stash,
+        loader_stash: nil,
+        footer: update_footer(state.footer, ev)
+    }
+  end
+
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentEnd{} = event}) do
     fire_extension_event(state.extensions, :agent_end, state)
 
@@ -1350,7 +1373,18 @@ defmodule OctoPi.TUI.Interactive do
 
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-    if state.session, do: Coder.prompt(state.session, value, send_text)
+
+    # Coder.prompt may run pre-prompt auto-compact synchronously
+    # (LLM call), which would block the TUI's event loop and freeze
+    # the screen. Fork the call so the TUI keeps processing
+    # subscriber events (CompactionStart spinner, MessageEnd, etc.)
+    # while the prompt is in flight. Errors propagate through the
+    # subscribed agent-event stream.
+    if state.session do
+      session = state.session
+      Task.start(fn -> Coder.prompt(session, value, send_text) end)
+    end
+
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
@@ -1474,7 +1508,7 @@ defmodule OctoPi.TUI.Interactive do
   # don't know the new context size until the next assistant message
   # reports usage, so reset percent to nil — the footer renders `?`
   # for unknown.
-  defp update_footer(footer, %OctoPi.Coder.Event.CompactionEnd{result: {:ok, _}}), do: %{footer | context_percent: nil}
+  defp update_footer(footer, %CompactionEnd{result: {:ok, _}}), do: %{footer | context_percent: nil}
 
   defp update_footer(footer, _), do: footer
 
@@ -1651,6 +1685,12 @@ defmodule OctoPi.TUI.Interactive do
   defp build_custom_theme(%{theme: theme}), do: %{fg: fn color, text -> Theme.fg(theme, color, text) end}
 
   defp default_working_message, do: "Thinking…"
+
+  defp compaction_label(:manual), do: "Compacting context… (Esc to cancel)"
+  defp compaction_label(:pre_prompt), do: "Auto-compacting… (Esc to cancel)"
+  defp compaction_label(:mid_run), do: "Auto-compacting… (Esc to cancel)"
+  defp compaction_label(:overflow), do: "Context overflow detected, auto-compacting… (Esc to cancel)"
+  defp compaction_label(_), do: "Compacting context… (Esc to cancel)"
 
   defp render_loader(nil, _width, _theme), do: []
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
