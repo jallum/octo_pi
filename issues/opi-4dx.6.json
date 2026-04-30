@@ -4,7 +4,8 @@
   "blocked_by": [],
   "blocks": [
     "opi-4dx.9",
-    "opi-4dx.10"
+    "opi-4dx.10",
+    "opi-4dx.8"
   ],
   "comments": [],
   "created": "2026-04-30T17:46:31.745313Z",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "Agent: per-block delta events with stable ids",
   "type": "task",
-  "updated_at": "2026-04-30T18:39:59.880482Z"
+  "updated_at": "2026-04-30T18:40:08.779386Z"
 }
