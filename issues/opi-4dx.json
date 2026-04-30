@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T13:48:27.822170Z",
+  "description": "## Problem\n\nKeyboard input feels sluggish in the TUI while assistant responses are streaming.\n\n## Diagnosis (hypothesis)\n\n`OctoPi.TUI.Interactive` is a single GenServer whose mailbox receives both `:hid_event` (keystrokes) and `:octo_pi_agent_event` (stream chunks). They are processed FIFO. Each `MessageUpdate` chunk triggers a synchronous `render_transcript()` → `AssistantMessage.render()` → `Markdown.render()` (Earmark `as_ast` + `SyntaxHighlight` + `WrapAnsi`) over the *entire* growing assistant message. While that runs, queued keypresses wait. As the response grows, per-chunk render cost grows.\n\nCitations: `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:513-524, 655, 896-911, 1536-1537, 1603-1614, 1754, 2197-2198`; `apps/octo_pi_tui/lib/octo_pi/tui/components/markdown.ex:40-50, 88, 98, 122`; `apps/octo_pi_tui/lib/octo_pi/tui/render_loop.ex:34-80`.\n\n## Upstream comparison (pi-mono)\n\n`packages/coding-agent/src/modes/interactive/interactive-mode.ts:2659` calls a cheap `updateContent()` on each chunk and lets the TUI's `requestRender()` (`packages/tui/src/tui.ts:498-514`, `MIN_RENDER_INTERVAL_MS = 16`) coalesce repaints. Markdown lex+render runs lazily at paint, not per chunk. No prefix caching, single thread — they get away with it because the per-chunk path is a no-op.\n\n## Strategy (in order, gated on measurement)\n\n1. **Pull, don't push.** Interactive's `MessageUpdate` handler becomes near-no-op: store latest partial, schedule a render tick. Mirror the `RenderLoop` idle/deadline/drain pattern but with append-fold semantics for stream deltas.\n2. **Measure to decide what's next.** If markdown render itself is the long pole on long messages, layer on either:\n   - **Stable-prefix / block caching** atop Earmark — only re-parse the open trailing block.\n   - **Off-process StreamBuffer Task** owning the partial assistant message and its rendered-line cache, so heavy work never sits in Interactive's mailbox.\n   - **Token-walker port** of `marked`-style lexer + ANSI walker, only if Earmark itself is the bottleneck.\n\n## Done when\n\n- During a long streaming response in tmux, typed keys appear in the editor with no visible lag.\n- Telemetry shows key-arrival → key-handled latency stays bounded as the assistant message grows.\n- Per-tick markdown render duration is bounded (constant in message length, or amortized to zero on stable prefix).",
+  "id": "opi-4dx",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI: keep keyboard responsive while assistant is streaming",
+  "type": "epic",
+  "updated_at": "2026-04-30T13:48:27.822170Z"
+}
