@@ -579,8 +579,9 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2.notification == "Steered"
 
       # The agent's steering queue actually received it.
-      drained = OctoPi.Agent.drain_steering(agent)
-      assert Enum.map(drained, & &1.content) == ["steer me"]
+      # Post-opi-5ka.1: normalize lifts "steer me" into [%Text{text: "steer me"}].
+      assert [%OctoPi.AI.Message.User{content: [%OctoPi.AI.Content.Text{text: "steer me"}]}] =
+               OctoPi.Agent.drain_steering(agent)
     end
 
     test "Enter with active loader and full steering queue surfaces a notification" do

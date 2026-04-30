@@ -61,6 +61,11 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
     pid
   end
 
+  # Helper for assertions on user-message content. Post-opi-5ka.1 every
+  # %User{} flowing through Agent.prompt / steer / follow_up has list-
+  # shape content (a single %Text{} for a string input).
+  defp user_text(%User{content: [%Text{text: t}]}), do: t
+
   # Named handlers — remote captures avoid telemetry's "local function"
   # performance warning.
   def telemetry_forward_tool_start(_event, _measurements, metadata, %{pid: pid}) do
@@ -407,7 +412,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "midway note"]
+      assert Enum.map(users, &user_text/1) == ["go", "midway note"]
     end
 
     # Steer a message *before* prompt() is called. Upstream's runLoop
@@ -434,7 +439,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "steer-pre"]
+      assert Enum.map(users, &user_text/1) == ["go", "steer-pre"]
     end
 
     # Steer during a streaming non-tool turn. Upstream's inner-loop
@@ -470,7 +475,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "steer-mid"]
+      assert Enum.map(users, &user_text/1) == ["go", "steer-mid"]
     end
 
     # When BOTH steering and follow-up are queued at a non-tool stop,
@@ -514,7 +519,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       # steer drained at end of turn 1 → "steer-first" runs as turn 2;
       # turn 2 is a non-tool stop with empty steering → outer loop
       # picks up follow_up → "fup-after" runs as turn 3.
-      assert Enum.map(users, & &1.content) == ["go", "steer-first", "fup-after"]
+      assert Enum.map(users, &user_text/1) == ["go", "steer-first", "fup-after"]
     end
   end
 
@@ -546,7 +551,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["hi", "and then?"]
+      assert Enum.map(users, &user_text/1) == ["hi", "and then?"]
     end
 
     test "follow_up during idle does not start a run; next prompt drains" do
@@ -586,7 +591,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["now", "carried over"]
+      assert Enum.map(users, &user_text/1) == ["now", "carried over"]
     end
 
     test "set_queue_mode(:all) drains multiple follow_ups in one pass" do
@@ -622,7 +627,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["hi", "a", "b"]
+      assert Enum.map(users, &user_text/1) == ["hi", "a", "b"]
     end
   end
 
@@ -1166,7 +1171,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       :ok = OctoPi.Agent.steer(loop, "c")
 
       drained = OctoPi.Agent.drain_steering(loop)
-      assert Enum.map(drained, & &1.content) == ["a", "b", "c"]
+      assert Enum.map(drained, &user_text/1) == ["a", "b", "c"]
       assert OctoPi.Agent.drain_steering(loop) == []
     end
 
@@ -1178,7 +1183,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       :ok = OctoPi.Agent.follow_up(loop, "c")
 
       drained = OctoPi.Agent.drain_follow_up(loop)
-      assert Enum.map(drained, & &1.content) == ["a", "b", "c"]
+      assert Enum.map(drained, &user_text/1) == ["a", "b", "c"]
       assert OctoPi.Agent.drain_follow_up(loop) == []
     end
   end
@@ -1195,13 +1200,19 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       :ok = OctoPi.Agent.steer(loop, "a")
 
       assert_received {:octo_pi_agent_event,
-                       %Event.QueueUpdate{steering: [%User{content: "a"}], follow_up: []}}
+                       %Event.QueueUpdate{
+                         steering: [%User{content: [%Text{text: "a"}]}],
+                         follow_up: []
+                       }}
 
       :ok = OctoPi.Agent.steer(loop, "b")
 
       assert_received {:octo_pi_agent_event,
                        %Event.QueueUpdate{
-                         steering: [%User{content: "a"}, %User{content: "b"}],
+                         steering: [
+                           %User{content: [%Text{text: "a"}]},
+                           %User{content: [%Text{text: "b"}]}
+                         ],
                          follow_up: []
                        }}
     end
@@ -1213,7 +1224,10 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       :ok = OctoPi.Agent.follow_up(loop, "x")
 
       assert_received {:octo_pi_agent_event,
-                       %Event.QueueUpdate{steering: [], follow_up: [%User{content: "x"}]}}
+                       %Event.QueueUpdate{
+                         steering: [],
+                         follow_up: [%User{content: [%Text{text: "x"}]}]
+                       }}
     end
 
     test "public-API drain emits QueueUpdate when items were drained" do
@@ -1267,7 +1281,9 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       # Enqueue snapshot then in-loop drain snapshot.
       assert_received {:octo_pi_agent_event,
-                       %Event.QueueUpdate{steering: [%User{content: "steer-mid"}]}}
+                       %Event.QueueUpdate{
+                         steering: [%User{content: [%Text{text: "steer-mid"}]}]
+                       }}
 
       assert_received {:octo_pi_agent_event,
                        %Event.QueueUpdate{steering: [], follow_up: []}}
@@ -1310,7 +1326,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "note a", "note b"]
+      assert Enum.map(users, &user_text/1) == ["go", "note a", "note b"]
     end
   end
 
