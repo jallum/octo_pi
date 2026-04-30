@@ -110,7 +110,6 @@ defmodule OctoPi.TUI.Interactive do
           tree_selector: TreeSelector.t() | nil,
           summarize_prompt: SummarizePrompt.t() | nil,
           select_list: SelectList.t() | nil,
-          dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
@@ -167,7 +166,6 @@ defmodule OctoPi.TUI.Interactive do
             tree_selector: nil,
             summarize_prompt: nil,
             select_list: nil,
-            dequeue_overlay: nil,
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
@@ -919,13 +917,6 @@ defmodule OctoPi.TUI.Interactive do
     Overlay.composite(lines, [ov], w, h)
   end
 
-  defp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do
-    ov_w = min(70, w)
-    ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
-    overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
-    Overlay.composite(lines, [overlay], w, h)
-  end
-
   defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
     ov_w = min(70, w)
 
@@ -954,16 +945,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_dialog_overlay(%{select_list: d}, :select_list, w) when not is_nil(d), do: SelectList.render(d, w)
   defp render_dialog_overlay(_, _, _), do: nil
-
-  defp render_dequeue_items(items, selected, _width, theme) do
-    Enum.with_index(items, fn {type, msg}, idx ->
-      prefix = if idx == selected, do: "→ ", else: "  "
-      type_tag = dim("[#{type}]")
-      text = if is_map(msg) and Map.has_key?(msg, :content), do: to_string(msg.content), else: inspect(msg)
-      label = "#{prefix}#{type_tag} #{text}"
-      if idx == selected and theme, do: Theme.fg(theme, :accent, label), else: label
-    end)
-  end
 
   defp log_overwide(fd, lines, width) do
     overwide =
@@ -1232,14 +1213,17 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
 
+  # opi-tze.5: Restore queued steering and follow-up messages back
+  # into the editor for free editing. Mirrors upstream pi-mono
+  # `restoreQueuedMessagesToEditor/1` (interactive-mode.ts L3549-3568):
+  # drain ALL queues, join the message texts with blank lines, then
+  # combine with whatever the user has currently typed. The user can
+  # then edit, delete, or resubmit the combined text however they like.
   defp dispatch_app_action("app.message.dequeue", state, _key) do
-    steering = Coder.drain_steering(state.session)
-    follow_up = Coder.drain_follow_up(state.session)
-    items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
-
-    if items == [],
-      do: %{state | notification: "No queued messages"},
-      else: focus(%{state | dequeue_overlay: %{items: items, selected: 0}}, {:overlay, :dequeue})
+    case restore_queued_to_editor(state, abort?: false) do
+      {0, state} -> %{state | notification: "No queued messages"}
+      {_n, state} -> state
+    end
   end
 
   defp dispatch_app_action("app.message.followUp", %{loader: %Components.Loader{}} = state, _key) do
@@ -1797,8 +1781,44 @@ defmodule OctoPi.TUI.Interactive do
 
   defp default_working_message, do: "Thinking…"
 
-  defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
+  # opi-tze.5 / opi-tze.8: drain ALL queued steering and follow-up
+  # messages from the agent and place them in the editor for free
+  # editing. Mirrors upstream pi-mono
+  # restoreQueuedMessagesToEditor/1 (interactive-mode.ts L3549-3568).
+  #
+  # Returns `{n, state}` where `n` is the total number of items
+  # restored. When `abort?: true` is passed and the agent is
+  # streaming, also calls Coder.abort/1 — used by Escape during a
+  # run to cancel and reclaim the queued text in one gesture.
+  @spec restore_queued_to_editor(t(), keyword()) :: {non_neg_integer(), t()}
+  defp restore_queued_to_editor(%{session: nil} = state, _opts), do: {0, state}
 
+  defp restore_queued_to_editor(state, opts) do
+    abort? = Keyword.get(opts, :abort?, false)
+    steering = Coder.drain_steering(state.session)
+    follow_up = Coder.drain_follow_up(state.session)
+    queued_texts = Enum.map(steering ++ follow_up, &message_text/1)
+    n = length(queued_texts)
+
+    if abort?, do: Coder.abort(state.session)
+
+    if n == 0 do
+      {0, state}
+    else
+      queued_text = Enum.join(queued_texts, "\n\n")
+      current_text = state.input.value
+
+      combined =
+        [queued_text, current_text]
+        |> Enum.reject(&(String.trim(&1) == ""))
+        |> Enum.join("\n\n")
+
+      input = %{state.input | value: combined, cursor: String.length(combined)}
+      {n, %{state | input: input}}
+    end
+  end
+
+  defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
   defp flush_compaction_queue(%{compaction_queue: queue, session: session} = state) do
     # Use follow_up rather than prompt so the messages join the
     # follow_up_queue and get drained at the next idle/run boundary.
@@ -1875,41 +1895,10 @@ defmodule OctoPi.TUI.Interactive do
 
   defp thinking_level_label(level), do: to_string(level)
 
-  defp handle_dequeue_key(state, ov, %Key{key: :up}),
-    do: %{state | dequeue_overlay: %{ov | selected: max(0, ov.selected - 1)}}
-
-  defp handle_dequeue_key(state, ov, %Key{key: :down}) do
-    max_sel = max(0, length(ov.items) - 1)
-    %{state | dequeue_overlay: %{ov | selected: min(max_sel, ov.selected + 1)}}
-  end
-
-  defp handle_dequeue_key(state, ov, %Key{key: k}) when k in [:delete, :backspace] do
-    new_items = List.delete_at(ov.items, ov.selected)
-
-    if new_items == [] do
-      unfocus(%{state | dequeue_overlay: nil})
-    else
-      max_sel = max(0, length(new_items) - 1)
-      %{state | dequeue_overlay: %{ov | items: new_items, selected: min(ov.selected, max_sel)}}
-    end
-  end
-
-  defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
-    Enum.each(ov.items, fn
-      {:steering, msg} -> if state.session, do: Coder.steer(state.session, msg)
-      {:follow_up, msg} -> if state.session, do: Coder.follow_up(state.session, msg)
-    end)
-
-    unfocus(%{state | dequeue_overlay: nil})
-  end
-
-  defp handle_dequeue_key(state, _ov, _key), do: state
-
   defp dispatch_key_to_focused(state, key) do
     case state.focused_component do
       :input -> handle_input_key(state, key)
       {:dialog, dialog_key} -> dispatch_dialog_key(state, dialog_key, key)
-      {:overlay, :dequeue} -> handle_dequeue_key(state, state.dequeue_overlay, key)
       nil -> state
     end
   end

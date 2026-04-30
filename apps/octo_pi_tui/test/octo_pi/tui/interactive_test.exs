@@ -280,25 +280,17 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
-  describe "handle_event — Alt+Up dequeue overlay (opi-0g4.16)" do
+  # opi-tze.5: Alt+Up restores all queued steering / follow-up
+  # messages back into the editor for free editing. Replaces the
+  # earlier dedicated overlay UX (which had no way to *edit* a
+  # queued message's text and which collided with opi-tze.4 by
+  # only showing one item at a time).
+  describe "handle_event — Alt+Up restore queued to editor (opi-tze.5)" do
     alias Loop, as: CoderLoop
     alias OctoPi.Coder.SessionManager
     alias OctoPi.Coder.SessionStore
 
-    defp dequeue_state(items, selected) do
-      %Interactive{dequeue_overlay: %{items: items, selected: selected}, focused_component: {:overlay, :dequeue}}
-    end
-
-    defp tagged(type, text) do
-      msg = %User{
-        content: text,
-        timestamp: 0
-      }
-
-      {type, msg}
-    end
-
-    defp start_coder_session! do
+    defp start_coder_session_for_dequeue! do
       model = %OctoPi.AI.Model{
         id: "fake",
         name: "fake",
@@ -310,7 +302,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       id = "test-#{System.unique_integer([:positive])}"
-      root = Path.join(System.tmp_dir!(), "opi-dequeue-test-#{id}")
+      root = Path.join(System.tmp_dir!(), "opi-restore-test-#{id}")
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
 
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
@@ -328,81 +320,59 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2 == s
     end
 
-    test "Alt+Up with live session and queued follow-up opens overlay" do
-      {coder, agent} = start_coder_session!()
-      OctoPi.Agent.follow_up(agent, "queued message")
-      s = %Interactive{session: coder}
+    test "Alt+Up with empty queues shows 'No queued messages' notification" do
+      {coder, _agent} = start_coder_session_for_dequeue!()
+      s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
-      assert s2.dequeue_overlay
-      items = s2.dequeue_overlay.items
-      assert length(items) == 1
-      assert match?([{:follow_up, _}], items)
-    end
-
-    test "Alt+Up with live session and empty queues shows notification" do
-      {coder, _agent} = start_coder_session!()
-      s = %Interactive{session: coder}
-      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
-      assert s2.dequeue_overlay == nil
       assert s2.notification =~ "No queued"
+      assert s2.input.value == ""
     end
 
-    test "when dequeue_overlay open, Up moves selection toward first item" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
-      s = dequeue_state(items, 2)
-      s2 = Interactive.handle_event(s, %Key{key: :up})
-      assert s2.dequeue_overlay.selected == 1
+    test "Alt+Up with a single queued message places its text in the editor" do
+      {coder, agent} = start_coder_session_for_dequeue!()
+      :ok = OctoPi.Agent.steer(agent, "please continue")
+
+      s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
+
+      assert s2.input.value == "please continue"
+      assert s2.input.cursor == String.length("please continue")
+      assert OctoPi.Agent.drain_steering(agent) == []
     end
 
-    test "when dequeue_overlay open, Up does not go below 0" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
-      s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, %Key{key: :up})
-      assert s2.dequeue_overlay.selected == 0
+    test "Alt+Up joins multiple queued messages with blank lines (steering, then follow-up)" do
+      {coder, agent} = start_coder_session_for_dequeue!()
+      :ok = OctoPi.Agent.steer(agent, "steer one")
+      :ok = OctoPi.Agent.steer(agent, "steer two")
+      :ok = OctoPi.Agent.follow_up(agent, "and then")
+
+      s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
+
+      assert s2.input.value == "steer one\n\nsteer two\n\nand then"
+      assert OctoPi.Agent.drain_steering(agent) == []
+      assert OctoPi.Agent.drain_follow_up(agent) == []
     end
 
-    test "when dequeue_overlay open, Down moves selection toward last item" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
-      s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, %Key{key: :down})
-      assert s2.dequeue_overlay.selected == 1
+    test "Alt+Up combines queued text with whatever is already typed" do
+      {coder, agent} = start_coder_session_for_dequeue!()
+      :ok = OctoPi.Agent.steer(agent, "queued")
+
+      s = %Interactive{session: coder, input: %Input{value: "new draft", cursor: 9}}
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
+
+      assert s2.input.value == "queued\n\nnew draft"
     end
 
-    test "when dequeue_overlay open, Down does not go past last item" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
-      s = dequeue_state(items, 1)
-      s2 = Interactive.handle_event(s, %Key{key: :down})
-      assert s2.dequeue_overlay.selected == 1
-    end
+    test "Alt+Up with whitespace-only current text drops it from the combined value" do
+      {coder, agent} = start_coder_session_for_dequeue!()
+      :ok = OctoPi.Agent.steer(agent, "queued")
 
-    test "when dequeue_overlay open, Delete removes selected item" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b"), tagged(:follow_up, "c")]
-      s = dequeue_state(items, 1)
-      s2 = Interactive.handle_event(s, %Key{key: :delete})
-      assert length(s2.dequeue_overlay.items) == 2
-      assert match?([{:follow_up, _}, {:follow_up, _}], s2.dequeue_overlay.items)
-    end
+      s = %Interactive{session: coder, input: %Input{value: "   \n\n", cursor: 5}}
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
 
-    test "when dequeue_overlay open, Delete on last remaining item closes overlay" do
-      items = [tagged(:follow_up, "only")]
-      s = dequeue_state(items, 0)
-      s2 = Interactive.handle_event(s, %Key{key: :delete})
-      assert s2.dequeue_overlay == nil
+      assert s2.input.value == "queued"
     end
-
-    test "when dequeue_overlay open, Escape closes overlay" do
-      items = [tagged(:follow_up, "a"), tagged(:steering, "b")]
-      s = dequeue_state(items, 0, session: nil)
-      s2 = Interactive.handle_event(s, %Key{key: :escape})
-      assert s2.dequeue_overlay == nil
-    end
-  end
-
-  defp dequeue_state(items, selected, opts) do
-    struct(
-      %Interactive{dequeue_overlay: %{items: items, selected: selected}, focused_component: {:overlay, :dequeue}},
-      opts
-    )
   end
 
   describe "handle_event — Alt+Enter follow-up queuing (opi-0g4.15)" do
@@ -3083,26 +3053,6 @@ defmodule OctoPi.TUI.InteractiveTest do
       ms = ModelSelector.new([make_model("m1")], theme)
       s = %Interactive{model_selector: ms, focused_component: {:dialog, :model_selector}}
       s2 = Interactive.handle_event(s, %Key{key: :escape})
-      assert s2.focused_component == :input
-    end
-
-    test "Escape from dequeue_overlay resets focused_component to :input" do
-      items = [{:follow_up, %User{content: "x", timestamp: 0}}]
-
-      s = %Interactive{
-        dequeue_overlay: %{items: items, selected: 0},
-        focused_component: {:overlay, :dequeue},
-        session: nil
-      }
-
-      s2 = Interactive.handle_event(s, %Key{key: :escape})
-      assert s2.focused_component == :input
-    end
-
-    test "Delete-to-empty from dequeue_overlay resets focused_component to :input" do
-      items = [{:follow_up, %User{content: "x", timestamp: 0}}]
-      s = %Interactive{dequeue_overlay: %{items: items, selected: 0}, focused_component: {:overlay, :dequeue}}
-      s2 = Interactive.handle_event(s, %Key{key: :delete})
       assert s2.focused_component == :input
     end
 
