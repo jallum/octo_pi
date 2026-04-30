@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T03:44:23.767747Z",
+  "description": "Emit telemetry events around the registry, auth, and runner ops, and ship a pluggable tracing handler that prints one line per event to stderr when enabled.\n\n## Events\n\nTriplet pattern (`:start`, `:stop`, `:exception`) where the operation can fail or take time; single events otherwise.\n\n- `[:octo_pi, :ai, :model_registry, :load]` start/stop — measurements: `system_time`, `duration`; metadata: `path`, `runner_count`, `model_count`, `error?`.\n- `[:octo_pi, :ai, :model_registry, :resolve]` start/stop/exception — meta: `ref`, `runner`, `id`, `outcome` (`:cached | :looked_up | :not_found | :unsupported | :bad_ref`).\n- `[:octo_pi, :ai, :auth, :resolve]` start/stop/exception — meta: `runner`, `strategy`, `source` (`:default | :auth_json`), `redacted: true` (never log the actual secret).\n- `[:octo_pi, :ai, :runner, :lookup]` start/stop/exception — meta: `runner`, `id`, `outcome`.\n- `[:octo_pi, :ai, :runner, :discover]` start/stop/exception — meta: `runner`, `model_count`.\n- `[:octo_pi, :ai, :api, :request]` start/stop/exception — meta: `runner`, `api`, `model_id`, `endpoint`, `bytes_in`, `bytes_out`.\n- `[:octo_pi, :ai, :api, :stream_chunk]` — meta: `runner`, `api`, `model_id`, `kind` (`:text | :thinking | :tool_call | :usage | :stop`), `bytes`.\n\n## Tracing handler\n\n`OctoPi.AI.Tracing` — `attach/0` and `detach/0`. When attached, formats each event as a single stderr line:\n\n```\n[trace] octo_pi.ai.runner.lookup runner=ollama id=qwen3:8b outcome=ok dur=412ms\n```\n\n- Auth events log `strategy` but never the value.\n- Activated by `OCTO_PI_TRACE=1` env var (read at app start) or `config :octo_pi, :trace, true`. Both checked in `Application.start/2` and `attach/0` is called when either is truthy.\n- Detached by default in `MIX_ENV=test` unless a test opts in.\n\n## Tests\n\nUse `:telemetry_test.attach_event_handlers/2` to assert events fire with expected metadata. No `Process.sleep` — synchronize via the `:stop` event.\n\n## Out of scope\n\n- Span IDs / W3C tracing context.\n- Exporting to OTLP or any external sink.\n- Per-request token-level events beyond `:stream_chunk`.",
+  "id": "opi-y1z.5",
+  "labels": [],
+  "parent": "opi-y1z",
+  "priority": 2,
+  "status": "open",
+  "title": "Telemetry + tracing for model registry / runners",
+  "type": "task",
+  "updated_at": "2026-04-30T03:44:23.767747Z"
+}
