@@ -1770,7 +1770,7 @@ defmodule OctoPi.TUI.Interactive do
   def flush_pending_partial(state) do
     %{
       state
-      | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme),
+      | transcript: apply_streaming_blocks(state.transcript, state.streaming_blocks, state.theme, state.width),
         streaming_tick_at: nil
     }
   end
@@ -1779,31 +1779,42 @@ defmodule OctoPi.TUI.Interactive do
   def streaming_tick_due?(%{streaming_tick_at: nil}, _now_ms), do: false
   def streaming_tick_due?(%{streaming_tick_at: at}, now_ms) when is_integer(at), do: now_ms >= at
 
-  defp apply_streaming_blocks(transcript, %{order: order, data: data}, theme) do
-    content =
-      Enum.flat_map(order, fn id ->
-        case Map.get(data, id) do
-          {:text, t} -> [{:text, t}]
-          {:thinking, t} -> [{:thinking, t}]
-          _ -> []
-        end
-      end)
-
+  # Drive AssistantMessage.put_block directly per block_id so each
+  # delta only touches its own slot — no content-list rebuild, no
+  # diff-and-rewrite of unchanged blocks.
+  defp apply_streaming_blocks(transcript, %{order: order, data: data}, theme, width) do
     case find_last_assistant(transcript) do
       {idx, %AssistantMessage{} = msg} ->
         updated =
-          AssistantMessage.update_content(msg,
-            content: content,
-            streaming?: true
-          )
+          msg
+          |> ensure_dims(theme, width)
+          |> Map.put(:streaming?, true)
+          |> apply_blocks(order, data)
 
         List.replace_at(transcript, idx, updated)
 
       _ ->
-        msg = AssistantMessage.new(theme, content: content, streaming?: true)
+        msg =
+          AssistantMessage.new(theme, streaming?: true, width: width)
+          |> apply_blocks(order, data)
+
         transcript ++ [msg]
     end
   end
+
+  defp apply_blocks(msg, order, data) do
+    Enum.reduce(order, msg, fn id, acc ->
+      case Map.get(data, id) do
+        {kind, snapshot} -> AssistantMessage.put_block(acc, id, kind, snapshot)
+        _ -> acc
+      end
+    end)
+  end
+
+  defp ensure_dims(%AssistantMessage{theme: theme, width: width} = msg, theme, width), do: msg
+
+  defp ensure_dims(%AssistantMessage{} = msg, theme, width),
+    do: AssistantMessage.update_content(msg, theme: theme, width: width)
 
   defp finalize_assistant(transcript, msg, theme) do
     content = extract_content_blocks(msg)

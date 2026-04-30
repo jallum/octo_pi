@@ -122,7 +122,13 @@ defmodule OctoPi.TUI.Transcript do
   """
   @spec render(t(), ctx() | nil) :: {iodata(), t()}
   def render(%__MODULE__{} = t, ctx \\ nil) do
-    t = if ctx != nil and ctx != t.ctx, do: resize(t, ctx), else: t
+    t =
+      cond do
+        ctx == nil -> t
+        ctx === t.ctx -> t
+        ctx == t.ctx -> t
+        true -> resize(t, ctx)
+      end
 
     {rendered, renderers} =
       Enum.reduce(t.order, {t.rendered, t.renderers}, fn id, {rmap, rrmap} ->

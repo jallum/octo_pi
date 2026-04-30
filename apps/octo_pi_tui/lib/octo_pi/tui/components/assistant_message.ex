@@ -230,7 +230,14 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
           [:octo_pi_tui, :markdown, :render],
           start_meta,
           fn ->
-            ctx = ctx_for(msg, width)
+            # When the call width matches the stamped ctx width, reuse
+            # the stored ctx by reference — Transcript.render then
+            # short-circuits its ctx-equality check.
+            ctx =
+              cond do
+                msg.blocks.ctx != nil and Map.get(msg.blocks.ctx, :width) == width -> msg.blocks.ctx
+                true -> ctx_for(msg, width)
+              end
 
             # Tolerate struct-literal construction (`%AssistantMessage{content: [...]}`)
             # that bypasses `new/2`: build the Transcript on the fly.
