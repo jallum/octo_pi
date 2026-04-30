@@ -16,8 +16,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "AssistantMessage: nest the Transcript shape for content blocks",
   "type": "task",
-  "updated_at": "2026-04-30T19:27:05.803865Z"
+  "updated_at": "2026-04-30T19:32:57.862050Z"
 }
