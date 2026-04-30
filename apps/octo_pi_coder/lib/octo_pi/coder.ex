@@ -80,11 +80,11 @@ defmodule OctoPi.Coder do
   def abort(server), do: GenServer.call(server, :agent_abort)
 
   @doc "Queue a follow-up message with the held agent."
-  @spec follow_up(t(), String.t()) :: :ok
+  @spec follow_up(t(), String.t()) :: :ok | {:error, :full}
   def follow_up(server, text), do: GenServer.call(server, {:agent_follow_up, text})
 
   @doc "Queue a steering message with the held agent."
-  @spec steer(t(), String.t()) :: :ok
+  @spec steer(t(), String.t()) :: :ok | {:error, :full}
   def steer(server, text), do: GenServer.call(server, {:agent_steer, text})
 
   @doc "Change the model for future runs."

@@ -1231,9 +1231,16 @@ defmodule OctoPi.TUI.Interactive do
     if text == "" do
       state
     else
-      if state.session, do: Coder.follow_up(state.session, text)
+      result = if state.session, do: Coder.follow_up(state.session, text), else: :ok
       input = %{state.input | value: "", cursor: 0}
-      %{state | input: input, notification: "Follow-up queued"}
+
+      notification =
+        case result do
+          {:error, :full} -> "Follow-up queue is full"
+          _ -> "Follow-up queued"
+        end
+
+      %{state | input: input, notification: notification}
     end
   end
 
