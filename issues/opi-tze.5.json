@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-tze.4"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-tze",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "[FEATURE] Dequeue UX: restore queued messages back into editor (upstream parity)",
   "type": "task",
-  "updated_at": "2026-04-30T12:08:10Z"
+  "updated_at": "2026-04-30T12:42:41Z"
 }
