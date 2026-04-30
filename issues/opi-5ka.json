@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T13:07:21Z",
+  "description": "",
+  "id": "opi-5ka",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "[EPIC] Canonicalize User/ToolResult content to list-shape at construction",
+  "type": "task",
+  "updated_at": "2026-04-30T13:07:21Z"
+}
