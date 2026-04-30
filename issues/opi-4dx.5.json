@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T14:04:14.345059Z",
+  "description": "Replace whole-message Earmark re-parsing on the streaming assistant message with an incremental, line-oriented Markdown lexer. Lexer state is persisted at the most recent newline; new bytes resume from that checkpoint. Per-tick render cost becomes O(current line length), not O(message length).\n\n## Mental model\n\n- The most recent `\\n` is always a safe checkpoint. Newlines are unambiguous; block boundaries are not. We don't need to reason about block closure.\n- Everything up to the last newline is **frozen**: tokens emitted, lines rendered, never recomputed.\n- Bytes since the last newline are the **tail**: re-rendered each tick, naturally.\n- A code fence is just a sequence of newline-checkpointed lines whose lex carries an \"in fence\" mode bit; no special case.\n\n## Streaming state per assistant message\n\n```\n%StreamingMarkdown{\n  width:           integer,\n  frozen_tokens:   [token],     # lex output through the last checkpoint\n  frozen_lines:    [iolist],    # rendered ANSI lines for frozen tokens\n  checkpoint_lex:  lexer_state, # mode + list/fence depth at last `\\n`\n  tail_buf:        binary       # bytes since last `\\n`\n}\n```\n\nPer delta:\n1. Append bytes to `tail_buf`.\n2. If a `\\n` is present: split at the last `\\n`. Resume lexer from `checkpoint_lex` over the new complete-lines portion → emit tokens → render → append to `frozen_lines`. Update `checkpoint_lex`. Keep the post-`\\n` remainder as new `tail_buf`.\n3. Render `tail_buf` as a single volatile line atop `frozen_lines`.\n\nOn stream-close: treat end-of-stream as an implicit boundary; flush `tail_buf` through the lexer and freeze.\n\n## Lexer scope\n\nToken-walker port modelled on `marked`'s line-oriented lexer:\n- Headings (ATX), paragraphs, blockquotes, lists (ordered/unordered, nested), fenced code, horizontal rules.\n- Inline: `code`, **bold**, *italic*, links (inline form), strikethrough.\n- Setext headings: out of scope; assistants don't emit them.\n- Reference-style links: out of scope.\n\nWalk tokens directly to ANSI lines using existing `Theme` / `SyntaxHighlight` / `WrapAnsi` helpers. No AST, no HTML.\n\n## Acceptance\n\n- Streaming message render cost per tick (from telemetry) is bounded by current-line length and does not grow with total message length.\n- Output is byte-equal to Earmark+current-renderer output for a representative corpus of assistant responses (golden tests).\n- Width change re-wraps `frozen_tokens` to `frozen_lines` without re-lexing.\n- Composes with opi-4dx.4: when the streaming message finalizes, its `frozen_lines` populate the per-message cache verbatim.\n\n## Risks\n\n- Token-walker correctness — guard with golden tests against current Earmark output for a real corpus before swapping in.\n- Lexer state must be small and easily serialized between ticks (mode + a small int stack for list depth).",
+  "id": "opi-4dx.5",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Incremental Markdown lexer with line-checkpointed state",
+  "type": "feature",
+  "updated_at": "2026-04-30T14:04:14.345059Z"
+}
