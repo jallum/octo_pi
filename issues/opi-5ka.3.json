@@ -4,7 +4,9 @@
     "opi-5ka.1",
     "opi-5ka.2"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-5ka.4"
+  ],
   "created": "2026-04-30T13:08:32Z",
   "description": "## Sites\n- apps/octo_pi_ai/lib/octo_pi/ai/message/user.ex\n- apps/octo_pi_ai/lib/octo_pi/ai/message/tool_result.ex\n\n## Change\nUser.t():\n\\`\\`\\`elixir\n@type t :: %__MODULE__{\n        content: String.t() | [Content.user_block()],   # \u003c- drop String.t()\n        timestamp: integer()\n      }\n\\`\\`\\`\nbecomes:\n\\`\\`\\`elixir\n@type t :: %__MODULE__{\n        content: [Content.user_block()],\n        timestamp: integer()\n      }\n\\`\\`\\`\n\nSame shape edit on ToolResult.t().content.\n\nThe moduledoc on user.ex currently says:\n\u003e \\`content\\` is either a plain string (shorthand for a single text\n\u003e block) or a list of text/image blocks.\n\nUpdate to:\n\u003e \\`content\\` is a list of text/image blocks. Construct via\n\u003e \\`OctoPi.Agent.Message.normalize/1\\` if you have a plain string —\n\u003e it lifts strings into \\`[%Text{text: ...}]\\`.\n\n## Tests\nThe dialyzer/typespec change has no runtime effect, but any test that\nconstructs \\`%User{content: \\\"...\\\"}\\` directly stops being shape-correct.\nopi-5ka.1 already updated tests in octo_pi_agent to use list-shape\nor normalize/1; this ticket extends the same pass through\nocto_pi_coder, octo_pi_tui, and the AI provider apps.\n\nConcrete test sites to revisit (~30 lines):\n  apps/octo_pi_coder/test/octo_pi/coder/compaction/serialize_test.exs\n  apps/octo_pi_coder/test/octo_pi/coder/compaction/tokens_test.exs\n  apps/octo_pi_coder/test/octo_pi/coder/compaction/summary_test.exs\n  apps/octo_pi_tui/test/octo_pi/tui/interactive_test.exs\n\nMany of these tests are *intentionally* exercising the dual-shape;\nthey should be updated to use list-shape and the binary-shape\ncoverage moves to message_test.exs (opi-5ka.1) where the lift is\nthe contract under test.\n\n## Depends on\nopi-5ka.1 (normalize lifts) + opi-5ka.2 (set_messages plugged) so\nno library code path can produce binary-shape content for these\ntypes after this change lands.",
   "id": "opi-5ka.3",

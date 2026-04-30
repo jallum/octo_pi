@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-5ka.3"
+  ],
   "blocks": [],
   "created": "2026-04-30T13:08:48Z",
   "description": "## Sites\n\napps/octo_pi_coder/lib/octo_pi/coder/compaction/tokens.ex\n\\`\\`\\`elixir\ndefp user_chars(content) when is_binary(content), do: byte_size(content)\ndefp user_chars(content) when is_list(content), do: ...\ndefp tool_result_chars(content) when is_binary(content), do: byte_size(content)\ndefp tool_result_chars(content) when is_list(content), do: ...\n\\`\\`\\`\n\napps/octo_pi_coder/lib/octo_pi/coder/compaction/serialize.ex\n\\`\\`\\`elixir\ndefp user_text(content) when is_binary(content), do: content\ndefp user_text(content) when is_list(content), do: ...\ndefp tool_result_text(content) when is_binary(content), do: content\ndefp tool_result_text(content) when is_list(content), do: ...\n\\`\\`\\`\n\n## Change\nAfter opi-5ka.3 (User.t() / ToolResult.t() content is list-only),\nthe binary-clause heads are dead code in the well-typed world. Drop\nthem. The list-clause becomes the only definition.\n\nNB: the JSON-shape clauses (\\`%{\\\"role\\\" =\u003e \\\"user\\\", \\\"content\\\" =\u003e content}\\`\nin tokens.ex L70) operate on serialized session entries that have\nNOT been through Message.normalize; those keep their dual-shape\nhandling because the on-disk format intentionally stores either form.\n\n## Tests\n- Existing tokens_test.exs / serialize_test.exs cases that constructed\n  \\`%User{content: \\\"hi\\\"}\\` were updated in opi-5ka.3 to use list-shape;\n  they continue to pass.\n- Add at least one regression case asserting the dropped binary\n  clause is unreachable for User/ToolResult inputs (or verify via\n  \\`mix dialyzer\\` that the type narrowing is exact).\n\n## Depends on\nopi-5ka.3 (type narrowing is what makes the binary-clauses dead).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Drop dual-shape branches in compaction tokens / serialize",
   "type": "task",
-  "updated_at": "2026-04-30T13:08:48Z"
+  "updated_at": "2026-04-30T13:09:54Z"
 }
