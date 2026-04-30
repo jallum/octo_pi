@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T17:46:31.745313Z",
+  "description": "## Why\n\nThe TUI needs to associate deltas during streaming with prior content blocks. Today the content list is positional (`{:text, text}` / `{:thinking, text}`); the TUI synthesizes block identity from list index. Every other downstream client (web, CLI, IDE plugin) would have to invent its own scheme too. The legitimate fix is for the agent — the source of truth for streaming events — to assign and emit a stable id per content block.\n\n## Shape\n\nWhen the agent first emits a content block in any `OctoPi.Agent.Event` partial, mint a stable id (string or integer; uuid or a per-message counter — pick the simpler). On every subsequent partial that updates the block, and on the final, the same block carries the same id.\n\nUpdate the content tuple shape from `{:text, text}` / `{:thinking, text}` to carry the id alongside the text. Concrete options: `{:text, id, text}` (positional) or wrap each block in a struct (`%Block{kind: :text, id: ..., text: ...}`). Pick whichever fits the existing event-message conventions; structs are more discoverable, tuples are lighter.\n\n## Code references\n\n- `apps/octo_pi_agent/lib/octo_pi/agent/message.ex` — message/content shape definitions.\n- `apps/octo_pi_agent/lib/octo_pi/agent/event.ex` (or similar) — `MessageStart` / `MessageUpdate` / `MessageEnd` payload shape.\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:1695-1714` — `apply_partial` / `finalize_assistant`; consumes the content shape.\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/assistant_message.ex` — `content_block` type today; updates land here too.\n\n## Acceptance\n\n- Every `MessageUpdate` and `MessageEnd` carries content blocks with stable ids; the same id appears on all partials that refer to the same block, and on the final.\n- TUI consumers can dedup/update by id without touching positional indexes.\n- Existing tests in `octo_pi_agent` updated; existing TUI consumers updated.\n\n## Tests\n\n- Agent-side: a streaming sequence with multiple deltas to the same text block produces partials all carrying the same block id.\n- Agent-side: interleaved text + thinking blocks each carry distinct stable ids that don't collide.\n\n## Out of scope\n\n- Cross-message block identity (each new assistant message gets fresh ids; ids are scoped within a message).",
+  "id": "opi-4dx.6",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Agent: assign stable ids to streaming content blocks",
+  "type": "task",
+  "updated_at": "2026-04-30T17:46:31.745313Z"
+}
