@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-tze.4"
+  ],
   "blocks": [],
   "created": "2026-04-30T12:07:26Z",
   "description": "**Divergence**\nUpstream (pi-mono interactive-mode.ts L3549-3568, restoreQueuedMessagesToEditor):\n- Drain ALL queued messages.\n- Join with \\\"\\\\n\\\\n\\\".\n- Set editor text to (queued || \\\"\\\") joined with current editor text.\n- Optionally call agent.abort() (used by Escape during streaming).\n- This *is* the only way to edit queued message text upstream.\n\nOcto_pi (interactive.ex L1218-1226 + handle_dequeue_key/3 L1765-1793):\n- Drain → show in a dedicated overlay.\n- Arrow keys to navigate, Backspace/Delete to remove items, Escape to\n  re-enqueue what's left.\n- No way to edit the *content* of any queued message.\n\n**Why this matters**\n1. Upstream parity: documented keybinding \\\"app.message.dequeue\\\" / \\\"alt+up\\\"\n   has the description \\\"Edit queued messages\\\", not \\\"View / delete queued\n   messages\\\".\n2. Editing text — the most common reason a user wants to revisit a queued\n   message is to refine it, not just remove it wholesale.\n3. The overlay's re-enqueue-on-Escape preserves order only if drain\n   returns FIFO and re-enqueue is FIFO; coupled with bug opi-tze.4 the\n   re-enqueue path is broken.\n\n**Fix sketch**\nReplace the dequeue overlay with the upstream model:\n- On Alt+Up: drain all queued items, join with blank-line separators,\n  prepend to current editor text, refocus the input.\n- Drop the dequeue_overlay state and overlay rendering.\n- Pair with Escape-while-streaming: drain queue back to editor AND abort\n  (matches upstream restoreQueuedMessagesToEditor({abort: true})).",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "[FEATURE] Dequeue UX: restore queued messages back into editor (upstream parity)",
   "type": "task",
-  "updated_at": "2026-04-30T12:07:26Z"
+  "updated_at": "2026-04-30T12:08:09Z"
 }

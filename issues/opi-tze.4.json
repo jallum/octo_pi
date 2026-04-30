@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-tze.5"
+  ],
   "created": "2026-04-30T12:07:12Z",
   "description": "**Repro (.pi/tmp/queue-test/probe_queue.exs — test_drain_returns_and_removes / test_order_preservation)**\n- Default queue mode is :one_at_a_time.\n- Enqueue 3 steering messages.\n- Call Agent.drain_steering(loop) → returns 1 message (head only).\n- Call again → returns the next 1.\n\n**Why it matters**\n- The dequeue overlay (apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex L1218-1226)\n  calls Coder.drain_steering once and treats the result as \\\"all queued\n  steering messages\\\". With default mode, the user sees only 1 item even\n  when 5 are queued; the rest stay in the queue.\n- The publicly-documented intent of drain_steering / drain_follow_up\n  is \\\"give me all messages so I can show / edit / clear them\\\", per\n  the moduledoc on PendingMessageQueue and the dequeue UX. The :all-vs-\n  :one_at_a_time mode is a *loop drainage policy*, not an inspection\n  policy.\n\n**Upstream reference (tmp/pi-mono/packages/agent/src/agent.ts L261-275)**\n\\`\\`\\`ts\nclearSteeringQueue(): void { this.steeringQueue.clear(); }\nclearFollowUpQueue(): void { this.followUpQueue.clear(); }\nclearAllQueues(): void { ... }\n\\`\\`\\`\nUpstream's public clear* APIs are unconditional — independent of mode.\n\n**Fix sketch**\nTwo viable shapes; pick one:\nA. Make Agent.drain_steering / drain_follow_up always return all items,\n   regardless of mode. Internally the loop's per-turn drain still uses\n   PendingMessageQueue.drain/1 with the configured mode, but the public\n   API uses a new PendingMessageQueue.drain_all/1.\nB. Add a separate Agent.clear_steering / clear_follow_up returning\n   all items unconditionally; deprecate drain_* for inspection use.\n\nOption A keeps the existing surface; the TUI overlay just works.",
   "id": "opi-tze.4",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "[BUG] Agent.drain_steering / drain_follow_up honor :one_at_a_time mode",
   "type": "bug",
-  "updated_at": "2026-04-30T12:07:12Z"
+  "updated_at": "2026-04-30T12:08:09Z"
 }
