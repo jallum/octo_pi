@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-4dx.2"
+    "opi-4dx.2",
+    "opi-4dx.3"
   ],
   "blocks": [],
   "comments": [],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Cache rendered lines per finalized message",
   "type": "task",
-  "updated_at": "2026-04-30T14:16:42.413155Z"
+  "updated_at": "2026-04-30T14:17:38.155561Z"
 }
