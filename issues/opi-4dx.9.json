@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T17:47:38.309703Z",
+  "description": "## Why\n\nAn `AssistantMessage` carries multiple content blocks (`:text`, `:thinking`) that stream independently. The same three-slot shape from `opi-4dx.8` recurses inside the message: an order list of block ids, data keyed by id, renderers only while a block is streaming, rendered cached iolist per block.\n\nReplaces the current `markdown_streams: %{idx => Stream.t}` map keyed by positional index — that map is the local symptom of \"we don't have stable ids yet\" and gets superseded by `opi-4dx.6`'s ids.\n\n## Depends on\n\n- `opi-4dx.6` (block ids from agent)\n- `opi-4dx.7` (`Markdown.Render` is what populates `renderers` for `:text` blocks)\n\n## Shape\n\n`AssistantMessage` carries an embedded transcript-shaped struct keyed by content-block id. Could literally embed `%Transcript{}` from `.8` if the API generalizes, or hold its own `%AssistantMessage.Blocks{}` mirror — pick whichever is cleaner; the data shape is identical.\n\n`:thinking` blocks have a trivial renderer (one wrap pass over the text); `:text` blocks use `Markdown.Render` from `.7`.\n\n## Code references\n\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/assistant_message.ex` — entire file restructured.\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/markdown/stream.ex` — gone after `.7`; AssistantMessage uses the new renderer.\n\n## Acceptance\n\n- `AssistantMessage.render/2` on a message with all blocks finalized emits cached iolist verbatim — no re-walk, no telemetry `markdown.render` span fires.\n- `AssistantMessage.update_content` on one block doesn't touch the other blocks' state.\n- Mixed `:text` / `:thinking` ordering preserved across renders.\n- Removing `markdown_streams` field; replacing with the new shape.\n\n## Tests\n\n- Unit tests: append text block; update twice; finalize; assert renderer dropped from in-flight set; assert subsequent renders emit zero new lines and reuse cached.\n- Mixed-content test: a thinking block at idx 0, text block at idx 1, second text block at idx 2 — assert independent render state per block.\n\n## Out of scope\n\n- Interactive wiring (lives in `.10`).",
+  "id": "opi-4dx.9",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "AssistantMessage: nest the Transcript shape for content blocks",
+  "type": "task",
+  "updated_at": "2026-04-30T17:47:38.309703Z"
+}
