@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T14:32:48.017123Z",
+  "description": "## Symptom\n\nWhen compaction completes, no boundary marker is shown in the conversation. (Worse: see Cause — the transcript is being destructively replaced.)\n\n## Cause\n\n`apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:1098-1102`:\n\n```elixir\ndef handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do\n  theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())\n  coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now()))\n  csm = TUICSM.new(coder_msg, theme)\n  %{state | transcript: [csm]}\nend\n```\n\nThis replaces the **entire** transcript with a single CSM, wiping prior conversation history visually.\n\n## Upstream behavior\n\n`tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts:2841-2848` calls `rebuildChatFromMessages()` (rebuilds transcript from the post-compaction message list), then `addMessageToChat(csm)` to append the CompactionSummaryMessage as a boundary marker.\n\nThe CSM TUI component is at `packages/tui/src/components/compaction-summary-message.ts` and renders a `[compaction]` label with summary stats.\n\n## Proposed fix (two options — confirm with user before coding)\n\n**Minimal (visual fix only):**\n\n```elixir\n%{state | transcript: state.transcript ++ [csm]}\n```\nPreserves visual history; appends marker. Doesn't reflect post-compaction message list semantics on next turn.\n\n**Faithful (port upstream rebuild):** Rebuild the transcript from the post-compaction `Coder.Session.Messages` snapshot, then append the CSM. Matches upstream end-to-end.\n\nThe faithful version is the right port; the minimal version is at minimum required to stop the destructive replacement.\n\n## Acceptance\n\n- After `/compact` completes, prior turns remain visible.\n- A `[compaction]` boundary marker appears at the cut point.\n- Validated in tmux.",
+  "id": "opi-owj.3",
+  "labels": [],
+  "parent": "opi-owj",
+  "priority": 2,
+  "status": "open",
+  "title": "CompactionEnd handler wipes the entire transcript instead of appending a summary marker",
+  "type": "bug",
+  "updated_at": "2026-04-30T14:32:48.017123Z"
+}

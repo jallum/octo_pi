@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T14:32:48.017123Z",
+  "description": "Three visual defects observed when running manual `/compact` against the current `opi-tze` branch. All three are visible to the user during/after manual compaction.\n\nDiagnosed against upstream `tmp/pi-mono` and current octo_pi sources.\n\nSee children for individual bugs. Each child carries the upstream reference and proposed fix.",
+  "id": "opi-owj",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "Compaction TUI visual defects (manual /compact)",
+  "type": "epic",
+  "updated_at": "2026-04-30T14:32:48.017123Z"
+}
