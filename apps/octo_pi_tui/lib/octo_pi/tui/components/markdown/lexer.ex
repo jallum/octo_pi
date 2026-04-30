@@ -1,25 +1,21 @@
 defmodule OctoPi.TUI.Components.Markdown.Lexer do
   @moduledoc """
-  Hand-rolled, line-oriented Markdown lexer producing an
-  Earmark-compatible AST so the existing `Components.Markdown` token
-  walker keeps working unchanged.
+  Line-oriented Markdown lexer producing a native, atom-based AST.
 
-  Output shape per node: `{tag, attrs, children, meta}` where:
-    - `tag` is a String like `"h1"`, `"p"`, `"pre"`, `"blockquote"`,
-      `"ul"`, `"ol"`, `"li"`, `"hr"`, `"table"`, `"thead"`, `"tbody"`,
-      `"tr"`, `"th"`, `"td"`.
-    - `attrs` is a list of `{key, value}` 2-tuples (e.g. `{"class",
-      "language-elixir"}`, `{"start", "1"}`, `{"href", "..."}`).
-    - `children` is a list of nodes or strings.
-    - `meta` is unused (`%{}`).
+      block ::= {:heading, 1..6, [inline]}
+              | {:paragraph, [inline]}
+              | {:code_block, lang :: String.t() | nil, code :: String.t()}
+              | {:blockquote, [block]}
+              | {:list, :ul | {:ol, start :: integer}, [list_item]}
+              | :hr
+              | {:table, [[inline]], [[[inline]]]}
 
-  Inline children include bare strings and inline tags `"strong"`,
-  `"em"`, `"code"`, `"del"`, `"a"`, `"br"`. We do not emit `"text"`
-  pseudo-tags — bare strings stand in.
+      list_item ::= {:li, [inline], [block]}
 
-  This module is intentionally pure — `tokenize/1` is a function from
-  text to AST. Streaming uses the same lexer over the line-checkpointed
-  source held by `OctoPi.TUI.StreamingMarkdown`.
+      inline ::= see `OctoPi.TUI.Components.Markdown.Inline`
+
+  Pure: `tokenize/1` is a function from text to AST. Streaming uses the
+  same lexer over line-checkpointed source held by the streaming wrapper.
 
   Out of scope (matches the existing renderer's behavior):
     - Setext headings (`===` / `---` underlines).
@@ -27,12 +23,24 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     - HTML blocks beyond raw passthrough as text.
   """
 
-  @type ast_node :: {String.t(), list({String.t(), String.t()}), list(ast_node | String.t()), map()}
+  alias OctoPi.TUI.Components.Markdown.Inline
 
-  @doc """
-  Parse Markdown text into an Earmark-compatible AST.
-  """
-  @spec tokenize(String.t()) :: [ast_node]
+  @type inline :: Inline.inline()
+
+  @type list_kind :: :ul | {:ol, integer()}
+
+  @type list_item :: {:li, [inline], [block]}
+
+  @type block ::
+          {:heading, 1..6, [inline]}
+          | {:paragraph, [inline]}
+          | {:code_block, String.t() | nil, String.t()}
+          | {:blockquote, [block]}
+          | {:list, list_kind, [list_item]}
+          | :hr
+          | {:table, [[inline]], [[[inline]]]}
+
+  @spec tokenize(String.t()) :: [block]
   def tokenize(text) when is_binary(text) do
     text
     |> String.replace("\r\n", "\n")
@@ -41,15 +49,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   end
 
   # ── Block parser ────────────────────────────────────────────────
-  #
-  # Multi-head pattern matching: each clause recognizes one block kind
-  # by inspecting the leading line, emits the AST node directly, and
-  # recurses on the remaining lines. No intermediate classification
-  # tagged tuple — we parse and produce in one pass.
-  #
-  # Order matters where prefix patterns overlap (e.g. `- ` for list
-  # items must run before HR detection so `- foo` is not mistaken for
-  # a 3-dash divider, and HR runs before paragraph fallback).
 
   defp parse_blocks(lines), do: parse_blocks(lines, [])
 
@@ -57,10 +56,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   defp parse_blocks(["" | rest], acc), do: parse_blocks(rest, acc)
   defp parse_blocks([line | rest], acc), do: parse_block(line, rest, acc)
 
-  # Non-empty lines dispatch by content. Pattern-match where unambiguous
-  # binary prefixes exist; predicate guards for content-dependent
-  # shapes (HR, list, table). Each clause emits the AST node directly
-  # and recurses — no intermediate classification tuple.
   defp parse_block(line, rest, acc) do
     cond do
       String.trim(line) == "" ->
@@ -68,15 +63,14 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
 
       heading = parse_heading(line) ->
         {level, text} = heading
-        parse_blocks(rest, [{"h#{level}", [], parse_inline(text), %{}} | acc])
+        parse_blocks(rest, [{:heading, level, parse_inline(text)} | acc])
 
       fence = parse_fence_open(line) ->
         {marker, lang} = fence
         {code_lines, after_close} = take_until_fence_close(rest, marker, [])
         code = Enum.join(code_lines, "\n")
-        attrs = if lang == "", do: [], else: [{"class", "language-#{lang}"}]
-        node = {"pre", [], [{"code", attrs, [code], %{}}], %{}}
-        parse_blocks(after_close, [node | acc])
+        lang = if lang == "", do: nil, else: lang
+        parse_blocks(after_close, [{:code_block, lang, code} | acc])
 
       list_open = parse_list_item_open(line) ->
         {kind, indent, _start, _text} = list_open
@@ -85,38 +79,29 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
         parse_blocks(remaining, [build_list_node(kind, items, all) | acc])
 
       hr?(line) ->
-        parse_blocks(rest, [{"hr", [], [], %{}} | acc])
+        parse_blocks(rest, [:hr | acc])
 
       blockquote?(line) ->
         {qlines, remaining} = take_blockquote_lines([line | rest], [])
         inner = qlines |> Enum.join("\n") |> tokenize()
-        parse_blocks(remaining, [{"blockquote", [], inner, %{}} | acc])
+        parse_blocks(remaining, [{:blockquote, inner} | acc])
 
       table?(line, rest) ->
-        [sep | body_rest] = rest
-        _aligns = parse_table_alignments(sep)
-        headers = parse_table_row(line)
+        [_sep | body_rest] = rest
+        headers = line |> parse_table_row() |> Enum.map(&parse_inline/1)
         {body_rows, after_table} = take_table_body(body_rest, [])
-        thead = {"thead", [], [{"tr", [], Enum.map(headers, &{"th", [], parse_inline(&1), %{}}), %{}}], %{}}
-
-        tbody =
-          {"tbody", [],
-           Enum.map(body_rows, fn cells ->
-             {"tr", [], Enum.map(cells, &{"td", [], parse_inline(&1), %{}}), %{}}
-           end), %{}}
-
-        parse_blocks(after_table, [{"table", [], [thead, tbody], %{}} | acc])
+        rows = Enum.map(body_rows, fn cells -> Enum.map(cells, &parse_inline/1) end)
+        parse_blocks(after_table, [{:table, headers, rows} | acc])
 
       true ->
         {plines, remaining} = take_paragraph_lines(rest, [line])
         text = Enum.join(plines, "\n")
-        parse_blocks(remaining, [{"p", [], parse_inline(text), %{}} | acc])
+        parse_blocks(remaining, [{:paragraph, parse_inline(text)} | acc])
     end
   end
 
   defp blank?(line), do: String.trim(line) == ""
 
-  # HR: a line with three or more `-`, `*`, or `_`, optionally separated by spaces.
   defp hr?(line) do
     trimmed = String.trim(line)
 
@@ -137,7 +122,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     end
   end
 
-  # ATX heading: 1-6 `#`s followed by space and text, optional trailing `#`s.
   defp parse_heading(line) do
     case Regex.run(~r/^([#]{1,6})\s+(.*?)\s*[#]*\s*$/, line) do
       [_, hashes, text] -> {String.length(hashes), text}
@@ -145,7 +129,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     end
   end
 
-  # Code fence: ``` or ~~~ with optional language at the start, optional leading spaces.
   defp parse_fence_open(line) do
     case Regex.run(~r/^\s{0,3}(```|~~~)\s*([^\s`~]*)\s*$/, line) do
       [_, marker, lang] -> {marker, lang}
@@ -169,9 +152,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
 
   defp blockquote?(line), do: String.match?(line, ~r/^\s{0,3}>/)
 
-  # Strip the leading `>` (and optional space) off contiguous blockquote
-  # lines and return the unwrapped content. The unwrapped lines get
-  # re-tokenized so nested constructs (lists, code, etc.) work.
   defp take_blockquote_lines([], acc), do: {Enum.reverse(acc), []}
 
   defp take_blockquote_lines([line | rest] = all, acc) do
@@ -214,14 +194,8 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     |> Enum.map(&String.trim/1)
   end
 
-  defp parse_table_alignments(_sep_line), do: []
-
   # ── Lists ───────────────────────────────────────────────────────
 
-  # Returns a 4-tuple `{kind, indent, start_or_nil, text}` so all
-  # downstream pattern-matching can use one consistent shape.
-  # `kind` is `:unordered` (start_or_nil = nil) or `:ordered` (start
-  # is the numeric value of the leading marker).
   defp parse_list_item_open(line) do
     cond do
       m = Regex.run(~r/^(\s*)([-*+])\s+(.*)$/, line) ->
@@ -237,7 +211,7 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     end
   end
 
-  defp build_list_node(:unordered, items, _lines), do: {"ul", [], items, %{}}
+  defp build_list_node(:unordered, items, _lines), do: {:list, :ul, items}
 
   defp build_list_node(:ordered, items, lines) do
     start =
@@ -252,8 +226,7 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
           end
       end
 
-    attrs = if start == 1, do: [], else: [{"start", Integer.to_string(start)}]
-    {"ol", attrs, items, %{}}
+    {:list, {:ol, start}, items}
   end
 
   defp collect_items([], _kind, _base, acc), do: {Enum.reverse(acc), []}
@@ -277,16 +250,13 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
         end
 
       {^kind, ^base, _start, _text} = open ->
-        {item_children, leftover} = consume_item_body(open, rest, base)
-        item = {"li", [], item_children, %{}}
-        collect_items(leftover, kind, base, [item | acc])
+        {inline, nested, leftover} = consume_item_body(open, rest, base)
+        collect_items(leftover, kind, base, [{:li, inline, nested} | acc])
 
       {_other_kind, ^base, _start, _text} ->
-        # Different kind at same indent — list breaks here.
         {Enum.reverse(acc), all}
 
       _ ->
-        # Different indent — handled by take_nested in the parent item.
         {Enum.reverse(acc), all}
     end
   end
@@ -294,10 +264,9 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   defp consume_item_body({_, _, _, text}, rest, base) do
     inline = parse_inline(text)
     {nested, leftover} = take_nested(rest, base, [])
-    {inline ++ nested, leftover}
+    {inline, nested, leftover}
   end
 
-  # Look for a nested list starting at indent > base.
   defp take_nested([], _base, acc), do: {Enum.reverse(acc), []}
 
   defp take_nested([line | rest] = all, base, acc) do
@@ -327,9 +296,6 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   end
 
   # ── Paragraphs ──────────────────────────────────────────────────
-  #
-  # Take consecutive non-blank lines until we hit a blank or a line
-  # that starts a different block. Returns {paragraph_lines, remaining}.
 
   defp take_paragraph_lines([], acc), do: {Enum.reverse(acc), []}
 
@@ -349,7 +315,5 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
       parse_list_item_open(line) != nil
   end
 
-  # Inline parsing is delegated to the leex-generated lexer wrapped
-  # by `OctoPi.TUI.Components.Markdown.Inline`.
-  defp parse_inline(text), do: OctoPi.TUI.Components.Markdown.Inline.parse(text)
+  defp parse_inline(text), do: Inline.parse(text)
 end

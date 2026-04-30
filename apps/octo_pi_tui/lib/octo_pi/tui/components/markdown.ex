@@ -43,7 +43,7 @@ defmodule OctoPi.TUI.Components.Markdown do
     normalized = String.replace(text, "\t", "   ")
     ast = Lexer.tokenize(normalized)
 
-    lines = render_nodes(ast, content_width, theme)
+    lines = render_blocks(ast, content_width, theme)
     lines = clamp_width(lines, content_width)
 
     lines = apply_padding_x(lines, px)
@@ -51,51 +51,47 @@ defmodule OctoPi.TUI.Components.Markdown do
     lines
   end
 
-  # ── AST node rendering ─────────────────────────────────────────
+  # ── Block rendering ────────────────────────────────────────────
 
-  defp render_nodes(nodes, width, theme) do
-    nodes
+  defp render_blocks(blocks, width, theme) do
+    blocks
     |> Enum.with_index()
-    |> Enum.flat_map(fn {node, idx} ->
-      next_type = nodes |> Enum.at(idx + 1) |> node_tag()
-      render_node(node, width, theme, next_type)
+    |> Enum.flat_map(fn {block, idx} ->
+      next = Enum.at(blocks, idx + 1)
+      render_block(block, width, theme, next)
     end)
   end
 
-  defp render_node(text, _width, _theme, _next) when is_binary(text), do: [text]
-
-  defp render_node({"h1", _, children, _}, _width, theme, next) do
+  defp render_block({:heading, 1, children}, _width, theme, next) do
     text = render_inline(children, theme)
     styled = Theme.fg(theme, :md_heading, Theme.bold(Theme.underline(text)))
     maybe_space([styled], next)
   end
 
-  defp render_node({"h2", _, children, _}, _width, theme, next) do
+  defp render_block({:heading, 2, children}, _width, theme, next) do
     text = render_inline(children, theme)
     styled = Theme.fg(theme, :md_heading, Theme.bold(text))
     maybe_space([styled], next)
   end
 
-  defp render_node({"h" <> level, _, children, _}, _width, theme, next) when level in ["3", "4", "5", "6"] do
-    depth = String.to_integer(level)
-    prefix = String.duplicate("#", depth) <> " "
+  defp render_block({:heading, level, children}, _width, theme, next) when level in 3..6 do
+    prefix = String.duplicate("#", level) <> " "
     text = render_inline(children, theme)
     styled = Theme.fg(theme, :md_heading, Theme.bold(prefix <> text))
     maybe_space([styled], next)
   end
 
-  defp render_node({"p", _, children, _}, width, theme, next) do
+  defp render_block({:paragraph, children}, width, theme, next) do
     text = render_inline(children, theme)
     lines = WrapAnsi.wrap(text, width)
     maybe_space(lines, next)
   end
 
-  defp render_node({"pre", _, [{"code", attrs, [code], _}], _}, _width, theme, next) do
-    lang = extract_lang(attrs)
-    label = "```#{lang}"
+  defp render_block({:code_block, lang, code}, _width, theme, next) do
+    label = "```#{lang || ""}"
 
     code_lines =
-      if SyntaxHighlight.supported?(lang) do
+      if lang && SyntaxHighlight.supported?(lang) do
         SyntaxHighlight.highlight(code, lang, theme)
       else
         code |> String.split("\n") |> Enum.map(&Theme.fg(theme, :md_code_block, &1))
@@ -110,9 +106,9 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space(lines, next)
   end
 
-  defp render_node({"blockquote", _, children, _}, width, theme, next) do
+  defp render_block({:blockquote, blocks}, width, theme, next) do
     quote_width = max(1, width - 2)
-    inner_lines = render_nodes(children, quote_width, theme)
+    inner_lines = render_blocks(blocks, quote_width, theme)
     inner_lines = Enum.reverse(drop_trailing_empty(Enum.reverse(inner_lines)))
 
     lines =
@@ -124,27 +120,23 @@ defmodule OctoPi.TUI.Components.Markdown do
     maybe_space(lines, next)
   end
 
-  defp render_node({"ul", _, items, _}, _width, theme, _next) do
-    render_list_items(items, theme, :unordered, 0)
+  defp render_block({:list, kind, items}, _width, theme, _next) do
+    render_list_items(items, theme, kind, 0)
   end
 
-  defp render_node({"ol", attrs, items, _}, _width, theme, _next) do
-    start = extract_start(attrs)
-    render_list_items(items, theme, {:ordered, start}, 0)
-  end
-
-  defp render_node({"hr", _, _, _}, width, theme, next) do
+  defp render_block(:hr, width, theme, next) do
     line = Theme.fg(theme, :md_hr, String.duplicate("─", min(width, 80)))
     maybe_space([line], next)
   end
 
-  defp render_node({"table", _, children, _}, width, theme, next) do
-    {headers, rows} = extract_table_data(children, theme)
-    lines = render_table(headers, rows, width, theme)
+  defp render_block({:table, headers, rows}, width, theme, next) do
+    header_strings = Enum.map(headers, &render_inline(&1, theme))
+    row_strings = Enum.map(rows, fn row -> Enum.map(row, &render_inline(&1, theme)) end)
+    lines = render_table(header_strings, row_strings, width, theme)
     maybe_space(lines, next)
   end
 
-  defp render_node(_node, _width, _theme, _next), do: []
+  defp render_block(_block, _width, _theme, _next), do: []
 
   # ── Inline rendering ───────────────────────────────────────────
 
@@ -154,26 +146,24 @@ defmodule OctoPi.TUI.Components.Markdown do
 
   defp render_inline_node(text, _theme) when is_binary(text), do: text
 
-  defp render_inline_node({"strong", _, children, _}, theme) do
+  defp render_inline_node({:strong, children}, theme) do
     Theme.bold(render_inline(children, theme))
   end
 
-  defp render_inline_node({"em", _, children, _}, theme) do
+  defp render_inline_node({:em, children}, theme) do
     Theme.italic(render_inline(children, theme))
   end
 
-  defp render_inline_node({"code", _, children, _}, theme) do
-    text = render_inline(children, theme)
+  defp render_inline_node({:code, text}, theme) do
     Theme.fg(theme, :md_code, text)
   end
 
-  defp render_inline_node({"del", _, children, _}, theme) do
+  defp render_inline_node({:del, children}, theme) do
     Theme.strikethrough(render_inline(children, theme))
   end
 
-  defp render_inline_node({"a", attrs, children, _}, theme) do
+  defp render_inline_node({:link, href, children}, theme) do
     text = render_inline(children, theme)
-    href = extract_href(attrs)
     styled = Theme.fg(theme, :md_link, Theme.underline(text))
 
     if href && text != href do
@@ -183,93 +173,40 @@ defmodule OctoPi.TUI.Components.Markdown do
     end
   end
 
-  defp render_inline_node({"br", _, _, _}, _theme), do: "\n"
-
-  defp render_inline_node({_tag, _, children, _}, theme) do
-    render_inline(children, theme)
-  end
-
   # ── Lists ───────────────────────────────────────────────────────
 
-  defp render_list_items(items, theme, list_type, depth) do
+  defp render_list_items(items, theme, kind, depth) do
     indent = String.duplicate("  ", depth)
 
     items
     |> Enum.with_index()
-    |> Enum.flat_map(fn {{"li", _, children, _}, idx} ->
-      bullet = format_bullet(list_type, idx)
+    |> Enum.flat_map(fn {{:li, inline, nested}, idx} ->
+      bullet = format_bullet(kind, idx)
       styled_bullet = Theme.fg(theme, :md_list_bullet, bullet)
-      {inline, nested} = split_list_children(children)
       text = render_inline(inline, theme)
 
       first_line = indent <> styled_bullet <> text
 
       nested_lines =
         Enum.flat_map(nested, fn
-          {"ul", _, sub_items, _} ->
-            render_list_items(sub_items, theme, :unordered, depth + 1)
+          {:list, sub_kind, sub_items} ->
+            render_list_items(sub_items, theme, sub_kind, depth + 1)
 
-          {"ol", attrs, sub_items, _} ->
-            start = extract_start(attrs)
-            render_list_items(sub_items, theme, {:ordered, start}, depth + 1)
-
-          node ->
-            render_node(node, 80, theme, nil)
+          block ->
+            render_block(block, 80, theme, nil)
         end)
 
       [first_line | nested_lines]
     end)
   end
 
-  defp format_bullet(:unordered, _idx), do: "- "
-  defp format_bullet({:ordered, start}, idx), do: "#{start + idx}. "
-
-  defp split_list_children(children) do
-    {inline, nested} =
-      Enum.split_with(children, fn
-        text when is_binary(text) -> true
-        {"strong", _, _, _} -> true
-        {"em", _, _, _} -> true
-        {"code", _, _, _} -> true
-        {"del", _, _, _} -> true
-        {"a", _, _, _} -> true
-        {"br", _, _, _} -> true
-        _ -> false
-      end)
-
-    {inline, nested}
-  end
+  defp format_bullet(:ul, _idx), do: "- "
+  defp format_bullet({:ol, start}, idx), do: "#{start + idx}. "
 
   # ── Helpers ─────────────────────────────────────────────────────
 
   defp maybe_space(lines, nil), do: lines
   defp maybe_space(lines, _next), do: lines ++ [""]
-
-  defp node_tag(nil), do: nil
-  defp node_tag(text) when is_binary(text), do: "text"
-  defp node_tag({tag, _, _, _}), do: tag
-
-  defp extract_lang(attrs) do
-    case List.keyfind(attrs, "class", 0) do
-      {"class", "language-" <> lang} -> lang
-      {"class", class} -> class
-      nil -> ""
-    end
-  end
-
-  defp extract_href(attrs) do
-    case List.keyfind(attrs, "href", 0) do
-      {"href", href} -> href
-      nil -> nil
-    end
-  end
-
-  defp extract_start(attrs) do
-    case List.keyfind(attrs, "start", 0) do
-      {"start", start} -> String.to_integer(start)
-      nil -> 1
-    end
-  end
 
   defp drop_trailing_empty([]), do: []
   defp drop_trailing_empty(["" | rest]), do: drop_trailing_empty(rest)
@@ -294,37 +231,6 @@ defmodule OctoPi.TUI.Components.Markdown do
   end
 
   # ── Table rendering ────────────────────────────────────────────
-
-  defp extract_table_data(children, theme) do
-    thead = Enum.find(children, &match?({"thead", _, _, _}, &1))
-    tbody = Enum.find(children, &match?({"tbody", _, _, _}, &1))
-
-    headers =
-      case thead do
-        {"thead", _, rows, _} ->
-          rows
-          |> Enum.flat_map(fn {"tr", _, cells, _} -> cells end)
-          |> Enum.map(fn {"th", _, content, _} -> render_inline(content, theme) end)
-
-        _ ->
-          []
-      end
-
-    rows =
-      case tbody do
-        {"tbody", _, trs, _} ->
-          Enum.map(trs, &extract_row_cells(&1, theme))
-
-        _ ->
-          []
-      end
-
-    {headers, rows}
-  end
-
-  defp extract_row_cells({"tr", _, cells, _}, theme) do
-    Enum.map(cells, fn {"td", _, content, _} -> render_inline(content, theme) end)
-  end
 
   defp render_table([], _rows, _width, _theme), do: []
 

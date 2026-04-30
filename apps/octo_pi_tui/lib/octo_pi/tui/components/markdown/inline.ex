@@ -1,19 +1,28 @@
 defmodule OctoPi.TUI.Components.Markdown.Inline do
   @moduledoc """
   Inline parser. Wraps the leex lexer at `src/octo_pi_md_inline_lex.xrl`
-  and folds its token stream into an Earmark-shaped child list:
+  and folds its token stream into the native inline AST:
 
-      [text | {tag, attrs, children, meta}]
+      inline ::= String.t()
+               | {:strong, [inline]}
+               | {:em, [inline]}
+               | {:code, String.t()}
+               | {:del, [inline]}
+               | {:link, href :: String.t(), [inline]}
 
-  Where `tag` is one of `"strong"`, `"em"`, `"code"`, `"del"`, `"a"`.
-
-  Inner content of `strong` / `em` / `del` is recursively parsed so
-  nested emphasis works. `code` and escapes are returned verbatim.
+  Inner content of `:strong` / `:em` / `:del` is recursively parsed so
+  nested emphasis works. `:code` and escapes are returned verbatim.
   """
 
-  @type child :: String.t() | OctoPi.TUI.Components.Markdown.Lexer.ast_node()
+  @type inline ::
+          String.t()
+          | {:strong, [inline]}
+          | {:em, [inline]}
+          | {:code, String.t()}
+          | {:del, [inline]}
+          | {:link, String.t(), [inline]}
 
-  @spec parse(String.t()) :: [child]
+  @spec parse(String.t()) :: [inline]
   def parse(""), do: []
 
   def parse(text) when is_binary(text) do
@@ -25,30 +34,15 @@ defmodule OctoPi.TUI.Components.Markdown.Inline do
 
   defp token_to_child({:text, _, chars}), do: List.to_string(chars)
   defp token_to_child({:escape, _, chars}), do: List.to_string(chars)
-
-  defp token_to_child({:code, _, chars}) do
-    {"code", [], [List.to_string(chars)], %{}}
-  end
-
-  defp token_to_child({:strong, _, chars}) do
-    {"strong", [], parse(List.to_string(chars)), %{}}
-  end
-
-  defp token_to_child({:em, _, chars}) do
-    {"em", [], parse(List.to_string(chars)), %{}}
-  end
-
-  defp token_to_child({:del, _, chars}) do
-    {"del", [], parse(List.to_string(chars)), %{}}
-  end
+  defp token_to_child({:code, _, chars}), do: {:code, List.to_string(chars)}
+  defp token_to_child({:strong, _, chars}), do: {:strong, parse(List.to_string(chars))}
+  defp token_to_child({:em, _, chars}), do: {:em, parse(List.to_string(chars))}
+  defp token_to_child({:del, _, chars}), do: {:del, parse(List.to_string(chars))}
 
   defp token_to_child({:link, _, {text_chars, href_chars}}) do
-    text = List.to_string(text_chars)
-    href = List.to_string(href_chars)
-    {"a", [{"href", href}], parse(text), %{}}
+    {:link, List.to_string(href_chars), parse(List.to_string(text_chars))}
   end
 
-  # Merge adjacent strings so consumers see single text runs.
   defp coalesce_text(children), do: coalesce_text(children, [])
 
   defp coalesce_text([], acc), do: Enum.reverse(acc)
