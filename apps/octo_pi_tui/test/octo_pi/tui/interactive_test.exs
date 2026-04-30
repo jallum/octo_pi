@@ -444,6 +444,118 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
+  # opi-tze.2: pressing Enter while the agent is streaming should
+  # route to Coder.steer (default upstream streamingBehavior), not
+  # call Coder.prompt and silently lose the message to
+  # {:error, :already_streaming}.
+  describe "handle_event — Enter while streaming routes to steer (opi-tze.2)" do
+    alias Loop, as: CoderLoop
+    alias OctoPi.Coder.SessionManager
+    alias OctoPi.Coder.SessionStore
+
+    defp start_coder_session_for_steer! do
+      model = %OctoPi.AI.Model{
+        id: "fake",
+        name: "fake",
+        api: :fake,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      id = "test-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), "opi-steer-test-#{id}")
+      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+
+      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
+
+      coder =
+        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+
+      {coder, agent}
+    end
+
+    test "Enter with active loader enqueues to the agent's steering queue" do
+      {coder, agent} = start_coder_session_for_steer!()
+
+      s = %Interactive{
+        input: %Input{value: "steer me", cursor: 8},
+        loader: %Loader{},
+        session: coder
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+
+      # Input cleared, message echoed locally.
+      assert s2.input.value == ""
+      assert s2.input.cursor == 0
+      assert [{:user, "steer me"}] = s2.transcript
+      assert s2.notification == "Steered"
+
+      # The agent's steering queue actually received it.
+      drained = OctoPi.Agent.drain_steering(agent)
+      assert Enum.map(drained, & &1.content) == ["steer me"]
+    end
+
+    test "Enter with active loader and full steering queue surfaces a notification" do
+      model = %OctoPi.AI.Model{
+        id: "fake",
+        name: "fake",
+        api: :fake,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+
+      id = "test-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), "opi-steer-full-test-#{id}")
+      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+
+      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(
+          model: model,
+          convert_to_llm: &Messages.to_llm/1,
+          steering_queue_bound: 1
+        )
+
+      coder =
+        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+
+      :ok = OctoPi.Agent.steer(agent, "prefilled")
+
+      s = %Interactive{
+        input: %Input{value: "second", cursor: 6},
+        loader: %Loader{},
+        session: coder
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+
+      assert s2.input.value == ""
+      assert s2.notification == "Steering queue is full"
+    end
+
+    test "Enter with active loader and nil session is a no-op (just clears input)" do
+      # Falls through to the non-streaming clause which already guards
+      # on session being set; here we just verify the streaming branch
+      # doesn't crash on nil session.
+      s = %Interactive{
+        input: %Input{value: "hi", cursor: 2},
+        loader: %Loader{},
+        session: nil
+      }
+
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      # Whatever path it takes, it should not crash and should clear input.
+      assert s2.input.value == ""
+    end
+  end
+
   describe "handle_event — Ctrl+G external editor (opi-0g4.14)" do
     test "Ctrl+G sets editor_pending to true" do
       s = %Interactive{}
@@ -554,29 +666,42 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
-  describe "handle_event — key release/repeat filtering (opi-0g4.6)" do
-    test "release event is dropped — state unchanged" do
+  describe "handle_event — release filtering (opi-0g4.6)" do
+    # The only event_type-based filter in handle_event is the
+    # :release short-circuit:
+    #
+    #   def handle_event(state, %Key{event_type: :release}), do: state
+    #
+    # :press and :repeat both fall through to the normal dispatch
+    # path. We test exactly that here — *not* whether the upstream
+    # parser actually produces :repeat events. End-to-end repeat
+    # coverage lives in octo_pi_tui_terminal's KeyParser tests.
+
+    test ":release with a chord is swallowed (state unchanged)" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
       s2 = Interactive.handle_event(s, %Key{key: ?c, modifiers: [:ctrl], event_type: :release})
       refute s2.exit
       assert s2 == s
     end
 
-    test "release of a printable key does not insert char" do
+    test ":release of a printable key does not insert the char" do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
       s2 = Interactive.handle_event(s, %Key{key: ?a, event_type: :release})
       assert s2 == s
     end
 
-    test "repeat event is processed normally" do
-      s = %Interactive{input: %Input{value: "ab", cursor: 2}}
-      s2 = Interactive.handle_event(s, %Key{key: :left, event_type: :repeat})
-      assert s2.input.cursor == 1
-    end
-
-    test "press event is processed normally" do
+    test ":press is not filtered — falls through to normal dispatch" do
       s = %Interactive{tools_expanded: false}
       s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl], event_type: :press})
+      assert s2.tools_expanded
+    end
+
+    test ":repeat is not filtered — falls through to normal dispatch" do
+      # Use the same Ctrl+O chord as the :press case so we're isolating
+      # the filter behaviour, not retesting cursor movement. If the
+      # filter ever grows to drop :repeat too, this flips.
+      s = %Interactive{tools_expanded: false}
+      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl], event_type: :repeat})
       assert s2.tools_expanded
     end
   end

@@ -1415,6 +1415,32 @@ defmodule OctoPi.TUI.Interactive do
     }
   end
 
+  # Submit while the agent is streaming — route to Coder.steer (the
+  # default upstream "streamingBehavior" in agent-session.ts L987-997).
+  # Previously this called Coder.prompt unconditionally, which the
+  # Agent rejects with {:error, :already_streaming}; the rejection was
+  # silently swallowed by the Task.start fork and the message was lost
+  # while still being rendered in the local transcript.
+  defp do_handle_submit(%{loader: %Components.Loader{}, session: session} = state, new_input, value)
+       when not is_nil(session) do
+    result = Coder.steer(session, value)
+
+    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+
+    notification =
+      case result do
+        {:error, :full} -> "Steering queue is full"
+        _ -> "Steered"
+      end
+
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: state.transcript ++ [user_msg],
+        notification: notification
+    }
+  end
+
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
 
