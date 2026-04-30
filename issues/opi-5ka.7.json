@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-04-30T13:09:30Z",
+  "description": "## Site\napps/octo_pi_tui/test/octo_pi/tui/interactive_test.exs has three\nnear-identical ~20-line helpers added across opi-tze.2, .5, .8:\n\n  defp start_coder_session_for_steer! do ...\n  defp start_coder_session_for_dequeue! do ...\n  defp start_coder_session_for_escape! do ...\n\nThey differ only in the tmpdir suffix string. Each spins up:\n- a faux %OctoPi.AI.Model{},\n- a tmp SessionStore,\n- a SessionManager,\n- an Agent loop,\n- a Coder loop wired to all three.\n\n## Change\nPromote to a single module-level helper:\n\n\\`\\`\\`elixir\ndefp start_coder_session!(tag) do\n  ...\nend\n\\`\\`\\`\n\nThe \\`tag\\` only affects the tmpdir name (debug aid). Existing\nopi-tze tests retain their current describe-level identity by\nthreading the tag through.\n\n## Tests\nNo behavior change; all existing tests should keep passing.\n\n## Why this isn't done in opi-tze\nSurfaced during post-review. Each ticket added one helper for its\nown tests; the consolidation pass needs all three on disk to do\ncleanly.",
+  "id": "opi-5ka.7",
+  "labels": [],
+  "parent": "opi-5ka",
+  "priority": 4,
+  "status": "open",
+  "title": "DRY the start_coder_session_for_*! helpers in interactive_test.exs",
+  "type": "task",
+  "updated_at": "2026-04-30T13:09:30Z"
+}
