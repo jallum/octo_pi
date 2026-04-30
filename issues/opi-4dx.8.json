@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T17:47:19.259970Z",
+  "description": "## Why\n\n`Interactive.state.transcript` is a `[entry]` list. Every streaming chunk does `List.replace_at(transcript, idx, updated)` — O(N) cells allocated even though the only thing that changed is the contents of one slot. Order is fully stable; entries are append-only with one mutable slot at a time.\n\nExtract a `Transcript` module owning the render state. Interactive holds `transcript: %Transcript{}` and orchestrates only.\n\n## Shape\n\n```\n%OctoPi.TUI.Transcript{\n  order:     [id, ...],          # newest-head; append by `[id | order]`\n  data:      %{id => entry},     # current content for every entry; lives forever\n  renderers: %{id => renderer},  # only present for entries currently streaming\n  rendered:  %{id => iolist}     # cached output for everything ever rendered\n}\n```\n\nAPI:\n- `new() :: t`\n- `append(t, id, entry) :: t` — new entry, fresh renderer, empty rendered slot\n- `update(t, id, entry) :: t` — chunk arrived: update data, push into renderer\n- `finalize(t, id, entry) :: t` — drain renderer, drop from `renderers`, store final output in `rendered`\n- `render(t, theme, width) :: {iolist, t}` — for each id (tail-first walk of `order`), run pending tail in renderer if present, append produced segments to `rendered[id]`, emit nested iolist tree\n- `resize(t, theme, width) :: t` — clear `rendered`, rebuild `renderers` from `data`, re-render once\n\n## Code references\n\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:1685-1744` — `apply_partial` / `finalize_assistant` / transcript mutations to migrate.\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:2243-2244` — `render_entry` per-entry render call site.\n\n## Acceptance\n\n- `Transcript.append/3` on N entries does O(1) work per call; no spine rebuilds (verifiable by counting allocations or by the absence of `++` / `Enum.reverse` on hot paths).\n- `Transcript.render/3` after a single chunk update on the streaming entry does O(pending tail) work for that entry and O(1) per other entry (just emits cached iolist).\n- All transcript mutations on `Interactive` go through `Transcript` API; the GenServer state holds nothing else about rendering.\n\n## Tests\n\n- Pure unit tests: append-update-finalize-render lifecycle; resize correctness; rendered content stays byte-equal across renders if data didn't change.\n- Property-style: appending N entries and updating each k times produces a transcript whose rendered output equals what a from-scratch render would produce.\n\n## Out of scope\n\n- Per-message recursion (lives in `opi-4dx.9`); this ticket handles the transcript level only.\n- Wiring into `Interactive` (lives in `opi-4dx.10`); this ticket builds the module standalone.",
+  "id": "opi-4dx.8",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Transcript module: stable-cell render state",
+  "type": "task",
+  "updated_at": "2026-04-30T17:47:19.259970Z"
+}
