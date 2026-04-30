@@ -61,11 +61,6 @@ defmodule OctoPi.Coder.Compaction.SerializeTest do
   end
 
   describe "conversation/1 — user messages" do
-    test "string content renders with the [User]: prefix" do
-      msg = %User{content: "hi", timestamp: 0}
-      assert Serialize.conversation([msg]) == "[User]: hi"
-    end
-
     test "block content concatenates text blocks, ignoring others" do
       msg = %User{content: [%Text{text: "ab"}, %Text{text: "cd"}], timestamp: 0}
       assert Serialize.conversation([msg]) == "[User]: abcd"
@@ -145,7 +140,7 @@ defmodule OctoPi.Coder.Compaction.SerializeTest do
       long = String.duplicate("y", 5_000)
 
       msgs = [
-        %User{content: long, timestamp: 0},
+        %User{content: [%Text{text: long}], timestamp: 0},
         assistant([%Text{text: long}])
       ]
 
@@ -170,7 +165,7 @@ defmodule OctoPi.Coder.Compaction.SerializeTest do
   describe "conversation/1 — paragraphs and ordering" do
     test "messages are joined by a blank line" do
       msgs = [
-        %User{content: "q", timestamp: 0},
+        %User{content: [%Text{text: "q"}], timestamp: 0},
         assistant([%Text{text: "a"}])
       ]
 
