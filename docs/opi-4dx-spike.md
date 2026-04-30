@@ -198,3 +198,119 @@ the transcript — but per-call cost remains bounded.
 **opi-4dx.5 cleared its bar.** The streaming hot path (`octo_pi_agent_event`)
 is 25× faster at the median, and `markdown.render` no longer scales
 linearly with cumulative message size during streaming.
+
+## opi-4dx.6/.7/.8/.9/.10 post-redesign re-trace (`.pi/trace4.log`)
+
+Captured after the per-block delta events (`.6`), Markdown.Render
+module (`.7`), Transcript abstraction (`.8`), AssistantMessage
+embedding Transcript (`.9`), and Interactive wiring (`.10`) all
+landed. Same protocol as trace3: `mix pi --log-telemetry`, tmux
+200×50, ollama qwen3.5, ~90-line markdown demo prompt, keystroke
+hammering during streaming.
+
+### Q1 — handle_info duration by kind (median / p99 µs)
+
+| kind | trace3 median → trace4 | trace3 p99 → trace4 |
+|---|---|---|
+| `hid_event` | 614 → **660** | 5095 → **9376** |
+| `octo_pi_agent_event` | **114** → 122 | 1879 → **630** |
+| `timeout` | 2809 → 3263 | 6777 → 10011 |
+
+`octo_pi_agent_event` p50 is essentially flat (114→122µs); p99
+**dropped 66%** (1.88 → 0.63 ms). The block-delta events landing on
+the streaming hot path are uniformly cheap — no more bimodality
+when a chunk lands and triggers a content-list rebuild.
+
+### Q2 — `markdown.render` scaling
+
+| text_bytes | n | median (ms) | p99 (ms) |
+|---|---|---|---|
+| 0–256 | 27 | 0.15 | 0.27 |
+| 256–1024 | 135 | 0.44 | 1.13 |
+| 1024–4096 | 399 | 1.04 | 2.98 |
+| 4096–8192 | 468 | 2.52 | 5.81 |
+| 8192+ | 342 | 3.62 | 10.63 |
+
+trace4's prompt got a much larger response than trace3 (~11 KB max
+vs ~1 KB). Per-render cost grows roughly linearly with text_bytes,
+which is what the Markdown.Render committed-iodata cache plus
+volatile-tail re-lex predicts: each render does O(current paragraph
+size + cache-flatten) work. At 8 KB+ the p99 is 10.6 ms — within a
+30 Hz frame budget.
+
+### Q3 — `key.latency` vs `mailbox_len_at_arrival`
+
+| mailbox_len | trace3 (n / p50 / p99) | trace4 (n / p50 / p99) |
+|---|---|---|
+| 0 | 378 / 0.10 / 3.58 | 83 / 0.55 / 134.95 |
+| 1 | 4 / 4.45 / 221.10 | 46 / 8.33 / 134.12 |
+| 5 | 1 / 220.35 | 6 / 10.94 / 131.74 |
+| 50+ | 2 / 210.49 / 210.49 | 38–177 / 60–115 ms |
+
+`mailbox=0` p50 went from 0.10 → 0.55 ms (still sub-millisecond at
+the median; the p99 of 134.95 ms is one outlier in n=83). The 220
+ms key.latency tail from trace3 is **gone** — max in trace4 is
+134.95 ms, and the deep-mailbox latencies cluster at 60–135 ms,
+matching the streaming-tick coalescing budget.
+
+### Q4 — `transcript.render` duration vs msg_count
+
+| msg_count | trace3 streaming p50/p99 | trace4 streaming p50/p99 |
+|---|---|---|
+| 2 | 1.91 / 4.79 | 2.78 / 7.80 |
+| 3 | — | (idle only, n=9, 10.4/89.5 outlier) |
+| 4 | 2.81 / 5.89 | — |
+| 6 | 3.24 / 6.21 | — |
+
+`transcript.render` per-call cost regressed ~1.5× at the median for
+streaming msg_count=2 (1.91→2.78 ms). The cost source is the
+`AssistantMessage` ↔ Transcript boundary: every render allocates a
+`ctx` map and Transcript.render does a structural-equality check
+against the stored ctx (a theme map being one of its keys is
+expensive to compare). The reference-cache short-circuit added in
+.10 helps but doesn't fully amortize the per-render overhead.
+
+The acceptance bar — "p99 at msg_count=10+ no greater than at
+msg_count=2" — is **not directly verified** in this trace because
+the streaming msg_count never exceeded 2 (single-turn run). The
+mechanism is sound (Transcript caches finalized entries' iodata),
+but a multi-turn run is needed to confirm the cross-message scaling
+property.
+
+### Headline comparison
+
+| Metric | trace3 | trace4 | Δ |
+|---|---|---|---|
+| `octo_pi_agent_event` handle_info p50 | 0.11 ms | 0.12 ms | flat |
+| `octo_pi_agent_event` handle_info p99 | 1.88 ms | **0.63 ms** | −66% |
+| `key.latency` overall p50 | 14.85 ms | 21.16 ms | +43% |
+| `key.latency` overall p99 | (220 ms tail) | **134.95 ms** | −39% |
+| `transcript.render` p50 (streaming msg=2) | 1.91 ms | 2.78 ms | +46% |
+| Max `key.latency` observed | 220+ ms | **134.95 ms** | −39% |
+
+### Verdict
+
+Mixed. The streaming hot-path metric (`octo_pi_agent_event`) gets
+better, the 220 ms key-latency tail is closed, and `markdown.render`
+remains bounded by current-paragraph size at all observed text
+sizes. But `transcript.render` per-call cost regressed by ~50%,
+attributable to the ctx-allocation + structural-equality overhead at
+the `AssistantMessage` ↔ Transcript boundary that wasn't there
+pre-`.9`/`.10`.
+
+Acceptable trade for the architectural cleanup, but the regression
+is real. Two follow-ups worth filing if the cost is felt in
+practice:
+
+1. **Cache the AssistantMessage ctx by reference** — recompute only
+   when theme/width/hide_thinking changes, store on the struct.
+   Avoids the per-render map allocation and structural compare.
+2. **Skip the iodata→binary→split roundtrip** — have AssistantMessage
+   walk its blocks directly and concat lines per-renderer rather
+   than materializing the full transcript binary every render.
+
+The 220 ms key-latency tail at low mailbox depth is no longer
+reproducible — most likely it was an artifact of the old apply_partial
+path (full content-list rebuild + AssistantMessage allocation per
+chunk) hitting the GC. The .10 path stashes deltas in O(1) per chunk
+and only walks blocks at the streaming-tick boundary.

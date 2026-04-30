@@ -1,6 +1,8 @@
 defmodule Spike do
   def main do
-    lines = File.stream!("trace2.log") |> Enum.to_list()
+    path = System.argv() |> List.first() || "trace2.log"
+    IO.puts("# analyzing #{path}")
+    lines = File.stream!(path) |> Enum.to_list()
 
     # Q1: handle_info duration by kind
     handle_info =
