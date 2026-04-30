@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-y1z.1"
+  ],
+  "blocks": [
+    "opi-y1z.4"
+  ],
+  "comments": [],
+  "created": "2026-04-30T03:34:42.188590Z",
+  "description": "Implement `OctoPi.AI.Runner.LMStudio`.\n\n- `api/0` → `:openai_completions`.\n- `default_base_url/0` → `\"http://localhost:1234/v1\"`.\n- `auth/0` → `:none` (or `{:literal, \"lm-studio\"}` if the OpenAI-compatible endpoint demands a token; verify against an actual LM Studio install).\n- `validate/1`.\n- `lookup/2` — probe LM Studio's catalog (REST or SDK; native LM Studio SDK has Elixir bindings? if not, fall back to `GET /v1/models` and a `GET /api/v0/models` for capability data). Return `{:ok, Model.t()}` with `context_window`, `max_tokens`, modalities populated from the server response.\n- `discover/1` — bulk version of `lookup/2`. Returns `{:ok, [Model.t()]}`.\n\n**Tests:**\n- Stub HTTP transport (Req with `:plug` test transport — confirm umbrella conventions before assuming).\n- `lookup/2` for an existing model returns populated `Model.t()`.\n- `lookup/2` for an unknown id returns `:not_found`.\n- `discover/1` returns the full list.\n- Server-down / connection refused → `{:error, ...}` not a crash.\n\nDouble-check LM Studio's actual API surface before committing to specific endpoints — pi-mono uses the LM Studio SDK over websocket, but a REST probe may be sufficient for our needs.",
+  "id": "opi-y1z.3",
+  "labels": [],
+  "parent": "opi-y1z",
+  "priority": 2,
+  "status": "open",
+  "title": "Runner: :lmstudio (with lookup/discover)",
+  "type": "task",
+  "updated_at": "2026-04-30T03:34:42.188590Z"
+}

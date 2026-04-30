@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-y1z.1"
+  ],
+  "blocks": [
+    "opi-y1z.4"
+  ],
+  "comments": [],
+  "created": "2026-04-30T03:34:42.188590Z",
+  "description": "Implement `OctoPi.AI.Runner.Anthropic`.\n\n- `api/0` → `:anthropic_messages`.\n- `default_base_url/0` → `\"https://api.anthropic.com/v1\"`.\n- `auth/0` → `{:env, \"ANTHROPIC_API_KEY\"}`.\n- `validate/1` — accepts `base_url` override and per-model overrides.\n- `lookup/2` → `:unsupported` (no live `/models` endpoint we want to depend on).\n- `discover/1` → `:unsupported`.\n\n**Tests:**\n- Auth resolves from env var.\n- Auth.json override works.\n- `base_url` override propagates to `Model.base_url`.\n- `lookup/2` returns `:unsupported` cleanly.\n- Catalog comes purely from models.json entries (hand-curated).\n\nThe `:anthropic_messages` codec already exists — this ticket is just the runner side.",
+  "id": "opi-y1z.2",
+  "labels": [],
+  "parent": "opi-y1z",
+  "priority": 2,
+  "status": "open",
+  "title": "Runner: :anthropic",
+  "type": "task",
+  "updated_at": "2026-04-30T03:34:42.188590Z"
+}

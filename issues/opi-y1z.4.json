@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-y1z.2",
+    "opi-y1z.3"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T03:34:42.188590Z",
+  "description": "Cut over the two callers and remove the old module.\n\n- `OctoPi.Coder.Extension.Context` (apps/octo_pi_coder/lib/octo_pi/coder/extension/context.ex): default `find_model` callback → `OctoPi.AI.ModelRegistry.find/2`.\n- `OctoPi.Coder.CLI` `--model` flag: → `OctoPi.AI.ModelRegistry.resolve/1`. Update help text to show the strict `runner/model-id` form.\n- Delete `apps/octo_pi_coder/lib/octo_pi/coder/models.ex`.\n- Update `apps/octo_pi_coder/test/octo_pi/coder/extension/context_test.exs` and any other tests that referenced the deleted module.\n- Add `priv/models.example.json` to the umbrella with one anthropic and one lmstudio entry.\n- Update relevant docs / README pointers.\n\n**Tests:**\n- Coder integration tests still pass.\n- CLI `--model anthropic/claude-opus-4-7` resolves correctly.\n- CLI `--model claude-opus-4-7` (bare id) errors with the canonical-form hint.",
+  "id": "opi-y1z.4",
+  "labels": [],
+  "parent": "opi-y1z",
+  "priority": 2,
+  "status": "open",
+  "title": "Migration: wire callers, delete OctoPi.Coder.Models",
+  "type": "task",
+  "updated_at": "2026-04-30T03:34:42.188590Z"
+}

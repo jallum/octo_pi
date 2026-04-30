@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-y1z.2",
+    "opi-y1z.3"
+  ],
+  "comments": [],
+  "created": "2026-04-30T03:34:42.188590Z",
+  "description": "Implement the load-time half of the registry.\n\n**In scope:**\n- `OctoPi.AI.Runner` behaviour (callbacks: `api/0`, `default_base_url/0`, `auth/0`, `validate/1`, `lookup/2`, `discover/1`).\n- `OctoPi.AI.Api` behaviour (`stream/4`).\n- `OctoPi.AI.RunnerRegistry` — atom→module map, registered at compile-time, swappable via app env for tests.\n- `OctoPi.AI.Auth` — resolves `:none | {:env, ...} | {:literal, ...} | {:cmd, ...}` strategies, reads `auth.json` for overrides.\n- `OctoPi.AI.ModelRegistry`:\n  - `load!(opts)` — reads models.json, validates schema, builds `{(provider, id) => Model.t()}` map, caches via `:persistent_term`.\n  - `find/2`, `resolve/1` (strict `runner/model-id`, fallback to `Runner.lookup/2`, side-effect-free).\n  - `runners/0`, `models/1`, `all/0`.\n- JSON schema validation: per-entry `runner`/`base_url`/`headers`/`api`/`compat`/`models` shape; per-model `id` required, others optional with defaults.\n- File location: `~/.octo_pi/models.json` and `~/.octo_pi/auth.json`, overridable via `config :octo_pi, :models_file` / `:auth_file`.\n- `Model` struct rename in `apps/octo_pi_ai/lib/octo_pi/ai/model.ex`: keep field names `provider` and `api` but document new semantics (provider = runner name, api = wire codec).\n\n**Tests:**\n- Load valid models.json with anthropic + lmstudio entries.\n- Load with `runner` field for renamed key.\n- Validation failures produce path-formatted errors.\n- Missing files → empty registry, no crash.\n- Auth resolution for each strategy (with `cmd` injectable for tests).\n- `resolve/1` strict form, miss falls through to runner stub, `:unsupported` returns clear error.\n\n**Out of scope:** real runner implementations (separate tickets).",
+  "id": "opi-y1z.1",
+  "labels": [],
+  "parent": "opi-y1z",
+  "priority": 2,
+  "status": "open",
+  "title": "Foundation: schema, ModelRegistry, Auth, Runner/Api behaviours",
+  "type": "task",
+  "updated_at": "2026-04-30T03:34:42.188590Z"
+}
