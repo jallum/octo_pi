@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-y1z",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Foundation: schema, ModelRegistry, Auth, Runner/Api behaviours",
   "type": "task",
-  "updated_at": "2026-04-30T03:34:42.188590Z"
+  "updated_at": "2026-04-30T03:45:18.064750Z"
 }
