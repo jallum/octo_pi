@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-tze.4"
+  ],
   "blocks": [],
   "created": "2026-04-30T12:08:03Z",
   "description": "**Upstream behavior (tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts L2316-2321)**\n\\`\\`\\`ts\nthis.defaultEditor.onEscape = () =\u003e {\n  if (this.loadingAnimation) {\n    this.restoreQueuedMessagesToEditor({ abort: true });\n  } else if (this.session.isBashRunning) {\n    this.session.abortBash();\n  } ...\n};\n\\`\\`\\`\nrestoreQueuedMessagesToEditor({abort: true}) drains both queues, joins\nthe texts into the editor, and calls agent.abort(). Net effect: pressing\nEscape while the agent is streaming gives the user back exactly what\nthey had typed plus what they had queued, ready to edit, while killing\nthe in-flight run.\n\n**Octo_pi current behavior (apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex)**\n- Escape during streaming: kills the run (looks like). Does not drain\n  the queues. Does not restore queued text into the editor. The dequeue\n  overlay's Escape handler re-enqueues, but that overlay must be\n  manually opened first.\n\n**Fix**\n1. In the TUI's escape handler (search for the \\\"streaming\\\" branch), do:\n   - drain steering and follow-up queues (assumes opi-tze.4 fixed),\n   - join texts with \\\"\\\\n\\\\n\\\",\n   - prepend to current editor text,\n   - call Coder.abort.\n2. Coordinate with opi-tze.5 (dequeue → editor restore) so both paths\n   share one helper.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "[FEATURE] Escape during streaming should restore queued messages and abort",
   "type": "task",
-  "updated_at": "2026-04-30T12:08:03Z"
+  "updated_at": "2026-04-30T12:08:09Z"
 }
