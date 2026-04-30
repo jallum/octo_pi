@@ -201,6 +201,17 @@ defmodule OctoPi.TUI.Interactive do
             current_msg_id: nil,
             current_has_tool_calls?: false
 
+  @doc """
+  Return the transcript entries (the data payload of each Transcript
+  slot) in display order — oldest first. Provided for tests and
+  introspection; renders should walk `state.transcript` directly via
+  `Transcript.render/2`.
+  """
+  @spec transcript_entries(t()) :: [term()]
+  def transcript_entries(%{transcript: %Transcript{order: order, data: data}}) do
+    order |> Enum.reverse() |> Enum.map(&Map.fetch!(data, &1))
+  end
+
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
   def build_ui_context(interactive_pid) do
@@ -1276,12 +1287,14 @@ defmodule OctoPi.TUI.Interactive do
       has_tool_calls?: has_tool_calls?
     }
 
+    transcript = maybe_update_header_tool_flag(state.transcript, msg_id, has_tool_calls?)
+    header = Map.fetch!(transcript.data, header_key(msg_id))
+
     transcript =
-      state.transcript
-      |> maybe_update_header_tool_flag(msg_id, has_tool_calls?)
+      transcript
       |> Transcript.append(status_key(msg_id), status, AssistantStatus)
       |> Transcript.finalize(status_key(msg_id), status)
-      |> Transcript.finalize(header_key(msg_id), header_for(state.transcript, msg_id) || %AssistantHeader{msg_id: msg_id, has_tool_calls?: has_tool_calls?})
+      |> Transcript.finalize(header_key(msg_id), header)
 
     %{
       state
@@ -1614,7 +1627,7 @@ defmodule OctoPi.TUI.Interactive do
     # upstream's queueCompactionMessage. The user message lands in
     # the transcript immediately so they have visual feedback that
     # their input was accepted.
-    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+    user_msg = UserMessage.new(value, state.theme)
 
     %{
       state
@@ -1634,7 +1647,7 @@ defmodule OctoPi.TUI.Interactive do
        when not is_nil(session) do
     result = Coder.steer(session, value)
 
-    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+    user_msg = UserMessage.new(value, state.theme)
 
     notification =
       case result do
@@ -1664,7 +1677,7 @@ defmodule OctoPi.TUI.Interactive do
       Task.start(fn -> Coder.prompt(session, value, send_text) end)
     end
 
-    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+    user_msg = UserMessage.new(value, state.theme)
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: append_user_msg(state.transcript, user_msg)}
   end
 
@@ -1885,7 +1898,8 @@ defmodule OctoPi.TUI.Interactive do
   defp status_key(msg_id), do: "#{msg_id}:end"
   defp block_key(msg_id, idx), do: "#{msg_id}:#{idx}"
   defp tool_key(tool_call_id), do: "tool:#{tool_call_id}"
-  defp bash_key(bash_id), do: "bash:#{bash_id}"
+  defp bash_key(bash_id) when is_binary(bash_id), do: "bash:#{bash_id}"
+  defp bash_key(bash_id), do: "bash:#{inspect(bash_id)}"
   defp user_key, do: "user:#{:erlang.unique_integer([:positive, :monotonic])}"
   defp compaction_key, do: "compaction:#{:erlang.unique_integer([:positive, :monotonic])}"
 

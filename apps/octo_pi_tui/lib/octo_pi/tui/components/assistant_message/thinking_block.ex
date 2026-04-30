@@ -25,6 +25,19 @@ defmodule OctoPi.TUI.Components.AssistantMessage.ThinkingBlock do
     }
   end
 
+  # No ctx yet (Transcript hasn't seen a render at known dims) — keep
+  # the snapshot in a minimal shape; the next ctx-aware render will
+  # rebuild via Transcript.resize.
+  def new(snapshot, _ctx) do
+    %__MODULE__{
+      snapshot: snapshot,
+      theme: nil,
+      width: nil,
+      hide?: false,
+      hidden_label: "Thinking..."
+    }
+  end
+
   @impl true
   def put(%__MODULE__{} = s, snapshot), do: %{s | snapshot: snapshot}
 

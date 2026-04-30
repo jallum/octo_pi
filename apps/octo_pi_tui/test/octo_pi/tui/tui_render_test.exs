@@ -241,13 +241,30 @@ defmodule OctoPi.TUI.TuiRenderTest do
     test "input with borders always visible after long transcript" do
       alias OctoPi.TUI.Components.Footer
       alias OctoPi.TUI.Components.Input
+      alias OctoPi.TUI.Components.UserMessage
       alias OctoPi.TUI.Interactive
+      alias OctoPi.TUI.Theme
+      alias OctoPi.TUI.Transcript
+      alias OctoPi.TUI.Transcript.ComponentWrapper
 
-      # Simulate: long transcript (50 lines) + input with borders
-      transcript = Enum.map(1..50, &{:assistant, "Line #{&1}", :done})
+      theme = Theme.load_builtin(:dark, :truecolor)
+
+      # Simulate: long transcript (50 entries) + input with borders.
+      # Use UserMessage entries — easier to seed than full assistant
+      # turns, and the test only cares about overall layout/length.
+      transcript =
+        Enum.reduce(1..50, %Transcript{}, fn i, t ->
+          key = "u#{i}"
+          msg = UserMessage.new("Line #{i}", theme)
+
+          t
+          |> Transcript.append(key, msg, ComponentWrapper)
+          |> Transcript.finalize(key, msg)
+        end)
 
       state = %Interactive{
         transcript: transcript,
+        theme: theme,
         input: %Input{value: "", cursor: 0},
         footer: %Footer{cwd: "/test", model_id: "test", context_window: 200_000},
         width: 80,

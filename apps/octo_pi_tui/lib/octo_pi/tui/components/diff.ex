@@ -10,6 +10,15 @@ defmodule OctoPi.TUI.Components.Diff do
 
   defstruct [:diff_text, :theme]
 
+  @doc """
+  Component-style render dispatch — Diff is a transcript entry under
+  `.13`'s flat Transcript and gets routed through `ComponentWrapper`,
+  which calls `mod.render(state, width)`. Width is unused for diffs.
+  """
+  @spec render(t(), pos_integer()) :: [String.t()]
+  def render(%__MODULE__{diff_text: diff_text, theme: theme}, _width),
+    do: render_diff(diff_text, theme)
+
   @spec render_diff(String.t(), Theme.t()) :: [String.t()]
   def render_diff("", _theme), do: []
 

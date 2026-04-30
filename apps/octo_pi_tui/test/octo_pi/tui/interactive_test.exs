@@ -28,12 +28,33 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.SummarizePrompt
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.TreeSelector
+  alias OctoPi.TUI.Components.UserMessage
   alias OctoPi.TUI.Components.WelcomeBanner
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Paste
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Transcript
+  alias OctoPi.TUI.Transcript.AssistantHeader
+  alias OctoPi.TUI.Transcript.AssistantStatus
+  alias OctoPi.TUI.Transcript.ComponentWrapper
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
+
+  # Helper: build a Transcript from a list of {key, entry, mod} triples,
+  # finalizing each entry — useful for tests that need a seeded
+  # transcript without manually calling Transcript.append/finalize per
+  # slot.
+  defp seed_transcript(triples) do
+    Enum.reduce(triples, %Transcript{}, fn {key, entry, mod}, t ->
+      t
+      |> Transcript.append(key, entry, mod)
+      |> Transcript.finalize(key, entry)
+    end)
+  end
+
+  defp wrap(entry), do: {test_key(), entry, ComponentWrapper}
+  defp test_key, do: "test:#{:erlang.unique_integer([:positive, :monotonic])}"
 
   describe "handle_event — keyboard input" do
     test "printable char is inserted into the Input" do
@@ -60,13 +81,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: "", cursor: 0}}
       s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.input.value == ""
-      assert s.transcript == []
+      assert s.transcript == %Transcript{}
     end
 
     test "Enter with non-empty input appends user message + clears input" do
       s = %Interactive{input: %Input{value: "hi", cursor: 2}, session: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert s.transcript == [{:user, "hi"}]
+      assert [%UserMessage{text: "hi"}] = Interactive.transcript_entries(s)
       assert s.input.value == ""
       assert s.input.cursor == 0
     end
@@ -82,38 +103,38 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = %Interactive{input: %Input{value: "/greet world", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
       s = Interactive.handle_event(s, %Key{key: :enter})
       assert_received {:expanded, "/greet world"}
-      assert s.transcript == [{:user, "/greet world"}]
+      assert [%UserMessage{text: "/greet world"}] = Interactive.transcript_entries(s)
       assert s.input.value == ""
     end
 
     test "Enter without expand_prompt_fn works as before" do
       s = %Interactive{input: %Input{value: "/foo", cursor: 4}, session: nil, expand_prompt_fn: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert s.transcript == [{:user, "/foo"}]
+      assert [%UserMessage{text: "/foo"}] = Interactive.transcript_entries(s)
     end
 
     test "! prefix adds a running BashExecution to transcript immediately" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert [%BashExecution{command: "echo hello", status: :running}] = s.transcript
+      assert [%BashExecution{command: "echo hello", status: :running}] = Interactive.transcript_entries(s)
     end
 
     test "! prefix completes BashExecution on :bash_done event" do
       s = %Interactive{input: %Input{value: "! echo hello", cursor: 12}, session: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      be = hd(s.transcript)
+      be = hd(Interactive.transcript_entries(s))
       id = be.id
       assert_receive {:bash_done, ^id, output, exit_code}, 2_000
       s = Interactive.handle_event(s, {:bash_done, id, output, exit_code})
-      assert [%BashExecution{status: :complete, exit_code: 0}] = s.transcript
-      assert BashExecution.get_output(hd(s.transcript)) =~ "hello"
+      assert [%BashExecution{status: :complete, exit_code: 0}] = Interactive.transcript_entries(s)
+      assert BashExecution.get_output(hd(Interactive.transcript_entries(s))) =~ "hello"
     end
 
     test "! prefix without space also runs shell command" do
       s = %Interactive{input: %Input{value: "!echo hi", cursor: 8}, session: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert [%BashExecution{command: "echo hi", status: :running}] = s.transcript
-      be = hd(s.transcript)
+      assert [%BashExecution{command: "echo hi", status: :running}] = Interactive.transcript_entries(s)
+      be = hd(Interactive.transcript_entries(s))
       id = be.id
       assert_receive {:bash_done, ^id, _output, _exit_code}, 2_000
     end
@@ -141,17 +162,17 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "! prefix with non-zero exit sets error status on :bash_done event" do
       s = %Interactive{input: %Input{value: "! exit 1", cursor: 8}, session: nil}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      be = hd(s.transcript)
+      be = hd(Interactive.transcript_entries(s))
       id = be.id
       assert_receive {:bash_done, ^id, _output, exit_code}, 2_000
       s = Interactive.handle_event(s, {:bash_done, id, "", exit_code})
-      assert [%BashExecution{status: :error, exit_code: 1}] = s.transcript
+      assert [%BashExecution{status: :error, exit_code: 1}] = Interactive.transcript_entries(s)
     end
 
     test "/clear clears transcript without sending to AI" do
-      s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, transcript: [{:user, "hi"}]}
+      s = %Interactive{input: %Input{value: "/clear", cursor: 6}, session: nil, transcript: seed_transcript([wrap(UserMessage.new("hi", nil))])}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert s.transcript == []
+      assert s.transcript == %Transcript{}
       assert s.input.value == ""
     end
 
@@ -205,7 +226,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       expand_fn = fn text -> text end
       s = %Interactive{input: %Input{value: "/my-template", cursor: 12}, session: nil, expand_prompt_fn: expand_fn}
       s = Interactive.handle_event(s, %Key{key: :enter})
-      assert s.transcript == [{:user, "/my-template"}]
+      assert [%UserMessage{text: "/my-template"}] = Interactive.transcript_entries(s)
     end
 
     test "Escape clears non-empty input" do
@@ -462,14 +483,14 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Alt+Enter while idle with non-empty input submits immediately (like Enter)" do
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, session: nil, loader: nil}
       s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
-      assert [{:user, "hello"}] = s2.transcript
+      assert [%UserMessage{text: "hello"}] = Interactive.transcript_entries(s2)
       assert s2.input.value == ""
     end
 
     test "Alt+Enter while idle with empty input is no-op" do
       s = %Interactive{input: %Input{value: "", cursor: 0}, session: nil, loader: nil}
       s2 = Interactive.handle_event(s, %Key{key: :enter, modifiers: [:alt]})
-      assert s2.transcript == []
+      assert s2.transcript == %Transcript{}
       assert s2.input.value == ""
     end
   end
@@ -493,7 +514,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       # Input cleared, message echoed locally.
       assert s2.input.value == ""
       assert s2.input.cursor == 0
-      assert [{:user, "steer me"}] = s2.transcript
+      assert [%UserMessage{text: "steer me"}] = Interactive.transcript_entries(s2)
       assert s2.notification == "Steered"
 
       # The agent's steering queue actually received it.
@@ -602,14 +623,19 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "render hides thinking blocks when thinking_visible is false" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      msg = AssistantMessage.new(theme, content: [thinking: "my thought"])
 
       s = %Interactive{
         thinking_visible: false,
-        transcript: [msg],
+        transcript: %Transcript{},
+        theme: theme,
         input: %Input{},
         width: 80
       }
+      |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
+      |> Interactive.handle_event(
+        {:octo_pi_agent_event,
+         %Event.MessageBlockDelta{block_id: 0, kind: :thinking, delta: "my thought", snapshot: "my thought"}}
+      )
 
       lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
@@ -619,14 +645,19 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "render shows thinking blocks when thinking_visible is true" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      msg = AssistantMessage.new(theme, content: [thinking: "my thought"])
 
       s = %Interactive{
         thinking_visible: true,
-        transcript: [msg],
+        transcript: %Transcript{},
+        theme: theme,
         input: %Input{},
         width: 80
       }
+      |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
+      |> Interactive.handle_event(
+        {:octo_pi_agent_event,
+         %Event.MessageBlockDelta{block_id: 0, kind: :thinking, delta: "my thought", snapshot: "my thought"}}
+      )
 
       lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
@@ -710,262 +741,196 @@ defmodule OctoPi.TUI.InteractiveTest do
   end
 
   describe "handle_event — agent events" do
-    test "MessageBlockDelta appends a streaming assistant entry (after flush)" do
-      s = %Interactive{}
+    # Drive a full assistant turn: MessageStart → block events → MessageEnd.
+    # `block_events` is a list of {:start | :delta | :end, idx, kind, snapshot}.
+    # `final_assistant` is the %Assistant{} carried on MessageEnd.
+    defp drive_turn(state, block_events, final_assistant) do
+      state = Interactive.handle_event(state, {:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
-      # opi-4dx.3 + .6: block-delta events stash into streaming_blocks;
-      # pull-tick flush materializes them into the transcript.
-      s =
-        s
-        |> Interactive.handle_event(
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hello", snapshot: "hello"}}
-        )
-        |> Interactive.flush_pending_partial()
+      state =
+        Enum.reduce(block_events, state, fn
+          {:start, idx, kind}, s ->
+            Interactive.handle_event(s, {:octo_pi_agent_event,
+              %Event.MessageBlockStart{block_id: idx, kind: kind}})
 
-      assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
+          {:delta, idx, kind, snapshot}, s ->
+            Interactive.handle_event(s, {:octo_pi_agent_event,
+              %Event.MessageBlockDelta{block_id: idx, kind: kind, delta: snapshot, snapshot: snapshot}})
+
+          {:end, idx, kind, content}, s ->
+            Interactive.handle_event(s, {:octo_pi_agent_event,
+              %Event.MessageBlockEnd{block_id: idx, kind: kind, content: content}})
+        end)
+
+      Interactive.handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{message: final_assistant}})
     end
 
-    test "subsequent MessageBlockDeltas replace the streaming entry's text (after flush)" do
-      existing = AssistantMessage.new(nil, content: [text: "he"])
-
-      s = %Interactive{
-        transcript: [existing],
-        streaming_blocks: %{order: [0], data: %{0 => {:text, "he"}}}
-      }
-
-      s =
-        s
-        |> Interactive.handle_event(
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "llo", snapshot: "hello"}}
-        )
-        |> Interactive.flush_pending_partial()
-
-      assert [%AssistantMessage{content: [text: "hello"]}] = s.transcript
-    end
-
-    test "MessageEnd finalizes the streaming entry" do
-      existing = AssistantMessage.new(nil, content: [text: "hi"])
-      s = %Interactive{transcript: [existing]}
-
-      msg = %Assistant{
-        content: [%Content.Text{text: "hi"}],
+    defp assistant(content, stop_reason \\ :stop) do
+      %Assistant{
+        content: content,
         api: :fake,
         provider: :fake,
         model: "m",
         timestamp: 0,
-        stop_reason: :stop
+        stop_reason: stop_reason
       }
-
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
-      assert [%AssistantMessage{content: [text: "hi"], stop_reason: nil}] = s.transcript
     end
 
-    test "MessageEnd with tool calls sets has_tool_calls" do
-      existing = AssistantMessage.new(nil, content: [text: "ok"])
-      s = %Interactive{transcript: [existing]}
+    test "MessageStart appends an AssistantHeader entry" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
-      msg = %Assistant{
-        content: [%Content.Text{text: "ok"}, %OctoPi.AI.ToolCall{id: "tc1", name: "Read"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0,
-        stop_reason: :tool_use
-      }
-
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
-      assert [%AssistantMessage{has_tool_calls: true}] = s.transcript
+      msg_id = s.current_msg_id
+      assert %AssistantHeader{msg_id: ^msg_id} = Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
     end
 
-    test "ToolExecutionStart appends a ToolExecution component" do
-      s = %Interactive{}
+    test "MessageBlockDelta updates the block slot keyed by msg_id:idx" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
+
+      s =
+        Interactive.handle_event(s, {:octo_pi_agent_event,
+          %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hello", snapshot: "hello"}})
+
+      assert Map.fetch!(s.transcript.data, "#{s.current_msg_id}:0") == "hello"
+      assert Map.fetch!(s.transcript.modules, "#{s.current_msg_id}:0") == TextBlock
+    end
+
+    test "subsequent MessageBlockDeltas replace the slot's snapshot (latest wins)" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
+
+      s =
+        s
+        |> Interactive.handle_event({:octo_pi_agent_event,
+          %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "he", snapshot: "he"}})
+        |> Interactive.handle_event({:octo_pi_agent_event,
+          %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "llo", snapshot: "hello"}})
+
+      assert Map.fetch!(s.transcript.data, "#{s.current_msg_id}:0") == "hello"
+    end
+
+    test "MessageEnd appends AssistantStatus and finalizes header + status" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
+
+      s =
+        drive_turn(s, [{:delta, 0, :text, "hi"}], assistant([%Content.Text{text: "hi"}], :stop))
+
+      # current_msg_id was cleared on MessageEnd; recover from the only header.
+      [header_key] = Enum.filter(s.transcript.order, &String.ends_with?(&1, ":hdr"))
+      msg_id = String.replace_suffix(header_key, ":hdr", "")
+
+      assert %AssistantHeader{msg_id: ^msg_id, has_tool_calls?: false} =
+               Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
+
+      assert %AssistantStatus{stop_reason: nil, has_tool_calls?: false} =
+               Map.fetch!(s.transcript.data, "#{msg_id}:end")
+
+      assert MapSet.member?(s.transcript.finalized, "#{msg_id}:hdr")
+      assert MapSet.member?(s.transcript.finalized, "#{msg_id}:end")
+    end
+
+    test "MessageEnd with tool calls flips has_tool_calls? on header + status" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
+
+      final =
+        assistant([%Content.Text{text: "ok"}, %OctoPi.AI.ToolCall{id: "tc1", name: "Read"}], :tool_use)
+
+      s = drive_turn(s, [{:delta, 0, :text, "ok"}], final)
+
+      [header_key] = Enum.filter(s.transcript.order, &String.ends_with?(&1, ":hdr"))
+      msg_id = String.replace_suffix(header_key, ":hdr", "")
+
+      assert %AssistantHeader{has_tool_calls?: true} =
+               Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
+
+      assert %AssistantStatus{has_tool_calls?: true} =
+               Map.fetch!(s.transcript.data, "#{msg_id}:end")
+    end
+
+    test "ToolExecutionStart appends a ToolExecution sibling" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
 
       ev = %Event.ToolExecutionStart{tool_call_id: "tc1", tool_name: "Read"}
       s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
 
-      assert [%ToolExecution{tool_name: "Read", tool_call_id: "tc1", status: :pending}] =
-               s.transcript
+      assert %ToolExecution{tool_name: "Read", tool_call_id: "tc1", status: :pending} =
+               Map.fetch!(s.transcript.data, "tool:tc1")
     end
 
-    test "ToolExecutionEnd sets result on matching ToolExecution" do
-      te = ToolExecution.new("Bash", "tc2", %{}, nil)
-      s = %Interactive{transcript: [te]}
+    test "ToolExecutionEnd updates and finalizes the matching ToolExecution" do
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
 
-      result = %Result{
-        content: [%Content.Text{text: "output here"}],
-        is_error?: false
-      }
+      s =
+        Interactive.handle_event(s, {:octo_pi_agent_event,
+          %Event.ToolExecutionStart{tool_call_id: "tc2", tool_name: "Bash"}})
 
-      ev = %Event.ToolExecutionEnd{tool_call_id: "tc2", tool_name: "Bash", result: result}
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
+      result = %Result{content: [%Content.Text{text: "output here"}], is_error?: false}
 
-      assert [%ToolExecution{status: :success, result: "output here"}] = s.transcript
+      s =
+        Interactive.handle_event(s, {:octo_pi_agent_event,
+          %Event.ToolExecutionEnd{tool_call_id: "tc2", tool_name: "Bash", result: result}})
+
+      assert %ToolExecution{status: :success, result: "output here"} =
+               Map.fetch!(s.transcript.data, "tool:tc2")
+
+      assert MapSet.member?(s.transcript.finalized, "tool:tc2")
     end
 
     test "ToolExecutionEnd with error sets error status" do
-      te = ToolExecution.new("Bash", "tc3", %{}, nil)
-      s = %Interactive{transcript: [te]}
+      s = %Interactive{transcript: %Transcript{}, theme: nil}
 
-      result = %Result{
-        content: [%Content.Text{text: "permission denied"}],
-        is_error?: true
-      }
-
-      ev = %Event.ToolExecutionEnd{tool_call_id: "tc3", tool_name: "Bash", result: result}
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
-
-      assert [%ToolExecution{status: :error, result: "permission denied"}] = s.transcript
-    end
-
-    test "continuation text after tool execution creates a new AssistantMessage" do
-      # Turn 1: assistant says "let me check" then calls a tool
-      msg1 = AssistantMessage.new(nil, content: [text: "let me check"], has_tool_calls: true)
-      te = ToolExecution.new("bash", "tc1", %{}, nil)
-      te = ToolExecution.set_result(te, "ok", false)
-
-      s = %Interactive{transcript: [msg1, te]}
-
-      # Turn 2: model responds with new text after tool results
       s =
-        s
-        |> Interactive.handle_event(
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{
-             block_id: 0,
-             kind: :text,
-             delta: "here is the answer",
-             snapshot: "here is the answer"
-           }}
-        )
-        |> Interactive.flush_pending_partial()
+        Interactive.handle_event(s, {:octo_pi_agent_event,
+          %Event.ToolExecutionStart{tool_call_id: "tc3", tool_name: "Bash"}})
 
-      # The continuation text must be a NEW entry BELOW the tool, not
-      # merged into the first AssistantMessage above it.
-      assert [
-               %AssistantMessage{content: [text: "let me check"]},
-               %ToolExecution{},
-               %AssistantMessage{content: [text: "here is the answer"]}
-             ] =
-               s.transcript
+      result = %Result{content: [%Content.Text{text: "permission denied"}], is_error?: true}
+
+      s =
+        Interactive.handle_event(s, {:octo_pi_agent_event,
+          %Event.ToolExecutionEnd{tool_call_id: "tc3", tool_name: "Bash", result: result}})
+
+      assert %ToolExecution{status: :error, result: "permission denied"} =
+               Map.fetch!(s.transcript.data, "tool:tc3")
     end
 
     test "unrelated agent events don't modify the transcript" do
-      s = %Interactive{transcript: [{:user, "x"}]}
+      s = %Interactive{
+        transcript: seed_transcript([wrap(UserMessage.new("x", nil))]),
+        theme: nil
+      }
+
+      before = s.transcript
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 0}})
-      assert s.transcript == [{:user, "x"}]
+      assert s.transcript == before
     end
 
     # opi-tze.9: when the agent runs multiple terminal-stop turns in a
-    # single run (e.g. draining a queue of steered messages), each turn
-    # emits its own MessageStart → … → MessageEnd sequence. The TUI
-    # must treat the previous turn's finalized assistant as a boundary;
-    # otherwise the next turn's MessageUpdate finds it via
-    # find_last_assistant and overwrites it with the new turn's partial.
-    test "MessageBlockDelta after a finalized assistant appends a new entry" do
-      finalized =
-        AssistantMessage.new(nil, content: [text: "first reply"], finalized?: true)
-
-      s = %Interactive{transcript: [{:user, "first prompt"}, finalized]}
-
-      s =
-        s
-        |> Interactive.handle_event(
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{
-             block_id: 0,
-             kind: :text,
-             delta: "second",
-             snapshot: "second"
-           }}
-        )
-        |> Interactive.flush_pending_partial()
-
-      # First-turn assistant preserved, new partial appended.
-      assert [
-               {:user, "first prompt"},
-               %AssistantMessage{content: [text: "first reply"], finalized?: true},
-               %AssistantMessage{content: [text: "second"], finalized?: false}
-             ] = s.transcript
-    end
-
-    test "MessageEnd marks the assistant as finalized" do
-      partial = AssistantMessage.new(nil, content: [text: "hello"], finalized?: false)
-      s = %Interactive{transcript: [partial]}
-
-      msg = %Assistant{
-        content: [%Content.Text{text: "hello"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0,
-        stop_reason: :stop
+    # single run, each turn must produce its own header + blocks +
+    # status entries — turn 2's blocks must not overwrite turn 1's.
+    test "two consecutive turns produce two distinct header/status pairs" do
+      s = %Interactive{
+        transcript: seed_transcript([wrap(UserMessage.new("go", nil))]),
+        theme: nil
       }
 
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
-      assert [%AssistantMessage{finalized?: true}] = s.transcript
-    end
+      s = drive_turn(s, [{:delta, 0, :text, "r1"}], assistant([%Content.Text{text: "r1"}], :stop))
+      s = drive_turn(s, [{:delta, 0, :text, "r2"}], assistant([%Content.Text{text: "r2"}], :stop))
 
-    test "two consecutive turns produce two finalized assistants" do
-      # Simulates a multi-turn drain: turn 1 finishes, turn 2 starts and
-      # finishes, both responses must be visible.
-      s = %Interactive{transcript: [{:user, "go"}]}
+      headers = Enum.filter(s.transcript.order, &String.ends_with?(&1, ":hdr"))
+      assert length(headers) == 2
 
-      msg1 = %Assistant{
-        content: [%Content.Text{text: "r1"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0,
-        stop_reason: :stop
-      }
+      statuses = Enum.filter(s.transcript.order, &String.ends_with?(&1, ":end"))
+      assert length(statuses) == 2
 
-      partial2 = %Assistant{
-        content: [%Content.Text{text: "r2"}],
-        api: :fake,
-        provider: :fake,
-        model: "m",
-        timestamp: 0
-      }
+      # Both turns' block snapshots are preserved.
+      [t2_block, t1_block] =
+        s.transcript.order
+        |> Enum.filter(&String.ends_with?(&1, ":0"))
 
-      msg2 = %{partial2 | stop_reason: :stop}
-
-      # Turn 1: stream a partial, then end.
-      s =
-        Interactive.handle_event(
-          s,
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{
-             block_id: 0,
-             kind: :text,
-             delta: "r1",
-             snapshot: "r1"
-           }}
-        )
-
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg1}})
-
-      # Turn 2: stream a partial — must NOT overwrite turn 1's r1.
-      s =
-        Interactive.handle_event(
-          s,
-          {:octo_pi_agent_event,
-           %Event.MessageBlockDelta{
-             block_id: 0,
-             kind: :text,
-             delta: "r2",
-             snapshot: "r2"
-           }}
-        )
-
-      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg2}})
-
-      assert [
-               {:user, "go"},
-               %AssistantMessage{content: [text: "r1"], finalized?: true},
-               %AssistantMessage{content: [text: "r2"], finalized?: true}
-             ] = s.transcript
+      # block keys are msg_id:0; resolve back to the data
+      assert Map.fetch!(s.transcript.data, t1_block) == "r1"
+      assert Map.fetch!(s.transcript.data, t2_block) == "r2"
     end
   end
 
@@ -1061,13 +1026,13 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "no extensions — TurnStart returns state unchanged" do
-      s = %Interactive{extensions: [], transcript: [{:user, "x"}]}
+      s = %Interactive{extensions: [], transcript: seed_transcript([wrap(UserMessage.new("x", nil))])}
       new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 0}})
       assert new_s == s
     end
 
     test "no extensions — TurnEnd returns state unchanged" do
-      s = %Interactive{extensions: [], transcript: [{:user, "x"}]}
+      s = %Interactive{extensions: [], transcript: seed_transcript([wrap(UserMessage.new("x", nil))])}
       new_s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnEnd{turn: 0}})
       assert new_s == s
     end
@@ -1232,7 +1197,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       s = %Interactive{
         loader: loader,
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         width: 80,
         height: 40,
@@ -1247,7 +1212,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       s = %Interactive{
         loader: loader,
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         width: 80,
         height: 40,
@@ -1265,7 +1230,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       s = %Interactive{
         loader: loader,
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         width: 80,
         height: 40,
@@ -1301,7 +1266,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       loader = Loader.new(message: "Working...")
 
       s = %Interactive{
-        transcript: [{:user, "hi"}],
+        transcript: seed_transcript([wrap(UserMessage.new("hi", Theme.load_builtin(:dark, :truecolor)))]),
         loader: loader,
         input: %Input{value: "", cursor: 0},
         width: 80,
@@ -1315,7 +1280,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "no loader lines when loader is nil" do
       s = %Interactive{
-        transcript: [{:user, "hi"}],
+        transcript: seed_transcript([wrap(UserMessage.new("hi", Theme.load_builtin(:dark, :truecolor)))]),
         loader: nil,
         input: %Input{value: "", cursor: 0},
         width: 80,
@@ -1493,13 +1458,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert new_state.input.value == ""
       assert new_state.input.cursor == 0
-      assert new_state.transcript == []
+      assert new_state.transcript == %Transcript{}
     end
 
     test "unknown slash command with no matching extension falls through to AI" do
       state = %Interactive{input: %Input{value: "/unknown", cursor: 8}, extensions: [], session: nil}
       new_state = Interactive.handle_event(state, %Key{key: :enter})
-      assert new_state.transcript == [{:user, "/unknown"}]
+      assert [%UserMessage{text: "/unknown"}] = Interactive.transcript_entries(new_state)
     end
 
     test "extension command takes priority over AI dispatch" do
@@ -1519,7 +1484,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       new_state = Interactive.handle_event(state, %Key{key: :enter})
       assert_receive :ext_called, 1_000
-      assert new_state.transcript == []
+      assert new_state.transcript == %Transcript{}
     end
 
     test "extension command handler receives a context with has_ui?: true" do
@@ -1863,8 +1828,11 @@ defmodule OctoPi.TUI.InteractiveTest do
 
   describe "render/1" do
     test "concatenates transcript + input-with-borders + footer" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+
       s = %Interactive{
-        transcript: [{:user, "hi"}, {:assistant, "hello!", :done}],
+        transcript: seed_transcript([wrap(UserMessage.new("hi", theme)), wrap(UserMessage.new("hello!", theme))]),
+        theme: theme,
         input: %Input{value: "next", cursor: 4},
         width: 80
       }
@@ -1872,7 +1840,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
 
-      assert text =~ "> hi"
+      assert text =~ "hi"
       assert text =~ "hello!"
       # Input owns its borders
       border = String.duplicate("─", 80)
@@ -1889,7 +1857,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       }
 
       s = %Interactive{
-        transcript: [{:user, "hi"}],
+        transcript: seed_transcript([wrap(UserMessage.new("hi", Theme.load_builtin(:dark, :truecolor)))]),
         input: %Input{value: "", cursor: 0},
         footer: footer,
         width: 80,
@@ -1910,7 +1878,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       banner = WelcomeBanner.new(theme, model: "test-model")
 
       s = %Interactive{
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         banner: banner,
         theme: theme,
@@ -1999,7 +1967,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "Diff struct in transcript renders coloured lines" do
       theme = Theme.load_builtin(:dark, :truecolor)
       diff = %Diff{diff_text: "+1 new line\n-1 old line", theme: theme}
-      s = %Interactive{transcript: [diff], width: 80}
+      s = %Interactive{transcript: seed_transcript([wrap(diff)]), width: 80}
       lines = Interactive.build_screen(s)
       text = Enum.join(lines, "\n")
       assert text =~ "new line"
@@ -2009,7 +1977,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "CustomMessage struct in transcript renders via Component protocol" do
       theme = Theme.load_builtin(:dark, :truecolor)
       msg = CustomMessage.new("alert", "Something happened", theme)
-      s = %Interactive{transcript: [msg], width: 80}
+      s = %Interactive{transcript: seed_transcript([wrap(msg)]), width: 80}
       lines = Interactive.build_screen(s)
       text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
       assert text =~ "Something happened"
@@ -2198,7 +2166,9 @@ defmodule OctoPi.TUI.InteractiveTest do
         cost: 0.001
       }
 
-      s = %Interactive{footer: footer}
+      s =
+        %Interactive{footer: footer}
+        |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
       msg = %Assistant{
         api: :fake,
@@ -2235,7 +2205,9 @@ defmodule OctoPi.TUI.InteractiveTest do
         cost: 0.0
       }
 
-      s = %Interactive{footer: footer}
+      s =
+        %Interactive{footer: footer}
+        |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
       msg = %Assistant{
         api: :fake,
@@ -2269,7 +2241,9 @@ defmodule OctoPi.TUI.InteractiveTest do
         cost: 0.0
       }
 
-      s = %Interactive{footer: footer}
+      s =
+        %Interactive{footer: footer}
+        |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
       msg = %Assistant{
         api: :fake,
@@ -2306,7 +2280,9 @@ defmodule OctoPi.TUI.InteractiveTest do
         cost: 0.0
       }
 
-      s = %Interactive{footer: footer}
+      s =
+        %Interactive{footer: footer}
+        |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
       msg = %Assistant{
         api: :fake,
@@ -2501,7 +2477,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         banner: nil,
         width: 80,
@@ -2535,7 +2511,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         width: 80,
         height: 24,
@@ -2558,7 +2534,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       end
 
       s = %Interactive{
-        transcript: [],
+        transcript: %Transcript{},
         input: %Input{value: "", cursor: 0},
         width: 80,
         height: 24,
@@ -3362,7 +3338,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         width: 80,
         height: 40,
         loaded_resources: resources,
-        transcript: [%AssistantMessage{content: [{:text, "hello"}], theme: Theme.load_builtin(:dark, :truecolor)}]
+        transcript: seed_transcript([wrap(%AssistantMessage{content: [{:text, "hello"}], theme: Theme.load_builtin(:dark, :truecolor)})])
       }
 
       output = strip_ansi(joined_render(s))

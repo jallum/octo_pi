@@ -17,7 +17,8 @@ defmodule OctoPi.TUI.Transcript.ComponentWrapper do
   defstruct [:entry, :width]
 
   @impl true
-  def new(entry, %{width: width}), do: %__MODULE__{entry: entry, width: width}
+  def new(entry, %{width: width}) when is_integer(width), do: %__MODULE__{entry: entry, width: width}
+  def new(entry, _ctx), do: %__MODULE__{entry: entry, width: nil}
 
   @impl true
   def put(%__MODULE__{} = s, entry), do: %{s | entry: entry}
@@ -26,12 +27,14 @@ defmodule OctoPi.TUI.Transcript.ComponentWrapper do
   def finalize(%__MODULE__{} = s, entry), do: %{s | entry: entry}
 
   @impl true
-  def to_iolist(%__MODULE__{entry: entry, width: width}) do
+  def to_iolist(%__MODULE__{entry: entry, width: width}) when is_integer(width) do
     case render(entry, width) do
       [] -> []
       lines -> Enum.intersperse(lines, "\n")
     end
   end
+
+  def to_iolist(%__MODULE__{}), do: []
 
   defp render(entry, width) do
     mod = entry.__struct__

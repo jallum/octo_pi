@@ -1,12 +1,13 @@
 defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
   @moduledoc """
-  Tests for opi-4dx.3 + .6: pull-tick streaming coalescing.
+  Tests for opi-4dx.13: streaming-tick coalescing on the flat
+  Transcript.
 
-  Block-delta events (MessageBlockStart/Delta/End) stash into
-  `streaming_blocks` and stamp `streaming_tick_at` without updating
-  the transcript. A periodic tick (or any non-block agent event)
-  flushes pending state into the transcript via
-  `Interactive.flush_pending_partial/1`.
+  Block-delta events update the top-level Transcript directly
+  (latest-snapshot-wins is the natural property of Transcript.update —
+  only one slot mutates). The streaming-tick deadline is stamped so
+  the eventual `:timeout` fires a single render rather than rendering
+  per-delta.
   """
 
   use ExUnit.Case, async: true
@@ -15,10 +16,13 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
   alias OctoPi.AI.Content
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Usage
-  alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Transcript
+  alias OctoPi.TUI.Transcript.AssistantHeader
+  alias OctoPi.TUI.Transcript.AssistantStatus
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
@@ -34,12 +38,11 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
     }
   end
 
+  # A state with one open turn (i.e. MessageStart already processed) so
+  # block-delta events have a current_msg_id to compose keys against.
   defp base_state do
-    %Interactive{
-      transcript: %OctoPi.TUI.Transcript{},
-      theme: @theme,
-      footer: %Footer{}
-    }
+    %Interactive{transcript: %Transcript{}, theme: @theme, footer: %Footer{}}
+    |> Interactive.handle_event({:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
   end
 
   defp delta(snapshot, block_id \\ 0) do
@@ -52,12 +55,12 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
   end
 
   describe "block-delta stashing (no immediate render)" do
-    test "stashes the snapshot and does not update transcript" do
+    test "updates the Transcript slot for that block_id with the latest snapshot" do
       s0 = base_state()
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Hel")})
 
-      assert s1.streaming_blocks.data == %{0 => {:text, "Hel"}}
-      assert s1.transcript == [], "transcript must not be updated by a block delta"
+      key = "#{s1.current_msg_id}:0"
+      assert Map.fetch!(s1.transcript.data, key) == "Hel"
     end
 
     test "second delta replaces snapshot for the same block (latest wins)" do
@@ -66,8 +69,12 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("a")})
       s2 = Interactive.handle_event(s1, {:octo_pi_agent_event, delta("ab")})
 
-      assert s2.streaming_blocks.data == %{0 => {:text, "ab"}}
-      assert s2.transcript == []
+      key = "#{s2.current_msg_id}:0"
+      assert Map.fetch!(s2.transcript.data, key) == "ab"
+
+      # Only one block slot exists for this turn — latest wins.
+      block_keys = Enum.filter(s2.transcript.order, &String.ends_with?(&1, ":0"))
+      assert length(block_keys) == 1
     end
 
     test "first delta arms streaming_tick_at; subsequent deltas leave the deadline alone" do
@@ -84,46 +91,58 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       assert s2.streaming_tick_at == first_deadline,
              "deadline must not be re-armed on subsequent stashes"
     end
+
+    test "block uses the TextBlock renderer module for :text" do
+      s0 = base_state()
+      s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("hi")})
+
+      key = "#{s1.current_msg_id}:0"
+      assert Map.fetch!(s1.transcript.modules, key) == TextBlock
+    end
   end
 
   describe "flush_pending_partial/1" do
-    test "applies pending blocks into transcript and clears the deadline" do
+    test "clears the deadline (no-op on data — Transcript is the live source)" do
       s0 = base_state()
-
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Hello world")})
+
+      key = "#{s1.current_msg_id}:0"
+      assert Map.fetch!(s1.transcript.data, key) == "Hello world"
+      assert s1.streaming_tick_at != nil
 
       s2 = Interactive.flush_pending_partial(s1)
 
       assert s2.streaming_tick_at == nil
-      assert length(s2.transcript) == 1
-      [msg] = s2.transcript
-      assert %AssistantMessage{streaming?: true, content: [text: "Hello world"]} = msg
-    end
-
-    test "no-op when nothing pending" do
-      s0 = base_state()
-      s1 = Interactive.flush_pending_partial(s0)
-      assert s1 == s0
+      # The data is unchanged — there's nothing to flush in the .13 design.
+      assert s2.transcript == s1.transcript
     end
   end
 
-  describe "ordering: non-block agent events flush pending first" do
-    test "MessageEnd flushes pending and then finalizes" do
+  describe "MessageEnd finalizes the turn" do
+    test "appends an AssistantStatus entry and finalizes header + status" do
       s0 = base_state()
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Hello")})
-      assert s1.streaming_tick_at != nil
+      msg_id = s1.current_msg_id
 
       ev_end = %Event.MessageEnd{message: finalized("Hello, world!")}
       s2 = Interactive.handle_event(s1, {:octo_pi_agent_event, ev_end})
 
       assert s2.streaming_tick_at == nil
-      assert length(s2.transcript) == 1
-      [msg] = s2.transcript
-      assert %AssistantMessage{streaming?: false, finalized?: true} = msg
-      assert msg.content == [{:text, "Hello, world!"}]
-    end
+      assert s2.current_msg_id == nil
 
-    test "ToolExecutionStart flushes pending before appending the tool entry" do
+      header_key = "#{msg_id}:hdr"
+      status_key = "#{msg_id}:end"
+
+      assert %AssistantHeader{msg_id: ^msg_id} = Map.fetch!(s2.transcript.data, header_key)
+      assert %AssistantStatus{stop_reason: nil} = Map.fetch!(s2.transcript.data, status_key)
+
+      assert MapSet.member?(s2.transcript.finalized, header_key)
+      assert MapSet.member?(s2.transcript.finalized, status_key)
+    end
+  end
+
+  describe "ToolExecutionStart appends a sibling tool entry mid-stream" do
+    test "tool entry is appended after the streaming blocks" do
       s0 = base_state()
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Calling…")})
 
@@ -135,11 +154,11 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
 
       s2 = Interactive.handle_event(s1, {:octo_pi_agent_event, ev_tool})
 
-      assert s2.streaming_tick_at == nil
-      # Pending blocks flushed first; tool execution appended after.
-      assert length(s2.transcript) >= 2
-      [first | _] = s2.transcript
-      assert %AssistantMessage{} = first
+      tool_key = "tool:tc-1"
+      assert Map.has_key?(s2.transcript.data, tool_key)
+      # Tool entry order index is later than the block entry's.
+      assert Enum.find_index(Enum.reverse(s2.transcript.order), &(&1 == tool_key)) >
+               Enum.find_index(Enum.reverse(s2.transcript.order), &String.ends_with?(&1, ":0"))
     end
   end
 end
