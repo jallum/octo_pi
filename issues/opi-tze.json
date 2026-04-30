@@ -3,12 +3,12 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-04-30T12:05:52Z",
-  "description": "",
+  "description": "Surfaced via tmux-driven probes against the running interactive TUI\n(wired to FakeTransport) plus direct OctoPi.Agent API tests. Compared\nto upstream pi-mono in tmp/pi-mono/packages/{agent,coding-agent,tui}.\n\nInvestigation harness (still on disk, in .pi/tmp/queue-test):\n  - probe_queue.exs       direct Agent API probes (FIFO, drain, abort, …)\n  - tui_with_faux.exs     boots Interactive TUI with FakeTransport + a\n                          /tmp/octo_pi_faux_release watch process so a\n                          tmux driver can release scripted gates.\n  - run_faux_tui.sh       launches the TUI for tmux capture.\n\nObserved behavior summary (vs upstream):\n\n1. Steering queue is never drained at run start or after non-tool turns.\n   Items steered before/during a single-turn run sit in the queue forever.\n2. Submit-while-streaming in the TUI calls Coder.prompt (not steer/follow_up)\n   so queued messages are dropped at the agent (returns {:error, :already_streaming}\n   which the TUI swallows) and only appear in the local transcript.\n3. There is no in-input \"Steering: …\" / \"Follow-up: …\" pending-messages\n   indicator. Users get no visual confirmation a message is queued.\n4. Public Agent.drain_steering / drain_follow_up honor the queue's drainage\n   mode (default :one_at_a_time → returns 1 of N). The dequeue overlay\n   therefore only ever shows one item.\n5. Dequeue overlay UX diverges from upstream: upstream restores all queued\n   messages back into the editor for free editing; octo_pi shows an overlay\n   with arrow-key + Backspace per-item delete. No way to edit the *text* of\n   a queued item.\n6. Dequeue overlay's Escape \"re-enqueue\" path uses to_string(msg.content)\n   which crashes for list-content messages.\n7. Coder.steer / Coder.follow_up swallow {:error, :full} from the agent\n   and always return :ok. Caller cannot detect bound rejection.\n8. Abort during a run does not clear queues — matches upstream — but the\n   TUI's escape handler does not implement the upstream\n   restoreQueuedMessagesToEditor({abort: true}) flow.\n\nSub-tickets break these out individually.",
   "id": "opi-tze",
   "labels": [],
   "priority": 1,
   "status": "open",
   "title": "[EPIC] Prompt-queue parity \u0026 UX gaps vs pi-mono",
   "type": "task",
-  "updated_at": "2026-04-30T12:05:52Z"
+  "updated_at": "2026-04-30T12:06:10Z"
 }
