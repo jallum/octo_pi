@@ -373,6 +373,31 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       assert s2.input.value == "queued"
     end
+
+    # opi-tze.6: Pre opi-tze.5 the dequeue overlay rendered queued
+    # messages via `to_string(msg.content)`, which crashes for the
+    # list-content shape (a User message whose content is a list of
+    # %Text{} / %Image{} blocks). The new restore-to-editor path
+    # routes through the same `message_text/1` helper as the
+    # pending-messages indicator, which flattens the list cleanly.
+    test "Alt+Up with a list-content user message restores its joined text without crashing" do
+      {coder, agent} = start_coder_session_for_dequeue!()
+
+      list_content_msg = %User{
+        content: [
+          %OctoPi.AI.Content.Text{text: "first part"},
+          %OctoPi.AI.Content.Text{text: "second part"}
+        ],
+        timestamp: 0
+      }
+
+      :ok = OctoPi.Agent.steer(agent, list_content_msg)
+
+      s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
+      s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
+
+      assert s2.input.value == "first part\nsecond part"
+    end
   end
 
   describe "handle_event — Alt+Enter follow-up queuing (opi-0g4.15)" do
