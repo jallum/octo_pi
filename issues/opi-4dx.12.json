@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-04-30T18:39:49.592501Z",
+  "description": "## Why\n\n`apps/octo_pi_tui/lib/octo_pi/tui/components/assistant_message.ex:68` defines:\n\n```elixir\ndefp normalize_md(text), do: text |> String.trim() |> String.replace(\"\\t\", \"   \")\n```\n\nThis is called on the **entire snapshot binary** every chunk inside `refresh_streams/2`. For a 10 KB streaming message, that's a fresh 10 KB binary allocation per chunk — independent of any agent-side fix and independent of `Markdown.Render`'s otherwise-incremental work.\n\n`Markdown.Render` already does `String.replace(text, \"\\t\", \"   \")` inside `render_segment/2` on the volatile tail only. The right place for both transforms is inside `Markdown.Render` itself, applied to the volatile tail (size bounded by the current paragraph), not to the cumulative snapshot.\n\n## Shape\n\nMove the normalization into `Markdown.Render`:\n\n- Tab → spaces happens already on the segment, on every render. Leaving it.\n- Trim is the awkward bit — `String.trim/1` strips leading whitespace too, which is undesirable mid-stream. The actual need is \"strip a leading newline that some providers emit.\" Replace `String.trim/1` at the call site with a one-shot leading-whitespace strip applied to `source` only when the renderer first sees non-empty content. Or: drop the trim entirely and let the lexer's blank-line semantics handle it.\n\nRead the existing tests for AssistantMessage.update_content / `Markdown` rendering to confirm what trim is actually doing for callers, and whether removing it changes any byte-equality expectations.\n\n## Acceptance\n\n- `AssistantMessage.update_block/3` (post-`.9`) does no per-snapshot allocation proportional to total message size.\n- `Markdown.Render`'s output is byte-equal to the prior pipeline for representative inputs (golden tests).\n- `normalize_md` removed from `assistant_message.ex`.\n\n## Tests\n\n- Streaming-trim test: a message that begins with a leading newline still renders without that leading blank.\n- Streaming with embedded tabs renders identically to before.\n- Byte-equality: `Markdown.Render` output for several fixtures matches `Markdown.render` (already covered by `render_test.exs`; extend if any new normalization moves in).\n\n## Out of scope\n\n- Other `String.trim` / `String.replace` per-chunk patterns in `interactive.ex` (none currently identified, but flag if discovered).\n\n## Notes\n\nDiscovered during deep-research review of `.6` / agent event redesign. Independent of those tickets — this is a TUI-side allocation issue.",
+  "id": "opi-4dx.12",
+  "labels": [],
+  "parent": "opi-4dx",
+  "priority": 2,
+  "status": "open",
+  "title": "Move trim/tab normalization into Markdown.Render",
+  "type": "task",
+  "updated_at": "2026-04-30T18:39:49.592501Z"
+}
