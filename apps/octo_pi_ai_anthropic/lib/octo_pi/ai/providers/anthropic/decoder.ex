@@ -123,12 +123,12 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
   end
 
   def handle(state, %{"type" => "content_block_start", "index" => idx, "content_block" => block}) do
-    content_item = build_content_item(block, state)
     # `content` is reverse-ordered during streaming: prepend in O(1).
     # `position` is the forward-order index of the new block, which
     # equals the count of blocks that came before it (tracked in
     # `state.content_count`).
     position = state.content_count
+    content_item = build_content_item(block, state, position)
     message = %{state.message | content: [content_item | state.message.content]}
 
     new_state = %{
@@ -243,21 +243,24 @@ defmodule OctoPi.AI.Providers.Anthropic.Decoder do
     }
   end
 
-  @spec build_content_item(map(), State.t()) ::
+  @spec build_content_item(map(), State.t(), non_neg_integer()) ::
           Content.Text.t() | Content.Thinking.t() | ToolCall.t()
-  defp build_content_item(%{"type" => "text"}, _state), do: %Content.Text{text: ""}
+  defp build_content_item(%{"type" => "text"}, _state, position),
+    do: %Content.Text{text: "", content_index: position}
 
-  defp build_content_item(%{"type" => "thinking"}, _state), do: %Content.Thinking{thinking: "", signature: ""}
+  defp build_content_item(%{"type" => "thinking"}, _state, position),
+    do: %Content.Thinking{thinking: "", signature: "", content_index: position}
 
-  defp build_content_item(%{"type" => "redacted_thinking"} = block, _state) do
+  defp build_content_item(%{"type" => "redacted_thinking"} = block, _state, position) do
     %Content.Thinking{
       thinking: "[Reasoning redacted]",
       signature: block["data"] || "",
-      redacted?: true
+      redacted?: true,
+      content_index: position
     }
   end
 
-  defp build_content_item(%{"type" => "tool_use"} = block, state) do
+  defp build_content_item(%{"type" => "tool_use"} = block, state, _position) do
     %ToolCall{
       id: block["id"],
       name: rename_from_wire(block["name"], state),

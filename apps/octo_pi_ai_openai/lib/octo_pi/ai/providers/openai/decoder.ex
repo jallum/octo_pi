@@ -347,6 +347,7 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
   # --- block lifecycle ---
 
   defp open_block(state, block, block_type) do
+    block = stamp_index(block, state.content_count)
     message = %{state.message | content: [block | state.message.content]}
 
     %{state |
@@ -354,6 +355,10 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
       content_count: state.content_count + 1,
       current_block: block_type}
   end
+
+  defp stamp_index(%Content.Text{} = b, idx), do: %{b | content_index: idx}
+  defp stamp_index(%Content.Thinking{} = b, idx), do: %{b | content_index: idx}
+  defp stamp_index(other, _idx), do: other
 
   defp finish_current_block(%State{current_block: nil} = state), do: {[], state}
 

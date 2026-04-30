@@ -18,30 +18,33 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
 
   @type state :: MdRender.t() | {:deferred, binary()}
 
+  # Trim/tab normalization is intentionally NOT done here — see
+  # `Markdown.Render`, which applies tab→spaces to the volatile tail
+  # only (bounded by current-paragraph size). Allocating a fresh
+  # full-snapshot binary per chunk would defeat the incremental cache.
+
   @impl true
   def new(snapshot, %{theme: theme, width: width} = ctx)
       when not is_nil(theme) and is_integer(width) do
     opts = ctx |> Map.drop([:theme, :width]) |> Enum.to_list()
-    MdRender.new(theme, width, opts) |> MdRender.put(normalize(snapshot))
+    MdRender.new(theme, width, opts) |> MdRender.put(snapshot)
   end
 
   def new(snapshot, _ctx), do: {:deferred, snapshot}
 
   @impl true
   def put({:deferred, _}, snapshot), do: {:deferred, snapshot}
-  def put(%MdRender{} = r, snapshot), do: MdRender.put(r, normalize(snapshot))
+  def put(%MdRender{} = r, snapshot), do: MdRender.put(r, snapshot)
 
   @impl true
   def finalize({:deferred, _}, snapshot), do: {:deferred, snapshot}
 
   def finalize(%MdRender{} = r, snapshot) do
-    {_, r2} = MdRender.put(r, normalize(snapshot)) |> MdRender.finalize()
+    {_, r2} = MdRender.put(r, snapshot) |> MdRender.finalize()
     r2
   end
 
   @impl true
   def to_iolist({:deferred, _}), do: []
   def to_iolist(%MdRender{} = r), do: MdRender.to_iolist(r)
-
-  defp normalize(text), do: text |> String.trim() |> String.replace("\t", "   ")
 end
