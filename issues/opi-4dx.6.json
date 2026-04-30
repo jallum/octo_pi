@@ -13,8 +13,8 @@
   "labels": [],
   "parent": "opi-4dx",
   "priority": 2,
-  "status": "in_progress",
+  "status": "open",
   "title": "Agent: per-block delta events with stable ids",
   "type": "task",
-  "updated_at": "2026-04-30T18:38:20.762794Z"
+  "updated_at": "2026-04-30T18:39:59.880482Z"
 }
