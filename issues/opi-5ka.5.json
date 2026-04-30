@@ -4,14 +4,15 @@
     "opi-5ka.3"
   ],
   "blocks": [],
+  "closed_at": "2026-04-30T13:37:23Z",
   "created": "2026-04-30T13:09:01Z",
   "description": "## Sites\n\napps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n\\`\\`\\`elixir\ndefp message_text(%{content: c}) when is_binary(c), do: c\ndefp message_text(%{content: c}) when is_list(c) do\n  Enum.map_join(c, \\\"\\\\n\\\", fn ... end)\nend\ndefp message_text(other), do: inspect(other)\n\\`\\`\\`\nThe first clause was added in opi-tze.3 specifically because of the\ndual-shape ambiguity. After opi-5ka.3 the binary clause is dead code.\nCollapse to the list-shape clause; the catch-all stays for\ndefensive programming against malformed inputs from extensions.\n\napps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex\n\\`\\`\\`elixir\ndefp extract_content_text(s) when is_binary(s), do: normalize_text(s)\ndefp has_text_content?(s) when is_binary(s), do: String.trim(s) != \\\"\\\"\n\\`\\`\\`\nSame treatment.\n\napps/octo_pi_coder/lib/octo_pi/coder/session/message_writer.ex\n\\`\\`\\`elixir\ndefp user_content(text) when is_binary(text), do: [%{\\\"type\\\" =\u003e \\\"text\\\", \\\"text\\\" =\u003e text}]\n\\`\\`\\`\nThis one is on the writer side: it converts an in-memory message\ninto the JSON shape persisted to disk. Since post-5ka.3 in-memory\ncontent is always list-shape, the binary clause is dead. Drop it.\n(NB: the on-disk JSON writer can still emit the string shorthand\nfor User entries if upstream interop demands it — that's a JSON-\nemission concern, separate from Elixir struct content shape.)\n\n## Tests\n- Updated in opi-5ka.3 already.\n- Verify tmux probe still works (queue indicator + restore-to-editor\n  + escape-restore all still render correctly).\n\n## Depends on\nopi-5ka.3.",
   "id": "opi-5ka.5",
   "labels": [],
   "parent": "opi-5ka",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Drop dual-shape branches in TUI / tree_selector / message_writer",
   "type": "task",
-  "updated_at": "2026-04-30T13:34:34Z"
+  "updated_at": "2026-04-30T13:37:23Z"
 }
