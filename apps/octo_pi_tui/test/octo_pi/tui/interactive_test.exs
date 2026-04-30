@@ -860,6 +860,106 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.TurnStart{turn: 0}})
       assert s.transcript == [{:user, "x"}]
     end
+
+    # opi-tze.9: when the agent runs multiple terminal-stop turns in a
+    # single run (e.g. draining a queue of steered messages), each turn
+    # emits its own MessageStart → … → MessageEnd sequence. The TUI
+    # must treat the previous turn's finalized assistant as a boundary;
+    # otherwise the next turn's MessageUpdate finds it via
+    # find_last_assistant and overwrites it with the new turn's partial.
+    test "MessageUpdate after a finalized assistant appends a new entry" do
+      finalized =
+        AssistantMessage.new(nil, content: [text: "first reply"], finalized?: true)
+
+      s = %Interactive{transcript: [{:user, "first prompt"}, finalized]}
+
+      partial = %Assistant{
+        content: [%Content.Text{text: "second"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0
+      }
+
+      s =
+        Interactive.handle_event(
+          s,
+          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial}}
+        )
+
+      # First-turn assistant preserved, new partial appended.
+      assert [
+               {:user, "first prompt"},
+               %AssistantMessage{content: [text: "first reply"], finalized?: true},
+               %AssistantMessage{content: [text: "second"], finalized?: false}
+             ] = s.transcript
+    end
+
+    test "MessageEnd marks the assistant as finalized" do
+      partial = AssistantMessage.new(nil, content: [text: "hello"], finalized?: false)
+      s = %Interactive{transcript: [partial]}
+
+      msg = %Assistant{
+        content: [%Content.Text{text: "hello"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0,
+        stop_reason: :stop
+      }
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
+      assert [%AssistantMessage{finalized?: true}] = s.transcript
+    end
+
+    test "two consecutive turns produce two finalized assistants" do
+      # Simulates a multi-turn drain: turn 1 finishes, turn 2 starts and
+      # finishes, both responses must be visible.
+      s = %Interactive{transcript: [{:user, "go"}]}
+
+      msg1 = %Assistant{
+        content: [%Content.Text{text: "r1"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0,
+        stop_reason: :stop
+      }
+
+      partial2 = %Assistant{
+        content: [%Content.Text{text: "r2"}],
+        api: :fake,
+        provider: :fake,
+        model: "m",
+        timestamp: 0
+      }
+
+      msg2 = %{partial2 | stop_reason: :stop}
+
+      # Turn 1: stream a partial, then end.
+      s =
+        Interactive.handle_event(
+          s,
+          {:octo_pi_agent_event, %Event.MessageUpdate{partial: %{partial2 | content: [%Content.Text{text: "r1"}]}}}
+        )
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg1}})
+
+      # Turn 2: stream a partial — must NOT overwrite turn 1's r1.
+      s =
+        Interactive.handle_event(
+          s,
+          {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial2}}
+        )
+
+      s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg2}})
+
+      assert [
+               {:user, "go"},
+               %AssistantMessage{content: [text: "r1"], finalized?: true},
+               %AssistantMessage{content: [text: "r2"], finalized?: true}
+             ] = s.transcript
+    end
   end
 
   describe "handle_event — extension lifecycle events (opi-8ee.3)" do

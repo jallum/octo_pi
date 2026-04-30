@@ -1617,7 +1617,8 @@ defmodule OctoPi.TUI.Interactive do
       content: content,
       stop_reason: stop_reason,
       error_message: error_message,
-      has_tool_calls: has_tool_calls
+      has_tool_calls: has_tool_calls,
+      finalized?: true
     ]
 
     case find_last_assistant(transcript) do
@@ -1631,6 +1632,15 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
+  # Locates the *currently streaming* assistant in the transcript so
+  # apply_partial / finalize_assistant can update it in place. A finalized
+  # assistant (one whose MessageEnd has already been processed, i.e.
+  # `finalized?: true`) is treated as a boundary — a subsequent
+  # MessageStart belongs to a NEW turn and must be appended, not used
+  # to overwrite the previous turn's reply.
+  #
+  # Returns nil when the most recent assistant is finalized OR when a
+  # user / tool-execution boundary appears after the last assistant.
   defp find_last_assistant(transcript) do
     result =
       transcript
@@ -1642,6 +1652,9 @@ defmodule OctoPi.TUI.Interactive do
       end)
 
     case result do
+      {%AssistantMessage{finalized?: true}, _idx} ->
+        nil
+
       {msg, idx} ->
         has_boundary_after =
           transcript

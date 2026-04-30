@@ -20,7 +20,8 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
           error_message: String.t() | nil,
           hide_thinking: boolean(),
           hidden_thinking_label: String.t(),
-          has_tool_calls: boolean()
+          has_tool_calls: boolean(),
+          finalized?: boolean()
         }
 
   defstruct [
@@ -30,7 +31,8 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
     error_message: nil,
     hide_thinking: false,
     hidden_thinking_label: "Thinking...",
-    has_tool_calls: false
+    has_tool_calls: false,
+    finalized?: false
   ]
 
   @spec new(Theme.t(), keyword()) :: t()
