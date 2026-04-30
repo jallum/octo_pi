@@ -42,13 +42,27 @@ defmodule OctoPi.TUI.Components.Markdown do
     content_width = max(1, width - px * 2)
     normalized = String.replace(text, "\t", "   ")
     ast = Lexer.tokenize(normalized)
+    render_ast(ast, theme, content_width, px, py)
+  end
 
-    lines = render_blocks(ast, content_width, theme)
+  @doc """
+  Render a pre-tokenized AST. Used by callers that hold incremental
+  lexer state (see `OctoPi.TUI.Components.Markdown.Stream`) so the
+  per-render path can skip tokenization.
+  """
+  @spec render_blocks_to_lines([Lexer.block()], Theme.t(), keyword(), pos_integer()) :: [String.t()]
+  def render_blocks_to_lines(blocks, theme, opts, width) do
+    px = Keyword.get(opts, :padding_x, 0)
+    py = Keyword.get(opts, :padding_y, 0)
+    content_width = max(1, width - px * 2)
+    render_ast(blocks, theme, content_width, px, py)
+  end
+
+  defp render_ast(blocks, theme, content_width, px, py) do
+    lines = render_blocks(blocks, content_width, theme)
     lines = clamp_width(lines, content_width)
-
     lines = apply_padding_x(lines, px)
-    lines = apply_padding_y(lines, py)
-    lines
+    apply_padding_y(lines, py)
   end
 
   # ── Block rendering ────────────────────────────────────────────
