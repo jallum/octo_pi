@@ -180,7 +180,13 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
-            focused_component: :input
+            focused_component: :input,
+            # Streaming coalescing (opi-4dx.3): MessageUpdate stashes
+            # the latest partial here; a periodic tick (or a non-update
+            # agent event) flushes it into the transcript via
+            # `flush_pending_partial/1`.
+            pending_partial: nil,
+            streaming_tick_at: nil
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -497,7 +503,7 @@ defmodule OctoPi.TUI.Interactive do
   @impl GenServer
   def handle_continue(:first_render, state) do
     state = send_render(state)
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
   @impl GenServer
@@ -539,6 +545,16 @@ defmodule OctoPi.TUI.Interactive do
     end)
   end
 
+  # opi-4dx.3: MessageUpdate per-chunk path is intentionally cheap.
+  # handle_event stashes the partial; we skip advance() (no render) and
+  # return only with an updated timeout so the streaming tick will fire.
+  def handle_info({:octo_pi_agent_event, %Event.MessageUpdate{}} = agent_msg, state) do
+    RenderTelemetry.with_handle_info(agent_msg, fn ->
+      new_state = handle_event(state, agent_msg)
+      {:noreply, new_state, compute_timeout(new_state)}
+    end)
+  end
+
   def handle_info({:octo_pi_agent_event, _} = agent_msg, state) do
     RenderTelemetry.with_handle_info(agent_msg, fn ->
       state
@@ -574,10 +590,16 @@ defmodule OctoPi.TUI.Interactive do
     end)
   end
 
+  # Single :timeout multiplexes loader-tick and streaming-tick
+  # (opi-4dx.3). Both may be due simultaneously; flush streaming first
+  # so the loader animation is anchored to the freshly-rendered frame.
   def handle_info(:timeout = msg, state) do
     RenderTelemetry.with_handle_info(msg, fn ->
+      now = System.monotonic_time(:millisecond)
+
       state
-      |> handle_event(:loader_tick)
+      |> maybe_flush_streaming_tick(now)
+      |> maybe_loader_tick()
       |> advance()
     end)
   end
@@ -587,14 +609,25 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_info({:EXIT, _pid, _reason}, state) do
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
   def handle_info(msg, state) do
     RenderTelemetry.with_handle_info(msg, fn ->
-      {:noreply, state, loader_timeout(state)}
+      {:noreply, state, compute_timeout(state)}
     end)
   end
+
+  defp maybe_flush_streaming_tick(state, now) do
+    if streaming_tick_due?(state, now) do
+      flush_pending_partial(state)
+    else
+      state
+    end
+  end
+
+  defp maybe_loader_tick(%{loader: %Components.Loader{}} = state), do: handle_event(state, :loader_tick)
+  defp maybe_loader_tick(state), do: state
 
   @impl GenServer
   def handle_call({:ui_request, {:custom, factory, _kw}}, from, state) do
@@ -604,7 +637,7 @@ defmodule OctoPi.TUI.Interactive do
     done = fn result -> send(interactive_pid, {:custom_done, from, result}) end
     component = factory.(tui, theme, done)
     new_state = send_render(%{state | custom_widget: {from, component}})
-    {:noreply, new_state, loader_timeout(new_state)}
+    {:noreply, new_state, compute_timeout(new_state)}
   end
 
   def handle_call({:ui_request, msg}, from, state) do
@@ -619,8 +652,8 @@ defmodule OctoPi.TUI.Interactive do
     new_state = send_render(new_state)
 
     case reply do
-      :pending -> {:noreply, new_state, loader_timeout(new_state)}
-      val -> {:reply, val, new_state, loader_timeout(new_state)}
+      :pending -> {:noreply, new_state, compute_timeout(new_state)}
+      val -> {:reply, val, new_state, compute_timeout(new_state)}
     end
   end
 
@@ -676,8 +709,26 @@ defmodule OctoPi.TUI.Interactive do
 
   @loader_interval_ms 80
 
-  defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
-  defp loader_timeout(_), do: :infinity
+  # Multiplexed deadline: the GenServer holds a single :timeout. Compute
+  # the minimum remaining ms across (loader tick, streaming-coalescer
+  # tick); :infinity if neither is armed. Replaces the old
+  # `loader_timeout/1` to add streaming-tick coordination (opi-4dx.3).
+  defp compute_timeout(state) do
+    now = System.monotonic_time(:millisecond)
+
+    deadlines = Enum.reject([loader_deadline_ms(state), streaming_tick_remaining_ms(state, now)], &is_nil/1)
+
+    case deadlines do
+      [] -> :infinity
+      ms_list -> Enum.min(ms_list)
+    end
+  end
+
+  defp loader_deadline_ms(%{loader: %Components.Loader{}}), do: @loader_interval_ms
+  defp loader_deadline_ms(_), do: nil
+
+  defp streaming_tick_remaining_ms(%{streaming_tick_at: nil}, _now), do: nil
+  defp streaming_tick_remaining_ms(%{streaming_tick_at: at}, now), do: max(0, at - now)
 
   defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from), do: %{state | dialog: {type, from, a, b}}
 
@@ -689,7 +740,7 @@ defmodule OctoPi.TUI.Interactive do
     state = handle_suspend(state)
     state = maybe_launch_editor(state)
     state = send_render(state)
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
   defp detect_dimensions do
@@ -1144,7 +1195,18 @@ defmodule OctoPi.TUI.Interactive do
 
   def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{}}), do: state
 
+  # opi-4dx.3: MessageUpdate stashes the latest partial; the heavy
+  # transcript-render is deferred to the next streaming tick (or to
+  # the next non-update agent event, which flushes first for ordering).
+  # Footer is updated immediately because it's cheap and small.
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageUpdate{partial: partial} = event}) do
+    state = stash_partial(state, partial)
+    %{state | footer: update_footer(state.footer, event)}
+  end
+
   def handle_event(state, {:octo_pi_agent_event, event}) do
+    state = flush_pending_partial(state)
+
     %{
       state
       | transcript: update_transcript(state.transcript, event, state.theme),
@@ -1597,6 +1659,38 @@ defmodule OctoPi.TUI.Interactive do
        when is_integer(i) and is_integer(o) and is_integer(cr) and is_integer(cw), do: i + o + cr + cw
 
   defp current_context_tokens(_), do: nil
+
+  # opi-4dx.3: streaming-tick coalescing helpers.
+
+  @stream_tick_ms 33
+
+  @doc false
+  def stash_partial(state, partial) do
+    deadline = state.streaming_tick_at || System.monotonic_time(:millisecond) + @stream_tick_ms
+    %{state | pending_partial: partial, streaming_tick_at: deadline}
+  end
+
+  @doc """
+  Apply any pending streaming partial into the transcript and clear the
+  coalescing state. No-op if nothing is pending. Pure on Interactive
+  state — safe to call from tests and from any handler that needs to
+  preserve event ordering before processing a non-MessageUpdate event.
+  """
+  @spec flush_pending_partial(Interactive.t()) :: Interactive.t()
+  def flush_pending_partial(%{pending_partial: nil} = state), do: state
+
+  def flush_pending_partial(%{pending_partial: partial, theme: theme} = state) do
+    %{
+      state
+      | transcript: apply_partial(state.transcript, partial, theme),
+        pending_partial: nil,
+        streaming_tick_at: nil
+    }
+  end
+
+  @doc false
+  def streaming_tick_due?(%{streaming_tick_at: nil}, _now_ms), do: false
+  def streaming_tick_due?(%{streaming_tick_at: at}, now_ms) when is_integer(at), do: now_ms >= at
 
   defp apply_partial(transcript, partial, theme) do
     content = extract_content_blocks(partial)
