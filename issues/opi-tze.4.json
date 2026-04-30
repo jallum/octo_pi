@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-tze.5",
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-tze",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "[BUG] Agent.drain_steering / drain_follow_up honor :one_at_a_time mode",
   "type": "bug",
-  "updated_at": "2026-04-30T12:08:09Z"
+  "updated_at": "2026-04-30T12:16:17Z"
 }
