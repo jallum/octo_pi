@@ -31,8 +31,6 @@ defmodule OctoPi.Agent.Loop do
   alias OctoPi.Agent.AbortRef
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Loop
-  alias OctoPi.Agent.Message
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.PendingMessageQueue
   alias OctoPi.Agent.Subscribers
   alias OctoPi.Agent.Tool
@@ -46,56 +44,12 @@ defmodule OctoPi.Agent.Loop do
 
   @type mode :: :sync | :async
 
-  # ---------- public API ----------
-
+  # The only externally-visible function on this module is `start_link/1`,
+  # consumed by callers via `OctoPi.Agent.start_loop/1`. All other
+  # operations are GenServer messages — invoked through the front-facing
+  # `OctoPi.Agent` API, never against this module directly.
   @doc false
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
-
-  @doc false
-  def prompt(pid, msg_or_msgs), do: GenServer.call(pid, {:prompt, List.wrap(Message.normalize(msg_or_msgs))})
-
-  @doc false
-  def continue(pid), do: GenServer.call(pid, :continue)
-
-  @doc false
-  def steer(pid, msg), do: GenServer.call(pid, {:steer, Message.normalize(msg)})
-
-  @doc false
-  def follow_up(pid, msg), do: GenServer.call(pid, {:follow_up, Message.normalize(msg)})
-
-  @doc false
-  def set_queue_mode(pid, queue, mode) when queue in [:steering, :follow_up] and mode in [:one_at_a_time, :all],
-    do: GenServer.call(pid, {:set_queue_mode, queue, mode})
-
-  @doc false
-  def set_thinking_level(pid, level), do: GenServer.call(pid, {:set_thinking_level, level})
-
-  @doc false
-  def set_model(pid, model), do: GenServer.call(pid, {:set_model, model})
-
-  @doc false
-  def add_tool(pid, tool), do: GenServer.call(pid, {:add_tool, tool})
-
-  @doc false
-  def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
-
-  @doc false
-  def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
-
-  @doc false
-  def abort(pid), do: GenServer.call(pid, :abort)
-
-  @doc false
-  def compact(pid, opts \\ []), do: GenServer.call(pid, {:compact, opts})
-
-  @doc false
-  def compaction_response(pid, ref, result), do: GenServer.call(pid, {:compaction_response, ref, result})
-
-  @doc false
-  def state(pid), do: GenServer.call(pid, :state)
-
-  @doc false
-  def wait_for_idle(pid, timeout), do: GenServer.call(pid, :wait_for_idle, timeout)
 
   # ---------- GenServer callbacks ----------
 
@@ -110,8 +64,10 @@ defmodule OctoPi.Agent.Loop do
         transport: Keyword.get(opts, :transport, Transport.Direct),
         before_tool_call: Keyword.get(opts, :before_tool_call),
         after_tool_call: Keyword.get(opts, :after_tool_call),
-        messages_provider: Keyword.get(opts, :messages_provider),
-        messages: MessageLog.new(Keyword.get(opts, :messages, [])),
+        convert_to_llm: Keyword.fetch!(opts, :convert_to_llm),
+        # Initial messages arrive oldest-first; flip to internal
+        # newest-first storage.
+        messages: opts |> Keyword.get(:messages, []) |> Enum.reverse(),
         auto_compact_reserve_tokens: Keyword.get(opts, :auto_compact_reserve_tokens),
         turn: Turn.new()
       }
@@ -139,7 +95,7 @@ defmodule OctoPi.Agent.Loop do
     if store.loop.is_streaming? do
       {:reply, {:error, :already_streaming}, store}
     else
-      loop = %{store.loop | messages: MessageLog.append_many(store.loop.messages, msgs)}
+      loop = %{store.loop | messages: prepend_oldest_first(store.loop.messages, msgs)}
       {:reply, :ok, %{store | loop: loop}, {:continue, :start_run}}
     end
   end
@@ -176,6 +132,15 @@ defmodule OctoPi.Agent.Loop do
     do: {:reply, :ok, put_in(store.loop.thinking_level, level)}
 
   def handle_call({:set_model, model}, _from, store), do: {:reply, :ok, put_in(store.loop.model, model)}
+
+  def handle_call({:push_message, msg}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.messages, [msg | store.loop.messages])}
+
+  def handle_call({:set_messages, msgs}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.messages, Enum.reverse(msgs))}
+
+  def handle_call({:set_auto_compact_reserve_tokens, reserve}, _from, store),
+    do: {:reply, :ok, put_in(store.loop.auto_compact_reserve_tokens, reserve)}
 
   def handle_call({:add_tool, tool}, _from, store) do
     tools = store.loop.tools
@@ -244,7 +209,10 @@ defmodule OctoPi.Agent.Loop do
     end
   end
 
-  def handle_call(:state, _from, store), do: {:reply, store.loop, store}
+  def handle_call(:state, _from, store) do
+    # Snapshot is exposed oldest-first; internal storage is newest-first.
+    {:reply, %{store.loop | messages: Enum.reverse(store.loop.messages)}, store}
+  end
 
   def handle_call(:wait_for_idle, from, store) do
     if store.loop.is_streaming? do
@@ -474,10 +442,7 @@ defmodule OctoPi.Agent.Loop do
   defp finish_turn(store, %Assistant{} = assistant, tool_results, reason) do
     emit_turn_stop(store, reason)
 
-    messages =
-      store.loop.messages
-      |> MessageLog.push(assistant)
-      |> MessageLog.append_many(tool_results)
+    messages = prepend_oldest_first(store.loop.messages, [assistant | tool_results])
 
     store =
       store
@@ -515,10 +480,9 @@ defmodule OctoPi.Agent.Loop do
               # Remove the overflow error message from the transcript — it's
               # saved to conversation history by the Coder, but mustn't appear in
               # the LLM context on retry.
-              |> put_in(
-                [Access.key(:loop), Access.key(:messages)],
-                MessageLog.pop(store.loop.messages)
-              )
+              # Drop the newest message (the overflow error). With
+              # newest-first storage that's just `tl/1`.
+              |> put_in([Access.key(:loop), Access.key(:messages)], tl(store.loop.messages))
 
             advance(store, {:compact_requested, [auto?: true]})
 
@@ -546,7 +510,7 @@ defmodule OctoPi.Agent.Loop do
       |> put_in([Access.key(:loop), Access.key(:steering_queue)], q)
       |> put_in(
         [Access.key(:loop), Access.key(:messages)],
-        MessageLog.append_many(store.loop.messages, steers)
+        prepend_oldest_first(store.loop.messages, steers)
       )
 
     {:continue, store}
@@ -565,30 +529,21 @@ defmodule OctoPi.Agent.Loop do
           |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], q)
           |> put_in(
             [Access.key(:loop), Access.key(:messages)],
-            MessageLog.append_many(store.loop.messages, msgs)
+            prepend_oldest_first(store.loop.messages, msgs)
           )
 
         {:continue, store}
     end
   end
 
-  # Per-turn LLM context. When a `messages_provider` closure is set
-  # (the coder app wires one in to call
-  # `Coder.Session.build_session_context/1` |>
-  # `Coder.Session.Messages.to_llm/1` for post-compaction kept-window
-  # assembly), the closure produces the messages list. Otherwise
-  # falls back to `MessageLog.to_list/1` so the Agent app stays
-  # runnable standalone.
+  # Per-turn LLM context. `convert_to_llm` is a stateless transform
+  # `([AgentMessage] -> [Message])` applied to the transcript at
+  # call time. Coder installs `to_llm/1` to flatten synthetic
+  # message types; standalone Agent users pass `&Function.identity/1`.
   defp build_turn_context(loop) do
-    messages =
-      case loop.messages_provider do
-        nil -> MessageLog.to_list(loop.messages)
-        fun when is_function(fun, 1) -> fun.(loop)
-      end
-
     %AIContext{
       system_prompt: loop.system_prompt,
-      messages: messages,
+      messages: loop.convert_to_llm.(Enum.reverse(loop.messages)),
       tools: Enum.map(loop.tools, &agent_tool_to_ai_tool/1)
     }
   end
@@ -596,10 +551,10 @@ defmodule OctoPi.Agent.Loop do
   defp end_run(store, reason) do
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: reason,
-      messages: MessageLog.to_list(store.loop.messages)
+      messages: Enum.reverse(store.loop.messages)
     })
 
-    emit_loop_stop(store.loop, reason, store.turn_id, MessageLog.count(store.loop.messages))
+    emit_loop_stop(store.loop, reason, store.turn_id, length(store.loop.messages))
     flip_idle(store)
   end
 
@@ -610,14 +565,14 @@ defmodule OctoPi.Agent.Loop do
   end
 
   defp end_run_aborted(store, _reason) do
-    messages = MessageLog.push(store.loop.messages, aborted_assistant(store.loop.model))
+    messages = [aborted_assistant(store.loop.model) | store.loop.messages]
 
     Subscribers.dispatch(self(), %Event.AgentEnd{
       reason: :aborted,
-      messages: MessageLog.to_list(messages)
+      messages: Enum.reverse(messages)
     })
 
-    emit_loop_stop(store.loop, :aborted, store.turn_id, MessageLog.count(messages))
+    emit_loop_stop(store.loop, :aborted, store.turn_id, length(messages))
 
     store = put_in(store.loop.messages, messages)
     store = put_in(store.loop.error_message, "aborted by caller")
@@ -688,9 +643,17 @@ defmodule OctoPi.Agent.Loop do
     |> put_in([Access.key(:loop), Access.key(:follow_up_queue)], fq)
     |> put_in(
       [Access.key(:loop), Access.key(:messages)],
-      MessageLog.append_many(store.loop.messages, steers ++ followups)
+      store.loop.messages
+      |> prepend_oldest_first(steers)
+      |> prepend_oldest_first(followups)
     )
   end
+
+  # Internal storage is newest-first; callers hand us oldest-first
+  # batches to append. `Enum.reverse/2` reverses + prepends in one
+  # pass; flipped-arity here so it pipes naturally.
+  defp prepend_oldest_first(newest_first_log, oldest_first_batch),
+    do: Enum.reverse(oldest_first_batch, newest_first_log)
 
   # F4: returns true when this assistant's context tokens plus the configured
   # reserve exceed the model context window.  Used on the :continue path.
@@ -740,8 +703,9 @@ defmodule OctoPi.Agent.Loop do
   # count of the first successful (non-error, non-aborted) assistant with a
   # positive token total that is NOT stale (i.e. its timestamp is after the
   # last compaction).  Returns nil when nothing qualifies.
+  # `messages` is stored newest-first internally, so iterate as-is.
   defp find_last_successful_context_tokens(messages, last_compaction_at_ms) do
-    MessageLog.find_last_value(messages, fn
+    Enum.find_value(messages, fn
       %Assistant{stop_reason: stop, usage: usage, timestamp: ts}
       when stop not in [:error, :aborted] ->
         tokens = context_tokens_from_usage(usage)

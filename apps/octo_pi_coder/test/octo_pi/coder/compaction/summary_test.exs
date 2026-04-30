@@ -85,6 +85,28 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
       refute text =~ "<previous-summary>"
     end
 
+    # opi-qy9.4: synthetic message types must flatten via to_llm/1 at
+    # the wire edge — they should never reach Serialize.conversation/1
+    # in their struct form.
+    test "synthetic CompactionSummaryMessage in input is flattened to a wrapped user message" do
+      alias OctoPi.Coder.Session.CompactionSummaryMessage
+
+      producer = recording_producer(done_with("ok"))
+
+      synthetic = CompactionSummaryMessage.new("PRIOR SUMMARY", 0, "ts")
+
+      assert {:ok, "ok"} =
+               Summary.generate([synthetic | messages()], model(), 1000, producer: producer)
+
+      assert_received {:producer_call, _model, ctx, _opts}
+      assert [%User{content: [%Text{text: text}]}] = ctx.messages
+      assert text =~ "PRIOR SUMMARY"
+      # Anthropic provider would crash on a synthetic struct; consistency
+      # check: the conversation block should look like flattened user
+      # text wrapped with the upstream COMPACTION_SUMMARY_PREFIX/SUFFIX.
+      assert text =~ "The conversation history before this point was compacted"
+    end
+
     test "max_tokens defaults to 0.8 × reserve_tokens" do
       producer = recording_producer(done_with(""))
       assert {:ok, _} = Summary.generate(messages(), model(), 1000, producer: producer)

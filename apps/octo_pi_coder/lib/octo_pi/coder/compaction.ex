@@ -20,12 +20,8 @@ defmodule OctoPi.Coder.Compaction do
   """
 
   alias OctoPi.AI.Model
-  alias OctoPi.Coder.Compaction.FileOps
   alias OctoPi.Coder.Compaction.Preparation
   alias OctoPi.Coder.Compaction.Result
-  alias OctoPi.Coder.Compaction.Summary
-
-  @turn_separator "\n\n---\n\n**Turn Context (split turn):**\n\n"
 
   @type opts :: [
           api_key: String.t() | nil,
@@ -35,104 +31,37 @@ defmodule OctoPi.Coder.Compaction do
           producer: module() | function()
         ]
 
+  @doc """
+  Async compaction. Spawns a worker process that runs the LLM
+  streaming + summary build, sending `{:compact_done, ref, result}`
+  to `parent` when done. The worker also handles `:abort` messages
+  (graceful cancel) and `Process.exit(:kill)` (brutal cancel).
+
+  This is the primary entry point. The legacy synchronous
+  `compact/3` shim (below) wraps `async/5` for tests / contexts that
+  don't need cancellation.
+  """
+  @spec async(pid(), reference(), Preparation.t(), Model.t(), opts()) :: {:ok, pid()}
+  def async(parent, ref, %Preparation{} = prep, %Model{} = model, opts \\ []) do
+    pid = spawn(__MODULE__.Worker, :run, [parent, ref, prep, model, opts])
+    {:ok, pid}
+  end
+
+  @doc """
+  Synchronous wrapper around `async/5`. Spawns the worker, blocks on
+  its `{:compact_done, ref, result}` reply. Used by tests and any
+  caller that doesn't need cancellation.
+  """
   @spec compact(Preparation.t(), Model.t(), opts()) ::
-          {:ok, Result.t()} | {:error, term()}
+          {:ok, Result.t()} | {:error, term()} | {:cancel, :aborted}
   def compact(preparation, model, opts \\ [])
 
   def compact(%Preparation{} = prep, %Model{} = model, opts) do
-    with {:ok, body} <- generate_body(prep, model, opts) do
-      {:ok, build_result(prep, body)}
+    ref = make_ref()
+    {:ok, _pid} = async(self(), ref, prep, model, opts)
+
+    receive do
+      {:compact_done, ^ref, result} -> result
     end
-  end
-
-  # Single-pass: split_turn? is false OR there are no turn-prefix messages.
-  defp generate_body(%Preparation{split_turn?: split?, turn_prefix_messages: tp} = prep, model, opts)
-       when split? == false or tp == [] do
-    Summary.generate(
-      prep.messages_to_summarize,
-      model,
-      prep.settings.reserve_tokens,
-      history_opts(prep, opts)
-    )
-  end
-
-  # Split-turn parallel: history + turn-prefix run concurrently and are
-  # merged with the upstream separator.
-  defp generate_body(%Preparation{} = prep, %Model{} = model, opts) do
-    history_task =
-      Task.async(fn -> history_summary(prep, model, opts) end)
-
-    turn_task =
-      Task.async(fn ->
-        Summary.generate(
-          prep.turn_prefix_messages,
-          model,
-          prep.settings.reserve_tokens,
-          turn_prefix_opts(opts)
-        )
-      end)
-
-    case {Task.await(history_task, :infinity), Task.await(turn_task, :infinity)} do
-      {{:ok, hist}, {:ok, turn}} -> {:ok, hist <> @turn_separator <> turn}
-      {{:error, _} = err, _} -> err
-      {_, {:error, _} = err} -> err
-    end
-  end
-
-  # Upstream short-circuits the history call when there's nothing to
-  # summarize, returning the literal "No prior history." (compaction.ts:743-755).
-  defp history_summary(%Preparation{messages_to_summarize: []}, _model, _opts), do: {:ok, "No prior history."}
-
-  defp history_summary(%Preparation{} = prep, %Model{} = model, opts) do
-    Summary.generate(
-      prep.messages_to_summarize,
-      model,
-      prep.settings.reserve_tokens,
-      history_opts(prep, opts)
-    )
-  end
-
-  defp history_opts(%Preparation{} = prep, opts) do
-    Enum.reject(
-      [
-        previous_summary: prep.previous_summary,
-        custom_instructions: Keyword.get(opts, :custom_instructions),
-        api_key: Keyword.get(opts, :api_key),
-        headers: Keyword.get(opts, :headers),
-        thinking_level: Keyword.get(opts, :thinking_level),
-        producer: Keyword.get(opts, :producer)
-      ],
-      fn {_, v} -> is_nil(v) end
-    )
-  end
-
-  defp turn_prefix_opts(opts) do
-    Enum.reject(
-      [
-        variant: :turn_prefix,
-        api_key: Keyword.get(opts, :api_key),
-        headers: Keyword.get(opts, :headers),
-        thinking_level: Keyword.get(opts, :thinking_level),
-        producer: Keyword.get(opts, :producer)
-      ],
-      fn {_, v} -> is_nil(v) end
-    )
-  end
-
-  defp build_result(%Preparation{} = prep, body) do
-    lists = FileOps.compute_lists(prep.file_ops)
-    summary = body <> FileOps.format(lists.read_files, lists.modified_files)
-
-    details = %{
-      "readFiles" => lists.read_files,
-      "modifiedFiles" => lists.modified_files
-    }
-
-    %Result{
-      summary: summary,
-      first_kept_entry_id: prep.first_kept_entry_id,
-      tokens_before: prep.tokens_before,
-      details: details
-    }
   end
 end

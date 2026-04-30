@@ -1,6 +1,8 @@
 defmodule OctoPi.Coder.SessionStoreTest do
   use ExUnit.Case, async: false
 
+  alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionStore
 
   setup do
@@ -138,6 +140,243 @@ defmodule OctoPi.Coder.SessionStoreTest do
       assert path =~ ~r|#{Regex.escape(tmp)}/sessions/--[^/]+--/[^/]*enc\.jsonl|
       assert path =~ "home"
       :ok = SessionStore.close(pid)
+    end
+  end
+
+  defp message_entry(text) do
+    %Entry.Message{
+      id: nil,
+      parent_id: nil,
+      timestamp: nil,
+      message: %{"role" => "user", "content" => text}
+    }
+  end
+
+  describe "append_entry/3 — typed-entry path" do
+    test "mints id, links parent to current leaf, returns materialized entry", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "ae", cwd: tmp, root: tmp)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("a"))
+      assert is_binary(e1.id)
+      assert e1.parent_id == nil
+      assert is_binary(e1.timestamp)
+
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("b"))
+      assert e2.parent_id == e1.id
+      assert SessionStore.get_leaf_entry_id(pid) == e2.id
+
+      :ok = SessionStore.close(pid)
+    end
+
+    test "honours :id and :timestamp opts", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "io", cwd: tmp, root: tmp)
+      {:ok, e} = SessionStore.append_entry(pid, message_entry("x"), id: "fixed", timestamp: "T")
+      assert e.id == "fixed"
+      assert e.timestamp == "T"
+      :ok = SessionStore.close(pid)
+    end
+
+    test "persists each entry to disk in v3 byte-stable shape", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "rt", cwd: tmp, root: tmp)
+      path = SessionStore.path(pid)
+
+      {:ok, _e1} = SessionStore.append_entry(pid, message_entry("x"))
+      {:ok, _e2} = SessionStore.append_entry(pid, message_entry("y"))
+
+      :ok = SessionStore.close(pid)
+      reread = path |> SessionStore.read_entries() |> Enum.to_list()
+
+      [%Header{}, m1, m2] = reread
+      assert m1.parent_id == nil
+      assert m2.parent_id == m1.id
+      assert m1.message["content"] == "x"
+      assert m2.message["content"] == "y"
+    end
+  end
+
+  describe "read API on the in-memory tree" do
+    setup %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "ra", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("a"))
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("b"))
+      {:ok, e3} = SessionStore.append_entry(pid, message_entry("c"))
+
+      {:ok, pid: pid, e1: e1, e2: e2, e3: e3}
+    end
+
+    test "get_entry/2 looks up by id", %{pid: pid, e2: e2} do
+      assert SessionStore.get_entry(pid, e2.id) == e2
+      assert SessionStore.get_entry(pid, "nope") == nil
+    end
+
+    test "get_entries/1 returns body in file order", %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.get_entries(pid) == [e1, e2, e3]
+    end
+
+    test "get_branch/1 walks current leaf to root", %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.get_branch(pid) == [e1, e2, e3]
+    end
+
+    test "get_branch/2 walks from given id to root", %{pid: pid, e1: e1, e2: e2} do
+      assert SessionStore.get_branch(pid, e2.id) == [e1, e2]
+    end
+
+    test "get_leaf_entry_id/1 returns current leaf", %{pid: pid, e3: e3} do
+      assert SessionStore.get_leaf_entry_id(pid) == e3.id
+    end
+
+    test "get_session_id / get_cwd surface header metadata", %{pid: pid, tmp: tmp} do
+      assert SessionStore.get_session_id(pid) == "ra"
+      assert SessionStore.get_cwd(pid) == tmp
+    end
+
+    test "build_session_context/1 returns a context map with messages", %{pid: pid} do
+      ctx = SessionStore.build_session_context(pid)
+      assert is_list(ctx.messages)
+      assert length(ctx.messages) == 3
+    end
+  end
+
+  describe "path/3 — single read primitive" do
+    # Topology: e1 → e2 → e3 → comp(firstKept=e2) → e4 → e5
+    # Kept window is [e2, e3]; e1 is pre-cut history; e4, e5 are tail.
+    setup %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "p3", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("u1"))
+      {:ok, e2} = SessionStore.append_entry(pid, message_entry("u2"))
+      {:ok, e3} = SessionStore.append_entry(pid, message_entry("u3"))
+
+      {:ok, comp} =
+        SessionStore.append_entry(pid, %Entry.Compaction{
+          id: nil,
+          timestamp: nil,
+          summary: "summary",
+          first_kept_entry_id: e2.id,
+          tokens_before: 100
+        })
+
+      {:ok, e4} = SessionStore.append_entry(pid, message_entry("u4"))
+      {:ok, e5} = SessionStore.append_entry(pid, message_entry("u5"))
+
+      {:ok, pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5}
+    end
+
+    test ":root walks all the way to root",
+         %{pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: :root) == [e1, e2, e3, comp, e4, e5]
+    end
+
+    test ":latest_compaction stops at the latest compaction's first_kept_entry_id (inclusive)",
+         %{pid: pid, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [e2, e3, comp, e4, e5]
+    end
+
+    test ":latest_compaction falls back to :root when no compaction exists", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "noc", cwd: tmp, root: tmp)
+      on_exit(fn -> if Process.alive?(pid), do: SessionStore.close(pid) end)
+
+      {:ok, a} = SessionStore.append_entry(pid, message_entry("a"))
+      {:ok, b} = SessionStore.append_entry(pid, message_entry("b"))
+
+      assert SessionStore.path(pid, :leaf, to: :latest_compaction) == [a, b]
+    end
+
+    test "to: <id> stops at that id (inclusive)",
+         %{pid: pid, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: comp.id) == [comp, e4, e5]
+    end
+
+    test "to: <id> falls back to :root when id not on path",
+         %{pid: pid, e1: e1, e2: e2, e3: e3, comp: comp, e4: e4, e5: e5} do
+      assert SessionStore.path(pid, :leaf, to: "no-such-id") == [e1, e2, e3, comp, e4, e5]
+    end
+
+    test "explicit leaf id walks from there",
+         %{pid: pid, e1: e1, e2: e2, e3: e3} do
+      assert SessionStore.path(pid, e3.id, to: :root) == [e1, e2, e3]
+    end
+
+    test "nil leaf returns []", %{pid: pid} do
+      assert SessionStore.path(pid, nil, to: :root) == []
+    end
+  end
+
+  describe "fork/4" do
+    test "copies entries verbatim into a new supervised store with rewritten header",
+         %{tmp: tmp} do
+      {:ok, src} = SessionStore.open(id: "src-id", cwd: "/orig", root: tmp)
+      {:ok, m1} = SessionStore.append_entry(src, message_entry("a"))
+      {:ok, m2} = SessionStore.append_entry(src, message_entry("b"))
+      src_path = SessionStore.path(src)
+      target_dir = Path.join(tmp, "fork-dst")
+      on_exit(fn -> File.rm_rf!(target_dir) end)
+
+      assert {:ok, dst} =
+               SessionStore.fork(src, "/new-cwd", target_dir,
+                 id: "new-id",
+                 timestamp: "2026-01-01T00:00:00Z"
+               )
+
+      on_exit(fn -> if Process.alive?(dst), do: SessionStore.close(dst) end)
+
+      assert SessionStore.get_session_id(dst) == "new-id"
+      assert SessionStore.get_cwd(dst) == "/new-cwd"
+      assert SessionStore.get_session_manager(dst).parent_session == src_path
+
+      # Same ids, same parent chain.
+      assert dst |> SessionStore.get_branch() |> Enum.map(& &1.id) == [m1.id, m2.id]
+
+      # Original store and file untouched.
+      assert SessionStore.get_session_id(src) == "src-id"
+      [orig_header | _] = src_path |> SessionStore.read_entries() |> Enum.to_list()
+      assert orig_header.id == "src-id"
+      refute orig_header.parent_session
+
+      :ok = SessionStore.close(src)
+    end
+
+    test "appends to the source after fork stay isolated from the destination", %{tmp: tmp} do
+      {:ok, src} = SessionStore.open(id: "iso-src", cwd: "/c", root: tmp)
+      {:ok, _} = SessionStore.append_entry(src, message_entry("shared"))
+      target_dir = Path.join(tmp, "iso-dst")
+      on_exit(fn -> File.rm_rf!(target_dir) end)
+
+      {:ok, dst} = SessionStore.fork(src, "/c2", target_dir)
+      on_exit(fn -> if Process.alive?(dst), do: SessionStore.close(dst) end)
+
+      # Append to source after fork — should not affect the new store.
+      {:ok, _} = SessionStore.append_entry(src, message_entry("only-in-src"))
+
+      assert length(SessionStore.get_entries(src)) == 2
+      assert length(SessionStore.get_entries(dst)) == 1
+
+      :ok = SessionStore.close(src)
+    end
+  end
+
+  describe "open/1 with :path (resume)" do
+    test "loads an existing session and opens the file in append mode", %{tmp: tmp} do
+      {:ok, p1} = SessionStore.open(id: "res", cwd: tmp, root: tmp)
+      {:ok, _e1} = SessionStore.append_entry(p1, message_entry("first"))
+      path = SessionStore.path(p1)
+      :ok = SessionStore.close(p1)
+
+      {:ok, p2} = SessionStore.open(path: path)
+      assert SessionStore.path(p2) == path
+      assert SessionStore.get_session_id(p2) == "res"
+      assert [first_entry] = SessionStore.get_entries(p2)
+      assert first_entry.message["content"] == "first"
+
+      {:ok, e2} = SessionStore.append_entry(p2, message_entry("second"))
+      assert e2.parent_id == first_entry.id
+      :ok = SessionStore.close(p2)
+
+      lines = path |> File.read!() |> String.split("\n", trim: true)
+      assert length(lines) == 3
     end
   end
 end

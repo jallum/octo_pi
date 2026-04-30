@@ -19,6 +19,7 @@ defmodule OctoPi.TUI.Components.Footer do
           cost: float(),
           context_percent: float() | nil,
           context_window: non_neg_integer(),
+          auto_compact_enabled?: boolean(),
           model_id: String.t(),
           provider: atom() | nil,
           thinking_level: String.t() | nil,
@@ -35,6 +36,7 @@ defmodule OctoPi.TUI.Components.Footer do
             cost: 0.0,
             context_percent: nil,
             context_window: 0,
+            auto_compact_enabled?: false,
             model_id: "no-model",
             provider: nil,
             thinking_level: nil,
@@ -134,7 +136,8 @@ defmodule OctoPi.TUI.Components.Footer do
       end
 
     window_display = format_tokens(f.context_window)
-    text = "#{pct_display}%/#{window_display}"
+    auto_suffix = if f.auto_compact_enabled?, do: " (auto)", else: ""
+    text = "#{pct_display}%/#{window_display}#{auto_suffix}"
 
     case f.context_percent do
       p when is_float(p) and p > 90 -> "\e[31m#{text}\e[39m"

@@ -77,6 +77,17 @@ defmodule OctoPi.TUI.Terminal do
   @spec write(GenServer.server(), iodata()) :: :ok
   def write(pid, bytes), do: GenServer.call(pid, {:write, bytes})
 
+  @doc """
+  Toggle the OSC 9;4 terminal progress indicator (a taskbar-progress
+  hint understood by ConEmu / Windows Terminal / iTerm2). `true`
+  sets indeterminate state; `false` clears. Terminals that don't
+  recognize the sequence ignore it. Mirrors upstream's
+  `terminal.setProgress` call during compaction.
+  """
+  @spec set_progress(GenServer.server(), boolean()) :: :ok
+  def set_progress(pid, true), do: write(pid, "\e]9;4;3;\a")
+  def set_progress(pid, false), do: write(pid, "\e]9;4;0;\a")
+
   @doc false
   @spec info(GenServer.server()) :: map()
   def info(pid), do: GenServer.call(pid, :info)

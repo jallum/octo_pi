@@ -23,6 +23,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.Agent.Event.MessageEnd
   alias OctoPi.AI.Model
   alias OctoPi.Coder
+  alias OctoPi.Coder.Event.CompactionEnd
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
@@ -113,6 +114,9 @@ defmodule OctoPi.TUI.Interactive do
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
+          loader_stash: Components.Loader.t() | nil,
+          is_compacting?: boolean(),
+          compaction_queue: [String.t()],
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -165,6 +169,9 @@ defmodule OctoPi.TUI.Interactive do
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
+            loader_stash: nil,
+            is_compacting?: false,
+            compaction_queue: [],
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -437,11 +444,15 @@ defmodule OctoPi.TUI.Interactive do
 
     theme = Theme.load_builtin(:dark, Theme.detect_color_mode())
 
+    %{enabled: auto_compact_enabled?} = Coder.get_compaction_settings(session)
+
     footer = %Footer{
       cwd: cwd,
       model_id: model.id,
       provider: model.provider,
+      context_percent: 0.0,
       context_window: model.context_window,
+      auto_compact_enabled?: auto_compact_enabled?,
       git_branch: FooterData.get_git_branch(footer_data)
     }
 
@@ -671,32 +682,10 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  # Coder.set_agent_pid → Subscribers.subscribe registry call appears
-  # to Dialyzer as no_return when the Registry is not started. False positive.
-  @dialyzer {:nowarn_function, new_session: 6}
   defp new_session(cwd, model, tools, system_prompt, extensions, opts) do
     session_id = new_session_id()
     {:ok, store_pid} = SessionStore.start_link(id: session_id, cwd: cwd)
-    sm = %SessionManager{cwd: cwd, session_id: session_id}
-
-    {:ok, coder_pid} =
-      Coder.start_loop(
-        extensions: extensions,
-        session_manager: sm,
-        store_pid: store_pid,
-        model_provider: fn -> model end
-      )
-
-    agent_opts =
-      put_if_present(
-        [model: model, tools: tools, system_prompt: system_prompt],
-        :transport,
-        opts[:transport]
-      )
-
-    {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
-    :ok = Coder.set_agent_pid(coder_pid, agent_pid)
-    coder_pid
+    start_session(store_pid, model, tools, system_prompt, extensions, opts)
   end
 
   defp resume_or_new(cwd, model, tools, system_prompt, extensions, opts) do
@@ -707,33 +696,35 @@ defmodule OctoPi.TUI.Interactive do
         new_session(cwd, model, tools, system_prompt, extensions, opts)
 
       path ->
-        {:ok, sm} = SessionManager.load(path)
-        {:ok, store_pid} = SessionStore.start_link(id: sm.session_id, path: path)
-
-        {:ok, coder_pid} =
-          Coder.start_loop(
-            extensions: extensions,
-            session_manager: sm,
-            store_pid: store_pid,
-            model_provider: fn -> model end
-          )
-
-        messages_provider = fn _session ->
-          ctx = Coder.build_session_context(coder_pid)
-          SessionMessages.to_llm(ctx.messages)
-        end
-
-        agent_opts =
-          put_if_present(
-            [model: model, tools: tools, system_prompt: system_prompt, messages_provider: messages_provider],
-            :transport,
-            opts[:transport]
-          )
-
-        {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
-        :ok = Coder.set_agent_pid(coder_pid, agent_pid)
-        coder_pid
+        {:ok, store_pid} = SessionStore.start_link(path: path)
+        start_session(store_pid, model, tools, system_prompt, extensions, opts)
     end
+  end
+
+  defp start_session(store_pid, model, tools, system_prompt, extensions, opts) do
+    agent_opts =
+      put_if_present(
+        [
+          model: model,
+          tools: tools,
+          system_prompt: system_prompt,
+          convert_to_llm: &SessionMessages.to_llm/1
+        ],
+        :transport,
+        opts[:transport]
+      )
+
+    {:ok, agent_pid} = OctoPi.Agent.start_loop(agent_opts)
+
+    {:ok, coder_pid} =
+      Coder.start_loop(
+        extensions: extensions,
+        store_pid: store_pid,
+        agent_pid: agent_pid,
+        model_provider: fn -> model end
+      )
+
+    coder_pid
   end
 
   defp new_session_id do
@@ -1060,6 +1051,31 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader: Components.Loader.new(message: message)}
   end
 
+  def handle_event(state, {:octo_pi_agent_event, %OctoPi.Coder.Event.CompactionStart{reason: reason}}) do
+    # Stash the existing loader (e.g. "Thinking…" if mid-run); restore
+    # on CompactionEnd. Mirrors upstream's compaction_start handling.
+    label = compaction_label(reason)
+    new_loader = Components.Loader.new(message: label, cancellable: true)
+    Terminal.set_progress(state.terminal, true)
+    %{state | loader_stash: state.loader, loader: new_loader, is_compacting?: true}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
+    Terminal.set_progress(state.terminal, false)
+
+    state = %{
+      state
+      | loader: state.loader_stash,
+        loader_stash: nil,
+        is_compacting?: false,
+        footer: update_footer(state.footer, ev)
+    }
+
+    # Replay any prompts the user submitted while compacting. Mirrors
+    # upstream's `flushCompactionQueue`.
+    flush_compaction_queue(state)
+  end
+
   def handle_event(state, {:octo_pi_agent_event, %Event.AgentEnd{} = event}) do
     fire_extension_event(state.extensions, :agent_end, state)
 
@@ -1132,6 +1148,12 @@ defmodule OctoPi.TUI.Interactive do
     %{state | input: %{state.input | value: "", cursor: 0}}
   end
 
+  defp dispatch_app_action("app.interrupt", %{is_compacting?: true, session: session} = state, _key)
+       when not is_nil(session) do
+    Coder.abort_compact(session)
+    state
+  end
+
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
     if state.session, do: Coder.abort(state.session)
     state
@@ -1141,6 +1163,12 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.clear", %{input: %{value: v}} = state, _key) when v != "",
     do: %{state | input: %{state.input | value: "", cursor: 0}}
+
+  defp dispatch_app_action("app.clear", %{is_compacting?: true, session: session} = state, _key)
+       when not is_nil(session) do
+    Coder.abort_compact(session)
+    state
+  end
 
   defp dispatch_app_action("app.clear", %{loader: %Components.Loader{}} = state, _key) do
     if state.session, do: Coder.abort(state.session)
@@ -1364,9 +1392,36 @@ defmodule OctoPi.TUI.Interactive do
 
   defp notify_extension_result(_pid, _), do: :ok
 
+  defp do_handle_submit(%{is_compacting?: true} = state, new_input, value) do
+    # Compaction in flight — queue the prompt and replay it via
+    # flush_compaction_queue when CompactionEnd lands. Mirrors
+    # upstream's queueCompactionMessage. The user message lands in
+    # the transcript immediately so they have visual feedback that
+    # their input was accepted.
+    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: state.transcript ++ [user_msg],
+        compaction_queue: state.compaction_queue ++ [value]
+    }
+  end
+
   defp do_handle_submit(state, new_input, value) do
     send_text = if state.expand_prompt_fn, do: state.expand_prompt_fn.(value), else: value
-    if state.session, do: Coder.prompt(state.session, value, send_text)
+
+    # Coder.prompt may run pre-prompt auto-compact synchronously
+    # (LLM call), which would block the TUI's event loop and freeze
+    # the screen. Fork the call so the TUI keeps processing
+    # subscriber events (CompactionStart spinner, MessageEnd, etc.)
+    # while the prompt is in flight. Errors propagate through the
+    # subscribed agent-event stream.
+    if state.session do
+      session = state.session
+      Task.start(fn -> Coder.prompt(session, value, send_text) end)
+    end
+
     user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
   end
@@ -1462,15 +1517,22 @@ defmodule OctoPi.TUI.Interactive do
   defp update_footer(footer, %{__struct__: MessageEnd, message: msg}) do
     usage = Map.get(msg, :usage, %{})
     cost_struct = Map.get(usage, :cost, %{})
-    new_input = footer.input_tokens + Map.get(usage, :input, 0)
+
+    # `context_percent` reflects the LLM's current context size from
+    # the latest assistant message (the same value `over_threshold?`
+    # uses to decide auto-compact), NOT the cumulative work done
+    # across the run. `input_tokens` etc. continue to accumulate for
+    # the running totals display.
+    context_tokens = current_context_tokens(usage)
 
     context_percent =
-      if footer.context_window > 0,
-        do: new_input / footer.context_window * 100.0
+      if footer.context_window > 0 and is_integer(context_tokens),
+        do: context_tokens / footer.context_window * 100.0,
+        else: footer.context_percent
 
     %{
       footer
-      | input_tokens: new_input,
+      | input_tokens: footer.input_tokens + Map.get(usage, :input, 0),
         output_tokens: footer.output_tokens + Map.get(usage, :output, 0),
         cache_read: footer.cache_read + Map.get(usage, :cache_read, 0),
         cache_write: footer.cache_write + Map.get(usage, :cache_write, 0),
@@ -1479,7 +1541,24 @@ defmodule OctoPi.TUI.Interactive do
     }
   end
 
+  # After compaction, the LLM-visible context has been replaced. We
+  # don't know the new context size until the next assistant message
+  # reports usage, so reset percent to nil — the footer renders `?`
+  # for unknown.
+  defp update_footer(footer, %CompactionEnd{result: {:ok, _}}), do: %{footer | context_percent: nil}
+
   defp update_footer(footer, _), do: footer
+
+  # Mirrors `OctoPi.Agent.Loop.context_tokens_from_usage/1`: prefer
+  # provider-supplied `total_tokens` when positive; otherwise sum
+  # input + output + cache_read + cache_write so prompt-cache reads
+  # still count toward the trigger.
+  defp current_context_tokens(%{total_tokens: t}) when is_integer(t) and t > 0, do: t
+
+  defp current_context_tokens(%{input: i, output: o, cache_read: cr, cache_write: cw})
+       when is_integer(i) and is_integer(o) and is_integer(cr) and is_integer(cw), do: i + o + cr + cw
+
+  defp current_context_tokens(_), do: nil
 
   defp apply_partial(transcript, partial, theme) do
     content = extract_content_blocks(partial)
@@ -1643,6 +1722,28 @@ defmodule OctoPi.TUI.Interactive do
   defp build_custom_theme(%{theme: theme}), do: %{fg: fn color, text -> Theme.fg(theme, color, text) end}
 
   defp default_working_message, do: "Thinking…"
+
+  defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
+
+  defp flush_compaction_queue(%{compaction_queue: queue, session: session} = state) do
+    # Use follow_up rather than prompt so the messages join the
+    # follow_up_queue and get drained at the next idle/run boundary.
+    # If we'd called Coder.prompt here, the second prompt onward
+    # would race with the run started by the first and get
+    # `{:error, :already_streaming}`. Mirrors upstream's
+    # flushCompactionQueue using session.followUp.
+    Enum.each(queue, fn text ->
+      Coder.follow_up(session, text)
+    end)
+
+    %{state | compaction_queue: []}
+  end
+
+  defp compaction_label(:manual), do: "Compacting context… (Esc to cancel)"
+  defp compaction_label(:pre_prompt), do: "Auto-compacting… (Esc to cancel)"
+  defp compaction_label(:mid_run), do: "Auto-compacting… (Esc to cancel)"
+  defp compaction_label(:overflow), do: "Context overflow detected, auto-compacting… (Esc to cancel)"
+  defp compaction_label(_), do: "Compacting context… (Esc to cancel)"
 
   defp render_loader(nil, _width, _theme), do: []
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)

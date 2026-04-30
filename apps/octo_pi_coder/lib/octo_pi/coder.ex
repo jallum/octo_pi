@@ -44,7 +44,8 @@ defmodule OctoPi.Coder do
 
   @doc """
   Start a loop GenServer.
-  Required: `:extensions`, `:session_manager`, `:store_pid`.
+  Required: `:extensions`, `:store_pid`. The store is the source of
+  truth for the session tree; the loop loads its initial path from it.
   """
   @spec start_loop(Loop.start_opts()) :: {:ok, t()} | :ignore | {:error, term()}
   def start_loop(opts), do: Loop.start_link(opts)
@@ -72,7 +73,7 @@ defmodule OctoPi.Coder do
   def prompt(server, save_text), do: prompt(server, save_text, save_text)
 
   @spec prompt(t(), String.t(), String.t()) :: :ok | {:error, term()}
-  def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text})
+  def prompt(server, save_text, send_text), do: GenServer.call(server, {:agent_prompt, save_text, send_text}, :infinity)
 
   @doc "Abort the current agent run."
   @spec abort(t()) :: :ok
@@ -108,10 +109,6 @@ defmodule OctoPi.Coder do
 
   # ---- Session management ----
 
-  @doc "Wire an agent into the loop after init."
-  @spec set_agent_pid(t(), OctoPi.Agent.t()) :: :ok
-  def set_agent_pid(server, agent_pid), do: GenServer.call(server, {:set_agent_pid, agent_pid})
-
   @doc """
   Build the LLM-ready session context from the held `SessionManager`'s
   current branch.
@@ -140,6 +137,14 @@ defmodule OctoPi.Coder do
   @doc "Run the compaction orchestrator."
   @spec compact(t(), keyword()) :: compact_result()
   def compact(server, opts \\ []), do: GenServer.call(server, {:compact, opts}, :infinity)
+
+  @doc """
+  Cancel an in-flight compaction. Brutal-kills the spawned compact
+  task; the original caller of `compact/2` (or pre-prompt prompt)
+  receives `{:cancel, :aborted}`. No-op if no compact is in flight.
+  """
+  @spec abort_compact(t()) :: :ok
+  def abort_compact(server), do: GenServer.call(server, :agent_abort_compact)
 
   @doc "Fork the current session into a new session file."
   @spec fork(t(), keyword()) :: fork_result()

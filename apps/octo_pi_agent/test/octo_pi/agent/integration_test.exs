@@ -39,6 +39,7 @@ defmodule OctoPi.Agent.IntegrationTest do
       OctoPi.Agent.start_loop(
         model: model,
         tools: [EchoTool.tool()],
+        convert_to_llm: &Function.identity/1,
         system_prompt:
           "You have an 'echo' tool. Call echo with text 'hello' exactly once, " <>
             "then say 'done' and stop."

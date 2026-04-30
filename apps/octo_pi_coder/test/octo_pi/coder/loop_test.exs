@@ -7,6 +7,7 @@ defmodule OctoPi.Coder.LoopTest do
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.SessionManager
   alias OctoPi.Coder.SessionStore
   alias OctoPi.Coder.SettingsManager
@@ -23,8 +24,30 @@ defmodule OctoPi.Coder.LoopTest do
     pid
   end
 
-  defp empty_sm do
-    %SessionManager{cwd: "/tmp", session_id: "sm-test"}
+  @faux_model %OctoPi.AI.Model{
+    id: "faux-1",
+    name: "Faux Model",
+    api: :faux,
+    provider: :faux,
+    base_url: "https://example.com",
+    context_window: 128_000,
+    max_tokens: 16_384
+  }
+
+  defp start_agent! do
+    {:ok, pid} = OctoPi.Agent.start_loop(model: @faux_model, convert_to_llm: &SessionMessages.to_llm/1)
+    on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
+    pid
+  end
+
+  defp try_stop(pid) do
+    GenServer.stop(pid)
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp loop_opts(extra \\ []) do
+    Keyword.put_new_lazy(extra, :agent_pid, &start_agent!/0)
   end
 
   defp message_entry(text) do
@@ -38,38 +61,37 @@ defmodule OctoPi.Coder.LoopTest do
   describe "start_link/1" do
     test "starts with required opts and exposes state via state/1", ctx do
       store = open_store!(ctx)
-      sm = empty_sm()
+      agent = start_agent!()
 
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
+      {:ok, pid} = Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       state = :sys.get_state(pid)
       assert state.extensions == []
-      assert state.session_manager == sm
       assert state.store_pid == store
-      assert state.agent_pid == nil
+      assert state.agent_pid == agent
     end
 
-    test "raises if :extensions, :session_manager, or :store_pid is missing", ctx do
+    test "raises if :extensions, :store_pid, or :agent_pid is missing", ctx do
       store = open_store!(ctx)
-      sm = empty_sm()
+      agent = start_agent!()
 
       assert_raise KeyError, fn ->
-        Loop.start_link(session_manager: sm, store_pid: store)
+        Loop.start_link(store_pid: store, agent_pid: agent)
+      end
+
+      assert_raise KeyError, fn ->
+        Loop.start_link(extensions: [], agent_pid: agent)
       end
 
       assert_raise KeyError, fn ->
         Loop.start_link(extensions: [], store_pid: store)
       end
-
-      assert_raise KeyError, fn ->
-        Loop.start_link(extensions: [], session_manager: sm)
-      end
     end
 
     test "default settings_manager returns Settings.default() for compaction", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert Coder.get_compaction_settings(pid) == Settings.default()
@@ -77,7 +99,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "default model_provider returns nil", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       assert :sys.get_state(pid).model_provider.() == nil
@@ -95,11 +117,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          session_manager: empty_sm(),
-          store_pid: store,
-          model_provider: model_fn,
-          settings_manager: sm
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: model_fn,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -107,24 +130,45 @@ defmodule OctoPi.Coder.LoopTest do
       assert :sys.get_state(pid).model_provider.() == :my_model
       assert Coder.get_compaction_settings(pid) == expected
     end
+
+    test "plumbs SettingsManager's reserve_tokens into Agent at init", ctx do
+      store = open_store!(ctx)
+      agent = start_agent!()
+
+      {:ok, sm} =
+        SettingsManager.in_memory(%{
+          "compaction" => %{"reserveTokens" => 12_345}
+        })
+
+      {:ok, pid} =
+        Loop.start_link(
+          extensions: [],
+          store_pid: store,
+          agent_pid: agent,
+          settings_manager: sm
+        )
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert OctoPi.Agent.state(agent).auto_compact_reserve_tokens == 12_345
+    end
   end
 
   describe "getters" do
     setup ctx do
       store = open_store!(ctx)
       ext = %Extension{id: "e1", path: "/dev/null"}
-      sm = empty_sm()
 
       {:ok, pid} =
-        Loop.start_link(extensions: [ext], session_manager: sm, store_pid: store)
+        Loop.start_link(loop_opts(extensions: [ext], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
-      %{pid: pid, store: store, sm: sm, ext: ext}
+      %{pid: pid, store: store, ext: ext}
     end
 
-    test "get_session_manager/1 returns the seeded SessionManager", %{pid: pid, sm: sm} do
-      assert Coder.get_session_manager(pid) == sm
+    test "get_session_manager/1 proxies to the store", %{pid: pid, store: store} do
+      assert Coder.get_session_manager(pid) == SessionStore.get_session_manager(store)
     end
 
     test "get_extensions/1 returns the seeded extension list", %{pid: pid, ext: ext} do
@@ -135,10 +179,9 @@ defmodule OctoPi.Coder.LoopTest do
   describe "add_entry/3" do
     setup ctx do
       store = open_store!(ctx)
-      sm = empty_sm()
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
@@ -173,6 +216,22 @@ defmodule OctoPi.Coder.LoopTest do
     test "honors caller-supplied :id option", %{pid: pid} do
       assert {:ok, "fixed-id"} = Coder.add_entry(pid, message_entry("x"), id: "fixed-id")
       assert Coder.get_session_manager(pid).leaf_id == "fixed-id"
+    end
+
+    test "mirrors user-origin entries into Agent's working transcript", ctx do
+      store = open_store!(ctx)
+      agent = start_agent!()
+
+      {:ok, pid} =
+        Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert {:ok, _} = Coder.add_entry(pid, message_entry("hello agent"))
+
+      agent_state = :sys.get_state(agent).loop
+      msgs = agent_state.messages
+      assert [%{"role" => "user", "content" => "hello agent"}] = msgs
     end
   end
 
@@ -226,11 +285,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: extensions,
-          session_manager: empty_sm(),
-          store_pid: store,
-          model_provider: fn -> test_model() end,
-          settings_manager: sm
+          loop_opts(
+            extensions: extensions,
+            store_pid: store,
+            model_provider: fn -> test_model() end,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -252,10 +312,11 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          session_manager: empty_sm(),
-          store_pid: store,
-          model_provider: fn -> test_model() end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> test_model() end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -336,11 +397,12 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          session_manager: empty_sm(),
-          store_pid: store,
-          model_provider: fn -> nil end,
-          settings_manager: sm
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> nil end,
+            settings_manager: sm
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -377,7 +439,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -423,13 +485,13 @@ defmodule OctoPi.Coder.LoopTest do
   describe "messages_provider closure for Agent.Loop (E5a)" do
     alias OctoPi.AI.Content.Text
     alias OctoPi.AI.Message.User
-    alias OctoPi.Coder.Session.Messages
+    alias SessionMessages, as: SessionMessages
 
     setup ctx do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -443,7 +505,7 @@ defmodule OctoPi.Coder.LoopTest do
         coder_session
         |> Coder.build_session_context()
         |> Map.fetch!(:messages)
-        |> Messages.to_llm()
+        |> SessionMessages.to_llm()
       end
     end
 
@@ -490,10 +552,9 @@ defmodule OctoPi.Coder.LoopTest do
     defp loaded_session!(ctx) do
       store = open_store!(ctx)
       path = SessionStore.path(store)
-      {:ok, sm} = SessionManager.load(path)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: sm, store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {pid, path, store}
@@ -503,12 +564,14 @@ defmodule OctoPi.Coder.LoopTest do
       Path.join(System.tmp_dir!(), "opi-fork-test-#{ctx.test}-#{System.unique_integer([:positive])}")
     end
 
-    test "returns {:ok, new_session_manager} for a valid session", ctx do
+    test "returns {:ok, new_store_pid} for a valid session", ctx do
       {pid, _path, _store} = loaded_session!(ctx)
       {:ok, _} = Coder.add_entry(pid, message_entry("hello"))
 
       dir = fork_dir(ctx)
-      assert {:ok, %SessionManager{}} = Coder.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+      assert {:ok, new_store} = Coder.fork(pid, target_cwd: "/some/cwd", target_dir: dir)
+      assert is_pid(new_store)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
     end
 
     test "forked session has parent_session pointing at source file", ctx do
@@ -516,8 +579,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert new_sm.parent_session == source_path
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert SessionStore.get_session_manager(new_store).parent_session == source_path
     end
 
     test "forked session has the requested target_cwd", ctx do
@@ -525,8 +590,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("a"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
-      assert new_sm.cwd == "/fork/cwd"
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/fork/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert SessionStore.get_cwd(new_store) == "/fork/cwd"
     end
 
     test "forked session carries all source entries", ctx do
@@ -535,8 +602,10 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("two"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert length(SessionManager.get_entries(new_sm)) == 2
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert length(SessionStore.get_entries(new_store)) == 2
     end
 
     test "forked session file is readable and loads correctly", ctx do
@@ -544,9 +613,11 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, _} = Coder.add_entry(pid, message_entry("content"))
 
       dir = fork_dir(ctx)
-      {:ok, new_sm} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-      assert {:ok, reloaded} = SessionManager.load(new_sm.session_file)
-      assert reloaded.session_id == new_sm.session_id
+      {:ok, new_store} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
+      on_exit(fn -> if Process.alive?(new_store), do: SessionStore.close(new_store) end)
+
+      assert {:ok, reloaded} = SessionManager.load(SessionStore.path(new_store))
+      assert reloaded.session_id == SessionStore.get_session_id(new_store)
     end
 
     test "extension {:cancel, reason} aborts fork, no file written", ctx do
@@ -580,17 +651,6 @@ defmodule OctoPi.Coder.LoopTest do
       assert event.type == :session_before_fork
       assert event.entry_id == leaf_id
     end
-
-    test "{:error, :no_session_file} when session_manager has no file", ctx do
-      store = open_store!(ctx)
-
-      {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
-
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
-      dir = fork_dir(ctx)
-      assert {:error, :no_session_file} = Coder.fork(pid, target_cwd: "/cwd", target_dir: dir)
-    end
   end
 
   describe "Context.bind_session/2" do
@@ -598,7 +658,7 @@ defmodule OctoPi.Coder.LoopTest do
       store = open_store!(ctx)
 
       {:ok, pid} =
-        Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+        Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       %{pid: pid}
@@ -653,15 +713,13 @@ defmodule OctoPi.Coder.LoopTest do
 
     defp session_with_two_branches(ctx) do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
 
       {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
       {:ok, id2} = Coder.add_entry(pid, message_entry("branch A"))
-      # Navigate back to id1 to create a fork point for id3
-      :sys.replace_state(pid, fn state ->
-        %{state | session_manager: %{state.session_manager | leaf_id: id1}}
-      end)
+      # Navigate back to id1 to create a fork point for id3.
+      :ok = SessionStore.set_leaf(store, id1)
 
       {:ok, id3} = Coder.add_entry(pid, message_entry("branch B"))
 
@@ -672,7 +730,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "returns {:ok, nil} immediately when target_id == current leaf", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       {:ok, id} = Coder.add_entry(pid, message_entry("a"))
       assert {:ok, nil} = Coder.navigate_tree(pid, target_id: id)
@@ -680,7 +738,7 @@ defmodule OctoPi.Coder.LoopTest do
 
     test "returns {:error, :not_found} for an unknown target_id", ctx do
       store = open_store!(ctx)
-      {:ok, pid} = Loop.start_link(extensions: [], session_manager: empty_sm(), store_pid: store)
+      {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
       assert {:error, :not_found} = Coder.navigate_tree(pid, target_id: "ghost")
     end
@@ -971,10 +1029,11 @@ defmodule OctoPi.Coder.LoopTest do
 
       {:ok, pid} =
         Loop.start_link(
-          extensions: [],
-          session_manager: empty_sm(),
-          store_pid: store,
-          model_provider: fn -> model end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> model end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
@@ -1064,13 +1123,16 @@ defmodule OctoPi.Coder.LoopTest do
       assert_in_delta stats.context_usage.percent, 25_000 / 200_000 * 100, 0.001
     end
 
-    test "returns nil when no model is set" do
+    test "returns nil when no model is set", ctx do
+      store = open_store!(ctx)
+
       {:ok, pid2} =
         Loop.start_link(
-          extensions: [],
-          session_manager: empty_sm(),
-          store_pid: self(),
-          model_provider: fn -> nil end
+          loop_opts(
+            extensions: [],
+            store_pid: store,
+            model_provider: fn -> nil end
+          )
         )
 
       on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)

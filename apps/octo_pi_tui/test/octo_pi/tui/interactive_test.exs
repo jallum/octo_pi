@@ -10,6 +10,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.AI.Usage.Cost
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Loop
+  alias OctoPi.Coder.Session.Messages
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CustomMessage
@@ -313,9 +314,11 @@ defmodule OctoPi.TUI.InteractiveTest do
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
 
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      coder = start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: model)
-      :ok = OctoPi.Coder.set_agent_pid(coder, agent)
+      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
+
+      coder =
+        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+
       {coder, agent}
     end
 
@@ -1241,9 +1244,12 @@ defmodule OctoPi.TUI.InteractiveTest do
       root = Path.join(System.tmp_dir!(), "opi-addtool-test-#{id}")
       sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
       store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      coder = start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: tool_reg_model(), transport: FakeTransport)
-      :ok = OctoPi.Coder.set_agent_pid(coder, agent)
+
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(model: tool_reg_model(), transport: FakeTransport, convert_to_llm: &Messages.to_llm/1)
+
+      coder =
+        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
 
       tool = %{name: "runtime_tool", description: "added at runtime", input_schema: %{}}
       state = %Interactive{session: coder}
@@ -1841,7 +1847,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert_in_delta s.footer.cost, 0.003, 0.0001
     end
 
-    test "MessageEnd computes context_percent from input_tokens / context_window" do
+    test "MessageEnd computes context_percent from the latest assistant's usage" do
       footer = %Footer{
         cwd: "/tmp",
         model_id: "test-model",
@@ -1871,10 +1877,11 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
 
-      assert_in_delta s.footer.context_percent, 10.0, 0.01
+      # 20_000 + 500 (output) + 0 + 0 = 20_500 / 200_000 = 10.25%
+      assert_in_delta s.footer.context_percent, 10.25, 0.01
     end
 
-    test "MessageEnd context_percent accumulates across turns" do
+    test "MessageEnd context_percent reflects the latest turn, not cumulative" do
       footer = %Footer{
         cwd: "/tmp",
         model_id: "test-model",
@@ -1904,7 +1911,11 @@ defmodule OctoPi.TUI.InteractiveTest do
 
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageEnd{message: msg}})
 
-      assert_in_delta s.footer.context_percent, 25.0, 0.01
+      # Just this turn's usage: (15_000 + 100) / 100_000 = 15.1%.
+      # Pre-fix this was 25.0% (cumulative input across runs).
+      assert_in_delta s.footer.context_percent, 15.1, 0.01
+      # Cumulative input still accumulates for the running totals.
+      assert s.footer.input_tokens == 25_000
     end
 
     test "MessageEnd context_percent is nil when context_window is 0" do

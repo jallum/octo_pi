@@ -3,7 +3,6 @@ defmodule OctoPi.Agent.LoopAutoCompactTest do
 
   alias OctoPi.Agent
   alias OctoPi.Agent.Event
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.Agent.TestSupport.FakeTransport
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Event, as: AIEvent
@@ -51,7 +50,7 @@ defmodule OctoPi.Agent.LoopAutoCompactTest do
   end
 
   defp start_loop(opts \\ []) do
-    opts = Keyword.merge([model: over_model(), transport: FakeTransport], opts)
+    opts = Keyword.merge([model: over_model(), transport: FakeTransport, convert_to_llm: &Function.identity/1], opts)
     {:ok, pid} = Agent.start_loop(opts)
     pid
   end
@@ -413,7 +412,7 @@ defmodule OctoPi.Agent.LoopAutoCompactTest do
       # Both follow-ups should have reached the transcript (the in-compaction one
       # is drained by drain_queues_into_transcript in after_compaction)
       state = Agent.state(loop)
-      messages = MessageLog.to_list(state.messages)
+      messages = state.messages
       # The second turn ran and produced output — transcript has two assistant messages
       assert length(Enum.filter(messages, &match?(%Assistant{}, &1))) == 2
       # follow-up queue should be empty after drain

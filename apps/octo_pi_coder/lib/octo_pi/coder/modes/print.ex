@@ -25,6 +25,7 @@ defmodule OctoPi.Coder.Modes.Print do
   alias OctoPi.Agent.Event
   alias OctoPi.AI.Content
   alias OctoPi.Coder.ResourceLoader
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
 
   @spec run(OctoPi.Coder.print_opts()) :: {:ok, atom()} | {:error, atom()}
   def run(opts) do
@@ -40,7 +41,17 @@ defmodule OctoPi.Coder.Modes.Print do
         ResourceLoader.build_system_prompt(loader, cwd, tools)
       end)
 
-    session_opts = maybe_put([model: model, tools: tools, system_prompt: system_prompt], :transport, transport)
+    session_opts =
+      maybe_put(
+        [
+          model: model,
+          tools: tools,
+          system_prompt: system_prompt,
+          convert_to_llm: &SessionMessages.to_llm/1
+        ],
+        :transport,
+        transport
+      )
 
     {:ok, session} = OctoPi.Agent.start_loop(session_opts)
     OctoPi.Agent.subscribe(session, self(), :async)

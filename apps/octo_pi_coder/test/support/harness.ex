@@ -178,7 +178,6 @@ defmodule OctoPi.Coder.Test.Harness do
   OTP Registry entry is owned by that process.
   """
 
-  alias OctoPi.Agent.MessageLog
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Model
@@ -186,6 +185,7 @@ defmodule OctoPi.Coder.Test.Harness do
   alias OctoPi.Coder.Extension.Dispatcher
   alias OctoPi.Coder.Extension.Event
   alias OctoPi.Coder.Extension.Loader
+  alias OctoPi.Coder.Session.Messages, as: SessionMessages
   alias OctoPi.Coder.Test.EventCollector
   alias OctoPi.Coder.Test.FauxTransport
 
@@ -222,6 +222,7 @@ defmodule OctoPi.Coder.Test.Harness do
         model: @faux_model,
         transport: FauxTransport,
         tools: tools,
+        convert_to_llm: &SessionMessages.to_llm/1,
         before_tool_call: build_before_tool_call(extensions, ctx),
         after_tool_call: build_after_tool_call(extensions, ctx)
       )
@@ -257,9 +258,7 @@ defmodule OctoPi.Coder.Test.Harness do
   def get_assistant_texts(%__MODULE__{session: session}) do
     state = OctoPi.Agent.state(session)
 
-    state.messages
-    |> MessageLog.to_list()
-    |> Enum.flat_map(&extract_text_blocks/1)
+    Enum.flat_map(state.messages, &extract_text_blocks/1)
   end
 
   defp load_factories(factories) do

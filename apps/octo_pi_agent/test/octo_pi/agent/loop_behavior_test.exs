@@ -56,7 +56,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
   end
 
   defp start_loop(opts \\ []) do
-    opts = Keyword.merge([model: model(), transport: FakeTransport], opts)
+    opts = Keyword.merge([model: model(), transport: FakeTransport, convert_to_llm: &Function.identity/1], opts)
     {:ok, pid} = OctoPi.Agent.start_loop(opts)
     pid
   end
@@ -1100,7 +1100,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       on_exit(fn -> :telemetry.detach(handler_id) end)
 
       {:ok, loop} =
-        OctoPi.Agent.start_loop(model: model(), transport: BlockingTransport)
+        OctoPi.Agent.start_loop(model: model(), transport: BlockingTransport, convert_to_llm: &Function.identity/1)
 
       OctoPi.Agent.subscribe(loop, self(), :async)
 

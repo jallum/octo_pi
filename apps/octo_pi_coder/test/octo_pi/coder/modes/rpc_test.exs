@@ -46,7 +46,7 @@ defmodule OctoPi.Coder.Modes.RpcTest do
 
   defp open_session do
     {:ok, session} =
-      OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [])
+      OctoPi.Agent.start_loop(model: model(), transport: FakeTransport, tools: [], convert_to_llm: &Function.identity/1)
 
     # Stop the session before FakeTransport.clear/0 runs, so lingering
     # Task-supervised turn runs don't race the agent being stopped and

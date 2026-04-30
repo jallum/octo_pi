@@ -171,34 +171,107 @@ defmodule OctoPi.Coder.SessionManager do
   def get_entry(%__MODULE__{by_id: by_id}, id) when is_binary(id), do: Map.get(by_id, id)
 
   @doc """
-  Walk from the current leaf to root and return the path in
-  root→leaf order. Returns `[]` when the session has no leaf.
-  Mirrors `getBranch()` with no argument (`session-manager.ts:1034`).
+  Walk from a leaf entry toward root and return the slice in root→leaf
+  order. Single read primitive used by branch reads, branch-switch, and
+  compaction.
+
+  ## Arguments
+
+    * `leaf` — `:leaf` resolves to the manager's current leaf id, or a
+      specific entry id to walk from.
+
+  ## Options
+
+    * `:to` — stop anchor (default `:root`):
+      * `:root` — walk all the way to a root entry (parent_id == nil
+        or pointing at a missing ancestor)
+      * `:latest_compaction` — stop at the **latest compaction's
+        `first_kept_entry_id`** (inclusive). This includes the kept
+        window (`first_kept_entry_id..compaction`) plus everything
+        after the compaction — matching upstream's
+        `prepareCompaction` boundary (`compaction.ts:622-637`) and
+        keeping `build_session_context`'s "summary + kept window +
+        tail" emission well-defined. Falls back to the compaction
+        itself if its `first_kept_entry_id` is not on the path; falls
+        back to `:root` when no compaction exists.
+      * a binary id — stop at the entry with that id (inclusive).
+        Falls back to `:root` when the id is not on the path.
+
+  Returns `[]` when no leaf exists or the leaf id is unknown. Orphaned
+  ancestors (parent_id pointing to a missing entry) terminate the walk
+  early so the returned path is always a contiguous chain.
   """
-  @spec get_branch(t()) :: [entry()]
-  def get_branch(%__MODULE__{leaf_id: nil}), do: []
-  def get_branch(%__MODULE__{leaf_id: id} = sm), do: get_branch(sm, id)
+  @spec path(t(), :leaf | String.t() | nil, keyword()) :: [entry()]
+  def path(sm, leaf \\ :leaf, opts \\ [])
+
+  def path(%__MODULE__{leaf_id: leaf_id} = sm, :leaf, opts), do: path(sm, leaf_id, opts)
+  def path(%__MODULE__{}, nil, _opts), do: []
+
+  def path(%__MODULE__{by_id: by_id}, leaf_id, opts) when is_binary(leaf_id) do
+    full = walk_to_anchor(by_id, Map.get(by_id, leaf_id), &never_stop/1, [])
+    apply_to_anchor(full, Keyword.get(opts, :to, :root))
+  end
+
+  defp never_stop(_entry), do: false
+
+  defp apply_to_anchor(full, :root), do: full
+
+  defp apply_to_anchor(full, :latest_compaction) do
+    case latest_compaction_anchor_id(full) do
+      nil -> full
+      anchor_id -> drop_before_id(full, anchor_id)
+    end
+  end
+
+  defp apply_to_anchor(full, id) when is_binary(id) do
+    case drop_before_id(full, id) do
+      [] -> full
+      sliced -> sliced
+    end
+  end
+
+  defp latest_compaction_anchor_id(full) do
+    full
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %Entry.Compaction{first_kept_entry_id: fk} when is_binary(fk) -> fk
+      %Entry.Compaction{} = c -> entry_id(c)
+      _ -> nil
+    end)
+  end
+
+  defp drop_before_id(entries, id) do
+    Enum.drop_while(entries, fn e -> entry_id(e) != id end)
+  end
+
+  defp walk_to_anchor(_by_id, nil, _pred, acc), do: acc
+
+  defp walk_to_anchor(by_id, entry, pred, acc) do
+    acc = [entry | acc]
+
+    if pred.(entry) do
+      acc
+    else
+      parent_id = entry_parent(entry)
+      parent = parent_id && Map.get(by_id, parent_id)
+      walk_to_anchor(by_id, parent, pred, acc)
+    end
+  end
 
   @doc """
-  Walk from the given entry id to root and return the path in
-  root→leaf order. Returns `[]` if the id is unknown. Orphaned
-  ancestors (parent_id pointing to a missing entry) terminate the
-  walk early so the returned path is always a contiguous chain
-  ending at the requested entry. Mirrors `getBranch(fromId)`
-  (`session-manager.ts:1034-1043`).
+  Walk from the current leaf to root and return the path in root→leaf
+  order. Returns `[]` when the session has no leaf. Equivalent to
+  `path(sm, :leaf, to: :root)`.
+  """
+  @spec get_branch(t()) :: [entry()]
+  def get_branch(%__MODULE__{} = sm), do: path(sm, :leaf, to: :root)
+
+  @doc """
+  Walk from the given entry id to root. Equivalent to
+  `path(sm, from_id, to: :root)`.
   """
   @spec get_branch(t(), String.t()) :: [entry()]
-  def get_branch(%__MODULE__{by_id: by_id}, from_id) when is_binary(from_id) do
-    walk_to_root(by_id, Map.get(by_id, from_id), [])
-  end
-
-  defp walk_to_root(_by_id, nil, acc), do: acc
-
-  defp walk_to_root(by_id, entry, acc) do
-    parent_id = entry_parent(entry)
-    parent = parent_id && Map.get(by_id, parent_id)
-    walk_to_root(by_id, parent, [entry | acc])
-  end
+  def get_branch(%__MODULE__{} = sm, from_id) when is_binary(from_id), do: path(sm, from_id, to: :root)
 
   defp entry_parent(%Entry.Passthrough{raw: r}), do: r["parentId"]
   defp entry_parent(entry), do: Map.get(entry, :parent_id)
@@ -314,7 +387,7 @@ defmodule OctoPi.Coder.SessionManager do
   defp do_build_context(_by_id, nil), do: %{messages: [], thinking_level: "off", model: nil}
 
   defp do_build_context(by_id, leaf) do
-    path = walk_to_root(by_id, leaf, [])
+    path = walk_to_anchor(by_id, leaf, &never_stop/1, [])
     build_context_from_path(path)
   end
 
@@ -400,8 +473,11 @@ defmodule OctoPi.Coder.SessionManager do
   @doc """
   Append an entry to the session: assign id (collision-checked),
   link `parent_id` to the current leaf, fill timestamp if absent,
-  update the byId index + leaf pointer, and (when `:store` is
-  given) persist via `SessionStore.append/2`.
+  and update the byId index + leaf pointer.
+
+  Pure update on the in-memory struct — no IO. Persistence is the
+  caller's responsibility (typically `OctoPi.Coder.SessionStore`,
+  which wraps this and writes the materialized entry to its file).
 
   Mirrors the upstream `_appendEntry` flow
   (`session-manager.ts:821-826`) plus per-type appenders.
@@ -410,11 +486,11 @@ defmodule OctoPi.Coder.SessionManager do
 
     * `:id` — explicit id (skips generation).
     * `:timestamp` — explicit ISO-8601 timestamp (defaults to now).
-    * `:store` — pid of an `OctoPi.Coder.SessionStore` to persist into.
 
-  Returns `{updated_session_manager, entry_id}`.
+  Returns `{updated_session_manager, materialized_entry}` — the entry
+  with `id` / `parent_id` / `timestamp` filled in.
   """
-  @spec add_entry(t(), entry(), keyword()) :: {t(), String.t()}
+  @spec add_entry(t(), entry(), keyword()) :: {t(), entry()}
   def add_entry(%__MODULE__{} = sm, entry, opts \\ []) do
     id = opts[:id] || unique_short_id(MapSet.new(Map.keys(sm.by_id)))
     parent_id = sm.leaf_id
@@ -426,8 +502,6 @@ defmodule OctoPi.Coder.SessionManager do
       |> set_parent_id(parent_id)
       |> ensure_timestamp(timestamp)
 
-    if pid = opts[:store], do: SessionStore.append(pid, Entry.pairs(filled))
-
     sm = %{
       sm
       | by_id: Map.put(sm.by_id, id, filled),
@@ -435,8 +509,18 @@ defmodule OctoPi.Coder.SessionManager do
         file_entries: sm.file_entries ++ [filled]
     }
 
-    {sm, id}
+    {sm, filled}
   end
+
+  @doc """
+  Move the leaf pointer without appending an entry. Used by branch
+  navigation: after walking to a different node, the next append should
+  be a child of *that* node. Pure update; no IO.
+
+  Returns the updated session manager.
+  """
+  @spec set_leaf(t(), String.t() | nil) :: t()
+  def set_leaf(%__MODULE__{} = sm, leaf_id), do: %{sm | leaf_id: leaf_id}
 
   defp ensure_timestamp(%Entry.Passthrough{raw: raw} = e, ts) do
     case Map.get(raw, "timestamp") do
@@ -453,63 +537,6 @@ defmodule OctoPi.Coder.SessionManager do
   end
 
   defp iso8601_now, do: DateTime.to_iso8601(DateTime.utc_now())
-
-  @doc """
-  Fork an existing session into a new file under `target_dir`. The
-  new file gets a fresh session id and `parentSession = source_path`,
-  with all non-header entries copied verbatim. Returns the loaded
-  `SessionManager` for the new file.
-
-  Mirrors `SessionManager.forkFrom`
-  (`session-manager.ts:1316-1357`).
-
-  Errors:
-    * `{:error, :enoent}` — source file does not exist
-    * `{:error, :empty}` — source has no parseable lines
-    * `{:error, :missing_header}` — source first entry is not a header
-  """
-  @spec fork(Path.t(), String.t(), Path.t(), keyword()) ::
-          {:ok, t()} | {:error, :enoent | :empty | :missing_header}
-  def fork(source_path, target_cwd, target_dir, opts \\ []) do
-    with true <- File.exists?(source_path) || {:error, :enoent},
-         entries when entries != [] <- source_path |> SessionStore.read_entries() |> Enum.to_list(),
-         [%Header{} | body] <- entries do
-      File.mkdir_p!(target_dir)
-
-      new_id = opts[:id] || create_session_id()
-      timestamp = opts[:timestamp] || iso8601_now()
-      file_timestamp = timestamp |> String.replace(":", "-") |> String.replace(".", "-")
-      new_path = Path.join(target_dir, "#{file_timestamp}_#{new_id}.jsonl")
-
-      header = %Header{
-        id: new_id,
-        version: @current_version,
-        timestamp: timestamp,
-        cwd: target_cwd,
-        parent_session: source_path
-      }
-
-      lines = [Header.encode(header) | Enum.map(body, &Entry.encode/1)]
-      File.write!(new_path, Enum.join(lines, "\n") <> "\n")
-
-      load(new_path)
-    else
-      {:error, _} = err -> err
-      [] -> {:error, :empty}
-      _ -> {:error, :missing_header}
-    end
-  end
-
-  # Random UUID-shaped id (not a true v7 — just an opaque session
-  # identifier, matching pi-mono's contract that ids are opaque
-  # strings). 128 random bits formatted as 8-4-4-4-12.
-  defp create_session_id do
-    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
-
-    "~8.16.0b-~4.16.0b-~4.16.0b-~4.16.0b-~12.16.0b"
-    |> :io_lib.format([a, b, c, d, e])
-    |> IO.iodata_to_binary()
-  end
 
   # ------- migration: v1 → v2 (assign id, parent_id, compaction id) -------
 

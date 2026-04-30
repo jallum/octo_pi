@@ -4,7 +4,6 @@ defmodule OctoPi.Coder.SessionManagerTest do
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.Header
   alias OctoPi.Coder.SessionManager
-  alias OctoPi.Coder.SessionStore
 
   @fixture_root Path.expand("../../fixtures", __DIR__)
 
@@ -190,6 +189,66 @@ defmodule OctoPi.Coder.SessionManagerTest do
     end
   end
 
+  describe "path/3 — anchor variants" do
+    # Topology: m1 → m2 → m3 → c1(firstKept=m2) → m4 → m5
+    # The compaction's kept window is [m2, m3]; everything before
+    # firstKeptEntryId (m1) is summarized into c1; m4, m5 are after.
+    defp build_with_compaction do
+      tmp = scratch("comp.jsonl")
+
+      File.write!(tmp, """
+      {"type":"session","version":3,"id":"s","timestamp":"t","cwd":"/c"}
+      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"u1"}}
+      {"type":"message","id":"m2","parentId":"m1","timestamp":"t","message":{"role":"user","content":"u2"}}
+      {"type":"message","id":"m3","parentId":"m2","timestamp":"t","message":{"role":"user","content":"u3"}}
+      {"type":"compaction","id":"c1","parentId":"m3","timestamp":"t","summary":"s","firstKeptEntryId":"m2","tokensBefore":100}
+      {"type":"message","id":"m4","parentId":"c1","timestamp":"t","message":{"role":"user","content":"u4"}}
+      {"type":"message","id":"m5","parentId":"m4","timestamp":"t","message":{"role":"user","content":"u5"}}
+      """)
+
+      {:ok, sm} = SessionManager.load(tmp)
+      sm
+    end
+
+    test ":root walks the entire branch" do
+      sm = build_with_compaction()
+
+      assert sm |> SessionManager.path(:leaf, to: :root) |> Enum.map(& &1.id) ==
+               ~w(m1 m2 m3 c1 m4 m5)
+    end
+
+    test ":latest_compaction stops at the latest compaction's first_kept_entry_id (inclusive)" do
+      sm = build_with_compaction()
+
+      # m2 is firstKeptEntryId; result includes the kept window
+      # [m2, m3], the compaction c1, and post-compaction tail [m4, m5].
+      assert sm |> SessionManager.path(:leaf, to: :latest_compaction) |> Enum.map(& &1.id) ==
+               ~w(m2 m3 c1 m4 m5)
+    end
+
+    test ":latest_compaction falls back to root when no compaction exists" do
+      sm = build_linear(~w(a b c))
+
+      assert sm |> SessionManager.path(:leaf, to: :latest_compaction) |> Enum.map(& &1.id) ==
+               ~w(a b c)
+    end
+
+    test "to: <id> stops at that id (inclusive)" do
+      sm = build_with_compaction()
+      assert sm |> SessionManager.path(:leaf, to: "m4") |> Enum.map(& &1.id) == ~w(m4 m5)
+    end
+
+    test "explicit leaf id" do
+      sm = build_with_compaction()
+      assert sm |> SessionManager.path("m3", to: :root) |> Enum.map(& &1.id) == ~w(m1 m2 m3)
+    end
+
+    test "nil leaf returns []" do
+      sm = build_linear(~w(a b))
+      assert SessionManager.path(sm, nil, to: :root) == []
+    end
+  end
+
   describe "get_entries/1" do
     test "empty body session returns []" do
       tmp = scratch("nobody-entries.jsonl")
@@ -353,86 +412,24 @@ defmodule OctoPi.Coder.SessionManagerTest do
     end
   end
 
-  describe "fork/4" do
-    test "missing source returns :enoent" do
-      assert {:error, :enoent} =
-               SessionManager.fork(
-                 Path.join(System.tmp_dir!(), "nope-#{System.unique_integer()}.jsonl"),
-                 "/c2",
-                 System.tmp_dir!()
-               )
-    end
-
-    test "copies entries verbatim into a new file with rewritten header" do
-      src = scratch("fork-src.jsonl")
-
-      File.write!(src, """
-      {"type":"session","version":3,"id":"src-id","timestamp":"src-ts","cwd":"/orig"}
-      {"type":"message","id":"m1","parentId":null,"timestamp":"t1","message":{"role":"user","content":"a"}}
-      {"type":"message","id":"m2","parentId":"m1","timestamp":"t2","message":{"role":"assistant","content":"b"}}
-      """)
-
-      target_dir = Path.join(System.tmp_dir!(), "fork-dst-#{System.unique_integer([:positive])}")
-      on_exit(fn -> File.rm_rf!(target_dir) end)
-
-      assert {:ok, forked} =
-               SessionManager.fork(src, "/new-cwd", target_dir, id: "new-id", timestamp: "2026-01-01T00:00:00Z")
-
-      assert forked.session_id == "new-id"
-      assert forked.cwd == "/new-cwd"
-      assert forked.parent_session == src
-      assert forked.version == 3
-
-      # Same body, same ids, same parent_id chain
-      assert forked.by_id["m1"].parent_id == nil
-      assert forked.by_id["m2"].parent_id == "m1"
-      assert forked.leaf_id == "m2"
-
-      # Original file untouched
-      [orig_header | _] = src |> SessionStore.read_entries() |> Enum.to_list()
-      assert orig_header.id == "src-id"
-      assert orig_header.cwd == "/orig"
-      refute orig_header.parent_session
-    end
-
-    test "forked file is independently loadable" do
-      src = scratch("fork-roundtrip.jsonl")
-
-      File.write!(src, """
-      {"type":"session","version":3,"id":"a","timestamp":"t","cwd":"/c"}
-      {"type":"message","id":"m1","parentId":null,"timestamp":"t","message":{"role":"user","content":"x"}}
-      """)
-
-      target_dir = Path.join(System.tmp_dir!(), "fork-rt-#{System.unique_integer([:positive])}")
-      on_exit(fn -> File.rm_rf!(target_dir) end)
-
-      assert {:ok, forked} = SessionManager.fork(src, "/c2", target_dir)
-      reloaded = SessionManager.load(forked.session_file)
-      assert {:ok, sm} = reloaded
-      assert sm.session_id == forked.session_id
-      assert sm.parent_session == src
-      assert Map.keys(sm.by_id) == ["m1"]
-    end
-  end
-
   describe "add_entry/3" do
     test "advances leaf, indexes the entry, links parent_id to old leaf" do
       sm = empty_sm()
 
-      {sm, id1} = SessionManager.add_entry(sm, msg("a"))
-      assert SessionManager.get_leaf_entry_id(sm) == id1
-      assert sm.by_id[id1].parent_id == nil
+      {sm, entry1} = SessionManager.add_entry(sm, msg("a"))
+      assert SessionManager.get_leaf_entry_id(sm) == entry1.id
+      assert sm.by_id[entry1.id].parent_id == nil
 
-      {sm, id2} = SessionManager.add_entry(sm, msg("b"))
-      assert SessionManager.get_leaf_entry_id(sm) == id2
-      assert sm.by_id[id2].parent_id == id1
-      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == [id1, id2]
+      {sm, entry2} = SessionManager.add_entry(sm, msg("b"))
+      assert SessionManager.get_leaf_entry_id(sm) == entry2.id
+      assert sm.by_id[entry2.id].parent_id == entry1.id
+      assert sm |> SessionManager.get_branch() |> Enum.map(& &1.id) == [entry1.id, entry2.id]
     end
 
     test "uses an explicit :id when provided" do
       sm = empty_sm()
-      {sm, id} = SessionManager.add_entry(sm, msg("hi"), id: "fixed")
-      assert id == "fixed"
+      {sm, entry} = SessionManager.add_entry(sm, msg("hi"), id: "fixed")
+      assert entry.id == "fixed"
       assert sm.leaf_id == "fixed"
       assert sm.by_id["fixed"].id == "fixed"
     end
@@ -440,36 +437,11 @@ defmodule OctoPi.Coder.SessionManagerTest do
     test "fills timestamp when entry has none, preserves existing one" do
       sm = empty_sm()
 
-      {sm, _id} = SessionManager.add_entry(sm, msg("t1"))
+      {sm, _entry} = SessionManager.add_entry(sm, msg("t1"))
       assert is_binary(List.last(sm.file_entries).timestamp)
 
-      {sm, _id2} = SessionManager.add_entry(sm, %{msg("t2") | timestamp: "fixed-ts"})
+      {sm, _entry2} = SessionManager.add_entry(sm, %{msg("t2") | timestamp: "fixed-ts"})
       assert List.last(sm.file_entries).timestamp == "fixed-ts"
-    end
-
-    test "persists each entry to the attached SessionStore" do
-      tmp = Path.join(System.tmp_dir!(), "smt-store-#{System.unique_integer([:positive])}")
-      File.mkdir_p!(tmp)
-      on_exit(fn -> File.rm_rf!(tmp) end)
-
-      {:ok, store} = SessionStore.open(id: "rt", cwd: tmp, root: tmp)
-      path = SessionStore.path(store)
-
-      sm = empty_sm()
-      {sm, _id1} = SessionManager.add_entry(sm, msg("x"), store: store)
-      {sm, _id2} = SessionManager.add_entry(sm, msg("y"), store: store)
-
-      :ok = SessionStore.close(store)
-      reread = path |> SessionStore.read_entries() |> Enum.to_list()
-
-      [%Header{}, m1, m2] = reread
-      [in_mem1, in_mem2] = sm.file_entries
-      assert m1.id == in_mem1.id
-      assert m2.id == in_mem2.id
-      assert m1.parent_id == nil
-      assert m2.parent_id == m1.id
-      assert m1.message["content"] == "x"
-      assert m2.message["content"] == "y"
     end
   end
 
