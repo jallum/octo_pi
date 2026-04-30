@@ -11,6 +11,8 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.Coder.Extension.UIContext
   alias OctoPi.Coder.Loop
   alias OctoPi.Coder.Session.Messages
+  alias OctoPi.Coder.SessionManager
+  alias OctoPi.Coder.SessionStore
   alias OctoPi.TUI.Components.AssistantMessage
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CustomMessage
@@ -292,34 +294,6 @@ defmodule OctoPi.TUI.InteractiveTest do
   # queued message's text and which collided with opi-tze.4 by
   # only showing one item at a time).
   describe "handle_event — Alt+Up restore queued to editor (opi-tze.5)" do
-    alias Loop, as: CoderLoop
-    alias OctoPi.Coder.SessionManager
-    alias OctoPi.Coder.SessionStore
-
-    defp start_coder_session_for_dequeue! do
-      model = %OctoPi.AI.Model{
-        id: "fake",
-        name: "fake",
-        api: :fake,
-        provider: :fake,
-        base_url: "http://fake",
-        context_window: 100,
-        max_tokens: 100
-      }
-
-      id = "test-#{System.unique_integer([:positive])}"
-      root = Path.join(System.tmp_dir!(), "opi-restore-test-#{id}")
-      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
-
-      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
-
-      coder =
-        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
-
-      {coder, agent}
-    end
-
     test "Alt+Up with nil session is a no-op" do
       s = %Interactive{session: nil}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
@@ -327,7 +301,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up with empty queues shows 'No queued messages' notification" do
-      {coder, _agent} = start_coder_session_for_dequeue!()
+      {coder, _agent} = start_coder_session!("restore")
       s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
       s2 = Interactive.handle_event(s, %Key{key: :up, modifiers: [:alt]})
       assert s2.notification =~ "No queued"
@@ -335,7 +309,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up with a single queued message places its text in the editor" do
-      {coder, agent} = start_coder_session_for_dequeue!()
+      {coder, agent} = start_coder_session!("restore")
       :ok = OctoPi.Agent.steer(agent, "please continue")
 
       s = %Interactive{session: coder, input: %Input{value: "", cursor: 0}}
@@ -347,7 +321,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up joins multiple queued messages with blank lines (steering, then follow-up)" do
-      {coder, agent} = start_coder_session_for_dequeue!()
+      {coder, agent} = start_coder_session!("restore")
       :ok = OctoPi.Agent.steer(agent, "steer one")
       :ok = OctoPi.Agent.steer(agent, "steer two")
       :ok = OctoPi.Agent.follow_up(agent, "and then")
@@ -361,7 +335,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up combines queued text with whatever is already typed" do
-      {coder, agent} = start_coder_session_for_dequeue!()
+      {coder, agent} = start_coder_session!("restore")
       :ok = OctoPi.Agent.steer(agent, "queued")
 
       s = %Interactive{session: coder, input: %Input{value: "new draft", cursor: 9}}
@@ -371,7 +345,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Alt+Up with whitespace-only current text drops it from the combined value" do
-      {coder, agent} = start_coder_session_for_dequeue!()
+      {coder, agent} = start_coder_session!("restore")
       :ok = OctoPi.Agent.steer(agent, "queued")
 
       s = %Interactive{session: coder, input: %Input{value: "   \n\n", cursor: 5}}
@@ -387,7 +361,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     # routes through the same `message_text/1` helper as the
     # pending-messages indicator, which flattens the list cleanly.
     test "Alt+Up with a list-content user message restores its joined text without crashing" do
-      {coder, agent} = start_coder_session_for_dequeue!()
+      {coder, agent} = start_coder_session!("restore")
 
       list_content_msg = %User{
         content: [
@@ -412,36 +386,8 @@ defmodule OctoPi.TUI.InteractiveTest do
   # interactive-mode.ts L2316-2321
   # (`restoreQueuedMessagesToEditor({abort: true})`).
   describe "handle_event — Escape during streaming (opi-tze.8)" do
-    alias Loop, as: CoderLoop
-    alias OctoPi.Coder.SessionManager
-    alias OctoPi.Coder.SessionStore
-
-    defp start_coder_session_for_escape! do
-      model = %OctoPi.AI.Model{
-        id: "fake",
-        name: "fake",
-        api: :fake,
-        provider: :fake,
-        base_url: "http://fake",
-        context_window: 100,
-        max_tokens: 100
-      }
-
-      id = "test-#{System.unique_integer([:positive])}"
-      root = Path.join(System.tmp_dir!(), "opi-escape-test-#{id}")
-      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
-
-      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
-
-      coder =
-        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
-
-      {coder, agent}
-    end
-
     test "Escape during streaming with queued messages restores them and aborts" do
-      {coder, agent} = start_coder_session_for_escape!()
+      {coder, agent} = start_coder_session!("escape")
       :ok = OctoPi.Agent.steer(agent, "queued one")
       :ok = OctoPi.Agent.follow_up(agent, "and then")
 
@@ -462,7 +408,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "Escape during streaming with empty queues preserves the draft (no clear)" do
-      {coder, _agent} = start_coder_session_for_escape!()
+      {coder, _agent} = start_coder_session!("escape")
 
       s = %Interactive{
         session: coder,
@@ -533,36 +479,8 @@ defmodule OctoPi.TUI.InteractiveTest do
   # call Coder.prompt and silently lose the message to
   # {:error, :already_streaming}.
   describe "handle_event — Enter while streaming routes to steer (opi-tze.2)" do
-    alias Loop, as: CoderLoop
-    alias OctoPi.Coder.SessionManager
-    alias OctoPi.Coder.SessionStore
-
-    defp start_coder_session_for_steer! do
-      model = %OctoPi.AI.Model{
-        id: "fake",
-        name: "fake",
-        api: :fake,
-        provider: :fake,
-        base_url: "http://fake",
-        context_window: 100,
-        max_tokens: 100
-      }
-
-      id = "test-#{System.unique_integer([:positive])}"
-      root = Path.join(System.tmp_dir!(), "opi-steer-test-#{id}")
-      sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
-
-      store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
-      {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
-
-      coder =
-        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
-
-      {coder, agent}
-    end
-
     test "Enter with active loader enqueues to the agent's steering queue" do
-      {coder, agent} = start_coder_session_for_steer!()
+      {coder, agent} = start_coder_session!("steer")
 
       s = %Interactive{
         input: %Input{value: "steer me", cursor: 8},
@@ -609,7 +527,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         )
 
       coder =
-        start_supervised!({CoderLoop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+        start_supervised!({Loop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
 
       :ok = OctoPi.Agent.steer(agent, "prefilled")
 
@@ -3014,6 +2932,27 @@ defmodule OctoPi.TUI.InteractiveTest do
       context_window: 100,
       max_tokens: 100
     }
+  end
+
+  # Spin up the full coder pipeline (Agent loop + SessionStore +
+  # Coder loop) backed by a faux model and a fresh tmp directory.
+  # Returns {coder_pid, agent_pid}. `tag` only affects the tmpdir
+  # name (debug aid). Used by the opi-tze.* tests that exercise
+  # TUI ↔ Coder ↔ Agent paths end-to-end.
+  defp start_coder_session!(tag) do
+    model = make_model("fake")
+
+    id = "test-#{System.unique_integer([:positive])}"
+    root = Path.join(System.tmp_dir!(), "opi-#{tag}-test-#{id}")
+    sm = %SessionManager{cwd: System.tmp_dir!(), session_id: id}
+
+    store = start_supervised!({SessionStore, [id: id, cwd: System.tmp_dir!(), root: root]})
+    {:ok, agent} = OctoPi.Agent.start_loop(model: model, convert_to_llm: &Messages.to_llm/1)
+
+    coder =
+      start_supervised!({Loop, [extensions: [], session_manager: sm, store_pid: store, agent_pid: agent]})
+
+    {coder, agent}
   end
 
   describe "handle_event — Ctrl+P/Shift+Ctrl+P model cycling (opi-0g4.12)" do
