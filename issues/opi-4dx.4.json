@@ -11,6 +11,11 @@
       "author": "",
       "text": "**Deferred** by spike data (see `docs/opi-4dx-spike.md`).\n\nThe trace covers only msg_count 2 → 4 — too narrow a range to confirm whether `transcript.render` cost grows linearly with `msg_count`. Cost was roughly flat in the observed range (1.06–1.36 ms idle p50; 1.92–2.22 ms streaming p50).\n\nRe-evaluate against a long-conversation trace (≥ 20 finalized messages) before opening for work.",
       "timestamp": "2026-04-30T15:37:39.859897Z"
+    },
+    {
+      "author": "",
+      "text": "**Subsumed by `opi-4dx.7` + `opi-4dx.8`.**\n\nThe render-state redesign reframes the problem from \"cache lines for finalized messages\" to \"what's still pending render?\". A finalized message has zero pending tail, so its rendered iolist sits in `Transcript.rendered[id]` and subsequent ticks emit it verbatim — O(1) per finalized item without a separate cache layer. The line cache `.4` proposed becomes implicit in the Transcript shape.\n\nClosing as subsumed.",
+      "timestamp": "2026-04-30T17:49:04.089098Z"
     }
   ],
   "created": "2026-04-30T14:03:50.175104Z",
@@ -22,5 +27,5 @@
   "status": "deferred",
   "title": "Cache rendered lines per finalized message",
   "type": "task",
-  "updated_at": "2026-04-30T15:37:39.859897Z"
+  "updated_at": "2026-04-30T17:49:04.089098Z"
 }
