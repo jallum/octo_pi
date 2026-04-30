@@ -64,7 +64,8 @@ defmodule OctoPi.Coder.Session.MessageWriter do
 
   # ---- content block serialization ----------------------------------------
 
-  defp user_content(text) when is_binary(text), do: [%{"type" => "text", "text" => text}]
+  # User.t() and ToolResult.t() content are list-shape post-opi-5ka.3;
+  # the binary clause was dead in the well-typed world. Dropped.
   defp user_content(blocks) when is_list(blocks), do: Enum.map(blocks, &user_block/1)
 
   defp user_block(%Text{text: t}), do: %{"type" => "text", "text" => t}

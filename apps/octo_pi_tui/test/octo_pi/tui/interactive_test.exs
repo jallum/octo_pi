@@ -1219,20 +1219,6 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "handle_event — Event.QueueUpdate (opi-tze.3)" do
     alias OctoPi.AI.Message.User
 
-    test "copies binary-content user messages into pending_steering / pending_follow_up" do
-      s = %Interactive{}
-
-      ev = %Event.QueueUpdate{
-        steering: [%User{content: "a", timestamp: 0}, %User{content: "b", timestamp: 0}],
-        follow_up: [%User{content: "x", timestamp: 0}]
-      }
-
-      s2 = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
-
-      assert s2.pending_steering == ["a", "b"]
-      assert s2.pending_follow_up == ["x"]
-    end
-
     test "flattens list-content messages by joining %Text{} blocks" do
       s = %Interactive{}
 

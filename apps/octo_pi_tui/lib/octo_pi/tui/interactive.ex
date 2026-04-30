@@ -1876,13 +1876,11 @@ defmodule OctoPi.TUI.Interactive do
     |> Container.render(width)
   end
 
-  # Extract a plain string from a queued message struct. Handles both
-  # the binary-content shape (steered/follow_up'd via Coder.steer/2 —
-  # Message.normalize wraps the binary into %User{content: bin}) and
-  # the list-of-content-blocks shape (e.g. messages reconstructed
-  # from session state with %Text{} blocks and possibly images).
-  defp message_text(%{content: c}) when is_binary(c), do: c
-
+  # Extract a plain string from a queued message struct. Post-
+  # opi-5ka.3 every %User{} reaching the TUI's pending-messages
+  # indicator has list-shape content (a single %Text{} for items
+  # built from a string, or %Text{}/%Image{} blocks for items
+  # reconstructed from session state).
   defp message_text(%{content: c}) when is_list(c) do
     Enum.map_join(c, "\n", fn
       %{__struct__: OctoPi.AI.Content.Text, text: t} -> t
