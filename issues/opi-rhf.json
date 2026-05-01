@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T20:25:38Z",
+  "description": "Two bugs surfaced by running `bin/pi --log-telemetry` under tmux and exercising the basic interaction loop.\n\n## Issues\n\n### 1. Key-input lag during streaming (mailbox backpressure)\nDuring a streaming response, measured key latency was p50=8.8ms / max=15.5ms; 86.6% of keypresses arrived with a backed-up mailbox (max backlog 37 messages). Idle latency (between turns) is p50=174µs / max=3ms — the gap is entirely caused by streaming delta events piling up.\n\nRoot cause: `handle_info` for `MessageBlockDelta` (and Start/End) in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:573–579` processes exactly one message per scheduler return. When the provider delivers tokens faster than 33ms each, the process mailbox accumulates pending deltas. HID events must wait for all queued deltas to drain before they are processed.\n\n### 2. `app.clear` (Ctrl+C) does not clear the transcript when idle\nAfter a completed response, pressing Ctrl+C does nothing visible. The conversation context is unchanged.\n\nRoot cause: `dispatch_app_action(\"app.clear\", state, _key)` in `interactive.ex:1396` — the base (idle) function head — returns `state` unchanged. The slash-command path at line 1687 correctly does `%{state | transcript: %Transcript{}}`.\n\n## Dependency graph\n```mermaid\ngraph LR\n    A[.1 app.clear base case] --\u003e C[.3 verify smoke-test clean]\n    B[.2 mailbox drain] --\u003e C\n```\n\n## Test methodology\nBoth tickets should be verified under tmux with `--log-telemetry`:\n```\ntmux new-session -d -s pi_test -x 220 -y 50\ntmux send-keys -t pi_test 'bin/pi --log-telemetry tmp/verify_trace.log' Enter\n# ... exercise scenario ...\npython3 tmp/analyze_trace.py tmp/verify_trace.log\n```\n\n## Trace analysis tool\nA trace analysis script lives at `tmp/analyze_trace.py`. Run it against any `--log-telemetry` output file.\nKey metrics to check: `key.latency` p50/p99, `mailbox\u003e0 at arrival`, `streaming? = true` render counts.",
+  "id": "opi-rhf",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "TUI: Smoke-test defect backlog (2026-05-01)",
+  "type": "epic",
+  "updated_at": "2026-05-01T20:25:38Z"
+}
