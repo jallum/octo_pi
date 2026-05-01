@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-rhf.1",
     "opi-rhf.2"
@@ -11,8 +11,8 @@
   "labels": [],
   "parent": "opi-rhf",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Smoke-test sign-off: verify both defects resolved",
   "type": "task",
-  "updated_at": "2026-05-01T20:26:30Z"
+  "updated_at": "2026-05-01T20:38:12Z"
 }
