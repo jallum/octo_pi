@@ -61,7 +61,7 @@ defmodule OctoPi.Coder.Compaction.Serialize do
     |> Enum.join("\n\n")
   end
 
-  # User: plain string content, or text-blocks-only filtered+concatenated.
+  # User: text-blocks-only filtered+concatenated.
   defp format(%User{content: content}) do
     text = user_text(content)
 
@@ -97,8 +97,9 @@ defmodule OctoPi.Coder.Compaction.Serialize do
 
   # ---- helpers -----------------------------------------------------------
 
-  defp user_text(content) when is_binary(content), do: content
-
+  # User.content is list-only post-opi-5ka.3; the in-tree binary
+  # form was lifted at construction (Message.normalize/1). Drop the
+  # is_binary clause here — unreachable for typed %User{} values.
   defp user_text(content) when is_list(content) do
     content
     |> Enum.flat_map(fn
@@ -110,6 +111,9 @@ defmodule OctoPi.Coder.Compaction.Serialize do
 
   defp user_text(_), do: ""
 
+  # ToolResult.content has been list-only by type since well before
+  # opi-5ka; the binary clause was defensive coverage and is dropped
+  # in line with the same shape-uniformity goal.
   defp tool_result_text(content) when is_list(content) do
     content
     |> Enum.flat_map(fn
@@ -119,7 +123,6 @@ defmodule OctoPi.Coder.Compaction.Serialize do
     |> Enum.join("")
   end
 
-  defp tool_result_text(content) when is_binary(content), do: content
   defp tool_result_text(_), do: ""
 
   defp split_assistant_blocks(blocks) do

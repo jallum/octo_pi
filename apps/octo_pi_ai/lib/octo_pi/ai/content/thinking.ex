@@ -11,8 +11,9 @@ defmodule OctoPi.AI.Content.Thinking do
   @type t :: %__MODULE__{
           thinking: String.t(),
           signature: String.t() | nil,
-          redacted?: boolean()
+          redacted?: boolean(),
+          content_index: non_neg_integer() | nil
         }
 
-  defstruct thinking: "", signature: nil, redacted?: false
+  defstruct thinking: "", signature: nil, redacted?: false, content_index: nil
 end

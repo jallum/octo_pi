@@ -123,8 +123,25 @@ defmodule OctoPi.Coder.Modes.Rpc do
 
   def event_to_json(%Event.MessageStart{}), do: event("message_start", %{})
 
-  def event_to_json(%Event.MessageUpdate{partial: partial}) do
-    event("message_update", %{"text" => extract_text(partial)})
+  def event_to_json(%Event.MessageBlockStart{block_id: id, kind: kind}) do
+    event("message_block_start", %{"block_id" => id, "kind" => to_string(kind)})
+  end
+
+  def event_to_json(%Event.MessageBlockDelta{block_id: id, kind: kind, delta: delta, snapshot: snapshot}) do
+    event("message_block_delta", %{
+      "block_id" => id,
+      "kind" => to_string(kind),
+      "delta" => delta,
+      "snapshot" => snapshot
+    })
+  end
+
+  def event_to_json(%Event.MessageBlockEnd{block_id: id, kind: kind, content: content}) do
+    event("message_block_end", %{
+      "block_id" => id,
+      "kind" => to_string(kind),
+      "content" => content
+    })
   end
 
   def event_to_json(%Event.MessageEnd{message: msg}) do

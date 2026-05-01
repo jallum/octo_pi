@@ -14,13 +14,19 @@ defmodule OctoPi.TUI.Component do
   """
 
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.RenderContext
 
-  @callback render(state :: struct(), width :: pos_integer()) :: [binary()]
+  @type t :: struct()
 
-  @callback handle_key(state :: struct(), key :: Key.t()) ::
-              struct() | {struct(), [term()]}
+  @type frame_ms :: non_neg_integer() | nil
 
-  @callback invalidate(state :: struct()) :: struct()
+  @callback invalidate(t()) :: t()
+  @callback update(t(), term()) :: t()
+  @callback finalize(t(), term()) :: t()
 
-  @optional_callbacks handle_key: 2, invalidate: 1
+  @callback render(t(), ctx :: RenderContext.t()) :: {t(), [String.t()], frame_ms()}
+
+  @callback handle_key(t(), key :: Key.t()) :: t() | {t(), [term()]}
+
+  @optional_callbacks handle_key: 2, invalidate: 1, update: 2, finalize: 2
 end

@@ -17,8 +17,11 @@ defmodule OctoPi.AI.Application do
     })
 
     children = [
-      OctoPi.AI.ProviderRegistry
+      OctoPi.AI.ApiRegistry,
+      OctoPi.AI.RunnerRegistry
     ]
+
+    OctoPi.AI.Tracing.maybe_attach()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: OctoPi.AI.Supervisor)
   end

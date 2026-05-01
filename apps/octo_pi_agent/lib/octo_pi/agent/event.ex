@@ -7,17 +7,29 @@ defmodule OctoPi.Agent.Event do
 
       AgentStart
         TurnStart
-          MessageStart → many MessageUpdate → MessageEnd
+          MessageStart
+            MessageBlockStart → many MessageBlockDelta → MessageBlockEnd
+            (repeat per content block: text / thinking / tool_call)
+          MessageEnd
           ToolExecutionStart → many ToolExecutionUpdate → ToolExecutionEnd
           (repeat per tool)
         TurnEnd
         (repeat per turn until the loop exits)
       AgentEnd
 
-  `partial` fields, where present, carry the in-progress
-  `OctoPi.AI.Message.Assistant.t()` snapshot — consumers can render
-  current state without tracking deltas themselves. `message` (on
-  `MessageEnd`, `AgentEnd`) carries the finalized shape.
+  `QueueUpdate` is asynchronous: it fires whenever the steering or
+  follow-up queue is mutated (enqueue, public-API drain, in-loop
+  drain). It is not part of the per-turn lifecycle above and may
+  arrive at any time, including before `AgentStart` and after
+  `AgentEnd`.
+
+  `MessageStart`'s `partial` carries the empty Assistant skeleton
+  (model/provider metadata, no content yet). Per-chunk updates ride
+  on `MessageBlockDelta` as `{block_id, kind, delta, snapshot}` — both
+  `delta` and `snapshot` are binaries (refcounted refc binaries cross
+  processes zero-copy). `message` (on `MessageEnd`, `AgentEnd`) carries
+  the finalized full shape — the only point in the stream where a
+  full `Assistant.t()` crosses a process boundary.
 
   `ToolExecutionUpdate` carries a `Tool.Result.t()` partial — tool
   handlers can stream progress via the `on_update` callback.
@@ -34,13 +46,16 @@ defmodule OctoPi.Agent.Event do
           | Event.TurnStart.t()
           | Event.TurnEnd.t()
           | Event.MessageStart.t()
-          | Event.MessageUpdate.t()
+          | Event.MessageBlockStart.t()
+          | Event.MessageBlockDelta.t()
+          | Event.MessageBlockEnd.t()
           | Event.MessageEnd.t()
           | Event.ToolExecutionStart.t()
           | Event.ToolExecutionUpdate.t()
           | Event.ToolExecutionEnd.t()
           | Event.CompactionRequested.t()
           | Event.CompactionEnd.t()
+          | Event.QueueUpdate.t()
 
   defmodule AgentStart do
     @moduledoc "Emitted once at the start of a run."
@@ -81,11 +96,54 @@ defmodule OctoPi.Agent.Event do
     defstruct [:partial]
   end
 
-  defmodule MessageUpdate do
-    @moduledoc "Assistant message partial snapshot mid-stream."
-    @enforce_keys [:partial]
-    @type t :: %__MODULE__{partial: Assistant.t()}
-    defstruct [:partial]
+  defmodule MessageBlockStart do
+    @moduledoc """
+    A single content block (text / thinking / tool_call) has begun
+    streaming. `block_id` is the decoder's `content_index` — a stable
+    forward-order integer per assistant message. `kind` discriminates
+    the block type.
+    """
+    @enforce_keys [:block_id, :kind]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{block_id: non_neg_integer(), kind: kind()}
+    defstruct [:block_id, :kind]
+  end
+
+  defmodule MessageBlockDelta do
+    @moduledoc """
+    An incremental chunk for a content block. `delta` is the new
+    fragment for this chunk; `snapshot` is the cumulative text of
+    *this block* so far (delta inclusive).
+
+    For `:tool_call`, `delta` is a JSON fragment and `snapshot` is
+    the accumulated partial-JSON buffer.
+
+    Both are refcounted refc binaries — zero-copy across processes.
+    """
+    @enforce_keys [:block_id, :kind, :delta, :snapshot]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{
+            block_id: non_neg_integer(),
+            kind: kind(),
+            delta: binary(),
+            snapshot: binary()
+          }
+    defstruct [:block_id, :kind, :delta, :snapshot]
+  end
+
+  defmodule MessageBlockEnd do
+    @moduledoc """
+    A content block has finished. `content` is the full accumulated
+    text (or partial-JSON buffer for `:tool_call`).
+    """
+    @enforce_keys [:block_id, :kind, :content]
+    @type kind :: :text | :thinking | :tool_call
+    @type t :: %__MODULE__{
+            block_id: non_neg_integer(),
+            kind: kind(),
+            content: binary()
+          }
+    defstruct [:block_id, :kind, :content]
   end
 
   defmodule MessageEnd do
@@ -151,5 +209,26 @@ defmodule OctoPi.Agent.Event do
     @enforce_keys [:result]
     @type t :: %__MODULE__{result: {:ok, map()} | {:cancel, term()} | {:error, term()}}
     defstruct [:result]
+  end
+
+  defmodule QueueUpdate do
+    @moduledoc """
+    Emitted whenever the steering or follow-up queue changes — on
+    enqueue (`steer/2` / `follow_up/2`), on public-API drain
+    (`drain_steering/1` / `drain_follow_up/1`), and on every in-loop
+    drain. Subscribers (notably the TUI's pending-messages indicator)
+    use this to render "Steering: …" / "Follow-up: …" lines above the
+    editor without having to call back into the Agent for state.
+
+    Both queues are reported in FIFO order (oldest first) at every
+    emission.
+
+    Mirrors upstream pi-mono's `queue_update` event emitted by
+    `AgentSession` (tmp/pi-mono/packages/coding-agent/src/core
+    /agent-session.ts).
+    """
+    @enforce_keys [:steering, :follow_up]
+    @type t :: %__MODULE__{steering: [Message.t()], follow_up: [Message.t()]}
+    defstruct [:steering, :follow_up]
   end
 end

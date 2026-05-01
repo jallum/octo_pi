@@ -1,14 +1,18 @@
 defmodule OctoPi.TUI.Components.Diff do
   @moduledoc false
 
+  @behaviour OctoPi.TUI.Component
+
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
 
-  @type t :: %__MODULE__{
-          diff_text: String.t(),
-          theme: Theme.t()
-        }
+  @type t :: %__MODULE__{diff_text: String.t()}
 
-  defstruct [:diff_text, :theme]
+  defstruct [:diff_text]
+
+  @impl true
+  def render(%__MODULE__{diff_text: diff_text} = self, %RenderContext{theme: theme}),
+    do: {self, render_diff(diff_text, theme), nil}
 
   @spec render_diff(String.t(), Theme.t()) :: [String.t()]
   def render_diff("", _theme), do: []
@@ -20,7 +24,7 @@ defmodule OctoPi.TUI.Components.Diff do
     |> Enum.reverse()
   end
 
-  @spec invalidate(t()) :: t()
+  @impl true
   def invalidate(state), do: state
 
   defp render_lines([], _theme, acc), do: acc

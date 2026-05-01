@@ -61,6 +61,11 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
     pid
   end
 
+  # Helper for assertions on user-message content. Post-opi-5ka.1 every
+  # %User{} flowing through Agent.prompt / steer / follow_up has list-
+  # shape content (a single %Text{} for a string input).
+  defp user_text(%User{content: [%Text{text: t}]}), do: t
+
   # Named handlers — remote captures avoid telemetry's "local function"
   # performance warning.
   def telemetry_forward_tool_start(_event, _measurements, metadata, %{pid: pid}) do
@@ -114,7 +119,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentStart{}}
       assert_received {:octo_pi_agent_event, %Event.TurnStart{turn: 1}}
       assert_received {:octo_pi_agent_event, %Event.MessageStart{}}
-      assert_received {:octo_pi_agent_event, %Event.MessageUpdate{}}
+      assert_received {:octo_pi_agent_event, %Event.MessageBlockDelta{kind: :text, delta: "hello"}}
       assert_received {:octo_pi_agent_event, %Event.MessageEnd{}}
       assert_received {:octo_pi_agent_event, %Event.TurnEnd{turn: 1}}
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{reason: :stop, messages: msgs}}
@@ -407,7 +412,114 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
 
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "midway note"]
+      assert Enum.map(users, &user_text/1) == ["go", "midway note"]
+    end
+
+    # Steer a message *before* prompt() is called. Upstream's runLoop
+    # drains steering before the very first stream call (agent-loop.ts
+    # L165). Octo_pi previously only drained on :tool_use turns, so a
+    # pre-prompt steer was stranded across a single-turn run.
+    test "steered messages enqueued before prompt land in turn 1's transcript" do
+      final = assistant([%Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: final}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.steer(loop, "steer-pre")
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      assert Enum.map(users, &user_text/1) == ["go", "steer-pre"]
+    end
+
+    # Steer during a streaming non-tool turn. Upstream's inner-loop
+    # tail (agent-loop.ts L208) drains steering after every turn and
+    # re-enters the inner loop if any items arrived, regardless of
+    # stop_reason. Octo_pi previously only drained on :tool_use, so
+    # a steer mid-stream of a :stop turn was stranded.
+    test "steered messages during a non-tool streaming turn run as a follow-up turn" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.steer(loop, "steer-mid")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      assert Enum.map(users, &user_text/1) == ["go", "steer-mid"]
+    end
+
+    # When BOTH steering and follow-up are queued at a non-tool stop,
+    # steering takes precedence: upstream's inner-loop tail drains
+    # steering before falling through to the outer follow-up check
+    # (agent-loop.ts L208 + L222).
+    test "steering takes precedence over follow_up at non-tool stop" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+      third = assistant([%Text{text: "third"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: third}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.follow_up(loop, "fup-after")
+      :ok = OctoPi.Agent.steer(loop, "steer-first")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
+
+      users = Enum.filter(msgs, &match?(%User{}, &1))
+      # steer drained at end of turn 1 → "steer-first" runs as turn 2;
+      # turn 2 is a non-tool stop with empty steering → outer loop
+      # picks up follow_up → "fup-after" runs as turn 3.
+      assert Enum.map(users, &user_text/1) == ["go", "steer-first", "fup-after"]
     end
   end
 
@@ -439,7 +551,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["hi", "and then?"]
+      assert Enum.map(users, &user_text/1) == ["hi", "and then?"]
     end
 
     test "follow_up during idle does not start a run; next prompt drains" do
@@ -447,6 +559,9 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
       OctoPi.Agent.subscribe(loop, self(), :async)
 
       :ok = OctoPi.Agent.follow_up(loop, "carried over")
+      # Enqueue emits a QueueUpdate snapshot (opi-tze.3) but must NOT
+      # emit any run-lifecycle event — idle stays idle.
+      assert_received {:octo_pi_agent_event, %Event.QueueUpdate{}}
       refute_receive {:octo_pi_agent_event, _}, 50
 
       only = assistant([%Text{text: "ok"}], :stop)
@@ -476,7 +591,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["now", "carried over"]
+      assert Enum.map(users, &user_text/1) == ["now", "carried over"]
     end
 
     test "set_queue_mode(:all) drains multiple follow_ups in one pass" do
@@ -512,7 +627,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["hi", "a", "b"]
+      assert Enum.map(users, &user_text/1) == ["hi", "a", "b"]
     end
   end
 
@@ -1043,6 +1158,163 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
     end
   end
 
+  # opi-5ka.2: set_messages/2 routes elements through
+  # Message.normalize_if_message/1, lifting User/ToolResult string
+  # content to list-shape while passing synthetic transcript types
+  # (raw JSON maps, compaction-summary structs) through unchanged.
+  describe "set_messages/2 normalization" do
+    test "lifts %User{} string content to list-shape; passes others through" do
+      loop = start_loop()
+
+      synthetic_map = %{"role" => "compactionSummary", "summary" => "earlier", "timestamp" => 0}
+
+      :ok =
+        OctoPi.Agent.set_messages(loop, [
+          %User{content: "hi", timestamp: 0},
+          %User{content: [%Text{text: "already-list"}], timestamp: 0},
+          synthetic_map
+        ])
+
+      state = OctoPi.Agent.state(loop)
+
+      assert [
+               %User{content: [%Text{text: "hi"}]},
+               %User{content: [%Text{text: "already-list"}]},
+               ^synthetic_map
+             ] = state.messages
+    end
+  end
+
+  # opi-tze.4: Agent.drain_steering / drain_follow_up are inspection /
+  # restore-to-editor APIs and must return ALL queued items regardless
+  # of the queue's configured drainage mode (which only controls the
+  # in-loop per-turn drain).
+  describe "public-API drain returns all items" do
+    test "drain_steering/1 returns all queued items in default :one_at_a_time mode" do
+      loop = start_loop()
+
+      :ok = OctoPi.Agent.steer(loop, "a")
+      :ok = OctoPi.Agent.steer(loop, "b")
+      :ok = OctoPi.Agent.steer(loop, "c")
+
+      drained = OctoPi.Agent.drain_steering(loop)
+      assert Enum.map(drained, &user_text/1) == ["a", "b", "c"]
+      assert OctoPi.Agent.drain_steering(loop) == []
+    end
+
+    test "drain_follow_up/1 returns all queued items in default :one_at_a_time mode" do
+      loop = start_loop()
+
+      :ok = OctoPi.Agent.follow_up(loop, "a")
+      :ok = OctoPi.Agent.follow_up(loop, "b")
+      :ok = OctoPi.Agent.follow_up(loop, "c")
+
+      drained = OctoPi.Agent.drain_follow_up(loop)
+      assert Enum.map(drained, &user_text/1) == ["a", "b", "c"]
+      assert OctoPi.Agent.drain_follow_up(loop) == []
+    end
+  end
+
+  # opi-tze.3: Event.QueueUpdate fires whenever either queue is
+  # mutated (enqueue, public-API drain, in-loop drain). The TUI uses
+  # this to render the "Steering: … / Follow-up: …" indicator above
+  # the editor.
+  describe "queue_update events" do
+    test "steer/2 emits QueueUpdate carrying the new full snapshot" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.steer(loop, "a")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{
+                         steering: [%User{content: [%Text{text: "a"}]}],
+                         follow_up: []
+                       }}
+
+      :ok = OctoPi.Agent.steer(loop, "b")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{
+                         steering: [
+                           %User{content: [%Text{text: "a"}]},
+                           %User{content: [%Text{text: "b"}]}
+                         ],
+                         follow_up: []
+                       }}
+    end
+
+    test "follow_up/2 emits QueueUpdate carrying the new full snapshot" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      :ok = OctoPi.Agent.follow_up(loop, "x")
+
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{
+                         steering: [],
+                         follow_up: [%User{content: [%Text{text: "x"}]}]
+                       }}
+    end
+
+    test "public-API drain emits QueueUpdate when items were drained" do
+      loop = start_loop()
+      :ok = OctoPi.Agent.steer(loop, "a")
+      :ok = OctoPi.Agent.steer(loop, "b")
+
+      # Subscribe AFTER enqueuing so we only see drain events.
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      _ = OctoPi.Agent.drain_steering(loop)
+
+      assert_received {:octo_pi_agent_event, %Event.QueueUpdate{steering: [], follow_up: []}}
+    end
+
+    test "public-API drain on an empty queue does NOT emit QueueUpdate" do
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      _ = OctoPi.Agent.drain_steering(loop)
+      _ = OctoPi.Agent.drain_follow_up(loop)
+
+      refute_receive {:octo_pi_agent_event, %Event.QueueUpdate{}}, 50
+    end
+
+    test "in-loop steering drain emits QueueUpdate (parity with upstream queue_update)" do
+      first = assistant([%Text{text: "first"}], :stop)
+      second = assistant([%Text{text: "second"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: first}
+        ],
+        [
+          %AIEvent.Start{partial: assistant([], nil)},
+          %AIEvent.Done{reason: :stop, message: second}
+        ]
+      ])
+
+      loop = start_loop()
+      OctoPi.Agent.subscribe(loop, self(), :async)
+
+      FakeTransport.set_gate()
+      :ok = OctoPi.Agent.prompt(loop, "go")
+      :ok = OctoPi.Agent.steer(loop, "steer-mid")
+      FakeTransport.release_gate()
+
+      :ok = OctoPi.Agent.wait_for_idle(loop, 2_000)
+
+      # Enqueue snapshot then in-loop drain snapshot.
+      assert_received {:octo_pi_agent_event,
+                       %Event.QueueUpdate{
+                         steering: [%User{content: [%Text{text: "steer-mid"}]}]
+                       }}
+
+      assert_received {:octo_pi_agent_event, %Event.QueueUpdate{steering: [], follow_up: []}}
+    end
+  end
+
   describe "steering queue :all mode" do
     test "set_queue_mode(:steering, :all) drains multiple steers in one pass" do
       tool_call = %ToolCall{
@@ -1079,7 +1351,7 @@ defmodule OctoPi.Agent.LoopBehaviorTest do
 
       assert_received {:octo_pi_agent_event, %Event.AgentEnd{messages: msgs}}
       users = Enum.filter(msgs, &match?(%User{}, &1))
-      assert Enum.map(users, & &1.content) == ["go", "note a", "note b"]
+      assert Enum.map(users, &user_text/1) == ["go", "note a", "note b"]
     end
   end
 

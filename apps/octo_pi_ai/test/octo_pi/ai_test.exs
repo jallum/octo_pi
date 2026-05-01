@@ -7,7 +7,7 @@ defmodule OctoPi.AITest do
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
-  alias OctoPi.AI.Provider
+  alias OctoPi.AI.Api
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage
@@ -83,8 +83,8 @@ defmodule OctoPi.AITest do
       assert %Event.Error{reason: :error, message: assistant}
     end
 
-    test "provider behaviour defines stream_to/4" do
-      callbacks = Provider.behaviour_info(:callbacks)
+    test "api behaviour defines stream_to/4" do
+      callbacks = Api.behaviour_info(:callbacks)
       assert {:stream_to, 4} in callbacks
     end
   end

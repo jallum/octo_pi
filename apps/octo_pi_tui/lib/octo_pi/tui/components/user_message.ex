@@ -4,26 +4,26 @@ defmodule OctoPi.TUI.Components.UserMessage do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.Components.Markdown
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
 
   @osc133_zone_start "\e]133;A\a"
   @osc133_zone_end "\e]133;B\a"
   @osc133_zone_final "\e]133;C\a"
 
-  @type t :: %__MODULE__{
-          text: String.t(),
-          theme: Theme.t()
-        }
+  @type t :: %__MODULE__{text: String.t()}
 
-  defstruct [:text, :theme]
+  defstruct [:text]
 
-  @spec new(String.t(), Theme.t()) :: t()
-  def new(text, theme), do: %__MODULE__{text: text, theme: theme}
+  @spec new(String.t()) :: t()
+  def new(text), do: %__MODULE__{text: text}
 
   @impl true
-  def render(%__MODULE__{text: text}, _width) when text in ["", nil], do: []
+  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, build_lines(self, ctx), nil}
 
-  def render(%__MODULE__{text: text, theme: theme}, width) do
+  defp build_lines(%__MODULE__{text: text}, _ctx) when text in ["", nil], do: []
+
+  defp build_lines(%__MODULE__{text: text}, %RenderContext{theme: theme, width: width}) do
     if String.trim(text) == "" do
       []
     else

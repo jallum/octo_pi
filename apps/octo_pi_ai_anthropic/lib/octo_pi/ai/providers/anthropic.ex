@@ -1,10 +1,10 @@
 defmodule OctoPi.AI.Providers.Anthropic do
   @moduledoc """
-  Anthropic Messages provider. Implements `OctoPi.AI.Provider` by
+  Anthropic Messages provider. Implements `OctoPi.AI.Api` by
   spawning an `OctoPi.AI.Providers.Anthropic.Producer` per call.
   """
 
-  @behaviour OctoPi.AI.Provider
+  @behaviour OctoPi.AI.Api
 
   alias OctoPi.AI.Providers.Anthropic.Producer
 

@@ -88,8 +88,11 @@ defmodule OctoPi.Coder.Compaction.Tokens do
   # relative to JS, which keeps us inside the heuristic's conservative
   # ceiling and never under-budgets a compaction decision.
 
-  defp user_chars(content) when is_binary(content), do: byte_size(content)
-
+  # User.content is list-only post-opi-5ka.3 (Message.normalize/1
+  # lifts strings on input). The agent loop's transcript can still hold
+  # raw decoded-JSON user maps (Session.Entry.Message.message), but
+  # those flow through estimate_tokens/1 via the map_user_chars/1
+  # heads further below — not through this typed-struct path.
   defp user_chars(content) when is_list(content) do
     Enum.reduce(content, 0, fn
       %Text{text: t}, acc when is_binary(t) -> acc + byte_size(t)
@@ -108,8 +111,11 @@ defmodule OctoPi.Coder.Compaction.Tokens do
 
   defp assistant_block_chars(_), do: 0
 
-  defp tool_result_chars(content) when is_binary(content), do: byte_size(content)
-
+  # ToolResult.content was already list-only by type (predates opi-5ka).
+  # The dual-shape branch below was defensive coverage; the binary
+  # clause was unreachable for typed %ToolResult{} values and is
+  # dropped now that we're ensuring shape uniformity across the
+  # transcript.
   defp tool_result_chars(content) when is_list(content) do
     Enum.reduce(content, 0, fn
       %Text{text: t}, acc when is_binary(t) -> acc + byte_size(t)

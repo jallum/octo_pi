@@ -1,17 +1,17 @@
-defmodule OctoPi.AI.ProviderRegistry do
+defmodule OctoPi.AI.ApiRegistry do
   @moduledoc """
   ETS-backed registry mapping `api` atoms to their implementing
-  `OctoPi.AI.Provider` modules.
+  `OctoPi.AI.Api` modules.
 
   Owned by a GenServer started under `OctoPi.AI.Application`'s
   supervisor. Writes go through the owner process (one writer at a
   time), reads go straight to the public ETS table (read-concurrent).
 
-  Providers call `register/2` from their own
+  API modules call `register/2` from their own
   `Application.start/2` callback to announce themselves:
 
       def start(_, _) do
-        OctoPi.AI.ProviderRegistry.register(:anthropic_messages, __MODULE__)
+        OctoPi.AI.ApiRegistry.register(:anthropic_messages, __MODULE__)
         ...
       end
 
@@ -20,7 +20,7 @@ defmodule OctoPi.AI.ProviderRegistry do
 
   use GenServer
 
-  @table :octo_pi_providers
+  @table :octo_pi_apis
 
   # --- public API ---
 

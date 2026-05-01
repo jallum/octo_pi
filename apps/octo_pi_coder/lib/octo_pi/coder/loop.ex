@@ -260,13 +260,11 @@ defmodule OctoPi.Coder.Loop do
   end
 
   def handle_call({:agent_follow_up, text}, _from, state) do
-    OctoPi.Agent.follow_up(state.agent_pid, text)
-    {:reply, :ok, state}
+    {:reply, OctoPi.Agent.follow_up(state.agent_pid, text), state}
   end
 
   def handle_call({:agent_steer, text}, _from, state) do
-    OctoPi.Agent.steer(state.agent_pid, text)
-    {:reply, :ok, state}
+    {:reply, OctoPi.Agent.steer(state.agent_pid, text), state}
   end
 
   def handle_call({:agent_set_model, model}, _from, state) do

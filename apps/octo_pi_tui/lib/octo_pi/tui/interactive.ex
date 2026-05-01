@@ -21,6 +21,7 @@ defmodule OctoPi.TUI.Interactive do
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
+  alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Model
   alias OctoPi.Coder
   alias OctoPi.Coder.Event.CompactionEnd
@@ -42,11 +43,11 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Autocomplete.SlashCommandProvider
   alias OctoPi.TUI.Clipboard
   alias OctoPi.TUI.Components
-  alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
+  alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.Container
-  alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
   alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.LoginDialog
@@ -66,12 +67,15 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Paste
   alias OctoPi.TUI.RenderLoop
-  alias OctoPi.TUI.Safe
+  alias OctoPi.TUI.RenderTelemetry
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Terminal.Image
   alias OctoPi.TUI.Terminal.RawMode
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Transcript
+  alias OctoPi.TUI.Transcript.AssistantHeader
+  alias OctoPi.TUI.Transcript.AssistantStatus
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -90,7 +94,7 @@ defmodule OctoPi.TUI.Interactive do
           send_sigtstp_fn: (-> :ok),
           keybindings: Keybindings.t() | nil,
           input: Components.Input.t(),
-          transcript: [struct()],
+          transcript: Transcript.t(),
           footer: Footer.t(),
           footer_data: pid() | nil,
           theme: Theme.t() | nil,
@@ -110,13 +114,14 @@ defmodule OctoPi.TUI.Interactive do
           tree_selector: TreeSelector.t() | nil,
           summarize_prompt: SummarizePrompt.t() | nil,
           select_list: SelectList.t() | nil,
-          dequeue_overlay: %{items: list(), selected: non_neg_integer()} | nil,
           tools_expanded: boolean(),
           thinking_visible: boolean(),
           loader: Components.Loader.t() | nil,
           loader_stash: Components.Loader.t() | nil,
           is_compacting?: boolean(),
           compaction_queue: [String.t()],
+          pending_steering: [String.t()],
+          pending_follow_up: [String.t()],
           working_message: String.t() | nil,
           notification: String.t() | nil,
           banner: Components.WelcomeBanner.t() | nil,
@@ -128,7 +133,10 @@ defmodule OctoPi.TUI.Interactive do
           custom_widget: {GenServer.from(), map()} | nil,
           extension_shortcuts: [{(Key.t() -> boolean()), (t() -> t())}],
           extensions: [Extension.t()],
-          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil
+          focused_component: :input | {:dialog, atom()} | {:overlay, atom()} | nil,
+          turn_seq: non_neg_integer(),
+          current_msg_id: String.t() | nil,
+          current_has_tool_calls?: boolean()
         }
 
   # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
@@ -141,7 +149,7 @@ defmodule OctoPi.TUI.Interactive do
             send_sigtstp_fn: &__MODULE__.default_send_sigtstp/0,
             keybindings: nil,
             input: %Components.Input{},
-            transcript: [],
+            transcript: %Transcript{},
             footer: %Footer{},
             footer_data: nil,
             theme: nil,
@@ -165,13 +173,14 @@ defmodule OctoPi.TUI.Interactive do
             tree_selector: nil,
             summarize_prompt: nil,
             select_list: nil,
-            dequeue_overlay: nil,
             tools_expanded: false,
             thinking_visible: true,
             loader: nil,
             loader_stash: nil,
             is_compacting?: false,
             compaction_queue: [],
+            pending_steering: [],
+            pending_follow_up: [],
             working_message: nil,
             notification: nil,
             ui_overrides: %{},
@@ -179,7 +188,26 @@ defmodule OctoPi.TUI.Interactive do
             custom_widget: nil,
             extension_shortcuts: [],
             extensions: [],
-            focused_component: :input
+            focused_component: :input,
+            # Streaming-tick coalescing (opi-4dx.3 / .13): block events
+            # update the Transcript directly and stamp `streaming_tick_at`;
+            # the eventual :timeout fires a single render rather than
+            # one per delta.
+            streaming_tick_at: nil,
+            turn_seq: 0,
+            current_msg_id: nil,
+            current_has_tool_calls?: false
+
+  @doc """
+  Return the transcript entries (the data payload of each Transcript
+  slot) in display order — oldest first. Provided for tests and
+  introspection; renders should walk `state.transcript` directly via
+  `Transcript.render/2`.
+  """
+  @spec transcript_entries(t()) :: [term()]
+  def transcript_entries(%{transcript: %Transcript{} = t}) do
+    t.order |> Enum.reverse() |> Enum.map(&Transcript.fetch_data!(t, &1))
+  end
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
   @spec build_ui_context(pid()) :: UIContext.t()
@@ -496,54 +524,106 @@ defmodule OctoPi.TUI.Interactive do
   @impl GenServer
   def handle_continue(:first_render, state) do
     state = send_render(state)
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
   @impl GenServer
-  def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
-    send(state.render_loop, {:resize, w, h})
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      send(state.render_loop, {:resize, w, h})
 
-    state
-    |> handle_event(event)
-    |> advance()
+      state
+      |> handle_event(event)
+      |> advance()
+    end)
   end
 
-  def handle_info({:hid_event, event}, state) do
-    state
-    |> Map.put(:notification, nil)
-    |> handle_event(event)
-    |> advance()
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event, _mono_us} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      send(state.render_loop, {:resize, w, h})
+
+      state
+      |> handle_event(event)
+      |> advance()
+    end)
+  end
+
+  def handle_info({:hid_event, event} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> Map.put(:notification, nil)
+      |> handle_event(event)
+      |> advance()
+    end)
+  end
+
+  def handle_info({:hid_event, event, _mono_us} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> Map.put(:notification, nil)
+      |> handle_event(event)
+      |> advance()
+    end)
+  end
+
+  # opi-4dx.3 + .6: block-delta per-chunk path is intentionally cheap.
+  # handle_event stashes into streaming_blocks; we skip advance() (no
+  # render) and return only with an updated timeout so the streaming
+  # tick will fire.
+  def handle_info({:octo_pi_agent_event, %ev{}} = agent_msg, state)
+      when ev in [Event.MessageBlockStart, Event.MessageBlockDelta, Event.MessageBlockEnd] do
+    RenderTelemetry.with_handle_info(agent_msg, fn ->
+      new_state = handle_event(state, agent_msg)
+      {:noreply, new_state, compute_timeout(new_state)}
+    end)
   end
 
   def handle_info({:octo_pi_agent_event, _} = agent_msg, state) do
-    state
-    |> handle_event(agent_msg)
-    |> advance()
+    RenderTelemetry.with_handle_info(agent_msg, fn ->
+      state
+      |> handle_event(agent_msg)
+      |> advance()
+    end)
   end
 
-  def handle_info({:extension_result, text}, state) do
-    advance(%{state | notification: text})
+  def handle_info({:extension_result, text} = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      advance(%{state | notification: text})
+    end)
   end
 
-  def handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do
-    GenServer.reply(from, result)
-    advance(%{state | custom_widget: nil})
+  def handle_info({:custom_done, from, result} = msg, %{custom_widget: {from, _}} = state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      GenServer.reply(from, result)
+      advance(%{state | custom_widget: nil})
+    end)
   end
 
-  def handle_info(:force_render, state) do
-    advance(state)
+  def handle_info(:force_render = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      advance(state)
+    end)
   end
 
   def handle_info({:bash_done, _id, _output, _exit_code} = msg, state) do
-    state
-    |> handle_event(msg)
-    |> advance()
+    RenderTelemetry.with_handle_info(msg, fn ->
+      state
+      |> handle_event(msg)
+      |> advance()
+    end)
   end
 
-  def handle_info(:timeout, state) do
-    state
-    |> handle_event(:loader_tick)
-    |> advance()
+  # Single :timeout multiplexes loader-tick and streaming-tick
+  # (opi-4dx.3). Both may be due simultaneously; flush streaming first
+  # so the loader animation is anchored to the freshly-rendered frame.
+  def handle_info(:timeout = msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      now = System.monotonic_time(:millisecond)
+
+      state
+      |> maybe_flush_streaming_tick(now)
+      |> advance()
+    end)
   end
 
   def handle_info({:EXIT, pid, _reason}, %{sup: sup} = state) when pid == sup do
@@ -551,11 +631,21 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_info({:EXIT, _pid, _reason}, state) do
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
-  def handle_info(_msg, state) do
-    {:noreply, state, loader_timeout(state)}
+  def handle_info(msg, state) do
+    RenderTelemetry.with_handle_info(msg, fn ->
+      {:noreply, state, compute_timeout(state)}
+    end)
+  end
+
+  defp maybe_flush_streaming_tick(state, now) do
+    if streaming_tick_due?(state, now) do
+      flush_pending_partial(state)
+    else
+      state
+    end
   end
 
   @impl GenServer
@@ -566,7 +656,7 @@ defmodule OctoPi.TUI.Interactive do
     done = fn result -> send(interactive_pid, {:custom_done, from, result}) end
     component = factory.(tui, theme, done)
     new_state = send_render(%{state | custom_widget: {from, component}})
-    {:noreply, new_state, loader_timeout(new_state)}
+    {:noreply, new_state, compute_timeout(new_state)}
   end
 
   def handle_call({:ui_request, msg}, from, state) do
@@ -581,8 +671,8 @@ defmodule OctoPi.TUI.Interactive do
     new_state = send_render(new_state)
 
     case reply do
-      :pending -> {:noreply, new_state, loader_timeout(new_state)}
-      val -> {:reply, val, new_state, loader_timeout(new_state)}
+      :pending -> {:noreply, new_state, compute_timeout(new_state)}
+      val -> {:reply, val, new_state, compute_timeout(new_state)}
     end
   end
 
@@ -638,8 +728,47 @@ defmodule OctoPi.TUI.Interactive do
 
   @loader_interval_ms 80
 
-  defp loader_timeout(%{loader: %Components.Loader{}}), do: @loader_interval_ms
-  defp loader_timeout(_), do: :infinity
+  # Floor on render rate. With cadence-driven scheduling two animated
+  # components could converge to a tighter rate; clamp to ~60Hz.
+  @min_render_interval_ms 16
+
+  # Multiplexed deadline: the GenServer holds a single :timeout. Compute
+  # the minimum remaining ms across (loader tick, streaming-coalescer
+  # tick); :infinity if neither is armed. Replaces the old
+  # `loader_timeout/1` to add streaming-tick coordination (opi-4dx.3).
+  defp compute_timeout(state) do
+    now = System.monotonic_time(:millisecond)
+
+    deadlines =
+      Enum.reject(
+        [
+          loader_deadline_ms(state),
+          streaming_tick_remaining_ms(state, now),
+          transcript_deadline_ms(state, now)
+        ],
+        &is_nil/1
+      )
+
+    case deadlines do
+      [] -> :infinity
+      ms_list -> max(@min_render_interval_ms, Enum.min(ms_list))
+    end
+  end
+
+  defp loader_deadline_ms(%{loader: %Components.Loader{}}), do: @loader_interval_ms
+  defp loader_deadline_ms(_), do: nil
+
+  defp streaming_tick_remaining_ms(%{streaming_tick_at: nil}, _now), do: nil
+  defp streaming_tick_remaining_ms(%{streaming_tick_at: at}, now), do: max(0, at - now)
+
+  defp transcript_deadline_ms(%{transcript: %Transcript{} = t}, now) do
+    case Transcript.next_deadline(t) do
+      :infinity -> nil
+      deadline -> max(0, deadline - now)
+    end
+  end
+
+  defp transcript_deadline_ms(_state, _now), do: nil
 
   defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from), do: %{state | dialog: {type, from, a, b}}
 
@@ -651,7 +780,7 @@ defmodule OctoPi.TUI.Interactive do
     state = handle_suspend(state)
     state = maybe_launch_editor(state)
     state = send_render(state)
-    {:noreply, state, loader_timeout(state)}
+    {:noreply, state, compute_timeout(state)}
   end
 
   defp detect_dimensions do
@@ -895,7 +1024,7 @@ defmodule OctoPi.TUI.Interactive do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
-    {lines, layout} = build_screen(state, input_lines)
+    {lines, layout, state} = build_screen(state, input_lines)
     lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
@@ -913,13 +1042,6 @@ defmodule OctoPi.TUI.Interactive do
     ov_lines = ModelSelector.render(ms, ov_w)
     ov = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
     Overlay.composite(lines, [ov], w, h)
-  end
-
-  defp composite_active_overlay(%{dequeue_overlay: ov, width: w, height: h, theme: theme}, lines) when not is_nil(ov) do
-    ov_w = min(70, w)
-    ov_lines = render_dequeue_items(ov.items, ov.selected, ov_w, theme)
-    overlay = %Overlay{lines: ov_lines, anchor: :center, width: ov_w, margin: 2}
-    Overlay.composite(lines, [overlay], w, h)
   end
 
   defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
@@ -950,16 +1072,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_dialog_overlay(%{select_list: d}, :select_list, w) when not is_nil(d), do: SelectList.render(d, w)
   defp render_dialog_overlay(_, _, _), do: nil
-
-  defp render_dequeue_items(items, selected, _width, theme) do
-    Enum.with_index(items, fn {type, msg}, idx ->
-      prefix = if idx == selected, do: "→ ", else: "  "
-      type_tag = dim("[#{type}]")
-      text = if is_map(msg) and Map.has_key?(msg, :content), do: to_string(msg.content), else: inspect(msg)
-      label = "#{prefix}#{type_tag} #{text}"
-      if idx == selected and theme, do: Theme.fg(theme, :accent, label), else: label
-    end)
-  end
 
   defp log_overwide(fd, lines, width) do
     overwide =
@@ -1051,6 +1163,19 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader: Components.Loader.new(message: message)}
   end
 
+  # opi-tze.3: keep the in-state copy of the steering / follow-up
+  # queue snapshots in sync with the agent. Fires on every queue
+  # mutation (enqueue, public-API drain, in-loop drain). The
+  # pending-messages indicator above the editor renders directly
+  # from these fields.
+  def handle_event(state, {:octo_pi_agent_event, %Event.QueueUpdate{} = ev}) do
+    %{
+      state
+      | pending_steering: Enum.map(ev.steering, &message_text/1),
+        pending_follow_up: Enum.map(ev.follow_up, &message_text/1)
+    }
+  end
+
   def handle_event(state, {:octo_pi_agent_event, %OctoPi.Coder.Event.CompactionStart{reason: reason}}) do
     # Stash the existing loader (e.g. "Thinking…" if mid-run); restore
     # on CompactionEnd. Mirrors upstream's compaction_start handling.
@@ -1058,6 +1183,24 @@ defmodule OctoPi.TUI.Interactive do
     new_loader = Components.Loader.new(message: label, cancellable: true)
     Terminal.set_progress(state.terminal, true)
     %{state | loader_stash: state.loader, loader: new_loader, is_compacting?: true}
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{result: {:ok, data}} = ev}) do
+    Terminal.set_progress(state.terminal, false)
+
+    csm =
+      TUICSM.new(CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now())))
+
+    state = %{
+      state
+      | loader: state.loader_stash,
+        loader_stash: nil,
+        is_compacting?: false,
+        transcript: append_csm(state.transcript, csm),
+        footer: update_footer(state.footer, ev)
+    }
+
+    flush_compaction_queue(state)
   end
 
   def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
@@ -1071,8 +1214,6 @@ defmodule OctoPi.TUI.Interactive do
         footer: update_footer(state.footer, ev)
     }
 
-    # Replay any prompts the user submitted while compacting. Mirrors
-    # upstream's `flushCompactionQueue`.
     flush_compaction_queue(state)
   end
 
@@ -1097,14 +1238,72 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do
-    theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())
-    coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now()))
-    csm = TUICSM.new(coder_msg, theme)
-    %{state | transcript: [csm]}
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageStart{}}) do
+    seq = state.turn_seq + 1
+    msg_id = "turn-#{seq}"
+
+    header = %AssistantHeader{msg_id: msg_id, has_tool_calls?: false}
+
+    %{
+      state
+      | turn_seq: seq,
+        current_msg_id: msg_id,
+        current_has_tool_calls?: false,
+        streaming_tick_at: nil,
+        transcript: Transcript.append(state.transcript, header_key(msg_id), header)
+    }
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{}}), do: state
+  # opi-4dx.13: block events update the top-level Transcript directly,
+  # keyed by `<msg_id>:<block_id>`. The streaming-tick deadline is stamped
+  # so :timeout fires a single render pass per coalescing window rather
+  # than re-rendering on every delta.
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockStart{block_id: id, kind: kind}}) do
+    state
+    |> stamp_streaming_tick()
+    |> append_block(id, kind, "")
+  end
+
+  def handle_event(
+        state,
+        {:octo_pi_agent_event, %Event.MessageBlockDelta{block_id: id, kind: kind, snapshot: snapshot}}
+      ) do
+    state
+    |> stamp_streaming_tick()
+    |> upsert_block(id, kind, snapshot)
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockEnd{block_id: id, kind: kind, content: content}}) do
+    state
+    |> stamp_streaming_tick()
+    |> upsert_block(id, kind, content)
+    |> finalize_block(id)
+  end
+
+  def handle_event(state, {:octo_pi_agent_event, %MessageEnd{message: msg} = event}) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    has_tool_calls? = has_tool_calls?(msg)
+    stop_reason = extract_stop_reason(msg)
+    error_message = Map.get(msg, :error_message)
+
+    status = %AssistantStatus{
+      stop_reason: stop_reason,
+      error_message: error_message,
+      has_tool_calls?: has_tool_calls?
+    }
+
+    transcript = maybe_update_header_tool_flag(state.transcript, msg_id, has_tool_calls?)
+    transcript = Transcript.append(transcript, status_key(msg_id), status)
+
+    %{
+      state
+      | streaming_tick_at: nil,
+        current_msg_id: nil,
+        current_has_tool_calls?: false,
+        transcript: transcript,
+        footer: update_footer(state.footer, event)
+    }
+  end
 
   def handle_event(state, {:octo_pi_agent_event, event}) do
     %{
@@ -1114,25 +1313,38 @@ defmodule OctoPi.TUI.Interactive do
     }
   end
 
-  def handle_event(state, %Resize{width: w, height: h}),
-    do: %{state | width: w, height: h, input: %{state.input | width: w, height: h}}
-
-  def handle_event(%{loader: %Components.Loader{}} = state, :loader_tick), do: state
+  def handle_event(state, %Resize{width: w, height: h}) do
+    %{
+      state
+      | width: w,
+        height: h,
+        input: %{state.input | width: w, height: h},
+        transcript: Transcript.invalidate(state.transcript)
+    }
+  end
 
   def handle_event(state, {:bash_done, id, output, exit_code}) do
-    transcript =
-      Enum.map(state.transcript, fn
-        %BashExecution{id: ^id} = be ->
-          be |> BashExecution.append_output(output) |> BashExecution.set_complete(exit_code)
+    key = bash_key(id)
 
-        other ->
-          other
-      end)
+    case Transcript.get_data(state.transcript, key) do
+      %BashExecution{} = be ->
+        updated =
+          be
+          |> BashExecution.append_output(output)
+          |> BashExecution.set_complete(exit_code)
 
-    %{state | transcript: transcript}
+        %{state | transcript: Transcript.replace(state.transcript, key, updated)}
+
+      _ ->
+        state
+    end
   end
 
   def handle_event(state, _), do: state
+
+  defp append_csm(transcript, csm) do
+    Transcript.append(transcript, compaction_key(), csm)
+  end
 
   defp handle_event_after_app(%{extension_shortcuts: [_ | _] = shortcuts} = state, key) do
     case try_extension_shortcut(shortcuts, key, state) do
@@ -1143,19 +1355,25 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_event_after_app(state, key), do: handle_event_key(state, key)
 
-  defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}, input: %{value: v}} = state, _key)
-       when v != "" do
-    %{state | input: %{state.input | value: "", cursor: 0}}
-  end
-
   defp dispatch_app_action("app.interrupt", %{is_compacting?: true, session: session} = state, _key)
        when not is_nil(session) do
     Coder.abort_compact(session)
     state
   end
 
+  # opi-tze.8: Escape (mapped to app.interrupt) while the agent is
+  # streaming — drain queued messages back into the editor AND
+  # abort the in-flight run, in one gesture. Mirrors upstream
+  # interactive-mode.ts L2316-2321:
+  #     if (this.loadingAnimation) {
+  #       this.restoreQueuedMessagesToEditor({ abort: true });
+  #     }
+  # The non-empty-input case used to just clear the input; that's
+  # subsumed by restore_queued_to_editor/2, which combines the
+  # current editor text with whatever was queued (or leaves it
+  # untouched when both queues are empty).
   defp dispatch_app_action("app.interrupt", %{loader: %Components.Loader{}} = state, _key) do
-    if state.session, do: Coder.abort(state.session)
+    {_n, state} = restore_queued_to_editor(state, abort?: true)
     state
   end
 
@@ -1215,14 +1433,17 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_app_action("app.message.dequeue", %{session: nil} = state, _key), do: state
 
+  # opi-tze.5: Restore queued steering and follow-up messages back
+  # into the editor for free editing. Mirrors upstream pi-mono
+  # `restoreQueuedMessagesToEditor/1` (interactive-mode.ts L3549-3568):
+  # drain ALL queues, join the message texts with blank lines, then
+  # combine with whatever the user has currently typed. The user can
+  # then edit, delete, or resubmit the combined text however they like.
   defp dispatch_app_action("app.message.dequeue", state, _key) do
-    steering = Coder.drain_steering(state.session)
-    follow_up = Coder.drain_follow_up(state.session)
-    items = Enum.map(steering, &{:steering, &1}) ++ Enum.map(follow_up, &{:follow_up, &1})
-
-    if items == [],
-      do: %{state | notification: "No queued messages"},
-      else: focus(%{state | dequeue_overlay: %{items: items, selected: 0}}, {:overlay, :dequeue})
+    case restore_queued_to_editor(state, abort?: false) do
+      {0, state} -> %{state | notification: "No queued messages"}
+      {_n, state} -> state
+    end
   end
 
   defp dispatch_app_action("app.message.followUp", %{loader: %Components.Loader{}} = state, _key) do
@@ -1231,9 +1452,16 @@ defmodule OctoPi.TUI.Interactive do
     if text == "" do
       state
     else
-      if state.session, do: Coder.follow_up(state.session, text)
+      result = if state.session, do: Coder.follow_up(state.session, text), else: :ok
       input = %{state.input | value: "", cursor: 0}
-      %{state | input: input, notification: "Follow-up queued"}
+
+      notification =
+        case result do
+          {:error, :full} -> "Follow-up queue is full"
+          _ -> "Follow-up queued"
+        end
+
+      %{state | input: input, notification: notification}
     end
   end
 
@@ -1340,7 +1568,7 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_submit(state, new_input, "!" <> rest) do
     command = String.trim_leading(rest, " ")
     id = make_ref()
-    be = BashExecution.new(command, state.theme, id: id)
+    be = BashExecution.new(command, id: id)
     interactive_pid = self()
 
     Task.start(fn ->
@@ -1348,7 +1576,11 @@ defmodule OctoPi.TUI.Interactive do
       send(interactive_pid, {:bash_done, id, output, exit_code})
     end)
 
-    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [be]}
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: Transcript.append(state.transcript, bash_key(id), be)
+    }
   end
 
   defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
@@ -1398,13 +1630,39 @@ defmodule OctoPi.TUI.Interactive do
     # upstream's queueCompactionMessage. The user message lands in
     # the transcript immediately so they have visual feedback that
     # their input was accepted.
-    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
+    user_msg = UserMessage.new(value)
 
     %{
       state
       | input: %{new_input | value: "", cursor: 0},
-        transcript: state.transcript ++ [user_msg],
+        transcript: append_user_msg(state.transcript, user_msg),
         compaction_queue: state.compaction_queue ++ [value]
+    }
+  end
+
+  # Submit while the agent is streaming — route to Coder.steer (the
+  # default upstream "streamingBehavior" in agent-session.ts L987-997).
+  # Previously this called Coder.prompt unconditionally, which the
+  # Agent rejects with {:error, :already_streaming}; the rejection was
+  # silently swallowed by the Task.start fork and the message was lost
+  # while still being rendered in the local transcript.
+  defp do_handle_submit(%{loader: %Components.Loader{}, session: session} = state, new_input, value)
+       when not is_nil(session) do
+    result = Coder.steer(session, value)
+
+    user_msg = UserMessage.new(value)
+
+    notification =
+      case result do
+        {:error, :full} -> "Steering queue is full"
+        _ -> "Steered"
+      end
+
+    %{
+      state
+      | input: %{new_input | value: "", cursor: 0},
+        transcript: append_user_msg(state.transcript, user_msg),
+        notification: notification
     }
   end
 
@@ -1422,11 +1680,11 @@ defmodule OctoPi.TUI.Interactive do
       Task.start(fn -> Coder.prompt(session, value, send_text) end)
     end
 
-    user_msg = if state.theme, do: UserMessage.new(value, state.theme), else: {:user, value}
-    %{state | input: %{new_input | value: "", cursor: 0}, transcript: state.transcript ++ [user_msg]}
+    user_msg = UserMessage.new(value)
+    %{state | input: %{new_input | value: "", cursor: 0}, transcript: append_user_msg(state.transcript, user_msg)}
   end
 
-  defp dispatch_slash_command("clear", state), do: %{state | transcript: []}
+  defp dispatch_slash_command("clear", state), do: %{state | transcript: %Transcript{}}
 
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
@@ -1481,6 +1739,10 @@ defmodule OctoPi.TUI.Interactive do
     focus(%{state | session_selector: ss}, {:dialog, :session_selector})
   end
 
+  defp append_user_msg(transcript, user_msg) do
+    Transcript.append(transcript, user_key(), user_msg)
+  end
+
   defp try_extension_shortcut([], _key, _state), do: :pass
 
   defp try_extension_shortcut([{match_fn, handler} | rest], key, state) do
@@ -1493,23 +1755,24 @@ defmodule OctoPi.TUI.Interactive do
 
   # --- transcript updates ---
 
-  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.MessageUpdate} = ev, theme),
-    do: apply_partial(transcript, ev.partial, theme)
-
-  defp update_transcript(transcript, %{__struct__: MessageEnd} = ev, theme),
-    do: finalize_assistant(transcript, ev.message, theme)
-
-  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev, theme) do
-    te = ToolExecution.new(ev.tool_name, ev.tool_call_id, ev.args, theme)
-    transcript ++ [te]
+  defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionStart} = ev, _theme) do
+    te = ToolExecution.new(ev.tool_name, ev.tool_call_id, ev.args)
+    Transcript.append(transcript, tool_key(ev.tool_call_id), te)
   end
 
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev, _theme) do
-    update_tool_execution(transcript, ev.tool_call_id, fn te ->
-      result_text = extract_tool_result_text(ev.result)
-      is_error = Map.get(ev.result, :is_error?, false)
-      ToolExecution.set_result(te, result_text, is_error)
-    end)
+    key = tool_key(ev.tool_call_id)
+
+    case Transcript.get_data(transcript, key) do
+      %ToolExecution{} = te ->
+        result_text = extract_tool_result_text(ev.result)
+        is_error = Map.get(ev.result, :is_error?, false)
+        updated = ToolExecution.set_result(te, result_text, is_error)
+        Transcript.replace(transcript, key, updated)
+
+      _ ->
+        transcript
+    end
   end
 
   defp update_transcript(transcript, _, _theme), do: transcript
@@ -1560,96 +1823,91 @@ defmodule OctoPi.TUI.Interactive do
 
   defp current_context_tokens(_), do: nil
 
-  defp apply_partial(transcript, partial, theme) do
-    content = extract_content_blocks(partial)
+  # opi-4dx.13: streaming-tick coalescing.
+  #
+  # Block events update the top-level Transcript directly (latest-snapshot-
+  # wins per block_id is automatic since Transcript.update only mutates
+  # one slot). The streaming-tick deadline is stamped so :timeout fires a
+  # single advance() per coalescing window rather than rendering once
+  # per delta.
+  @stream_tick_ms 33
 
-    case find_last_assistant(transcript) do
-      {idx, %AssistantMessage{} = msg} ->
-        updated = AssistantMessage.update_content(msg, content: content)
-        List.replace_at(transcript, idx, updated)
+  defp stamp_streaming_tick(%{streaming_tick_at: nil} = state) do
+    %{state | streaming_tick_at: System.monotonic_time(:millisecond) + @stream_tick_ms}
+  end
 
-      _ ->
-        msg = AssistantMessage.new(theme, content: content)
-        transcript ++ [msg]
+  defp stamp_streaming_tick(state), do: state
+
+  @doc """
+  No-op shim for the legacy flush API. With `.13`, block events update
+  the Transcript directly so there is nothing to flush — but the helper
+  is kept callable so existing callers (and tests written against the
+  pre-`.13` shape) compile and pass through unchanged.
+  """
+  @spec flush_pending_partial(Interactive.t()) :: Interactive.t()
+  def flush_pending_partial(state), do: %{state | streaming_tick_at: nil}
+
+  @doc false
+  def streaming_tick_due?(%{streaming_tick_at: nil}, _now_ms), do: false
+  def streaming_tick_due?(%{streaming_tick_at: at}, now_ms) when is_integer(at), do: now_ms >= at
+
+  # --- block routing ---------------------------------------------
+
+  defp append_block(state, block_id, kind, snapshot) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
+    %{state | transcript: Transcript.append(state.transcript, key, block_struct(kind, snapshot))}
+  end
+
+  defp upsert_block(state, block_id, kind, snapshot) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
+
+    transcript =
+      if Transcript.has_entry?(state.transcript, key) do
+        Transcript.update(state.transcript, key, snapshot)
+      else
+        Transcript.append(state.transcript, key, block_struct(kind, snapshot))
+      end
+
+    %{state | transcript: transcript}
+  end
+
+  defp finalize_block(state, block_id) do
+    msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
+    key = block_key(msg_id, block_id)
+
+    case Transcript.get_data(state.transcript, key) do
+      nil -> state
+      entry -> %{state | transcript: Transcript.finalize(state.transcript, key, entry.snapshot)}
     end
   end
 
-  defp finalize_assistant(transcript, msg, theme) do
-    content = extract_content_blocks(msg)
-    stop_reason = extract_stop_reason(msg)
-    error_message = Map.get(msg, :error_message)
-    has_tool_calls = has_tool_calls?(msg)
+  defp block_struct(:text, snapshot), do: %TextBlock{snapshot: snapshot}
+  defp block_struct(:thinking, snapshot), do: %ThinkingBlock{snapshot: snapshot}
+  defp block_struct(_, snapshot), do: %ThinkingBlock{snapshot: snapshot}
 
-    updates = [
-      content: content,
-      stop_reason: stop_reason,
-      error_message: error_message,
-      has_tool_calls: has_tool_calls
-    ]
+  # --- key minting -----------------------------------------------
 
-    case find_last_assistant(transcript) do
-      {idx, %AssistantMessage{} = existing} ->
-        updated = AssistantMessage.update_content(existing, updates)
-        List.replace_at(transcript, idx, updated)
+  defp header_key(msg_id), do: "#{msg_id}:hdr"
+  defp status_key(msg_id), do: "#{msg_id}:end"
+  defp block_key(msg_id, idx), do: "#{msg_id}:#{idx}"
+  defp tool_key(tool_call_id), do: "tool:#{tool_call_id}"
+  defp bash_key(bash_id) when is_binary(bash_id), do: "bash:#{bash_id}"
+  defp bash_key(bash_id), do: "bash:#{inspect(bash_id)}"
+  defp user_key, do: "user:#{:erlang.unique_integer([:positive, :monotonic])}"
+  defp compaction_key, do: "compaction:#{:erlang.unique_integer([:positive, :monotonic])}"
 
-      _ ->
-        msg = AssistantMessage.new(theme, updates)
-        transcript ++ [msg]
+  # --- header lookup / mutation ----------------------------------
+
+  defp maybe_update_header_tool_flag(transcript, msg_id, has_tool_calls?) do
+    key = header_key(msg_id)
+
+    case Transcript.get_data(transcript, key) do
+      %AssistantHeader{} -> Transcript.update(transcript, key, has_tool_calls?)
+      _ -> transcript
     end
   end
-
-  defp find_last_assistant(transcript) do
-    result =
-      transcript
-      |> Enum.with_index()
-      |> Enum.reverse()
-      |> Enum.find(fn
-        {%AssistantMessage{}, _idx} -> true
-        _ -> false
-      end)
-
-    case result do
-      {msg, idx} ->
-        has_boundary_after =
-          transcript
-          |> Enum.drop(idx + 1)
-          |> Enum.any?(fn
-            %UserMessage{} -> true
-            {:user, _} -> true
-            %ToolExecution{} -> true
-            _ -> false
-          end)
-
-        if has_boundary_after, do: nil, else: {idx, msg}
-
-      nil ->
-        nil
-    end
-  end
-
-  defp update_tool_execution(transcript, tool_call_id, update_fn) do
-    idx =
-      Enum.find_index(transcript, fn
-        %ToolExecution{tool_call_id: id} -> id == tool_call_id
-        _ -> false
-      end)
-
-    if idx do
-      List.update_at(transcript, idx, update_fn)
-    else
-      transcript
-    end
-  end
-
-  defp extract_content_blocks(%{content: content}) when is_list(content) do
-    Enum.flat_map(content, fn
-      %OctoPi.AI.Content.Text{text: text} -> [{:text, text}]
-      %OctoPi.AI.Content.Thinking{thinking: text} -> [{:thinking, text}]
-      _ -> []
-    end)
-  end
-
-  defp extract_content_blocks(_), do: []
 
   defp extract_stop_reason(%{stop_reason: :stop}), do: nil
   defp extract_stop_reason(%{stop_reason: reason}) when is_atom(reason), do: reason
@@ -1680,16 +1938,16 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec build_screen(t()) :: [binary()]
   def build_screen(%{input: input, width: width} = state) do
-    {lines, _layout} = build_screen(state, Components.Input.render(input, width))
+    {lines, _layout, _state} = build_screen(state, Components.Input.render(input, width))
     lines
   end
 
-  @spec build_screen(t(), [binary()]) :: {[binary()], map()}
-  def build_screen(%{custom_widget: {_, component}, width: width, height: height}, _input_lines) do
+  @spec build_screen(t(), [binary()]) :: {[binary()], map(), t()}
+  def build_screen(%{custom_widget: {_, component}, width: width, height: height} = state, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
     lines = if len < height, do: List.duplicate("", height - len) ++ lines, else: lines
-    {lines, %{footer_height: 0, dropdown_height: 0, notification_height: 0}}
+    {lines, %{footer_height: 0, dropdown_height: 0, notification_height: 0}, state}
   end
 
   def build_screen(
@@ -1698,8 +1956,28 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
-    transcript_lines = render_transcript(transcript, width, state.thinking_visible)
+
+    {transcript_lines, transcript2} =
+      RenderTelemetry.with_transcript_render(
+        %{
+          msg_count: length(transcript.order),
+          streaming?: state.current_msg_id != nil
+        },
+        fn -> render_transcript(transcript, width, state.theme, state.thinking_visible) end
+      )
+
+    state = %{state | transcript: transcript2}
+
     loader_lines = render_loader(loader, width, state.theme)
+
+    pending_lines =
+      render_pending_messages(
+        state.pending_steering,
+        state.pending_follow_up,
+        get_keybindings(state),
+        width
+      )
+
     dropdown_lines = Components.Input.render_dropdown(state.input, width)
     notification_lines = render_notification(state.notification, width)
     footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
@@ -1707,7 +1985,9 @@ defmodule OctoPi.TUI.Interactive do
     all =
       banner_lines ++
         resource_lines ++
-        transcript_lines ++ loader_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
+        transcript_lines ++
+        loader_lines ++
+        pending_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
 
     layout = %{
       footer_height: length(footer_lines_val),
@@ -1715,13 +1995,54 @@ defmodule OctoPi.TUI.Interactive do
       notification_height: length(notification_lines)
     }
 
-    {[""] ++ all, layout}
+    {[""] ++ all, layout, state}
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}
   defp build_custom_theme(%{theme: theme}), do: %{fg: fn color, text -> Theme.fg(theme, color, text) end}
 
   defp default_working_message, do: "Thinking…"
+
+  # opi-tze.5 / opi-tze.8: drain ALL queued steering and follow-up
+  # messages from the agent and place them in the editor for free
+  # editing. Mirrors upstream pi-mono
+  # restoreQueuedMessagesToEditor/1 (interactive-mode.ts L3549-3568).
+  #
+  # Returns `{n, state}` where `n` is the total number of items
+  # restored. When `abort?: true` is passed and the agent is
+  # streaming, also calls Coder.abort/1 — used by Escape during a
+  # run to cancel and reclaim the queued text in one gesture.
+  @spec restore_queued_to_editor(t(), keyword()) :: {non_neg_integer(), t()}
+  defp restore_queued_to_editor(%{session: nil} = state, _opts), do: {0, state}
+
+  defp restore_queued_to_editor(state, opts) do
+    abort? = Keyword.get(opts, :abort?, false)
+    steering = Coder.drain_steering(state.session)
+    follow_up = Coder.drain_follow_up(state.session)
+    queued_texts = Enum.map(steering ++ follow_up, &message_text/1)
+    n = length(queued_texts)
+
+    if abort?, do: Coder.abort(state.session)
+
+    if n == 0 do
+      {0, state}
+    else
+      queued_text = Enum.join(queued_texts, "\n\n")
+      current_text = state.input.value
+
+      combined =
+        [queued_text, current_text]
+        |> Enum.reject(&(String.trim(&1) == ""))
+        |> Enum.join("\n\n")
+
+      input =
+        state.input
+        |> Components.Input.set_value(combined)
+        |> Map.put(:cursor, String.length(combined))
+
+      {n, %{state | input: input}}
+    end
+  end
 
   defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
 
@@ -1754,6 +2075,43 @@ defmodule OctoPi.TUI.Interactive do
     [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
   end
 
+  # opi-tze.3: pending-messages indicator. Mirrors upstream
+  # interactive-mode.ts's pendingMessagesContainer
+  # (`updatePendingMessagesDisplay/0`, L3530-3548). One dim line per
+  # queued steering / follow-up message in FIFO order, plus a hint
+  # line showing the keybinding for the dequeue overlay.
+  defp render_pending_messages([], [], _kb, _width), do: []
+
+  defp render_pending_messages(steering, follow_up, kb, width) do
+    steering_lines = Enum.map(steering, fn t -> %TruncatedText{text: dim("Steering: " <> t)} end)
+    follow_up_lines = Enum.map(follow_up, fn t -> %TruncatedText{text: dim("Follow-up: " <> t)} end)
+
+    hint_text =
+      case Keybindings.get_keys(kb, "app.message.dequeue") do
+        [key | _] -> dim("↳ #{key} to edit all queued messages")
+        [] -> dim("↳ to edit all queued messages")
+      end
+
+    (steering_lines ++ follow_up_lines ++ [%TruncatedText{text: hint_text}])
+    |> Container.new()
+    |> Container.render(width)
+  end
+
+  # Extract a plain string from a queued message struct. Post-
+  # opi-5ka.3 every %User{} reaching the TUI's pending-messages
+  # indicator has list-shape content (a single %Text{} for items
+  # built from a string, or %Text{}/%Image{} blocks for items
+  # reconstructed from session state).
+  defp message_text(%{content: c}) when is_list(c) do
+    Enum.map_join(c, "\n", fn
+      %{__struct__: Text, text: t} -> t
+      %{text: t} when is_binary(t) -> t
+      _ -> ""
+    end)
+  end
+
+  defp message_text(other), do: inspect(other)
+
   defp next_thinking_level(:off), do: :low
   defp next_thinking_level(:low), do: :medium
   defp next_thinking_level(:medium), do: :high
@@ -1762,41 +2120,10 @@ defmodule OctoPi.TUI.Interactive do
 
   defp thinking_level_label(level), do: to_string(level)
 
-  defp handle_dequeue_key(state, ov, %Key{key: :up}),
-    do: %{state | dequeue_overlay: %{ov | selected: max(0, ov.selected - 1)}}
-
-  defp handle_dequeue_key(state, ov, %Key{key: :down}) do
-    max_sel = max(0, length(ov.items) - 1)
-    %{state | dequeue_overlay: %{ov | selected: min(max_sel, ov.selected + 1)}}
-  end
-
-  defp handle_dequeue_key(state, ov, %Key{key: k}) when k in [:delete, :backspace] do
-    new_items = List.delete_at(ov.items, ov.selected)
-
-    if new_items == [] do
-      unfocus(%{state | dequeue_overlay: nil})
-    else
-      max_sel = max(0, length(new_items) - 1)
-      %{state | dequeue_overlay: %{ov | items: new_items, selected: min(ov.selected, max_sel)}}
-    end
-  end
-
-  defp handle_dequeue_key(state, ov, %Key{key: :escape}) do
-    Enum.each(ov.items, fn
-      {:steering, msg} -> if state.session, do: Coder.steer(state.session, msg)
-      {:follow_up, msg} -> if state.session, do: Coder.follow_up(state.session, msg)
-    end)
-
-    unfocus(%{state | dequeue_overlay: nil})
-  end
-
-  defp handle_dequeue_key(state, _ov, _key), do: state
-
   defp dispatch_key_to_focused(state, key) do
     case state.focused_component do
       :input -> handle_input_key(state, key)
       {:dialog, dialog_key} -> dispatch_dialog_key(state, dialog_key, key)
-      {:overlay, :dequeue} -> handle_dequeue_key(state, state.dequeue_overlay, key)
       nil -> state
     end
   end
@@ -2077,31 +2404,61 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 
-  defp render_transcript(transcript, width, thinking_visible) do
-    transcript
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {entry, idx} ->
-      spacer = if idx > 0 and match?(%UserMessage{}, entry), do: [""], else: []
-      spacer ++ render_entry(entry, width, thinking_visible)
-    end)
+  defp render_transcript(%Transcript{} = transcript, _width, nil, _thinking_visible), do: {[], transcript}
+
+  defp render_transcript(%Transcript{} = transcript, width, theme, thinking_visible) do
+    ctx = %OctoPi.TUI.RenderContext{
+      theme: theme,
+      width: width,
+      padding_x: 1,
+      hide_thinking: not thinking_visible,
+      hidden_thinking_label: "Thinking..."
+    }
+
+    {slots, transcript2} = Transcript.render(transcript, ctx)
+    {slots |> weld_assistant_turns() |> List.flatten(), transcript2}
   end
 
-  defp render_entry(%AssistantMessage{} = msg, width, thinking_visible) do
-    AssistantMessage.render(%{msg | hide_thinking: not thinking_visible}, width)
+  # OSC 133 zone welding. Walks the slot list grouping any range
+  # bounded by an `AssistantHeader` and the matching `AssistantStatus`
+  # (or the end of the list when the turn is still in flight). Tool-use
+  # turns and turns with no visible lines pass through untouched.
+  defp weld_assistant_turns(slots), do: do_weld(slots, [], nil)
+
+  defp do_weld([], acc_rev, nil), do: Enum.reverse(acc_rev)
+
+  defp do_weld([], acc_rev, {%AssistantHeader{} = h, buf_rev}),
+    do: do_weld([], [weld_lines(h, nil, Enum.reverse(buf_rev)) | acc_rev], nil)
+
+  defp do_weld([{%AssistantHeader{} = h, _lines} | rest], acc_rev, nil), do: do_weld(rest, acc_rev, {h, []})
+
+  defp do_weld([{%AssistantStatus{} = s, status_lines} | rest], acc_rev, {%AssistantHeader{} = h, buf_rev}) do
+    welded = weld_lines(h, s, Enum.reverse(buf_rev, status_lines))
+    do_weld(rest, [welded | acc_rev], nil)
   end
 
-  # Diff does not implement Component.render/2 — route explicitly.
-  defp render_entry(%Diff{diff_text: diff_text, theme: theme}, _width, _thinking_visible) do
-    Diff.render_diff(diff_text, theme)
-  end
+  defp do_weld([{_entry, lines} | rest], acc_rev, nil), do: do_weld(rest, [lines | acc_rev], nil)
 
-  defp render_entry(%mod{} = component, width, _thinking_visible), do: mod.render(component, width)
+  defp do_weld([{_entry, lines} | rest], acc_rev, {h, buf_rev}), do: do_weld(rest, acc_rev, {h, [lines | buf_rev]})
 
-  defp render_entry({:user, text}, width, _thinking_visible) do
-    WrapAnsi.wrap("> #{text}", width)
-  end
+  @osc133_zone_start "\e]133;A\a"
+  @osc133_zone_end "\e]133;B\a"
+  @osc133_zone_final "\e]133;C\a"
 
-  defp render_entry({:assistant, text, _}, width, _thinking_visible) do
-    WrapAnsi.wrap(Safe.sanitize(text), width)
+  defp weld_lines(_h, %AssistantStatus{has_tool_calls?: true}, lines), do: lines
+  defp weld_lines(%AssistantHeader{has_tool_calls?: true}, _s, lines), do: lines
+
+  defp weld_lines(_h, _s, lines) do
+    case List.flatten(lines) do
+      [] ->
+        []
+
+      [single] ->
+        [@osc133_zone_start <> @osc133_zone_end <> @osc133_zone_final <> single]
+
+      [first | rest] ->
+        {middle, [last]} = Enum.split(rest, -1)
+        [@osc133_zone_start <> first | middle] ++ [@osc133_zone_end <> @osc133_zone_final <> last]
+    end
   end
 end

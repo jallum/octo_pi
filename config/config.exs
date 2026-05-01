@@ -11,6 +11,10 @@ import Config
 
 config :logger, :default_formatter, metadata: [:domain]
 
+if config_env() == :test do
+  import_config "test.exs"
+end
+
 # Sample configuration:
 #
 #     config :logger, :default_handler,

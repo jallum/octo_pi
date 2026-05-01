@@ -25,31 +25,15 @@ defmodule OctoPi.Coder.CLITest do
       assert {:ok, %{mode: :rpc}} = CLI.parse_args(["--mode", "rpc"])
     end
 
-    test "--model overrides the default" do
-      assert {:ok, %{model: %{id: "claude-sonnet-4-5"}}} =
-               CLI.parse_args(["--model", "claude-sonnet-4-5", "hi"])
+    test "--model resolves canonical runner/model-id form" do
+      assert {:ok, %{model: %{id: "claude-opus-4-7", provider: :anthropic}}} =
+               CLI.parse_args(["--model", "anthropic/claude-opus-4-7", "hi"])
     end
 
-    test "vendor/model id resolves to OpenRouter" do
-      assert {:ok,
-              %{
-                model: %{
-                  id: "anthropic/claude-sonnet-4.5",
-                  provider: :openrouter,
-                  api: :openai_completions,
-                  base_url: "https://openrouter.ai/api/v1"
-                }
-              }} = CLI.parse_args(["--model", "anthropic/claude-sonnet-4.5", "hi"])
-    end
-
-    test "claude* id resolves to Anthropic regardless of slashes" do
-      assert {:ok, %{model: %{provider: :anthropic}}} =
-               CLI.parse_args(["--model", "claude-sonnet-4-5", "hi"])
-    end
-
-    test "non-slash, non-claude id resolves to local Ollama" do
-      assert {:ok, %{model: %{provider: :ollama, id: "qwen3.5:latest"}}} =
-               CLI.parse_args(["--model", "qwen3.5:latest", "hi"])
+    test "--model with bare id (no runner prefix) raises with canonical-form hint" do
+      assert_raise ArgumentError, ~r/runner\/model-id/, fn ->
+        CLI.parse_args(["--model", "claude-opus-4-7", "hi"])
+      end
     end
 
     test "--help returns a help sentinel" do
@@ -264,7 +248,7 @@ defmodule OctoPi.Coder.CLITest do
                "agent_start",
                "turn_start",
                "message_start",
-               "message_update",
+               "message_block_delta",
                "message_end",
                "turn_end",
                "agent_end"

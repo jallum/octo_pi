@@ -316,8 +316,45 @@ defmodule OctoPi.AI.Providers.Anthropic.DecoderTest do
 
       # `state.message.content` is reverse-ordered during streaming
       # (open block at head); use Decoder.message/1 for forward order.
-      assert [%Content.Text{text: "first"}, %Content.Text{text: "second"}] =
-               Decoder.message(state).content
+      assert [
+               %Content.Text{text: "first", content_index: 0},
+               %Content.Text{text: "second", content_index: 1}
+             ] = Decoder.message(state).content
+    end
+
+    test "stamps content_index on text/thinking/redacted_thinking finalized blocks" do
+      {_, state} = Decoder.new(model())
+
+      {_events, state} =
+        feed(state, [
+          %{"type" => "content_block_start", "index" => 0, "content_block" => %{"type" => "text"}},
+          %{"type" => "content_block_delta", "index" => 0, "delta" => %{"type" => "text_delta", "text" => "a"}},
+          %{"type" => "content_block_stop", "index" => 0},
+          %{"type" => "content_block_start", "index" => 1, "content_block" => %{"type" => "thinking"}},
+          %{
+            "type" => "content_block_delta",
+            "index" => 1,
+            "delta" => %{"type" => "thinking_delta", "thinking" => "ponder"}
+          },
+          %{
+            "type" => "content_block_delta",
+            "index" => 1,
+            "delta" => %{"type" => "signature_delta", "signature" => "sig-1"}
+          },
+          %{"type" => "content_block_stop", "index" => 1},
+          %{
+            "type" => "content_block_start",
+            "index" => 2,
+            "content_block" => %{"type" => "redacted_thinking", "data" => "ENCRYPTED"}
+          },
+          %{"type" => "content_block_stop", "index" => 2}
+        ])
+
+      assert [
+               %Content.Text{text: "a", content_index: 0},
+               %Content.Thinking{thinking: "ponder", signature: "sig-1", content_index: 1},
+               %Content.Thinking{redacted?: true, signature: "ENCRYPTED", content_index: 2}
+             ] = Decoder.message(state).content
     end
   end
 

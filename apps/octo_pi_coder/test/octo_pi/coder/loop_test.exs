@@ -154,6 +154,52 @@ defmodule OctoPi.Coder.LoopTest do
     end
   end
 
+  # opi-tze.7: Coder.steer / Coder.follow_up must propagate the
+  # underlying Agent's `{:error, :full}` instead of swallowing it.
+  describe "steer / follow_up bound propagation" do
+    test "steer/2 forwards :ok and {:error, :full} from the agent", ctx do
+      store = open_store!(ctx)
+
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(
+          model: @faux_model,
+          convert_to_llm: &SessionMessages.to_llm/1,
+          steering_queue_bound: 1
+        )
+
+      on_exit(fn -> if Process.alive?(agent), do: try_stop(agent) end)
+
+      {:ok, pid} =
+        Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert :ok = Coder.steer(pid, "first")
+      assert {:error, :full} = Coder.steer(pid, "second")
+    end
+
+    test "follow_up/2 forwards :ok and {:error, :full} from the agent", ctx do
+      store = open_store!(ctx)
+
+      {:ok, agent} =
+        OctoPi.Agent.start_loop(
+          model: @faux_model,
+          convert_to_llm: &SessionMessages.to_llm/1,
+          follow_up_queue_bound: 1
+        )
+
+      on_exit(fn -> if Process.alive?(agent), do: try_stop(agent) end)
+
+      {:ok, pid} =
+        Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
+
+      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+
+      assert :ok = Coder.follow_up(pid, "first")
+      assert {:error, :full} = Coder.follow_up(pid, "second")
+    end
+  end
+
   describe "getters" do
     setup ctx do
       store = open_store!(ctx)

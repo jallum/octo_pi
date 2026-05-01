@@ -11,6 +11,7 @@ defmodule OctoPi.TUI.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:leex] ++ Mix.compilers(),
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -31,8 +32,7 @@ defmodule OctoPi.TUI.MixProject do
       {:octo_pi_tracer, in_umbrella: true},
       {:octo_pi_coder, in_umbrella: true},
       {:octo_pi_tui_terminal, in_umbrella: true},
-      {:jason, "~> 1.4"},
-      {:earmark_parser, "~> 1.4"}
+      {:jason, "~> 1.4"}
     ]
   end
 end

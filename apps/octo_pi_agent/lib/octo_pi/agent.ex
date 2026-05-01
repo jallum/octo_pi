@@ -136,15 +136,34 @@ defmodule OctoPi.Agent do
   Replace the working transcript wholesale. The host calls this on
   events that re-shape the LLM-visible chain end-to-end (compaction,
   branch navigation).
+
+  Inputs are routed through `Message.normalize_if_message/1`: any
+  `User.t()` / `ToolResult.t()` with binary content is lifted to
+  list-shape `[%Text{text: bin}]`, while synthetic transcript types
+  (compaction-summary structs, raw JSON maps) pass through unchanged.
+  This keeps the typed-Message subset of the transcript canonically
+  list-shape (see opi-5ka).
   """
   @spec set_messages(t(), [term()]) :: :ok
-  def set_messages(pid, msgs) when is_list(msgs), do: GenServer.call(pid, {:set_messages, msgs})
+  def set_messages(pid, msgs) when is_list(msgs),
+    do: GenServer.call(pid, {:set_messages, Enum.map(msgs, &Message.normalize_if_message/1)})
 
-  @doc "Drain all messages from the steering queue and return them."
+  @doc """
+  Drain all messages from the steering queue and return them.
+
+  Always returns every queued item regardless of the queue's drainage
+  mode — the configured `:one_at_a_time` / `:all` mode only controls
+  the in-loop per-turn drain done internally by the run loop.
+  """
   @spec drain_steering(t()) :: [Message.t()]
   def drain_steering(pid), do: GenServer.call(pid, :drain_steering)
 
-  @doc "Drain all messages from the follow-up queue and return them."
+  @doc """
+  Drain all messages from the follow-up queue and return them.
+
+  Always returns every queued item regardless of the queue's drainage
+  mode (see `drain_steering/1`).
+  """
   @spec drain_follow_up(t()) :: [Message.t()]
   def drain_follow_up(pid), do: GenServer.call(pid, :drain_follow_up)
 

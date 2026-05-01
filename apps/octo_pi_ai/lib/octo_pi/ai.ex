@@ -9,10 +9,10 @@ defmodule OctoPi.AI do
       OctoPi.AI.stream_to(model, context, opts, pid)  # push primitive
 
   The canonical types (`Context`, `Model`, `Message`, `Event`, …) and
-  the `Provider` behaviour live in `OctoPi.AI.*` submodules. Provider
+  the `Api` behaviour live in `OctoPi.AI.*` submodules. Api
   implementations ship as sibling umbrella apps (e.g.
   `octo_pi_ai_anthropic`) and register themselves in the
-  `OctoPi.AI.ProviderRegistry` on startup.
+  `OctoPi.AI.ApiRegistry` on startup.
 
   See `docs/port-map/anthropic.md` for the Anthropic reference port.
   """
@@ -20,7 +20,7 @@ defmodule OctoPi.AI do
   alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Context
   alias OctoPi.AI.Model
-  alias OctoPi.AI.ProviderRegistry
+  alias OctoPi.AI.ApiRegistry
 
   @type thinking_level :: :minimal | :low | :medium | :high | :xhigh
 
@@ -108,7 +108,7 @@ defmodule OctoPi.AI do
   """
   @spec provider_module(atom()) :: module()
   def provider_module(api) when is_atom(api) do
-    case ProviderRegistry.lookup(api) do
+    case ApiRegistry.lookup(api) do
       nil ->
         raise ArgumentError,
               "no provider registered for api: #{inspect(api)}. " <>

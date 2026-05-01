@@ -5,7 +5,7 @@ defmodule OctoPi.Agent.Transport do
   Two concrete transports are planned:
 
     - `OctoPi.Agent.Transport.Direct` (default) — delegates to
-      `OctoPi.AI.stream_to/4`, which dispatches via `ProviderRegistry`
+      `OctoPi.AI.stream_to/4`, which dispatches via `ApiRegistry`
       to whichever provider handles the `Model`'s api atom.
     - Proxy (deferred) — tunnels through an HTTP proxy that runs the
       provider call server-side and streams events back; see

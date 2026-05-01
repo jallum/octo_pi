@@ -7,19 +7,14 @@ defmodule OctoPi.Coder.CLI do
     selected mode. Returns an integer exit code.
   """
 
-  alias OctoPi.Coder.Models
+  alias OctoPi.AI.ModelRegistry
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
   alias OctoPi.Coder.ResourceLoader
   alias OctoPi.Tracer.FileBackend
 
-  # Matches upstream pi-mono's per-provider default for Anthropic
-  # (see `tmp/pi-mono/packages/coding-agent/src/core/model-resolver.ts`
-  # `defaultModelPerProvider.anthropic`). Override with `--model`.
-  # The full resolver (scoped models, saved settings, provider
-  # priority with valid-auth fallback) is a Phase 8 follow-up.
-  @default_model "qwen3.5:latest"
+  @default_model "lmstudio/google/gemma-4-26b-a4b"
 
   @switches [
     print: :boolean,
@@ -279,7 +274,20 @@ defmodule OctoPi.Coder.CLI do
       IO.puts(Jason.encode!(fallback))
   end
 
-  defp resolve_model(id), do: Models.resolve(id)
+  defp resolve_model(ref) when is_binary(ref) do
+    case ModelRegistry.resolve(ModelRegistry.global!(), ref) do
+      {:ok, %OctoPi.AI.Model{} = model} ->
+        model
+
+      {:error, {:bad_ref, _}} ->
+        raise ArgumentError,
+              "--model expects canonical form runner/model-id (got #{inspect(ref)}). " <>
+                "Example: --model anthropic/claude-opus-4-7"
+
+      {:error, reason} ->
+        raise ArgumentError, "could not resolve model #{inspect(ref)}: #{inspect(reason)}"
+    end
+  end
 
   defp usage_text do
     """
@@ -292,9 +300,8 @@ defmodule OctoPi.Coder.CLI do
     Flags:
       --print, -p    force print mode (default when a prompt is given)
       --mode rpc     run as a JSON-line RPC server on stdin/stdout
-      --model, -m    model id (default: #{@default_model};
-                     claude* → Anthropic; vendor/model → OpenRouter
-                     (set OPENROUTER_API_KEY); else → local Ollama)
+      --model, -m    canonical runner/model-id (default: #{@default_model})
+                     entries come from ~/.octo_pi/models.json or live runner lookup
       --cwd          working dir (default: current dir)
       --help, -h     show this message
       --continue, -c    resume the most recent session for this directory

@@ -3,11 +3,13 @@ defmodule OctoPi.AI.Providers.OpenAI.Application do
 
   use Application
 
-  alias OctoPi.AI.ProviderRegistry
+  alias OctoPi.AI.ApiRegistry
+  alias OctoPi.AI.RunnerRegistry
 
   @impl true
   def start(_type, _args) do
-    ProviderRegistry.register(:openai_completions, OctoPi.AI.Providers.OpenAI)
+    ApiRegistry.register(:openai_completions, OctoPi.AI.Providers.OpenAI)
+    RunnerRegistry.register(:lmstudio, OctoPi.AI.Runners.LMStudio)
 
     children = [
       {Task.Supervisor, name: OctoPi.AI.Providers.OpenAI.TaskSup}

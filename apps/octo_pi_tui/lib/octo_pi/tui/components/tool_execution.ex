@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   alias OctoPi.Coder.Extension.ToolRender
   alias OctoPi.TUI.Components.Box
   alias OctoPi.TUI.Components.Text
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
 
   @type render_fn :: (ToolRender.Context.t() -> [String.t()])
@@ -14,7 +15,6 @@ defmodule OctoPi.TUI.Components.ToolExecution do
           tool_name: String.t(),
           tool_call_id: String.t(),
           args: map(),
-          theme: Theme.t(),
           result: String.t() | nil,
           partial: String.t() | nil,
           status: status(),
@@ -27,7 +27,6 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   defstruct [
     :tool_name,
     :tool_call_id,
-    :theme,
     :render_call,
     :render_result,
     args: %{},
@@ -38,13 +37,12 @@ defmodule OctoPi.TUI.Components.ToolExecution do
     render_shell: :default
   ]
 
-  @spec new(String.t(), String.t(), map(), Theme.t(), keyword()) :: t()
-  def new(tool_name, tool_call_id, args, theme, opts \\ []) do
+  @spec new(String.t(), String.t(), map(), keyword()) :: t()
+  def new(tool_name, tool_call_id, args, opts \\ []) do
     %__MODULE__{
       tool_name: tool_name,
       tool_call_id: tool_call_id,
       args: args,
-      theme: theme,
       render_call: Keyword.get(opts, :render_call),
       render_result: Keyword.get(opts, :render_result),
       render_shell: Keyword.get(opts, :render_shell, :default)
@@ -73,11 +71,14 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   end
 
   @impl true
-  def render(%__MODULE__{} = te, width) do
-    case custom_render_fn(te) do
-      nil -> render_default(te, width)
-      custom_fn -> render_custom(te, custom_fn, width)
-    end
+  def render(%__MODULE__{} = te, %RenderContext{theme: theme, width: width}) do
+    lines =
+      case custom_render_fn(te) do
+        nil -> render_default(te, theme, width)
+        custom_fn -> render_custom(te, custom_fn, theme, width)
+      end
+
+    {te, lines, nil}
   end
 
   defp custom_render_fn(%{status: :pending, render_call: f}) when is_function(f), do: f
@@ -86,25 +87,25 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   defp custom_render_fn(_), do: nil
 
-  defp render_custom(te, custom_fn, width) do
+  defp render_custom(te, custom_fn, theme, width) do
     ctx = build_render_context(te)
     custom_lines = custom_fn.(ctx)
 
     case te.render_shell do
       :self -> ["" | custom_lines]
-      :default -> render_in_box(te, custom_lines, width)
+      :default -> render_in_box(te, custom_lines, theme, width)
     end
   end
 
-  defp render_default(te, width) do
-    content = build_content(te)
-    render_in_box(te, content, width)
+  defp render_default(te, theme, width) do
+    content = build_content(te, theme)
+    render_in_box(te, content, theme, width)
   end
 
-  defp render_in_box(te, content, width) do
+  defp render_in_box(te, content, theme, width) do
     bg_key = status_bg_key(te.status)
-    bg_fn = fn text -> Theme.bg(te.theme, bg_key, text) end
-    styled_header = format_header(te)
+    bg_fn = fn text -> Theme.bg(theme, bg_key, text) end
+    styled_header = format_header(te, theme)
 
     box =
       Box.new(
@@ -136,9 +137,9 @@ defmodule OctoPi.TUI.Components.ToolExecution do
     }
   end
 
-  defp format_header(te) do
+  defp format_header(te, theme) do
     prefix = status_prefix(te.status)
-    summary = tool_summary(String.downcase(te.tool_name), te.tool_name, te.args, te.theme)
+    summary = tool_summary(String.downcase(te.tool_name), te.tool_name, te.args, theme)
     prefix <> summary
   end
 
@@ -238,27 +239,27 @@ defmodule OctoPi.TUI.Components.ToolExecution do
 
   @preview_lines 5
 
-  defp build_content(%{status: :error, result: result, theme: theme}) when result != nil do
+  defp build_content(%{status: :error, result: result}, theme) when result != nil do
     [%Text{content: Theme.fg(theme, :error, result)}]
   end
 
-  defp build_content(%{expanded: true, result: result, theme: theme}) when result != nil do
+  defp build_content(%{expanded: true, result: result}, theme) when result != nil do
     [%Text{content: Theme.fg(theme, :tool_output, result)}]
   end
 
-  defp build_content(%{expanded: true, partial: partial, theme: theme}) when partial != nil do
+  defp build_content(%{expanded: true, partial: partial}, theme) when partial != nil do
     [%Text{content: Theme.fg(theme, :tool_output, partial)}]
   end
 
-  defp build_content(%{result: result, theme: theme}) when result != nil do
+  defp build_content(%{result: result}, theme) when result != nil do
     preview_collapsed(result, theme)
   end
 
-  defp build_content(%{partial: partial, theme: theme}) when partial != nil do
+  defp build_content(%{partial: partial}, theme) when partial != nil do
     [%Text{content: Theme.fg(theme, :tool_output, String.slice(partial, -1, 1))}]
   end
 
-  defp build_content(_te), do: []
+  defp build_content(_te, _theme), do: []
 
   defp preview_collapsed(result, theme) do
     lines = result |> String.trim_trailing("\n") |> String.split("\n")

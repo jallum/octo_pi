@@ -38,9 +38,25 @@ defmodule OctoPi.TUI.Application do
 
     OctoPi.Tracer.register(%{
       id: :tui_render,
-      description: "TUI renderer frame timing",
+      description: "TUI renderer frame timing + transcript/markdown render spans",
       events: [
-        [:octo_pi_tui, :renderer, :render]
+        [:octo_pi_tui, :renderer, :render],
+        [:octo_pi_tui, :transcript, :render, :start],
+        [:octo_pi_tui, :transcript, :render, :stop],
+        [:octo_pi_tui, :markdown, :render, :start],
+        [:octo_pi_tui, :markdown, :render, :stop]
+      ],
+      level: :debug
+    })
+
+    OctoPi.Tracer.register(%{
+      id: :tui_interactive,
+      description: "TUI Interactive handle_info spans, mailbox depth, key arrival latency",
+      events: [
+        [:octo_pi_tui, :interactive, :handle_info, :start],
+        [:octo_pi_tui, :interactive, :handle_info, :stop],
+        [:octo_pi_tui, :interactive, :mailbox],
+        [:octo_pi_tui, :key, :latency]
       ],
       level: :debug
     })

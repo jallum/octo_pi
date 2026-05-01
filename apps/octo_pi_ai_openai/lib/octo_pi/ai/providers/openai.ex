@@ -1,6 +1,6 @@
 defmodule OctoPi.AI.Providers.OpenAI do
   @moduledoc """
-  OpenAI Completions provider. Implements `OctoPi.AI.Provider` by
+  OpenAI Completions provider. Implements `OctoPi.AI.Api` by
   spawning an `OctoPi.AI.Providers.OpenAI.Producer` per call.
 
   Covers OpenAI proper and any provider speaking the same chat
@@ -8,7 +8,7 @@ defmodule OctoPi.AI.Providers.OpenAI do
   `Compat` layer handles per-provider quirks.
   """
 
-  @behaviour OctoPi.AI.Provider
+  @behaviour OctoPi.AI.Api
 
   alias OctoPi.AI.Providers.OpenAI.Producer
 

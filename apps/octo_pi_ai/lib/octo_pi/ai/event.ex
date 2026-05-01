@@ -1,6 +1,6 @@
 defmodule OctoPi.AI.Event do
   @moduledoc """
-  Canonical event union emitted by `OctoPi.AI.Provider.stream/3`.
+  Canonical event union emitted by `OctoPi.AI.Api.stream_to/4`.
 
   The stream begins with a single `Start`, interleaves per-content-block
   lifecycles (`*_start` → zero or more `*_delta` → `*_end`), and

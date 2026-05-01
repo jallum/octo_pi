@@ -13,7 +13,6 @@ defmodule OctoPi.TUI.Components.BashExecution do
   @type t :: %__MODULE__{
           id: reference() | nil,
           command: String.t(),
-          theme: Theme.t(),
           output_lines: [String.t()],
           status: status(),
           exit_code: non_neg_integer() | nil,
@@ -24,7 +23,6 @@ defmodule OctoPi.TUI.Components.BashExecution do
   defstruct [
     :id,
     :command,
-    :theme,
     output_lines: [],
     status: :running,
     exit_code: nil,
@@ -32,12 +30,11 @@ defmodule OctoPi.TUI.Components.BashExecution do
     excluded: false
   ]
 
-  @spec new(String.t(), Theme.t(), keyword()) :: t()
-  def new(command, theme, opts \\ []) do
+  @spec new(String.t(), keyword()) :: t()
+  def new(command, opts \\ []) do
     %__MODULE__{
       id: Keyword.get(opts, :id),
       command: command,
-      theme: theme,
       excluded: Keyword.get(opts, :excluded, false)
     }
   end
@@ -80,13 +77,13 @@ defmodule OctoPi.TUI.Components.BashExecution do
   def get_output(%__MODULE__{output_lines: lines}), do: Enum.join(lines, "\n")
 
   @impl true
-  def render(%__MODULE__{} = be, width) do
+  def render(%__MODULE__{} = be, %{theme: theme, width: width}) do
     color_key = if be.excluded, do: :dim, else: :bash_mode
     bg_key = status_bg_key(be.status)
-    bg_fn = if be.theme, do: fn text -> Theme.bg(be.theme, bg_key, text) end
+    bg_fn = fn text -> Theme.bg(theme, bg_key, text) end
 
-    header = %Text{content: Theme.fg(be.theme, color_key, Theme.bold("$ #{be.command}"))}
-    content = build_content(be, color_key)
+    header = %Text{content: Theme.fg(theme, color_key, Theme.bold("$ #{be.command}"))}
+    content = build_content(be, theme, color_key)
 
     box =
       Box.new(
@@ -96,36 +93,36 @@ defmodule OctoPi.TUI.Components.BashExecution do
       )
 
     box = Enum.reduce([header | content], box, &Box.add_child(&2, &1))
-    ["" | Box.render(box, width)]
+    {be, ["" | Box.render(box, width)], nil}
   end
 
-  defp build_content(be, color_key) do
-    output_children = build_output(be)
-    status_children = build_status(be, color_key)
+  defp build_content(be, theme, color_key) do
+    output_children = build_output(be, theme)
+    status_children = build_status(be, theme, color_key)
     output_children ++ status_children
   end
 
-  defp build_output(%{output_lines: []}), do: []
+  defp build_output(%{output_lines: []}, _theme), do: []
 
-  defp build_output(%{output_lines: lines, expanded: true, theme: theme}) do
+  defp build_output(%{output_lines: lines, expanded: true}, theme) do
     text = Enum.map_join(lines, "\n", &Theme.fg(theme, :muted, &1))
     [%Text{content: text}]
   end
 
-  defp build_output(%{output_lines: lines, theme: theme}) do
+  defp build_output(%{output_lines: lines}, theme) do
     preview = Enum.slice(lines, -@preview_lines, @preview_lines)
     text = Enum.map_join(preview, "\n", &Theme.fg(theme, :muted, &1))
     [%Text{content: text}]
   end
 
-  defp build_status(%{status: :running}, _color_key) do
+  defp build_status(%{status: :running}, _theme, _color_key) do
     [%Text{content: "Running..."}]
   end
 
-  defp build_status(be, _color_key) do
+  defp build_status(be, theme, _color_key) do
     parts = []
     parts = maybe_add_hidden_count(parts, be)
-    parts = maybe_add_exit_status(parts, be)
+    parts = maybe_add_exit_status(parts, be, theme)
     if parts == [], do: [], else: [%Text{content: Enum.join(parts, "\n")}]
   end
 
@@ -139,15 +136,13 @@ defmodule OctoPi.TUI.Components.BashExecution do
     end
   end
 
-  defp maybe_add_exit_status(parts, %{status: :cancelled, theme: theme}) do
-    parts ++ [Theme.fg(theme, :warning, "(cancelled)")]
-  end
+  defp maybe_add_exit_status(parts, %{status: :cancelled}, theme),
+    do: parts ++ [Theme.fg(theme, :warning, "(cancelled)")]
 
-  defp maybe_add_exit_status(parts, %{status: :error, exit_code: code, theme: theme}) do
-    parts ++ [Theme.fg(theme, :error, "(exit #{code})")]
-  end
+  defp maybe_add_exit_status(parts, %{status: :error, exit_code: code}, theme),
+    do: parts ++ [Theme.fg(theme, :error, "(exit #{code})")]
 
-  defp maybe_add_exit_status(parts, _), do: parts
+  defp maybe_add_exit_status(parts, _, _theme), do: parts
 
   defp status_bg_key(:running), do: :tool_pending_bg
   defp status_bg_key(:complete), do: :tool_success_bg

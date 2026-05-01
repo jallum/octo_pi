@@ -22,9 +22,11 @@ defmodule OctoPi.TUI.Terminal do
       ready to be re-opened.
     * `terminate/2` deactivates if currently active.
 
-  Holders receive `{:hid_event, struct}` messages, where `struct` is
-  one of `%Key{}`, `%Paste{}`, or `%Terminal.Resize{}`. Multiple
-  Terminal/Interactive pairs are isolated by construction — no
+  Holders receive `{:hid_event, struct, mono_us}` messages, where `struct` is
+  one of `%Key{}`, `%Paste{}`, or `%Terminal.Resize{}` and `mono_us` is
+  `System.monotonic_time(:microsecond)` at narrowcast send (used by
+  receivers to compute key arrival → handled latency telemetry).
+  Multiple Terminal/Interactive pairs are isolated by construction — no
   global registry.
 
   Terminal owns the `StdinFSM` decode buffer + the bracketed-paste
@@ -84,7 +86,8 @@ defmodule OctoPi.TUI.Terminal do
   recognize the sequence ignore it. Mirrors upstream's
   `terminal.setProgress` call during compaction.
   """
-  @spec set_progress(GenServer.server(), boolean()) :: :ok
+  @spec set_progress(GenServer.server() | nil, boolean()) :: :ok
+  def set_progress(nil, _), do: :ok
   def set_progress(pid, true), do: write(pid, "\e]9;4;3;\a")
   def set_progress(pid, false), do: write(pid, "\e]9;4;0;\a")
 
@@ -323,9 +326,19 @@ defmodule OctoPi.TUI.Terminal do
   # --- subscribers ---
 
   defp narrowcast(%{subscribers: subs}, msg) do
-    for {pid, _ref} <- subs, do: send(pid, msg)
+    stamped = stamp_hid_event(msg)
+    for {pid, _ref} <- subs, do: send(pid, stamped)
     :ok
   end
+
+  # Tag :hid_event tuples with the monotonic time at narrowcast send so
+  # receivers can compute key arrival → handled latency. Other message
+  # shapes pass through unchanged.
+  defp stamp_hid_event({:hid_event, payload}) do
+    {:hid_event, payload, System.monotonic_time(:microsecond)}
+  end
+
+  defp stamp_hid_event(other), do: other
 
   defp add_subscriber(%{subscribers: subs} = state, pid) do
     case Map.fetch(subs, pid) do

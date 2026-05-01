@@ -3,11 +3,13 @@ defmodule OctoPi.AI.Providers.Anthropic.Application do
 
   use Application
 
-  alias OctoPi.AI.ProviderRegistry
+  alias OctoPi.AI.ApiRegistry
+  alias OctoPi.AI.RunnerRegistry
 
   @impl true
   def start(_type, _args) do
-    ProviderRegistry.register(:anthropic_messages, OctoPi.AI.Providers.Anthropic)
+    ApiRegistry.register(:anthropic_messages, OctoPi.AI.Providers.Anthropic)
+    RunnerRegistry.register(:anthropic, OctoPi.AI.Runners.Anthropic)
 
     OctoPi.Tracer.register(%{
       id: :anthropic,

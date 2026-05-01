@@ -46,12 +46,6 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
   end
 
   describe "estimate_tokens/1 — user messages" do
-    test "string content uses ceil(chars/4)" do
-      m = %User{content: "abcdefg", timestamp: 0}
-      # 7 chars → ceil(7/4) = 2
-      assert Tokens.estimate_tokens(m) == 2
-    end
-
     test "block-list content sums text blocks; ignores non-text" do
       m = %User{
         content: [%Text{text: "hello"}, %Image{data: "x", mime_type: "image/png"}, %Text{text: "world"}],
@@ -69,10 +63,10 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
 
     test "uses UTF-8 byte length, not grapheme count, to stay conservative" do
       # "héllo" is 5 graphemes but 6 bytes (é = 2 bytes in UTF-8).
-      m = %User{content: "héllo", timestamp: 0}
+      m = %User{content: [%Text{text: "héllo"}], timestamp: 0}
       # 6 bytes → ceil(6/4) = 2; grapheme count would yield 5/4 → 2 (same here),
       # so use a longer string where the difference is observable.
-      m2 = %User{content: "héllo héllo héllo", timestamp: 0}
+      m2 = %User{content: [%Text{text: "héllo héllo héllo"}], timestamp: 0}
       # 17 graphemes; UTF-8 bytes: 5*3 + 2*1(spaces) + 2*3(é runs)... easier: byte_size
       assert Tokens.estimate_tokens(m) == div(byte_size("héllo") + 3, 4)
       assert Tokens.estimate_tokens(m2) == div(byte_size("héllo héllo héllo") + 3, 4)
@@ -103,19 +97,6 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
   end
 
   describe "estimate_tokens/1 — tool results" do
-    test "string content" do
-      tr = %ToolResult{
-        tool_call_id: "1",
-        tool_name: "read",
-        content: "abcdefgh",
-        is_error?: false,
-        timestamp: 0
-      }
-
-      # 8 chars → 2
-      assert Tokens.estimate_tokens(tr) == 2
-    end
-
     test "image block contributes 4800 chars (≈1200 tokens)" do
       tr = %ToolResult{
         tool_call_id: "1",
@@ -192,7 +173,7 @@ defmodule OctoPi.Coder.Compaction.TokensTest do
 
   describe "estimate_context_tokens/1" do
     test "no assistant messages: pure estimation" do
-      msgs = [%User{content: "abcdefgh", timestamp: 0}]
+      msgs = [%User{content: [%Text{text: "abcdefgh"}], timestamp: 0}]
 
       assert Tokens.estimate_context_tokens(msgs) == %{
                tokens: 2,

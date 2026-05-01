@@ -18,30 +18,31 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
   alias OctoPi.TUI.Components.Markdown
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Keybindings
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
 
   @expand_action "app.tools.expand"
 
   @type t :: %__MODULE__{
           message: Msg.t(),
-          theme: Theme.t(),
           keybindings: Keybindings.t(),
           expanded: boolean()
         }
 
-  defstruct [:message, :theme, :keybindings, expanded: false]
+  defstruct [:message, :keybindings, expanded: false]
 
-  @spec new(Msg.t(), Theme.t(), keyword()) :: t()
-  def new(%Msg{} = message, %Theme{} = theme, opts \\ []) do
+  @spec new(Msg.t(), keyword()) :: t()
+  def new(%Msg{} = message, opts \\ []) do
     kb = Keyword.get(opts, :keybindings, Keybindings.new())
-    %__MODULE__{message: message, theme: theme, keybindings: kb}
+    %__MODULE__{message: message, keybindings: kb}
   end
 
   @spec toggle_expanded(t()) :: t()
   def toggle_expanded(%__MODULE__{expanded: e} = comp), do: %{comp | expanded: !e}
 
   @impl true
-  def render(%__MODULE__{} = comp, width), do: do_render(comp, width)
+  def render(%__MODULE__{} = comp, %RenderContext{theme: theme, width: width}),
+    do: {comp, do_render(comp, theme, width), nil}
 
   @impl true
   def handle_key(%__MODULE__{} = comp, key) do
@@ -56,7 +57,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
 
   # ── private ──────────────────────────────────────────────────────────────
 
-  defp do_render(%__MODULE__{message: msg, theme: theme, expanded: expanded, keybindings: kb}, width) do
+  defp do_render(%__MODULE__{message: msg, expanded: expanded, keybindings: kb}, theme, width) do
     label = Theme.fg(theme, :custom_message_label, Theme.bold("[compaction]"))
     token_str = format_number(msg.tokens_before)
 

@@ -69,7 +69,7 @@ defmodule OctoPi.Coder.Compaction.SummaryTest do
     end
   end
 
-  defp messages, do: [%User{content: "hello", timestamp: 0}]
+  defp messages, do: [%User{content: [%Text{text: "hello"}], timestamp: 0}]
 
   describe "generate/4 — basic path" do
     test "wraps the conversation in <conversation> tags and uses SUMMARIZATION_PROMPT" do

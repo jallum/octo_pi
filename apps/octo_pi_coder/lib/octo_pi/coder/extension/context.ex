@@ -3,7 +3,7 @@ defmodule OctoPi.Coder.Extension.Context do
 
   alias OctoPi.Agent.Message
   alias OctoPi.AI.Model
-  alias OctoPi.Coder.Models
+  alias OctoPi.AI.ModelRegistry
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.SessionManager
 
@@ -35,7 +35,7 @@ defmodule OctoPi.Coder.Extension.Context do
             get_messages: &__MODULE__.empty_list/0,
             get_branch: &__MODULE__.empty_list/0,
             get_leaf_entry_id: &__MODULE__.nil_entry_id/0,
-            find_model: &Models.find/2,
+            find_model: &__MODULE__.default_find_model/2,
             get_model_auth: &__MODULE__.no_auth/1,
             summary_producer: nil
 
@@ -50,6 +50,14 @@ defmodule OctoPi.Coder.Extension.Context do
   @doc false
   @spec no_auth(term()) :: {:error, String.t()}
   def no_auth(_model), do: {:error, "model registry not configured"}
+
+  @doc false
+  @spec default_find_model(atom(), String.t()) :: Model.t() | nil
+  def default_find_model(runner_name, id) when is_atom(runner_name) and is_binary(id) do
+    ModelRegistry.find(ModelRegistry.global!(), runner_name, id)
+  end
+
+  def default_find_model(_runner_name, _id), do: nil
 
   @spec new(map()) :: t()
   def new(attrs), do: struct!(__MODULE__, attrs)

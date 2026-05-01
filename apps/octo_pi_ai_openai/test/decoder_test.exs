@@ -67,7 +67,7 @@ defmodule OctoPi.AI.Providers.OpenAI.DecoderTest do
       ] = events
 
       assert %Event.Done{reason: :stop, message: msg} = terminal
-      assert [%Content.Text{text: "Hello world"}] = msg.content
+      assert [%Content.Text{text: "Hello world", content_index: 0}] = msg.content
     end
 
     test "ignores null and empty content deltas" do
@@ -111,7 +111,11 @@ defmodule OctoPi.AI.Providers.OpenAI.DecoderTest do
       ] = events
 
       assert %Event.Done{message: msg} = terminal
-      assert [%Content.Thinking{thinking: "Let me think... more thinking"}, %Content.Text{text: "Answer"}] = msg.content
+
+      assert [
+               %Content.Thinking{thinking: "Let me think... more thinking", content_index: 0},
+               %Content.Text{text: "Answer", content_index: 1}
+             ] = msg.content
     end
 
     test "emits thinking events from reasoning field" do

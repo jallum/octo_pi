@@ -2,10 +2,18 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.ToolExecution
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.WrapAnsi
 
   @theme Theme.load_builtin(:dark, :truecolor)
+
+  defp ctx(width \\ 80), do: %RenderContext{theme: @theme, width: width}
+
+  defp render_lines(te, width \\ 80) do
+    {_, lines, nil} = ToolExecution.render(te, ctx(width))
+    lines
+  end
 
   defp strip_ansi(text) do
     String.replace(text, ~r/\e\][^\a]*\a|\e\[[0-9;]*m/, "")
@@ -13,7 +21,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   defp header_text(te) do
     te
-    |> ToolExecution.render(80)
+    |> render_lines()
     |> Enum.map(&strip_ansi/1)
     |> Enum.find(&(String.trim(&1) != ""))
   end
@@ -21,7 +29,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   # count non-empty background-colored lines in rendered output
   defp bg_line_count(te) do
     te
-    |> ToolExecution.render(80)
+    |> render_lines()
     |> Enum.count(fn line -> line =~ "\e[48;" end)
   end
 
@@ -29,27 +37,27 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "render/2 pending state" do
     test "shows tool name" do
-      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo"})
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "read"))
     end
 
     test "shows arguments" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "ls -la"}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls -la"})
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "ls -la"))
     end
 
     test "uses pending background" do
-      te = ToolExecution.new("Read", "call-1", %{}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Read", "call-1", %{})
+      lines = render_lines(te)
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
 
     test "no extra blank line inside box when no result" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"})
       # padding_y=1 gives top + bottom padding = 2 bg lines, plus 1 content line = 3 total
       assert bg_line_count(te) == 3
     end
@@ -61,11 +69,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "success shows result text when expanded" do
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result("file contents here", false)
         |> ToolExecution.set_expanded(true)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "file contents"))
     end
@@ -73,20 +81,20 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "success uses success background" do
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result("ok", false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
 
     test "error shows error message" do
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result("file not found", true)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "file not found"))
     end
@@ -98,11 +106,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "collapsed shows short result as preview" do
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result("short content", false)
         |> ToolExecution.set_expanded(false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "short content"))
     end
@@ -112,11 +120,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result(long_result, false)
         |> ToolExecution.set_expanded(false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "line 20"))
       assert Enum.any?(stripped, &(&1 =~ "line 16"))
@@ -130,11 +138,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result(long_result, false)
         |> ToolExecution.set_expanded(false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "line 20"))
       assert Enum.any?(stripped, &(&1 =~ "line 16"))
@@ -144,17 +152,17 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "expanded shows full result text" do
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme)
+        |> ToolExecution.new("call-1", %{})
         |> ToolExecution.set_result("visible content", false)
         |> ToolExecution.set_expanded(true)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "visible content"))
     end
 
     test "toggle_expanded flips state" do
-      te = ToolExecution.new("Read", "call-1", %{}, @theme)
+      te = ToolExecution.new("Read", "call-1", %{})
       assert te.expanded == false
       te = ToolExecution.toggle_expanded(te)
       assert te.expanded == true
@@ -169,11 +177,11 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "updates partial result text" do
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
+        |> ToolExecution.new("call-1", %{command: "ls"})
         |> ToolExecution.update_partial("partial output...")
         |> ToolExecution.set_expanded(true)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "partial output"))
     end
@@ -183,21 +191,21 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Bash header" do
     test "shows $ command" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "ls -la"}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls -la"})
       header = header_text(te)
       assert header =~ "$ ls -la"
     end
 
     test "truncates long commands" do
       long_cmd = String.duplicate("x", 200)
-      te = ToolExecution.new("Bash", "call-1", %{command: long_cmd}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{command: long_cmd})
       header = header_text(te)
       assert header =~ "$ "
       assert String.length(header) < 200
     end
 
     test "shows timeout suffix" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "sleep 60", timeout: 120}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{command: "sleep 60", timeout: 120})
       header = header_text(te)
       assert header =~ "$ sleep 60"
       assert header =~ "timeout 120s"
@@ -206,21 +214,21 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Read header" do
     test "shows read path" do
-      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo/bar.ex"}, @theme)
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo/bar.ex"})
       header = header_text(te)
       assert header =~ "read"
       assert header =~ "/foo/bar.ex"
     end
 
     test "shows line range with offset and limit" do
-      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 10, limit: 20}, @theme)
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 10, limit: 20})
       header = header_text(te)
       assert header =~ "/foo.ex"
       assert header =~ ":10-29"
     end
 
     test "shows offset only without limit" do
-      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 5}, @theme)
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/foo.ex", offset: 5})
       header = header_text(te)
       assert header =~ ":5"
     end
@@ -228,7 +236,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Edit header" do
     test "shows edit path" do
-      te = ToolExecution.new("Edit", "call-1", %{file_path: "/src/app.ex"}, @theme)
+      te = ToolExecution.new("Edit", "call-1", %{file_path: "/src/app.ex"})
       header = header_text(te)
       assert header =~ "edit"
       assert header =~ "/src/app.ex"
@@ -237,7 +245,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Write header" do
     test "shows write path" do
-      te = ToolExecution.new("Write", "call-1", %{file_path: "/src/new.ex", content: "hello"}, @theme)
+      te = ToolExecution.new("Write", "call-1", %{file_path: "/src/new.ex", content: "hello"})
       header = header_text(te)
       assert header =~ "write"
       assert header =~ "/src/new.ex"
@@ -246,7 +254,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Grep header" do
     test "shows grep pattern in path" do
-      te = ToolExecution.new("Grep", "call-1", %{pattern: "defmodule", path: "/src"}, @theme)
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "defmodule", path: "/src"})
       header = header_text(te)
       assert header =~ "grep"
       assert header =~ "/defmodule/"
@@ -254,13 +262,13 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     end
 
     test "shows glob when present" do
-      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", glob: "*.ex"}, @theme)
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", glob: "*.ex"})
       header = header_text(te)
       assert header =~ "*.ex"
     end
 
     test "shows limit when present" do
-      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", limit: 10}, @theme)
+      te = ToolExecution.new("Grep", "call-1", %{pattern: "TODO", path: ".", limit: 10})
       header = header_text(te)
       assert header =~ "limit 10"
     end
@@ -268,7 +276,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "Find header" do
     test "shows find pattern in path" do
-      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src"}, @theme)
+      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src"})
       header = header_text(te)
       assert header =~ "find"
       assert header =~ "*.ex"
@@ -276,7 +284,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     end
 
     test "shows limit when present" do
-      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src", limit: 5}, @theme)
+      te = ToolExecution.new("Find", "call-1", %{pattern: "*.ex", path: "/src", limit: 5})
       header = header_text(te)
       assert header =~ "limit 5"
     end
@@ -284,14 +292,14 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "LS header" do
     test "shows ls path" do
-      te = ToolExecution.new("ls", "call-1", %{path: "/src"}, @theme)
+      te = ToolExecution.new("ls", "call-1", %{path: "/src"})
       header = header_text(te)
       assert header =~ "ls"
       assert header =~ "/src"
     end
 
     test "shows limit when present" do
-      te = ToolExecution.new("ls", "call-1", %{path: "/src", limit: 50}, @theme)
+      te = ToolExecution.new("ls", "call-1", %{path: "/src", limit: 50})
       header = header_text(te)
       assert header =~ "limit 50"
     end
@@ -299,13 +307,13 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "string-keyed args (JSON decode path)" do
     test "Bash with string keys" do
-      te = ToolExecution.new("Bash", "call-1", %{"command" => "echo hi"}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{"command" => "echo hi"})
       header = header_text(te)
       assert header =~ "$ echo hi"
     end
 
     test "Read with string keys" do
-      te = ToolExecution.new("Read", "call-1", %{"file_path" => "/src/app.ex", "offset" => 5}, @theme)
+      te = ToolExecution.new("Read", "call-1", %{"file_path" => "/src/app.ex", "offset" => 5})
       header = header_text(te)
       assert header =~ "/src/app.ex"
       assert header =~ ":5"
@@ -314,7 +322,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "unknown tool header" do
     test "falls back to generic key=value format" do
-      te = ToolExecution.new("CustomTool", "call-1", %{foo: "bar", baz: 42}, @theme)
+      te = ToolExecution.new("CustomTool", "call-1", %{foo: "bar", baz: 42})
       header = header_text(te)
       assert header =~ "CustomTool"
     end
@@ -322,7 +330,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "status prefix in header" do
     test "pending shows spinner" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"})
       header = header_text(te)
       assert header =~ "⏳"
     end
@@ -330,7 +338,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "success shows checkmark" do
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
+        |> ToolExecution.new("call-1", %{command: "ls"})
         |> ToolExecution.set_result("ok", false)
 
       header = header_text(te)
@@ -340,7 +348,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     test "error shows x" do
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{command: "ls"}, @theme)
+        |> ToolExecution.new("call-1", %{command: "ls"})
         |> ToolExecution.set_result("fail", true)
 
       header = header_text(te)
@@ -357,9 +365,9 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       end
 
       te =
-        ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, @theme, render_call: render_call)
+        ToolExecution.new("Read", "call-1", %{file_path: "/foo"}, render_call: render_call)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "[custom-call] /foo"))
     end
@@ -370,13 +378,13 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme,
+        |> ToolExecution.new("call-1", %{},
           render_call: render_call,
           render_result: render_result
         )
         |> ToolExecution.set_result("done", false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       refute Enum.any?(stripped, &(&1 =~ "[custom-call]"))
       assert Enum.any?(stripped, &(&1 =~ "[custom-result]"))
@@ -391,10 +399,10 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{}, @theme, render_result: render_result)
+        |> ToolExecution.new("call-1", %{}, render_result: render_result)
         |> ToolExecution.set_result("output", false)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "[custom-result] error=false"))
     end
@@ -406,10 +414,10 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Bash"
-        |> ToolExecution.new("call-1", %{command: "rm -rf"}, @theme, render_result: render_result)
+        |> ToolExecution.new("call-1", %{command: "rm -rf"}, render_result: render_result)
         |> ToolExecution.set_result("denied", true)
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "[error-render] rm -rf"))
     end
@@ -421,16 +429,16 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
       te =
         "Read"
-        |> ToolExecution.new("call-1", %{}, @theme, render_result: render_result)
+        |> ToolExecution.new("call-1", %{}, render_result: render_result)
         |> ToolExecution.set_result("data", false)
 
-      collapsed = te |> ToolExecution.render(80) |> Enum.map(&strip_ansi/1)
+      collapsed = te |> render_lines() |> Enum.map(&strip_ansi/1)
       assert Enum.any?(collapsed, &(&1 =~ "[collapsed-view]"))
 
       expanded =
         te
         |> ToolExecution.set_expanded(true)
-        |> ToolExecution.render(80)
+        |> render_lines()
         |> Enum.map(&strip_ansi/1)
 
       assert Enum.any?(expanded, &(&1 =~ "[expanded-view]"))
@@ -442,12 +450,12 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       render_call = fn _ctx -> ["SELF-FRAMED-LINE"] end
 
       te =
-        ToolExecution.new("Custom", "call-1", %{}, @theme,
+        ToolExecution.new("Custom", "call-1", %{},
           render_call: render_call,
           render_shell: :self
         )
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "SELF-FRAMED-LINE"))
       refute Enum.any?(stripped, &(&1 =~ "│"))
@@ -457,12 +465,12 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
       render_call = fn _ctx -> ["BOXED-LINE"] end
 
       te =
-        ToolExecution.new("Custom", "call-1", %{}, @theme,
+        ToolExecution.new("Custom", "call-1", %{},
           render_call: render_call,
           render_shell: :default
         )
 
-      lines = ToolExecution.render(te, 80)
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "BOXED-LINE"))
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
@@ -471,8 +479,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "no custom renderers" do
     test "renders with default when no custom render functions set" do
-      te = ToolExecution.new("Read", "call-1", %{file_path: "/bar"}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Read", "call-1", %{file_path: "/bar"})
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "read"))
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
@@ -481,8 +489,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   describe "borderless rendering (upstream parity)" do
     test "tool box uses background color, not border characters" do
-      te = ToolExecution.new("Read", "call-1", %{}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Read", "call-1", %{})
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
 
       refute Enum.any?(stripped, &(&1 =~ "┌")),
@@ -499,8 +507,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     end
 
     test "header text is inside the box as content, not in a border title" do
-      te = ToolExecution.new("Bash", "call-1", %{command: "ls"}, @theme)
-      lines = ToolExecution.render(te, 80)
+      te = ToolExecution.new("Bash", "call-1", %{command: "ls"})
+      lines = render_lines(te)
       stripped = Enum.map(lines, &strip_ansi/1)
 
       header_line = Enum.find(stripped, &(&1 =~ "$ ls"))
@@ -509,8 +517,8 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
     end
 
     test "box content is padded with spaces to full width" do
-      te = ToolExecution.new("Read", "call-1", %{}, @theme)
-      lines = ToolExecution.render(te, 40)
+      te = ToolExecution.new("Read", "call-1", %{})
+      lines = render_lines(te, 40)
 
       content_lines = Enum.filter(lines, &(&1 =~ "\e[48;"))
 

@@ -6,8 +6,9 @@ defmodule OctoPi.AI.Content.Text do
 
   @type t :: %__MODULE__{
           text: String.t(),
-          signature: String.t() | nil
+          signature: String.t() | nil,
+          content_index: non_neg_integer() | nil
         }
 
-  defstruct text: "", signature: nil
+  defstruct text: "", signature: nil, content_index: nil
 end
