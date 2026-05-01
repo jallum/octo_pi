@@ -5,7 +5,8 @@
     "opi-d06.3",
     "opi-d06.4",
     "opi-d06.6",
-    "opi-d06.7"
+    "opi-d06.7",
+    "opi-d06.15"
   ],
   "blocks": [],
   "comments": [],
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "Delete Compat adapter and feature flag; remove legacy Component callback shape",
   "type": "task",
-  "updated_at": "2026-05-01T11:20:50.205905Z"
+  "updated_at": "2026-05-01T11:25:34.829090Z"
 }
