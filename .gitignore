@@ -17,3 +17,6 @@ erl_crash.dump
 
 # leex-generated Erlang source (regenerated from .xrl on each build)
 apps/*/src/*.erl
+
+# Dynamic extension test fixtures (created/removed per test)
+apps/octo_pi_coder/test/octo_pi/coder/extension/fixtures/
