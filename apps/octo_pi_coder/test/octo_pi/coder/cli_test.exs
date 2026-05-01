@@ -8,6 +8,8 @@ defmodule OctoPi.Coder.CLITest do
   @moduletag capture_log: true
 
   describe "parse_args/1" do
+    @describetag :integration
+
     test "defaults to print mode with prompt from positional args" do
       assert {:ok, %{mode: :print, prompt: "hi there", model: _}} =
                CLI.parse_args(["hi", "there"])
@@ -21,7 +23,6 @@ defmodule OctoPi.Coder.CLITest do
       assert {:ok, %{mode: :print, prompt: "x"}} = CLI.parse_args(["-p", "x"])
     end
 
-    @tag :integration
     test "--mode rpc selects rpc mode; no prompt required" do
       assert {:ok, %{mode: :rpc}} = CLI.parse_args(["--mode", "rpc"])
     end
@@ -37,10 +38,6 @@ defmodule OctoPi.Coder.CLITest do
       end
     end
 
-    test "--help returns a help sentinel" do
-      assert {:help, _usage} = CLI.parse_args(["--help"])
-    end
-
     test "no args defaults to interactive mode" do
       assert {:ok, %{mode: :interactive, prompt: nil}} = CLI.parse_args([])
     end
@@ -54,15 +51,19 @@ defmodule OctoPi.Coder.CLITest do
       assert {:ok, %{list_telemetry: true}} = CLI.parse_args(["--list-telemetry"])
     end
 
-    @tag :integration
     test "--no-telemetry splits comma-separated ids into a list" do
       assert {:ok, %{no_telemetry: ["agent", "tui_events"]}} =
                CLI.parse_args(["--no-telemetry=agent,tui_events"])
     end
 
-    @tag :integration
     test "--no-telemetry with no value defaults to empty list" do
       assert {:ok, %{no_telemetry: []}} = CLI.parse_args([])
+    end
+  end
+
+  describe "parse_args/1 (offline)" do
+    test "--help returns a help sentinel" do
+      assert {:help, _usage} = CLI.parse_args(["--help"])
     end
   end
 
