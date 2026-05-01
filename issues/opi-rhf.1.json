@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-01T20:25:53Z",
+  "description": "## Observed\nAfter a completed response with empty input, pressing Ctrl+C does nothing. The transcript remains intact and the context token count is unchanged. The UI hint reads 'ctrl+c/ctrl+d clear/exit', so this is a regression against the documented contract.\n\n## Root cause\n`dispatch_app_action/3` in\n  `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`\n\nhas four heads for `\"app.clear\"`:\n\n| Line | Guard | Effect |\n|------|-------|--------|\n| 1382 | `input.value != \"\"` | Clears the input field |\n| 1385 | `is_compacting?` | Aborts compaction |\n| 1391 | `loader present` | Aborts generation |\n| 1396 | _(base case)_ | `state` — **no-op** |\n\nThe base case (idle, empty input, no active generation) should clear the transcript, but instead returns state unchanged.\n\nThe slash-command equivalent at line 1687:\n```elixir\ndefp dispatch_slash_command(\"clear\", state),\n  do: %{state | transcript: %Transcript{}}\n```\ndoes the right thing.\n\n## Fix\nReplace the base-case no-op with a transcript clear that mirrors the slash command:\n\n```elixir\n# before (interactive.ex:1396)\ndefp dispatch_app_action(\"app.clear\", state, _key), do: state\n\n# after\ndefp dispatch_app_action(\"app.clear\", state, _key),\n  do: %{state | transcript: %Transcript{}}\n```\n\nCheck whether the session context (Coder session message history) should also be reset here, or only the transcript display. Compare with `dispatch_slash_command(\"clear\", ...)` at line 1687 and align behaviour.\n\n## Test\n1. Start `bin/pi` under tmux.\n2. Send a message, wait for the response to complete.\n3. Ensure the input field is empty.\n4. Press Ctrl+C (physical keyboard preferred; tmux `send-keys C-c` also acceptable).\n5. **Pass**: transcript area is blank, token-usage counter resets to 0.\n6. **Pass**: a second Ctrl+C on an already-clear transcript is a no-op (no crash, no double-clear side effects).\n7. Confirm `/clear` still works identically.",
+  "id": "opi-rhf.1",
+  "labels": [],
+  "parent": "opi-rhf",
+  "priority": 1,
+  "status": "open",
+  "title": "app.clear base case: Ctrl+C does not clear transcript when idle",
+  "type": "bug",
+  "updated_at": "2026-05-01T20:25:53Z"
+}
