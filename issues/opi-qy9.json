@@ -9,8 +9,8 @@
   "id": "opi-qy9",
   "labels": [],
   "priority": 2,
-  "status": "in_review",
+  "status": "closed",
   "title": "Rebalance session ownership: store owns tree, loop owns path",
   "type": "epic",
-  "updated_at": "2026-04-29T18:20:17Z"
+  "updated_at": "2026-05-01T12:30:11.699206Z"
 }
