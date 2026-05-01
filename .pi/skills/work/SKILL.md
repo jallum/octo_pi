@@ -34,14 +34,15 @@ When invoked with an `<epic_id>`, follow these steps:
 4.  **Implement (TDD)**:
     - Write a failing test that covers the requirement.
     - Write the minimal code to make the test pass.
-    - Deviations or deferrals require approval.
     - **One commit per ticket**: Once the ticket is complete, commit your changes with a descriptive message related to the ticket.
 
 5.  **Verify Quality**: Before committing and closing, you **must** ensure:
+    - Deviations or deferrals require approval.
+    - Compiles without warnings.
     - All tests pass.
     - Code formatting is correct (e.g., `prettier`, `black`, etc.).
-    - Code hygiene tools/linters pass with **zero warnings**.
-    - Test output is clean (no noise or extra logs).
+    - Code hygiene tools/linters pass.
+    - Test output is clean (no noise, warnings or extra logs).
 
 6.  **Close Ticket**: Close the ticket:
 
