@@ -5,7 +5,8 @@
     "opi-d06.2"
   ],
   "blocks": [
-    "opi-d06.15"
+    "opi-d06.15",
+    "opi-d06.16"
   ],
   "comments": [],
   "created": "2026-05-01T11:23:57.804377Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Convert selectors: Model, Session, Settings, SettingsList, Tree, SelectList",
   "type": "task",
-  "updated_at": "2026-05-01T11:25:30.417423Z"
+  "updated_at": "2026-05-01T11:35:49.875637Z"
 }
