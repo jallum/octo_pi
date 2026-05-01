@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-d06.1"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-05-01T11:23:39.696379Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Collapse Text + TruncatedText into VText helpers",
   "type": "task",
-  "updated_at": "2026-05-01T11:23:39.696379Z"
+  "updated_at": "2026-05-01T11:24:30.914892Z"
 }

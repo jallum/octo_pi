@@ -4,7 +4,8 @@
   "blocked_by": [],
   "blocks": [
     "opi-d06.2",
-    "opi-d06.7"
+    "opi-d06.7",
+    "opi-d06.12"
   ],
   "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
@@ -16,5 +17,5 @@
   "status": "open",
   "title": "VDom core: VNode types, LineBuf, paint phase, Compat adapter behind feature flag",
   "type": "task",
-  "updated_at": "2026-05-01T11:20:50.205905Z"
+  "updated_at": "2026-05-01T11:24:30.914892Z"
 }
