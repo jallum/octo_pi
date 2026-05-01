@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:24:09.003637Z",
+  "description": "Pre-flight gate for d06.8. Verify by grep that the conversion is\ncomplete:\n\n  1. Zero matches for the old callback shape:\n       grep -rn \"render(.*width)\" apps/octo_pi_tui/lib | rg -v vdom\n  2. Zero matches for the legacy Component behaviour callsite:\n       grep -rn \"@behaviour OctoPi.TUI.Component\" — only allowed in\n       components that have been migrated to the new render/3 shape.\n  3. Zero matches for the custom-widget escape hatch:\n       grep -rn \"custom_widget\" apps/octo_pi_tui/lib\n  4. Zero matches for `OctoPi.TUI.Compat` outside its own module\n     and tests.\n  5. `mix dialyzer` clean; `mix test` 1251+ green.\n  6. tmux smoke run: open the TUI, run a prompt with tool calls,\n     scroll the transcript, open every dialog/selector, exit\n     cleanly. No regressions vs current `main`.\n\nWhen green, mark this ticket closed and unblock d06.8.",
+  "id": "opi-d06.15",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Final audit: zero legacy callers before adapter deletion",
+  "type": "task",
+  "updated_at": "2026-05-01T11:24:09.003637Z"
+}
