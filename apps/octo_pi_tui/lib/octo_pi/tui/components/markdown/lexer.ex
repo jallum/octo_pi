@@ -280,8 +280,7 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
     take_nested_step(parse_list_item_open(line), blank?(line), line, rest, all, base, acc)
   end
 
-  defp take_nested_step({kind, indent, _start, _text}, _blank, line, rest, _all, base, acc)
-       when indent > base do
+  defp take_nested_step({kind, indent, _start, _text}, _blank, line, rest, _all, base, acc) when indent > base do
     nested_list_lines = [line | rest]
     {items, remaining} = collect_items(nested_list_lines, kind, indent, [])
     nested_node = build_list_node(kind, items, nested_list_lines)
