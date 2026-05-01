@@ -2,12 +2,14 @@ defmodule OctoPi.AI.Runners.AnthropicTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.AI.ModelRegistry
+  alias OctoPi.AI.Runner
+  alias OctoPi.AI.RunnerRegistry
   alias OctoPi.AI.Runners.Anthropic
 
   describe "behaviour" do
     test "implements OctoPi.AI.Runner" do
       Code.ensure_loaded!(Anthropic)
-      callbacks = OctoPi.AI.Runner.behaviour_info(:callbacks)
+      callbacks = Runner.behaviour_info(:callbacks)
 
       Enum.each(callbacks, fn {name, arity} ->
         assert function_exported?(Anthropic, name, arity),
@@ -52,7 +54,7 @@ defmodule OctoPi.AI.Runners.AnthropicTest do
 
   describe "registration" do
     test "is registered in OctoPi.AI.RunnerRegistry under :anthropic" do
-      assert OctoPi.AI.RunnerRegistry.lookup(:anthropic) == Anthropic
+      assert RunnerRegistry.lookup(:anthropic) == Anthropic
     end
   end
 

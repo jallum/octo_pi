@@ -38,6 +38,7 @@ defmodule OctoPi.AI.ModelRegistry do
   """
 
   alias OctoPi.AI.Model
+  alias OctoPi.AI.RunnerRegistry
 
   @enforce_keys [:by_pair, :runner_module]
   defstruct [:by_pair, :runner_module]
@@ -52,7 +53,7 @@ defmodule OctoPi.AI.ModelRegistry do
 
   @spec load(keyword()) :: {:ok, t()} | {:error, term()}
   def load(opts \\ []) do
-    runners = Keyword.get_lazy(opts, :runners, &OctoPi.AI.RunnerRegistry.list/0)
+    runners = Keyword.get_lazy(opts, :runners, &RunnerRegistry.list/0)
     path = Keyword.get_lazy(opts, :models_file, &default_models_file/0)
 
     :telemetry.span(

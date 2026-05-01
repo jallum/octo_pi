@@ -2,6 +2,8 @@ defmodule OctoPi.AI.Runners.LMStudioTest do
   use ExUnit.Case, async: false
 
   alias OctoPi.AI.Model
+  alias OctoPi.AI.Runner
+  alias OctoPi.AI.RunnerRegistry
   alias OctoPi.AI.Runners.LMStudio
   alias OctoPi.AI.TestSupport.FakeLMStudioPlug
 
@@ -27,7 +29,7 @@ defmodule OctoPi.AI.Runners.LMStudioTest do
   describe "behaviour callbacks" do
     test "implements OctoPi.AI.Runner" do
       Code.ensure_loaded!(LMStudio)
-      callbacks = OctoPi.AI.Runner.behaviour_info(:callbacks)
+      callbacks = Runner.behaviour_info(:callbacks)
 
       Enum.each(callbacks, fn {name, arity} ->
         assert function_exported?(LMStudio, name, arity)
@@ -132,7 +134,7 @@ defmodule OctoPi.AI.Runners.LMStudioTest do
 
   describe "registration" do
     test "is registered in OctoPi.AI.RunnerRegistry under :lmstudio" do
-      assert OctoPi.AI.RunnerRegistry.lookup(:lmstudio) == LMStudio
+      assert RunnerRegistry.lookup(:lmstudio) == LMStudio
     end
   end
 end

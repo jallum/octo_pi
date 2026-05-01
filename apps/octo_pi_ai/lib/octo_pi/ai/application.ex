@@ -3,6 +3,8 @@ defmodule OctoPi.AI.Application do
 
   use Application
 
+  alias OctoPi.AI.Tracing
+
   @impl true
   def start(_type, _args) do
     OctoPi.Tracer.register(%{
@@ -21,7 +23,7 @@ defmodule OctoPi.AI.Application do
       OctoPi.AI.RunnerRegistry
     ]
 
-    OctoPi.AI.Tracing.maybe_attach()
+    Tracing.maybe_attach()
 
     Supervisor.start_link(children, strategy: :one_for_one, name: OctoPi.AI.Supervisor)
   end

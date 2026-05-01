@@ -58,7 +58,7 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
 
   defp parse_block(line, rest, acc) do
     cond do
-      String.trim(line) == "" ->
+      blank?(line) ->
         parse_blocks(rest, acc)
 
       heading = parse_heading(line) ->
@@ -66,37 +66,52 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
         parse_blocks(rest, [{:heading, level, parse_inline(text)} | acc])
 
       fence = parse_fence_open(line) ->
-        {marker, lang} = fence
-        {code_lines, after_close} = take_until_fence_close(rest, marker, [])
-        code = Enum.join(code_lines, "\n")
-        lang = if lang == "", do: nil, else: lang
-        parse_blocks(after_close, [{:code_block, lang, code} | acc])
+        parse_block_fence(fence, rest, acc)
 
       list_open = parse_list_item_open(line) ->
-        {kind, indent, _start, _text} = list_open
-        all = [line | rest]
-        {items, remaining} = collect_items(all, kind, indent, [])
-        parse_blocks(remaining, [build_list_node(kind, items, all) | acc])
+        parse_block_list(list_open, line, rest, acc)
 
       hr?(line) ->
         parse_blocks(rest, [:hr | acc])
 
       blockquote?(line) ->
-        {qlines, remaining} = take_blockquote_lines([line | rest], [])
-        inner = qlines |> Enum.join("\n") |> tokenize()
-        parse_blocks(remaining, [{:blockquote, inner} | acc])
-
-      table?(line, rest) ->
-        [_sep | body_rest] = rest
-        headers = line |> parse_table_row() |> Enum.map(&parse_inline/1)
-        {body_rows, after_table} = take_table_body(body_rest, [])
-        rows = Enum.map(body_rows, fn cells -> Enum.map(cells, &parse_inline/1) end)
-        parse_blocks(after_table, [{:table, headers, rows} | acc])
+        parse_block_blockquote(line, rest, acc)
 
       true ->
-        {plines, remaining} = take_paragraph_lines(rest, [line])
-        text = Enum.join(plines, "\n")
-        parse_blocks(remaining, [{:paragraph, parse_inline(text)} | acc])
+        parse_block_table_or_paragraph(line, rest, acc)
+    end
+  end
+
+  defp parse_block_fence({marker, lang}, rest, acc) do
+    {code_lines, after_close} = take_until_fence_close(rest, marker, [])
+    code = Enum.join(code_lines, "\n")
+    lang = if lang == "", do: nil, else: lang
+    parse_blocks(after_close, [{:code_block, lang, code} | acc])
+  end
+
+  defp parse_block_list({kind, indent, _start, _text}, line, rest, acc) do
+    all = [line | rest]
+    {items, remaining} = collect_items(all, kind, indent, [])
+    parse_blocks(remaining, [build_list_node(kind, items, all) | acc])
+  end
+
+  defp parse_block_blockquote(line, rest, acc) do
+    {qlines, remaining} = take_blockquote_lines([line | rest], [])
+    inner = qlines |> Enum.join("\n") |> tokenize()
+    parse_blocks(remaining, [{:blockquote, inner} | acc])
+  end
+
+  defp parse_block_table_or_paragraph(line, rest, acc) do
+    if table?(line, rest) do
+      [_sep | body_rest] = rest
+      headers = line |> parse_table_row() |> Enum.map(&parse_inline/1)
+      {body_rows, after_table} = take_table_body(body_rest, [])
+      rows = Enum.map(body_rows, fn cells -> Enum.map(cells, &parse_inline/1) end)
+      parse_blocks(after_table, [{:table, headers, rows} | acc])
+    else
+      {plines, remaining} = take_paragraph_lines(rest, [line])
+      text = Enum.join(plines, "\n")
+      parse_blocks(remaining, [{:paragraph, parse_inline(text)} | acc])
     end
   end
 
@@ -232,33 +247,25 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   defp collect_items([], _kind, _base, acc), do: {Enum.reverse(acc), []}
 
   defp collect_items([line | rest] = all, kind, base, acc) do
-    case parse_list_item_open(line) do
-      nil ->
-        if blank?(line) do
-          case rest do
-            [next | _] ->
-              case parse_list_item_open(next) do
-                {^kind, ^base, _, _} -> collect_items(rest, kind, base, acc)
-                _ -> {Enum.reverse(acc), all}
-              end
+    collect_items_step(parse_list_item_open(line), blank?(line), rest, all, kind, base, acc)
+  end
 
-            [] ->
-              {Enum.reverse(acc), []}
-          end
-        else
-          {Enum.reverse(acc), all}
-        end
+  defp collect_items_step({kind, base, _start, _text} = open, _blank, rest, _all, kind, base, acc) do
+    {inline, nested, leftover} = consume_item_body(open, rest, base)
+    collect_items(leftover, kind, base, [{:li, inline, nested} | acc])
+  end
 
-      {^kind, ^base, _start, _text} = open ->
-        {inline, nested, leftover} = consume_item_body(open, rest, base)
-        collect_items(leftover, kind, base, [{:li, inline, nested} | acc])
-
-      {_other_kind, ^base, _start, _text} ->
-        {Enum.reverse(acc), all}
-
-      _ ->
-        {Enum.reverse(acc), all}
+  defp collect_items_step(nil, true, [next | _] = rest, all, kind, base, acc) do
+    case parse_list_item_open(next) do
+      {^kind, ^base, _, _} -> collect_items(rest, kind, base, acc)
+      _ -> {Enum.reverse(acc), all}
     end
+  end
+
+  defp collect_items_step(nil, true, [], _all, _kind, _base, acc), do: {Enum.reverse(acc), []}
+
+  defp collect_items_step(_open, _blank, _rest, all, _kind, _base, acc) do
+    {Enum.reverse(acc), all}
   end
 
   defp consume_item_body({_, _, _, text}, rest, base) do
@@ -270,29 +277,26 @@ defmodule OctoPi.TUI.Components.Markdown.Lexer do
   defp take_nested([], _base, acc), do: {Enum.reverse(acc), []}
 
   defp take_nested([line | rest] = all, base, acc) do
-    case parse_list_item_open(line) do
-      {kind, indent, _start, _text} when indent > base ->
-        nested_list_lines = [line | rest]
-        {items, remaining} = collect_items(nested_list_lines, kind, indent, [])
-        nested_node = build_list_node(kind, items, nested_list_lines)
-        take_nested(remaining, base, [nested_node | acc])
+    take_nested_step(parse_list_item_open(line), blank?(line), line, rest, all, base, acc)
+  end
 
-      _ ->
-        if blank?(line) do
-          case rest do
-            [next | _] ->
-              case parse_list_item_open(next) do
-                {_, indent, _, _} when indent > base -> take_nested(rest, base, acc)
-                _ -> {Enum.reverse(acc), all}
-              end
+  defp take_nested_step({kind, indent, _start, _text}, _blank, line, rest, _all, base, acc)
+       when indent > base do
+    nested_list_lines = [line | rest]
+    {items, remaining} = collect_items(nested_list_lines, kind, indent, [])
+    nested_node = build_list_node(kind, items, nested_list_lines)
+    take_nested(remaining, base, [nested_node | acc])
+  end
 
-            _ ->
-              {Enum.reverse(acc), all}
-          end
-        else
-          {Enum.reverse(acc), all}
-        end
+  defp take_nested_step(_open, true, _line, [next | _] = rest, all, base, acc) do
+    case parse_list_item_open(next) do
+      {_, indent, _, _} when indent > base -> take_nested(rest, base, acc)
+      _ -> {Enum.reverse(acc), all}
     end
+  end
+
+  defp take_nested_step(_open, _blank, _line, _rest, all, _base, acc) do
+    {Enum.reverse(acc), all}
   end
 
   # ── Paragraphs ──────────────────────────────────────────────────
