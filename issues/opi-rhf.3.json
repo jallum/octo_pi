@@ -1,7 +1,8 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-rhf.1"
+    "opi-rhf.1",
+    "opi-rhf.2"
   ],
   "blocks": [],
   "created": "2026-05-01T20:26:24Z",
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "Smoke-test sign-off: verify both defects resolved",
   "type": "task",
-  "updated_at": "2026-05-01T20:26:29Z"
+  "updated_at": "2026-05-01T20:26:30Z"
 }
