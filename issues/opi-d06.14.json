@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-d06.2"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-d06.15"
+  ],
   "comments": [],
   "created": "2026-05-01T11:23:57.804377Z",
   "description": "Six selector components share a common pattern (list of items, arrow\nnavigation, optional fuzzy filter, enter-to-select). Convert all six\nto VDom; consider extracting a shared `Components.Selector` higher-\norder function that takes an item-renderer and a key-handler so the\nsix concrete selectors collapse into thin specializations.\n\nComponents covered:\n  * Components.ModelSelector\n  * Components.SessionSelector\n  * Components.SettingsSelector\n  * Components.SettingsList\n  * Components.TreeSelector\n  * Components.SelectList\n\nAcceptance: existing selector tests stay green; the\n`render_dialog_overlay/3` branches for these six are deleted as part\nof d06.6 (Screen root) cleanup.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Convert selectors: Model, Session, Settings, SettingsList, Tree, SelectList",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:39.756174Z"
+  "updated_at": "2026-05-01T11:25:30.417423Z"
 }
