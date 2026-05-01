@@ -10,7 +10,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessageTest do
 
   @summary "Compacted 5 turns. Key decisions: foo bar baz."
 
-  defp ctx(width \\ 80), do: %RenderContext{theme: @theme, width: width}
+  defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp msg(tokens_before \\ 50_000) do
     Msg.new(@summary, tokens_before, 0)

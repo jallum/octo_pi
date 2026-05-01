@@ -12,6 +12,8 @@ defmodule OctoPi.Coder.Extension.ExtensionsRunnerTest do
 
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias OctoPi.Coder.Extension
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
@@ -305,7 +307,13 @@ defmodule OctoPi.Coder.Extension.ExtensionsRunnerTest do
         end)
 
       event = %{type: :agent_start}
-      assert :ok == Dispatcher.fire_and_forget([e], event, ctx())
+
+      log =
+        capture_log(fn ->
+          assert :ok == Dispatcher.fire_and_forget([e], event, ctx())
+        end)
+
+      assert log =~ "Handler error!"
     end
 
     test "handler error is skipped in collect_all — does not crash" do
@@ -315,8 +323,13 @@ defmodule OctoPi.Coder.Extension.ExtensionsRunnerTest do
         end)
 
       event = %{type: :before_agent_start, messages: []}
-      results = Dispatcher.collect_all([e], event, ctx())
-      assert results == []
+
+      log =
+        capture_log(fn ->
+          assert [] == Dispatcher.collect_all([e], event, ctx())
+        end)
+
+      assert log =~ "oops"
     end
   end
 

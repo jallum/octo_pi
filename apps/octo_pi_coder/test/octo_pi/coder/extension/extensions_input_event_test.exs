@@ -10,6 +10,8 @@ defmodule OctoPi.Coder.Extension.ExtensionsInputEventTest do
 
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.Context
   alias OctoPi.Coder.Extension.Dispatcher
@@ -159,8 +161,12 @@ defmodule OctoPi.Coder.Extension.ExtensionsInputEventTest do
           API.on(api, :input, fn _ev, _ctx -> raise "boom" end)
         end)
 
-      result = emit([e], "x")
-      assert result.action == :continue
+      log =
+        capture_log(fn ->
+          assert %{action: :continue} = emit([e], "x")
+        end)
+
+      assert log =~ "boom"
     end
 
     test "handler error does not affect subsequent handlers" do
@@ -176,9 +182,14 @@ defmodule OctoPi.Coder.Extension.ExtensionsInputEventTest do
           end)
         end)
 
-      result = emit([e1, e2], "x")
-      assert result.action == :transform
-      assert result.text == "ok:x"
+      log =
+        capture_log(fn ->
+          result = emit([e1, e2], "x")
+          assert result.action == :transform
+          assert result.text == "ok:x"
+        end)
+
+      assert log =~ "boom"
     end
   end
 

@@ -46,7 +46,7 @@ defmodule OctoPi.Coder.LoopTest do
     :exit, _ -> :ok
   end
 
-  defp loop_opts(extra \\ []) do
+  defp loop_opts(extra) do
     Keyword.put_new_lazy(extra, :agent_pid, &start_agent!/0)
   end
 
@@ -64,7 +64,7 @@ defmodule OctoPi.Coder.LoopTest do
       agent = start_agent!()
 
       {:ok, pid} = Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       state = :sys.get_state(pid)
       assert state.extensions == []
@@ -92,7 +92,7 @@ defmodule OctoPi.Coder.LoopTest do
     test "default settings_manager returns Settings.default() for compaction", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert Coder.get_compaction_settings(pid) == Settings.default()
     end
@@ -100,7 +100,7 @@ defmodule OctoPi.Coder.LoopTest do
     test "default model_provider returns nil", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert :sys.get_state(pid).model_provider.() == nil
     end
@@ -125,7 +125,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert :sys.get_state(pid).model_provider.() == :my_model
       assert Coder.get_compaction_settings(pid) == expected
@@ -148,7 +148,7 @@ defmodule OctoPi.Coder.LoopTest do
           settings_manager: sm
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert OctoPi.Agent.state(agent).auto_compact_reserve_tokens == 12_345
     end
@@ -172,7 +172,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert :ok = Coder.steer(pid, "first")
       assert {:error, :full} = Coder.steer(pid, "second")
@@ -193,7 +193,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert :ok = Coder.follow_up(pid, "first")
       assert {:error, :full} = Coder.follow_up(pid, "second")
@@ -208,7 +208,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [ext], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       %{pid: pid, store: store, ext: ext}
     end
@@ -229,7 +229,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       %{pid: pid, store: store}
     end
@@ -271,7 +271,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(extensions: [], store_pid: store, agent_pid: agent)
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       assert {:ok, _} = Coder.add_entry(pid, message_entry("hello agent"))
 
@@ -339,7 +339,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       # Two messages so prep has something to summarize.
       {:ok, _} = Coder.add_entry(pid, message_entry("first"))
@@ -365,7 +365,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       assert {:error, :nothing_to_compact} = Coder.compact(pid)
     end
 
@@ -451,7 +451,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       {:ok, _} = Coder.add_entry(pid, message_entry("a"))
       {:ok, _} = Coder.add_entry(pid, message_entry("b"))
 
@@ -487,7 +487,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       %{pid: pid}
     end
 
@@ -539,7 +539,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       %{pid: pid}
     end
 
@@ -602,7 +602,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       {pid, path, store}
     end
 
@@ -706,7 +706,7 @@ defmodule OctoPi.Coder.LoopTest do
       {:ok, pid} =
         Loop.start_link(loop_opts(extensions: [], store_pid: store))
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       %{pid: pid}
     end
 
@@ -760,7 +760,7 @@ defmodule OctoPi.Coder.LoopTest do
     defp session_with_two_branches(ctx) do
       store = open_store!(ctx)
       {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
 
       {:ok, id1} = Coder.add_entry(pid, message_entry("root message"))
       {:ok, id2} = Coder.add_entry(pid, message_entry("branch A"))
@@ -777,7 +777,7 @@ defmodule OctoPi.Coder.LoopTest do
     test "returns {:ok, nil} immediately when target_id == current leaf", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       {:ok, id} = Coder.add_entry(pid, message_entry("a"))
       assert {:ok, nil} = Coder.navigate_tree(pid, target_id: id)
     end
@@ -785,7 +785,7 @@ defmodule OctoPi.Coder.LoopTest do
     test "returns {:error, :not_found} for an unknown target_id", ctx do
       store = open_store!(ctx)
       {:ok, pid} = Loop.start_link(loop_opts(extensions: [], store_pid: store))
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       assert {:error, :not_found} = Coder.navigate_tree(pid, target_id: "ghost")
     end
 
@@ -1082,7 +1082,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+      on_exit(fn -> if Process.alive?(pid), do: try_stop(pid) end)
       %{pid: pid, model: model}
     end
 
@@ -1181,7 +1181,7 @@ defmodule OctoPi.Coder.LoopTest do
           )
         )
 
-      on_exit(fn -> if Process.alive?(pid2), do: GenServer.stop(pid2) end)
+      on_exit(fn -> if Process.alive?(pid2), do: try_stop(pid2) end)
 
       assert Coder.get_context_usage(pid2) == nil
     end

@@ -15,8 +15,11 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
+  def __telem_handler__(event, measurements, metadata, %{pid: pid}) do
+    send(pid, {:telemetry, event, measurements, metadata})
+  end
+
   setup do
-    parent = self()
     handler_id = "render-telem-#{System.unique_integer([:positive])}"
 
     events = [
@@ -33,10 +36,8 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
     :telemetry.attach_many(
       handler_id,
       events,
-      fn event, measurements, metadata, _ ->
-        send(parent, {:telemetry, event, measurements, metadata})
-      end,
-      nil
+      &__MODULE__.__telem_handler__/4,
+      %{pid: self()}
     )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)

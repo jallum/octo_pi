@@ -54,6 +54,11 @@ defmodule OctoPi.TUI.TracerHandlersTest do
     })
 
     OctoPi.Tracer.attach_all()
+
+    on_exit(fn ->
+      Enum.each(OctoPi.Tracer.registered(), &OctoPi.Tracer.detach(&1.id))
+    end)
+
     :ok
   end
 

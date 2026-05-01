@@ -1,9 +1,10 @@
 defmodule OctoPi.TUI.InteractiveTest do
   use ExUnit.Case, async: true
 
+  require Logger
+
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Tool.Result
-  alias OctoPi.AI.Content
   alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Message.Assistant
   alias OctoPi.AI.Message.User
@@ -38,6 +39,40 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Transcript
   alias OctoPi.TUI.Transcript.AssistantHeader
   alias OctoPi.TUI.Transcript.AssistantStatus
+
+  # The "child crash still restores tty" test below kills the Terminal
+  # GenServer to verify the after-block cleanup. OTP's proc_lib emits
+  # an expected crash report asynchronously — after the test's
+  # capture_log scope ends — so we drop it at the default handler. The
+  # filter is narrowly matched to crash reports produced from inside
+  # this test module.
+  setup_all do
+    filter_id = :crash_test_otp_filter
+    sentinel = "OctoPi.TUI.InteractiveTest"
+
+    filter_fun = fn event, _ ->
+      case event do
+        %{level: :error, meta: %{domain: domain}} = ev when is_list(domain) ->
+          if :otp in domain and event_mentions?(ev, sentinel),
+            do: :stop,
+            else: :ignore
+
+        _ ->
+          :ignore
+      end
+    end
+
+    :logger.add_handler_filter(:default, filter_id, {filter_fun, nil})
+    on_exit(fn -> :logger.remove_handler_filter(:default, filter_id) end)
+    :ok
+  end
+
+  defp event_mentions?(%{msg: msg}, sentinel) do
+    case :binary.match(:erlang.term_to_binary(msg), sentinel) do
+      :nomatch -> false
+      _ -> true
+    end
+  end
 
   # Helper: build a Transcript from a list of {key, entry} pairs,
   # finalizing each entry — useful for tests that need a seeded
@@ -772,7 +807,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       Interactive.handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{message: final_assistant}})
     end
 
-    defp assistant(content, stop_reason \\ :stop) do
+    defp assistant(content, stop_reason) do
       %Assistant{
         content: content,
         api: :fake,
@@ -1651,6 +1686,11 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "types a prompt, receives response, then exits on Ctrl+C" do
+      log = ExUnit.CaptureLog.capture_log(fn -> run_pong_scenario() end)
+      assert log =~ "exceed terminal width 80"
+    end
+
+    defp run_pong_scenario do
       final = assistant_msg("pong")
 
       FakeTransport.set_script([

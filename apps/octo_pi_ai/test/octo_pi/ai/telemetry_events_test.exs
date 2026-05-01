@@ -44,17 +44,18 @@ defmodule OctoPi.AI.TelemetryEventsTest do
     p
   end
 
+  def __telem_handler__(event, measurements, metadata, %{pid: pid}) do
+    send(pid, {:telem, event, measurements, metadata})
+  end
+
   defp attach(name, events) do
-    pid = self()
     handler_id = "telem-test-#{name}-#{System.unique_integer([:positive])}"
 
     :telemetry.attach_many(
       handler_id,
       events,
-      fn event, measurements, metadata, _ ->
-        send(pid, {:telem, event, measurements, metadata})
-      end,
-      nil
+      &__MODULE__.__telem_handler__/4,
+      %{pid: self()}
     )
 
     on_exit(fn -> :telemetry.detach(handler_id) end)

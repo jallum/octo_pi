@@ -8,7 +8,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
-  defp ctx(width \\ 80), do: %RenderContext{theme: @theme, width: width}
+  defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(te, width \\ 80) do
     {_, lines, nil} = ToolExecution.render(te, ctx(width))

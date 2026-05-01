@@ -8,7 +8,7 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   @theme Theme.load_builtin(:dark, :truecolor)
   @preview_lines 20
 
-  defp ctx(width \\ 80), do: %RenderContext{theme: @theme, width: width}
+  defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(be, width \\ 80) do
     {_, lines, nil} = BashExecution.render(be, ctx(width))

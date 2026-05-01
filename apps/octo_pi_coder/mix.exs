@@ -12,6 +12,7 @@ defmodule OctoPi.Coder.MixProject do
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      test_ignore_filters: [&String.contains?(&1, "/fixtures/")],
       deps: deps()
     ]
   end

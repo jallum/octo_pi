@@ -1,6 +1,8 @@
 defmodule OctoPi.Coder.Extensions.EventBusDemoTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias OctoPi.Coder.Extension.API
   alias OctoPi.Coder.Extension.EventBus
   alias OctoPi.Coder.Extension.Loader
@@ -140,9 +142,13 @@ defmodule OctoPi.Coder.Extensions.EventBusDemoTest do
       EventBus.on(bus, "ch", fn _ -> raise "boom" end)
       EventBus.on(bus, "ch", fn _ -> send(test_pid, :second_ran) end)
 
-      EventBus.emit(bus, "ch", %{})
+      log =
+        capture_log(fn ->
+          EventBus.emit(bus, "ch", %{})
+          assert_receive :second_ran
+        end)
 
-      assert_receive :second_ran
+      assert log =~ "EventBus handler error on ch: boom"
     end
   end
 end
