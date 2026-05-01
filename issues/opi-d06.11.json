@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:23:32.131947Z",
+  "description": "~930 lines covering text editing, dropdown, IME composition, paste,\nslash-commands, history. d06.7 covers the cursor stamping; this\nticket covers everything else: Input.render returning a VRow with\nprompt + text + VCursor + suffix; the dropdown becomes a separate\nVFlow rendered as a sibling (not via the bespoke `render_dropdown/2`\nescape); state moves into hook cells.\n\nAcceptance: every existing input_test.exs assertion stays green;\nkeystroke smoke test in tmux confirms IME composition, paste, and\ndropdown navigation are unchanged.",
+  "id": "opi-d06.11",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert Input component (full surface beyond cursor)",
+  "type": "task",
+  "updated_at": "2026-05-01T11:23:32.131947Z"
+}
