@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-y1z",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Telemetry + tracing for model registry / runners",
   "type": "task",
-  "updated_at": "2026-04-30T03:44:23.767747Z"
+  "updated_at": "2026-05-01T12:57:15.010028Z"
 }
