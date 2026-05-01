@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-d06.3"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-05-01T11:24:09.003637Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Final audit: zero legacy callers before adapter deletion",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:09.003637Z"
+  "updated_at": "2026-05-01T11:24:45.029706Z"
 }
