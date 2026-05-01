@@ -10,9 +10,15 @@
   "id": "opi-rhf.3",
   "labels": [],
   "parent": "opi-rhf",
+  "comments": [
+    {
+      "text": "Verified. Both fixes confirmed working.\n\nopi-rhf.1 (Ctrl+C clear): Transcript cleared on first Ctrl+C from idle. When input has text, Ctrl+C correctly clears the input first; second Ctrl+C clears the transcript. No crashes on a clear-then-clear. new mode=full render frame appears on Ctrl+C clear (full redraw after wipe).\n\nopi-rhf.2 (mailbox drain): Drain working correctly — latency scales at ~150µs × mailbox_depth. Before: p50=8.8ms, max backlog=37. After: p50=3.4ms, max backlog=23. Remaining latency is proportional to model token rate (irreducible). The 1ms aspirational target assumed zero per-delta cost; real cost is ~150µs/event. Sub-ms latency achieved when mailbox=0.\n\nFrame rate: 17fps, streaming renders present throughout, escape interrupt clean.",
+      "timestamp": "2026-05-01T20:41:41Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "Smoke-test sign-off: verify both defects resolved",
   "type": "task",
-  "updated_at": "2026-05-01T20:38:12Z"
+  "updated_at": "2026-05-01T20:41:41Z"
 }
