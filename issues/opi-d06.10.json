@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:23:23.765199Z",
+  "description": "Markdown is the largest non-Input leaf (~350 lines core +\ninline/lexer/render/stream submodules). Today it returns\n`[binary()]`; under VDom it returns a VFlow of VText leaves with\nANSI styling already baked in via `%VText{style: …}`.\n\nStream submodule must be reviewed: it currently emits incremental\noutput during streaming. With VDom + memoization, the streaming\ncontract becomes \"props change → memo key changes → subtree\nrepaints\". Confirm that incremental rendering performance is at\nleast matched (telemetry: nodes_visited / paint duration per delta).\n\nAcceptance: existing markdown rendering tests stay green; ANSI byte\nsequences identical to today's output for representative fixtures.",
+  "id": "opi-d06.10",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert Markdown subsystem (markdown.ex + markdown/{inline,lexer,render,stream})",
+  "type": "task",
+  "updated_at": "2026-05-01T11:23:23.765199Z"
+}
