@@ -45,13 +45,24 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
 
     test "paint VCursor marks position" do
       ctx = %RenderCtx{width: 80}
-      node = %VDOM.VCursor{}
+      node = %VDOM.VCursor{style: :bar}
 
       {_, cursor} =
         Paint.paint(node, LineBuf.new() |> LineBuf.push("prefix"), ctx)
         |> LineBuf.finalize()
 
-      assert cursor == {0, 6}
+      assert cursor == {0, 6, :bar}
+    end
+
+    test "paint VCursor with style" do
+      ctx = %RenderCtx{width: 80}
+      node = %VDOM.VCursor{style: :block}
+
+      {_, cursor} =
+        Paint.paint(node, LineBuf.new() |> LineBuf.push("prefix"), ctx)
+        |> LineBuf.finalize()
+
+      assert cursor == {0, 6, :block}
     end
 
     test "VFlow with VText" do

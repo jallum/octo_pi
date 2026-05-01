@@ -38,16 +38,22 @@ defmodule OctoPi.TUI.VDOM.LineBufTest do
       assert length(buf.iolist_rev) == 2
     end
 
-    test "mark_cursor records position" do
+    test "mark_cursor records position with default style" do
       buf = LineBuf.new() |> LineBuf.push("hi") |> LineBuf.mark_cursor()
       {_, cursor} = LineBuf.finalize(buf)
-      assert cursor == {0, 2}
+      assert cursor == {0, 2, :bar}
     end
 
-    test "mark_cursor only first call has effect" do
-      buf = LineBuf.new() |> LineBuf.push("a") |> LineBuf.mark_cursor() |> LineBuf.mark_cursor()
+    test "mark_cursor records with custom style" do
+      buf = LineBuf.new() |> LineBuf.push("hi") |> LineBuf.mark_cursor(:block)
       {_, cursor} = LineBuf.finalize(buf)
-      assert cursor == {0, 1}
+      assert cursor == {0, 2, :block}
+    end
+
+    test "mark_cursor last call wins" do
+      buf = LineBuf.new() |> LineBuf.push("a") |> LineBuf.mark_cursor(:bar) |> LineBuf.push("b") |> LineBuf.mark_cursor(:underline)
+      {_, cursor} = LineBuf.finalize(buf)
+      assert cursor == {0, 2, :underline}
     end
 
     test "finalize reverses lines" do
@@ -66,10 +72,10 @@ defmodule OctoPi.TUI.VDOM.LineBufTest do
         |> LineBuf.push("line1")
         |> LineBuf.flush_line()
         |> LineBuf.push("x")
-        |> LineBuf.mark_cursor()
+        |> LineBuf.mark_cursor(:bar)
 
       {_, cursor} = LineBuf.finalize(buf)
-      assert cursor == {1, 1}
+      assert cursor == {1, 1, :bar}
     end
 
     test "nil cursor when never marked" do

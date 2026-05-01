@@ -369,7 +369,7 @@ defmodule OctoPi.TUI.UI.StateTest do
       assert state2.last_paint_at_ms != nil
       assert state2.dirty == false
       assert state2.dirty_since_ms == nil
-      assert cursor == nil
+      assert cursor == ""
     end
 
     test "increments generation on paint" do

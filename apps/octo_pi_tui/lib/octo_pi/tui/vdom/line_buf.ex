@@ -12,7 +12,7 @@ defmodule OctoPi.TUI.VDOM.LineBuf do
     - line_iolist_rev: reversed list for the line currently being built
     - visible_width: visible width of current line (excluding ANSI)
     - line_count: total lines flushed so far
-    - cursor: nil | {row, col} where row is absolute buffer row
+    - cursor: nil | {row, col, style} where row is absolute buffer row
   """
 
   alias OctoPi.TUI.WrapAnsi
@@ -22,7 +22,7 @@ defmodule OctoPi.TUI.VDOM.LineBuf do
           line_iolist_rev: [iodata()],
           visible_width: non_neg_integer(),
           line_count: non_neg_integer(),
-          cursor: nil | {non_neg_integer(), non_neg_integer()}
+          cursor: nil | {non_neg_integer(), non_neg_integer(), atom()}
         }
 
   defstruct iolist_rev: [],
@@ -75,16 +75,14 @@ defmodule OctoPi.TUI.VDOM.LineBuf do
     }
   end
 
-  @doc "Mark cursor position at the current line/col."
-  @spec mark_cursor(t()) :: t()
-  def mark_cursor(%__MODULE__{cursor: nil} = buf) do
-    %{buf | cursor: {buf.line_count, buf.visible_width}}
+  @doc "Mark cursor position at the current line/col with given style."
+  @spec mark_cursor(t(), atom()) :: t()
+  def mark_cursor(%__MODULE__{} = buf, style \\ :bar) do
+    %{buf | cursor: {buf.line_count, buf.visible_width, style}}
   end
 
-  def mark_cursor(%__MODULE__{} = buf), do: buf
-
   @doc "Finalize buffer, returning {iodata, cursor_or_nil}."
-  @spec finalize(t()) :: {iodata(), nil | {non_neg_integer(), non_neg_integer()}}
+  @spec finalize(t()) :: {iodata(), nil | {non_neg_integer(), non_neg_integer(), atom()}}
   def finalize(%__MODULE__{line_iolist_rev: [], iolist_rev: []} = buf) do
     {[], buf.cursor}
   end

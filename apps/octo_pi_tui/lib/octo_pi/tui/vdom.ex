@@ -110,9 +110,9 @@ defmodule OctoPi.TUI.VDOM do
 
   defmodule VCursor do
     @moduledoc "Zero-width leaf marking cursor position."
-    defstruct []
+    defstruct [:style]
 
-    @type t :: %__MODULE__{}
+    @type t :: %__MODULE__{style: :bar | :block | :underline}
   end
 
   @type t ::

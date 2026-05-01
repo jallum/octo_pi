@@ -121,8 +121,8 @@ defmodule OctoPi.TUI.VDOM.Paint do
     buf
   end
 
-  def paint(%VDOM.VCursor{}, buf, _ctx) do
-    LineBuf.mark_cursor(buf)
+  def paint(%VDOM.VCursor{style: style}, buf, _ctx) do
+    LineBuf.mark_cursor(buf, style)
   end
 
   ## Internals: kids walking

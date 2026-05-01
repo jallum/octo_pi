@@ -168,7 +168,23 @@ defmodule OctoPi.TUI.UI.State do
 
     state = %{state | dirty: false, dirty_since_ms: nil, last_paint_at_ms: now, hook_cells: ctx.state.hook_cells}
 
-    {state, iodata, cursor}
+    cursor_seq = format_cursor(cursor)
+
+    {state, iodata, cursor_seq}
+  end
+
+  # Format cursor position into ANSI sequence
+  defp format_cursor(nil), do: ""
+  defp format_cursor({row, col, style}) do
+    style_seq = case style do
+      :bar -> "\e[5 q"
+      :block -> "\e[1 q"
+      :underline -> "\e[3 q"
+      _ -> "\e[5 q"  # default bar
+    end
+
+    # cursor is 1-based in ANSI
+    "\e[?25h#{style_seq}\e[#{row + 1};#{col + 1}H"
   end
 
   @spec use_state(t(), cell_id(), term() | (() -> term())) :: {{term(), (term() -> t())}, t()}
