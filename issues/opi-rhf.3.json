@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-rhf.1"
+  ],
   "blocks": [],
   "created": "2026-05-01T20:26:24Z",
   "description": "Gate ticket — close once opi-rhf.1 and opi-rhf.2 are both merged and verified together in a single session.\n\n## Verification run\n```\ntmux new-session -d -s smoke -x 220 -y 50\ntmux send-keys -t smoke 'bin/pi --log-telemetry tmp/smoke_verify.log' Enter\n# 1. send a message, wait for response\n# 2. press Ctrl+C — transcript must clear\n# 3. send a long-streaming prompt\n# 4. press keys while the model streams\n# 5. press Escape to interrupt\n# 6. Ctrl+C again to clear\ntmux send-keys -t smoke C-d   # exit\npython3 tmp/analyze_trace.py tmp/smoke_verify.log\n```\n\n## Pass criteria\n- Ctrl+C clears the transcript (empty display, token counter resets to 0)\n- `key.latency` p50 \u003c 1 ms during streaming window\n- `mailbox\u003e0 at arrival` ≈ 0%\n- `streaming? = true` renders present throughout streaming (not just at turn end)\n- Escape interrupt still halts generation cleanly\n- No new crashes or visual defects introduced",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Smoke-test sign-off: verify both defects resolved",
   "type": "task",
-  "updated_at": "2026-05-01T20:26:24Z"
+  "updated_at": "2026-05-01T20:26:29Z"
 }
