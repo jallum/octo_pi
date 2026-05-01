@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.1"
+  ],
+  "blocks": [
+    "opi-d06.8"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Input.render returns %VRow{children: [text(before), %VCursor{style: :bar}, text(after)]} — the component never tracks screen coordinates. Painter stamps {row, col, style} via LineBuf.mark_cursor/2; LineBuf.finalize/1 returns {iodata, cursor_or_nil}. Renderer.render/4 builds cursor_seq from the stamped position when present, emits hide-cursor sequence when absent. IME/composition chunks emit their own VCursor and last-paint-wins. Tests: cursor follows nested VBox padding offsets; multi-VCursor last-wins; absent VCursor produces hide sequence.",
+  "id": "opi-d06.7",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Cursor-as-VNode: Input emits VCursor; renderer derives cursor_seq from buffer",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

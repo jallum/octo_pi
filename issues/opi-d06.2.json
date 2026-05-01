@@ -1,0 +1,23 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.1"
+  ],
+  "blocks": [
+    "opi-d06.3",
+    "opi-d06.4",
+    "opi-d06.5"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "GenServer (OctoPi.TUI.UI) owns root component, hook-cell map keyed by hole id, invalidation set, aggregated next-frame deadline. Hook handle `h` is passed to render fns explicitly (no implicit closure-of-current-component). use_frame requests aggregate into one deadline fed to RenderLoop — components never read System.monotonic_time directly, the reconciler passes frame index in (deterministic in tests). Hook-cell GC: cells not visited this frame retained one frame, then dropped. Tests: state survives rerenders, memo invalidation triggers rerender, frame deadlines coalesce correctly, key subscriptions mount/unmount cleanly.",
+  "id": "opi-d06.2",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Reconciler + hooks: use_state, use_memo, use_frame, use_key, use_effect",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

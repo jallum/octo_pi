@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.2"
+  ],
+  "blocks": [
+    "opi-d06.6",
+    "opi-d06.8"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Each existing transcript entry (AssistantHeader/Status, AssistantMessage text/thinking blocks, BashExecution, ToolExecution, Diff, UserMessage, CompactionSummary) becomes a VHole with the entry struct as props. The do_weld/3 + weld_lines/3 walk is deleted; assistant turns are emitted as %VZone{open, close, final, child} (or plain VFlow when has_tool_calls?). Existing transcript_test.exs assertions stay green; OSC 133 byte sequences land in the same positions per pixel-diff.",
+  "id": "opi-d06.3",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Migrate Transcript: entries become VHole/VLines; replace OSC welder with VZone",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

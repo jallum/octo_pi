@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.2"
+  ],
+  "blocks": [
+    "opi-d06.6",
+    "opi-d06.8"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Each becomes a function returning a VNode. WelcomeBanner/Header use use_state for expanded; Loader uses use_frame(80) and reads frame index instead of System.monotonic_time. Their structs and @impl Component callbacks are deleted. Theme arrives via RenderContext (no more theme-as-positional-arg in Loader.render/3).",
+  "id": "opi-d06.4",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert leaf components: WelcomeBanner, Header, Loader, Footer",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Replace the ad-hoc, two-contract render pipeline (top-level\n`Component.render(state, width) :: [binary]` vs transcript\n`Component.render(state, ctx) :: {state, lines, frame_ms}`) and the\nhand-stitched `Interactive.build_screen/2` with a single composable,\nmemoized component model.\n\nComponents become functions that return a `%VNode{}` tree. A single\nrecursive paint phase walks the tree once, writing into a `LineBuf`\n(an iodata accumulator with visible-width tracking) — no\n`++`/`flat_map`/`List.flatten` in the hot path. Hooks (`use_state`,\n`use_memo`, `use_frame`, `use_key`, `use_effect`) provide local\nstate, memoization, animation, and key handling without bespoke\nplumbing per region. OSC 133 zone welding becomes a regular\n`%VZone{}` node rather than a post-pass walker. The terminal cursor\nbecomes a zero-width `%VCursor{}` leaf whose `{row,col}` is stamped\ninto the buffer and lifted into the renderer's existing\n`cursor_seq`. Custom widgets stop escaping the type system through\n`{from, %{render: …}}`.\n\nGoals (single contract; nested composition; per-component memo;\nsingle-pass paint; first-class animation; OSC welding via VZone;\n`use_frame` aggregated into a single deadline that drives RenderLoop).\nNon-goals (no DOM diff in the React sense; no JSX/sigils in v1; no\nglobal stores; lines remain the output unit).\n\nDesign deck: `tmp/tui_react_proposal.html` (sections 1–12: today's\npain, goals, model, component API, hooks, layout, cursor-as-VNode,\nOSC welding, performance contract, reconciler, migration plan, open\nquestions).\n\nThe migration is sequenced so the codebase stays bilingual: a\n`Compat` adapter wraps any legacy `Component.render/2` as a\n`%VLines{}` leaf until every region is converted, then the adapter\nand feature flag are removed.",
+  "id": "opi-d06",
+  "labels": [],
+  "parent": "",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI: React-style functional component system (VDom → LineBuf)",
+  "type": "epic",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

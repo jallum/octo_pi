@@ -1,0 +1,22 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.3",
+    "opi-d06.4",
+    "opi-d06.6",
+    "opi-d06.7"
+  ],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "After every region is on VDom, delete OctoPi.TUI.Compat, drop the feature flag, and shrink the Component behaviour to just the new contract (`render(props, ctx, hook_handle) :: vnode`). Drop now-unused fields from Renderer (separate cursor_seq input path, etc.) only after confirming no external caller depends on them.",
+  "id": "opi-d06.8",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Delete Compat adapter and feature flag; remove legacy Component callback shape",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

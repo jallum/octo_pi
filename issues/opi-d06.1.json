@@ -1,0 +1,20 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [
+    "opi-d06.2",
+    "opi-d06.7"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Land %VText/VLines/VFlow/VRow/VBox/VZone/VMemo/VHole/VCursor structs and the single-pass painter (LineBuf as {iolist_rev, line_iolist_rev, visible_width, line_count}). Memo-cell shape is {iodata, visible_width, cursor_offset_or_nil} so cursor coords survive cache hits. Compat adapter wraps existing Component.render/2 outputs as VLines so nothing changes visually. Telemetry: [:octo_pi_tui, :vdom, :paint] reports nodes_visited / memo_hits / memo_misses / line_count / byte_count / duration. Hard rules: no ++, no flat_map, no List.flatten in the hot path. Tests: unit fixtures for border math, zone welding, padding, memo hit/miss, cursor stamping through nested boxes.",
+  "id": "opi-d06.1",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "VDom core: VNode types, LineBuf, paint phase, Compat adapter behind feature flag",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

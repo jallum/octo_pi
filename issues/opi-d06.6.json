@@ -1,0 +1,23 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.3",
+    "opi-d06.4",
+    "opi-d06.5"
+  ],
+  "blocks": [
+    "opi-d06.8"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "build_screen/2 becomes Components.Screen.render/3, returning a VFlow of [Header, Resources, Transcript, Loader, PendingMessages, Input, InputDropdown, Notification, Footer]. Custom widgets ({from, %{render: fn w → lines end}}) become regular VHoles wrapping the factory's output as VLines. The render_dialog_overlay/3 path also collapses into the tree. Tests: existing interactive flow tests stay green; the [\"\"] prefix that today opens build_screen is emitted by Screen as a VFlow gap.",
+  "id": "opi-d06.6",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Replace Interactive.build_screen/2 with a single root component",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}

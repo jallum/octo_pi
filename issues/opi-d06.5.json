@@ -1,0 +1,21 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [
+    "opi-d06.2"
+  ],
+  "blocks": [
+    "opi-d06.6"
+  ],
+  "comments": [],
+  "created": "2026-05-01T11:20:50.205905Z",
+  "description": "Box and Container collapse into VBox/VFlow and disappear as modules — their padding/border math moves into the painter. BashExecution/ToolExecution/Diff/UserMessage become functions returning trees of VBox/VFlow/VText. Streaming entries' update/finalize callbacks become hook-cell carried snapshots driven by reconciler-routed events.",
+  "id": "opi-d06.5",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert composites: Box, Container, BashExecution, ToolExecution, Diff, UserMessage",
+  "type": "task",
+  "updated_at": "2026-05-01T11:20:50.205905Z"
+}
