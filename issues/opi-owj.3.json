@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-01T21:45:59Z",
   "created": "2026-04-30T14:32:48.017123Z",
   "description": "## Symptom\n\nWhen compaction completes, no boundary marker is shown in the conversation. (Worse: see Cause — the transcript is being destructively replaced.)\n\n## Cause\n\n`apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:1098-1102`:\n\n```elixir\ndef handle_event(state, {:octo_pi_agent_event, %Event.CompactionEnd{result: {:ok, data}}}) do\n  theme = state.theme || Theme.load_builtin(:dark, Theme.detect_color_mode())\n  coder_msg = CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now()))\n  csm = TUICSM.new(coder_msg, theme)\n  %{state | transcript: [csm]}\nend\n```\n\nThis replaces the **entire** transcript with a single CSM, wiping prior conversation history visually.\n\n## Upstream behavior\n\n`tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts:2841-2848` calls `rebuildChatFromMessages()` (rebuilds transcript from the post-compaction message list), then `addMessageToChat(csm)` to append the CompactionSummaryMessage as a boundary marker.\n\nThe CSM TUI component is at `packages/tui/src/components/compaction-summary-message.ts` and renders a `[compaction]` label with summary stats.\n\n## Proposed fix (two options — confirm with user before coding)\n\n**Minimal (visual fix only):**\n\n```elixir\n%{state | transcript: state.transcript ++ [csm]}\n```\nPreserves visual history; appends marker. Doesn't reflect post-compaction message list semantics on next turn.\n\n**Faithful (port upstream rebuild):** Rebuild the transcript from the post-compaction `Coder.Session.Messages` snapshot, then append the CSM. Matches upstream end-to-end.\n\nThe faithful version is the right port; the minimal version is at minimum required to stop the destructive replacement.\n\n## TDD plan\n\n1. **Red — non-destructive test.** Author an interactive_test that:\n   - seeds `state.transcript` with N\u003e0 entries,\n   - dispatches `%Event.CompactionEnd{result: {:ok, %{summary: ..., tokens_before: ...}}}`,\n   - asserts `length(new_state.transcript) == N + 1` and the last element is a `TUICSM`. Currently fails (length collapses to 1).\n2. **Red — marker shape.** Render the resulting transcript and assert the rendered output contains a `[compaction]` boundary line (matching upstream CSM rendering).\n3. **Green.** Implement minimal fix (`++ [csm]`) to pass; if pursuing faithful port, add a second pass that rebuilds from the post-compaction `Coder.Session.Messages` snapshot before appending.\n4. **Validate.** Run `/compact` in tmux on a populous session; prior turns remain, marker appears at cut.\n\n## Acceptance\n\n- After `/compact` completes, prior turns remain visible.\n- A `[compaction]` boundary marker appears at the cut point.\n- Validated in tmux.",
   "id": "opi-owj.3",
   "labels": [],
   "parent": "opi-owj",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "CompactionEnd handler wipes the entire transcript instead of appending a summary marker",
   "type": "bug",
-  "updated_at": "2026-05-01T21:39:29Z"
+  "updated_at": "2026-05-01T21:45:59Z"
 }
