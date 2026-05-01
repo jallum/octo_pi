@@ -123,11 +123,6 @@ defmodule OctoPi.TUI.Transcript do
   @spec streaming?(t()) :: boolean()
   def streaming?(%__MODULE__{streaming: streaming}), do: MapSet.size(streaming) > 0
 
-  @doc "Whether `id` is present and finalized (i.e., not in the streaming set)."
-  @spec finalized?(t(), id()) :: boolean()
-  def finalized?(%__MODULE__{entries: entries, streaming: streaming}, id),
-    do: Map.has_key?(entries, id) and not MapSet.member?(streaming, id)
-
   @doc "Fetch the canonical data for `id`. Raises if not present."
   @spec fetch_data!(t(), id()) :: entry()
   def fetch_data!(%__MODULE__{entries: entries}, id), do: Map.fetch!(entries, id).data

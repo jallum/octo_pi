@@ -826,8 +826,8 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert %AssistantStatus{stop_reason: nil, has_tool_calls?: false} =
                Transcript.fetch_data!(s.transcript, "#{msg_id}:end")
 
-      assert Transcript.finalized?(s.transcript, "#{msg_id}:hdr")
-      assert Transcript.finalized?(s.transcript, "#{msg_id}:end")
+      refute MapSet.member?(s.transcript.streaming, "#{msg_id}:hdr")
+      refute MapSet.member?(s.transcript.streaming, "#{msg_id}:end")
     end
 
     test "MessageEnd with tool calls flips has_tool_calls? on header + status" do
@@ -874,7 +874,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert %ToolExecution{status: :success, result: "output here"} =
                Transcript.fetch_data!(s.transcript, "tool:tc2")
 
-      assert Transcript.finalized?(s.transcript, "tool:tc2")
+      refute MapSet.member?(s.transcript.streaming, "tool:tc2")
     end
 
     test "ToolExecutionEnd with error sets error status" do

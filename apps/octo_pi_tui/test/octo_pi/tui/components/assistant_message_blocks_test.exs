@@ -99,7 +99,7 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "hello world")
         |> AssistantMessage.finalize_block(0)
 
-      assert Transcript.finalized?(msg.blocks, 0)
+      refute MapSet.member?(msg.blocks.streaming, 0)
     end
 
     test "no-op for an unknown block id" do

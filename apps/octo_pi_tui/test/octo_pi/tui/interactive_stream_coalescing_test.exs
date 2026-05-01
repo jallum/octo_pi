@@ -136,8 +136,8 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       assert %AssistantHeader{msg_id: ^msg_id} = Transcript.fetch_data!(s2.transcript, header_key)
       assert %AssistantStatus{stop_reason: nil} = Transcript.fetch_data!(s2.transcript, status_key)
 
-      assert Transcript.finalized?(s2.transcript, header_key)
-      assert Transcript.finalized?(s2.transcript, status_key)
+      refute MapSet.member?(s2.transcript.streaming, header_key)
+      refute MapSet.member?(s2.transcript.streaming, status_key)
     end
   end
 

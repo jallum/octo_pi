@@ -86,7 +86,7 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, "hi", StubRenderer)
         |> Transcript.finalize(:a, "hi")
 
-      assert Transcript.finalized?(t, :a)
+      refute MapSet.member?(t.streaming, :a)
 
       {_, t} = Transcript.render(t)
       assert Map.has_key?(t.rendered, :a)
