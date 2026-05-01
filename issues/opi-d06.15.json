@@ -5,7 +5,8 @@
     "opi-d06.3",
     "opi-d06.4",
     "opi-d06.5",
-    "opi-d06.6"
+    "opi-d06.6",
+    "opi-d06.7"
   ],
   "blocks": [],
   "comments": [],
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "Final audit: zero legacy callers before adapter deletion",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:57.951259Z"
+  "updated_at": "2026-05-01T11:25:02.030941Z"
 }
