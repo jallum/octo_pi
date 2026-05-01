@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-d06.2"
+    "opi-d06.2",
+    "opi-d06.10"
   ],
   "blocks": [
     "opi-d06.15"
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Convert AssistantMessage blocks + CompactionSummaryMessage",
   "type": "task",
-  "updated_at": "2026-05-01T11:39:45.411234Z"
+  "updated_at": "2026-05-01T11:39:51.089459Z"
 }
