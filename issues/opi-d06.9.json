@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:23:14.575891Z",
+  "description": "Migrate `Components.AssistantMessage.TextBlock`,\n`Components.AssistantMessage.ThinkingBlock`, and\n`Components.CompactionSummaryMessage` to the VDom contract.\n\nThese are streaming-aware: today they implement the `update/2` +\n`finalize/2` callbacks. Under VDom, those become hook-cell snapshots\nmanaged by the reconciler — the component function reads the\ncurrent snapshot from `use_state`/dedicated streaming hook and emits\na VFlow of VText.\n\nAcceptance: structs and `@behaviour OctoPi.TUI.Component` callbacks\ndeleted; existing transcript_test.exs assertions stay green;\nstreaming smoke test in tmux shows tokens append at the same\ncadence.",
+  "id": "opi-d06.9",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert AssistantMessage blocks + CompactionSummaryMessage",
+  "type": "task",
+  "updated_at": "2026-05-01T11:23:14.575891Z"
+}
