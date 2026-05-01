@@ -1188,11 +1188,11 @@ defmodule OctoPi.TUI.Interactive do
     %{state | loader_stash: state.loader, loader: new_loader, is_compacting?: true}
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{result: {:ok, data}} = ev}) do
+  def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{result: {:ok, %{result: result}}} = ev}) do
     Terminal.set_progress(state.terminal, false)
 
     csm =
-      TUICSM.new(CoderCSM.new(data.summary, Map.get(data, :tokens_before, 0), DateTime.to_iso8601(DateTime.utc_now())))
+      TUICSM.new(CoderCSM.new(result.summary, result.tokens_before, DateTime.to_iso8601(DateTime.utc_now())))
 
     state = %{
       state

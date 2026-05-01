@@ -1,6 +1,7 @@
 defmodule OctoPi.TUI.InteractiveCompactionTest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.Coder.Compaction.Result
   alias OctoPi.Coder.Event.CompactionEnd
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Interactive
@@ -15,10 +16,12 @@ defmodule OctoPi.TUI.InteractiveCompactionTest do
       result:
         {:ok,
          %{
-           tokens_before: tokens_before,
-           summary: summary,
-           first_kept_entry_id: "entry-1",
-           details: nil,
+           result: %Result{
+             tokens_before: tokens_before,
+             summary: summary,
+             first_kept_entry_id: "entry-1",
+             details: nil
+           },
            from_extension?: false
          }}
     }
