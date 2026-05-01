@@ -38,24 +38,27 @@ defmodule OctoPi.TUI.Transcript.AssistantStatus do
   @impl true
   def finalize(%__MODULE__{} = s, %__MODULE__{} = entry), do: %{entry | theme: s.theme}
 
+  # Convention: every renderer terminates its own lines. OSC 133
+  # zone-end markers are zero-width and emitted inline (no terminator)
+  # so they attach to the end of the previous entry's last line
+  # rather than consuming their own row.
   @impl true
   def to_iolist(%__MODULE__{has_tool_calls?: true}), do: []
 
   def to_iolist(%__MODULE__{} = s) do
-    status_line = status_line(s)
-    [status_line, @osc133_zone_end <> @osc133_zone_final]
+    [status_line(s), @osc133_zone_end, @osc133_zone_final]
   end
 
   defp status_line(%__MODULE__{stop_reason: :aborted, error_message: msg, theme: theme})
        when is_binary(msg) and msg != "Request was aborted",
-       do: ["", Theme.fg(theme, :error, msg)]
+       do: [Theme.fg(theme, :error, msg), "\n"]
 
   defp status_line(%__MODULE__{stop_reason: :aborted, theme: theme}),
-    do: ["", Theme.fg(theme, :error, "Operation aborted")]
+    do: [Theme.fg(theme, :error, "Operation aborted"), "\n"]
 
   defp status_line(%__MODULE__{stop_reason: :error, error_message: msg, theme: theme}) do
     text = "Error: #{msg || "Unknown error"}"
-    ["", Theme.fg(theme, :error, text)]
+    [Theme.fg(theme, :error, text), "\n"]
   end
 
   defp status_line(_), do: []

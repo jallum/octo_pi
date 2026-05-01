@@ -113,7 +113,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @spec put_block(t(), non_neg_integer(), kind(), binary()) :: t()
   def put_block(%__MODULE__{} = msg, block_id, kind, snapshot) when is_integer(block_id) do
     blocks =
-      if Map.has_key?(msg.blocks.data, block_id) do
+      if Transcript.has_entry?(msg.blocks, block_id) do
         Transcript.update(msg.blocks, block_id, snapshot)
       else
         Transcript.append(msg.blocks, block_id, snapshot, renderer_for(kind))
@@ -125,7 +125,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   @doc "Mark a block finalized; the next render folds its volatile tail into cache."
   @spec finalize_block(t(), non_neg_integer()) :: t()
   def finalize_block(%__MODULE__{} = msg, block_id) do
-    case Map.get(msg.blocks.data, block_id) do
+    case Transcript.get_data(msg.blocks, block_id) do
       nil -> msg
       entry -> %{msg | blocks: Transcript.finalize(msg.blocks, block_id, entry)}
     end
@@ -153,7 +153,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
         case current_kind(msg.blocks, idx) do
           ^kind ->
             cond do
-              Map.has_key?(acc.data, idx) -> Transcript.update(acc, idx, snapshot)
+              Transcript.has_entry?(acc, idx) -> Transcript.update(acc, idx, snapshot)
               true -> Transcript.append(acc, idx, snapshot, renderer_for(kind))
             end
 
@@ -167,11 +167,13 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
 
   defp reset_blocks(msg), do: Transcript.new(msg.blocks.ctx)
 
-  defp current_kind(%Transcript{modules: modules}, idx) do
-    case Map.get(modules, idx) do
-      TextBlock -> :text
-      ThinkingBlock -> :thinking
-      _ -> nil
+  defp current_kind(%Transcript{} = t, idx) do
+    if Transcript.has_entry?(t, idx) do
+      case Transcript.fetch_module!(t, idx) do
+        TextBlock -> :text
+        ThinkingBlock -> :thinking
+        _ -> nil
+      end
     end
   end
 
@@ -179,17 +181,17 @@ defmodule OctoPi.TUI.Components.AssistantMessage do
   defp renderer_for(:thinking), do: ThinkingBlock
   defp renderer_for(_), do: ThinkingBlock
 
-  defp blocks_to_content(%Transcript{data: data, modules: modules}) do
-    data
+  defp blocks_to_content(%Transcript{entries: entries}) do
+    entries
     |> Enum.sort_by(fn {idx, _} -> idx end)
-    |> Enum.map(fn {idx, snapshot} -> {kind_for(Map.get(modules, idx)), snapshot} end)
+    |> Enum.map(fn {_, e} -> {kind_for(e.module), e.data} end)
   end
 
   defp kind_for(TextBlock), do: :text
   defp kind_for(ThinkingBlock), do: :thinking
   defp kind_for(_), do: :text
 
-  defp ctx_from(theme, width, opts \\ []) do
+  defp ctx_from(theme, width, opts) do
     base = %{theme: theme, width: width, padding_x: 1}
     Enum.into(opts, base)
   end

@@ -781,7 +781,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = Interactive.handle_event(s, {:octo_pi_agent_event, %Event.MessageStart{partial: nil}})
 
       msg_id = s.current_msg_id
-      assert %AssistantHeader{msg_id: ^msg_id} = Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
+      assert %AssistantHeader{msg_id: ^msg_id} = Transcript.fetch_data!(s.transcript, "#{msg_id}:hdr")
     end
 
     test "MessageBlockDelta updates the block slot keyed by msg_id:idx" do
@@ -792,8 +792,8 @@ defmodule OctoPi.TUI.InteractiveTest do
         Interactive.handle_event(s, {:octo_pi_agent_event,
           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "hello", snapshot: "hello"}})
 
-      assert Map.fetch!(s.transcript.data, "#{s.current_msg_id}:0") == "hello"
-      assert Map.fetch!(s.transcript.modules, "#{s.current_msg_id}:0") == TextBlock
+      assert Transcript.fetch_data!(s.transcript, "#{s.current_msg_id}:0") == "hello"
+      assert Transcript.fetch_module!(s.transcript, "#{s.current_msg_id}:0") == TextBlock
     end
 
     test "subsequent MessageBlockDeltas replace the slot's snapshot (latest wins)" do
@@ -807,7 +807,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         |> Interactive.handle_event({:octo_pi_agent_event,
           %Event.MessageBlockDelta{block_id: 0, kind: :text, delta: "llo", snapshot: "hello"}})
 
-      assert Map.fetch!(s.transcript.data, "#{s.current_msg_id}:0") == "hello"
+      assert Transcript.fetch_data!(s.transcript, "#{s.current_msg_id}:0") == "hello"
     end
 
     test "MessageEnd appends AssistantStatus and finalizes header + status" do
@@ -821,13 +821,13 @@ defmodule OctoPi.TUI.InteractiveTest do
       msg_id = String.replace_suffix(header_key, ":hdr", "")
 
       assert %AssistantHeader{msg_id: ^msg_id, has_tool_calls?: false} =
-               Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
+               Transcript.fetch_data!(s.transcript, "#{msg_id}:hdr")
 
       assert %AssistantStatus{stop_reason: nil, has_tool_calls?: false} =
-               Map.fetch!(s.transcript.data, "#{msg_id}:end")
+               Transcript.fetch_data!(s.transcript, "#{msg_id}:end")
 
-      assert MapSet.member?(s.transcript.finalized, "#{msg_id}:hdr")
-      assert MapSet.member?(s.transcript.finalized, "#{msg_id}:end")
+      assert Transcript.finalized?(s.transcript, "#{msg_id}:hdr")
+      assert Transcript.finalized?(s.transcript, "#{msg_id}:end")
     end
 
     test "MessageEnd with tool calls flips has_tool_calls? on header + status" do
@@ -842,10 +842,10 @@ defmodule OctoPi.TUI.InteractiveTest do
       msg_id = String.replace_suffix(header_key, ":hdr", "")
 
       assert %AssistantHeader{has_tool_calls?: true} =
-               Map.fetch!(s.transcript.data, "#{msg_id}:hdr")
+               Transcript.fetch_data!(s.transcript, "#{msg_id}:hdr")
 
       assert %AssistantStatus{has_tool_calls?: true} =
-               Map.fetch!(s.transcript.data, "#{msg_id}:end")
+               Transcript.fetch_data!(s.transcript, "#{msg_id}:end")
     end
 
     test "ToolExecutionStart appends a ToolExecution sibling" do
@@ -855,7 +855,7 @@ defmodule OctoPi.TUI.InteractiveTest do
       s = Interactive.handle_event(s, {:octo_pi_agent_event, ev})
 
       assert %ToolExecution{tool_name: "Read", tool_call_id: "tc1", status: :pending} =
-               Map.fetch!(s.transcript.data, "tool:tc1")
+               Transcript.fetch_data!(s.transcript, "tool:tc1")
     end
 
     test "ToolExecutionEnd updates and finalizes the matching ToolExecution" do
@@ -872,9 +872,9 @@ defmodule OctoPi.TUI.InteractiveTest do
           %Event.ToolExecutionEnd{tool_call_id: "tc2", tool_name: "Bash", result: result}})
 
       assert %ToolExecution{status: :success, result: "output here"} =
-               Map.fetch!(s.transcript.data, "tool:tc2")
+               Transcript.fetch_data!(s.transcript, "tool:tc2")
 
-      assert MapSet.member?(s.transcript.finalized, "tool:tc2")
+      assert Transcript.finalized?(s.transcript, "tool:tc2")
     end
 
     test "ToolExecutionEnd with error sets error status" do
@@ -891,7 +891,7 @@ defmodule OctoPi.TUI.InteractiveTest do
           %Event.ToolExecutionEnd{tool_call_id: "tc3", tool_name: "Bash", result: result}})
 
       assert %ToolExecution{status: :error, result: "permission denied"} =
-               Map.fetch!(s.transcript.data, "tool:tc3")
+               Transcript.fetch_data!(s.transcript, "tool:tc3")
     end
 
     test "unrelated agent events don't modify the transcript" do
@@ -929,8 +929,8 @@ defmodule OctoPi.TUI.InteractiveTest do
         |> Enum.filter(&String.ends_with?(&1, ":0"))
 
       # block keys are msg_id:0; resolve back to the data
-      assert Map.fetch!(s.transcript.data, t1_block) == "r1"
-      assert Map.fetch!(s.transcript.data, t2_block) == "r2"
+      assert Transcript.fetch_data!(s.transcript, t1_block) == "r1"
+      assert Transcript.fetch_data!(s.transcript, t2_block) == "r2"
     end
   end
 

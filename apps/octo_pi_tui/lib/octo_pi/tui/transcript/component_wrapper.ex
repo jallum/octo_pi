@@ -2,7 +2,9 @@ defmodule OctoPi.TUI.Transcript.ComponentWrapper do
   @moduledoc """
   Generic Transcript renderer adapter for any struct that implements
   `OctoPi.TUI.Component`. Calls the component's `render(state, width)`
-  on `to_iolist/1` and intersperses newlines.
+  on `to_iolist/1` and terminates each line with `\\n` — entries in a
+  Transcript own their own line termination; nothing else inserts
+  separators between siblings.
 
   Used for entry kinds whose own struct already produces
   `[String.t()]` lines and doesn't have a more incremental story —
@@ -28,10 +30,7 @@ defmodule OctoPi.TUI.Transcript.ComponentWrapper do
 
   @impl true
   def to_iolist(%__MODULE__{entry: entry, width: width}) when is_integer(width) do
-    case render(entry, width) do
-      [] -> []
-      lines -> Enum.intersperse(lines, "\n")
-    end
+    Enum.flat_map(render(entry, width), fn line -> [line, "\n"] end)
   end
 
   def to_iolist(%__MODULE__{}), do: []

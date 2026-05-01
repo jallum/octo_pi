@@ -44,7 +44,16 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
     r2
   end
 
+  # Convention: every renderer terminates its own lines. MdRender's
+  # output joins committed/volatile segments without a trailing
+  # newline; we add one so the next entry starts on its own line.
   @impl true
   def to_iolist({:deferred, _}), do: []
-  def to_iolist(%MdRender{} = r), do: MdRender.to_iolist(r)
+
+  def to_iolist(%MdRender{} = r) do
+    case MdRender.to_iolist(r) do
+      [] -> []
+      io -> [io, "\n"]
+    end
+  end
 end

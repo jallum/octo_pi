@@ -32,11 +32,11 @@ defmodule OctoPi.TUI.TranscriptTest do
     test "starts empty with nil ctx by default" do
       t = Transcript.new()
       assert t.order == []
-      assert t.data == %{}
-      assert t.renderers == %{}
+      assert t.entries == %{}
+      assert t.entries == %{}
       assert t.rendered == %{}
       assert t.ctx == nil
-      assert MapSet.size(t.finalized) == 0
+      assert MapSet.size(t.streaming) == 0
     end
 
     test "stamps the given ctx" do
@@ -51,7 +51,7 @@ defmodule OctoPi.TUI.TranscriptTest do
         Transcript.new(%{theme: :dark, width: 80})
         |> Transcript.append(:a, "alpha", StubRenderer)
 
-      assert t.renderers[:a].ctx == %{theme: :dark, width: 80}
+      assert t.entries[:a].renderer.ctx == %{theme: :dark, width: 80}
     end
 
     test "newest entries land at head; render emits oldest-first" do
@@ -76,8 +76,8 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, "he", StubRenderer)
         |> Transcript.update(:a, "hello")
 
-      assert t.data[:a] == "hello"
-      assert t.renderers[:a].entry == "hello"
+      assert t.entries[:a].data == "hello"
+      assert t.entries[:a].renderer.entry == "hello"
     end
 
     test "finalize marks entry; first render after that drops the renderer" do
@@ -86,11 +86,11 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, "hi", StubRenderer)
         |> Transcript.finalize(:a, "hi")
 
-      assert MapSet.member?(t.finalized, :a)
+      assert Transcript.finalized?(t, :a)
 
       {_, t} = Transcript.render(t)
       assert Map.has_key?(t.rendered, :a)
-      refute Map.has_key?(t.renderers, :a)
+      assert t.entries[:a].renderer == nil
     end
   end
 
@@ -129,7 +129,7 @@ defmodule OctoPi.TUI.TranscriptTest do
 
       assert t2.ctx == %{theme: :light, width: 40}
       # Finalized id stays out of renderers after resize+render.
-      refute Map.has_key?(t2.renderers, :a)
+      assert t2.entries[:a].renderer == nil
     end
 
     test "passing the same ctx does not rebuild renderers" do
@@ -137,10 +137,10 @@ defmodule OctoPi.TUI.TranscriptTest do
         Transcript.new(%{theme: :dark, width: 80})
         |> Transcript.append(:a, "alpha", StubRenderer)
 
-      r_before = t.renderers[:a]
+      r_before = t.entries[:a].renderer
       {_, t2} = Transcript.render(t, %{theme: :dark, width: 80})
 
-      assert t2.renderers[:a] === r_before, "no rebuild when ctx is unchanged"
+      assert t2.entries[:a].renderer === r_before, "no rebuild when ctx is unchanged"
     end
   end
 
@@ -155,10 +155,10 @@ defmodule OctoPi.TUI.TranscriptTest do
       t2 = Transcript.resize(t, %{theme: :light, width: 100})
 
       assert t2.ctx == %{theme: :light, width: 100}
-      assert t2.renderers[:a].ctx == %{theme: :light, width: 100}
-      assert t2.renderers[:a].finalized?, "finalize replayed for :a"
-      assert t2.renderers[:b].ctx == %{theme: :light, width: 100}
-      refute t2.renderers[:b].finalized?
+      assert t2.entries[:a].renderer.ctx == %{theme: :light, width: 100}
+      assert t2.entries[:a].renderer.finalized?, "finalize replayed for :a"
+      assert t2.entries[:b].renderer.ctx == %{theme: :light, width: 100}
+      refute t2.entries[:b].renderer.finalized?
       assert t2.rendered == %{}
     end
   end

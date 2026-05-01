@@ -13,6 +13,7 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
   alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.Components.Markdown.Render, as: MdRender
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.Transcript
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
@@ -23,9 +24,9 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
       msg = AssistantMessage.new(@theme, width: 80)
       msg = AssistantMessage.put_block(msg, 0, :text, "hello")
 
-      assert msg.blocks.data[0] == "hello"
-      assert msg.blocks.modules[0] == TextBlock
-      assert %MdRender{} = msg.blocks.renderers[0]
+      assert msg.blocks.entries[0].data == "hello"
+      assert msg.blocks.entries[0].module == TextBlock
+      assert %MdRender{} = msg.blocks.entries[0].renderer
       assert msg.content == [{:text, "hello"}]
     end
 
@@ -35,8 +36,8 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "he")
         |> AssistantMessage.put_block(0, :text, "hello")
 
-      assert msg.blocks.data[0] == "hello"
-      assert %MdRender{source: "hello"} = msg.blocks.renderers[0]
+      assert msg.blocks.entries[0].data == "hello"
+      assert %MdRender{source: "hello"} = msg.blocks.entries[0].renderer
     end
 
     test "updating one block leaves other blocks' state untouched" do
@@ -45,11 +46,11 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "alpha")
         |> AssistantMessage.put_block(1, :text, "beta")
 
-      r0_before = msg.blocks.renderers[0]
+      r0_before = msg.blocks.entries[0].renderer
 
       msg2 = AssistantMessage.put_block(msg, 1, :text, "beta-extended")
 
-      assert msg2.blocks.renderers[0] === r0_before,
+      assert msg2.blocks.entries[0].renderer === r0_before,
              "block 0's renderer state must be the same struct (no rebuild)"
     end
 
@@ -73,12 +74,12 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(1, :text, "first")
         |> AssistantMessage.put_block(2, :text, "second")
 
-      r1_before = msg.blocks.renderers[1]
+      r1_before = msg.blocks.entries[1].renderer
 
       msg2 = AssistantMessage.put_block(msg, 2, :text, "second-grew")
 
-      assert msg2.blocks.renderers[1] === r1_before
-      assert msg2.blocks.data[2] == "second-grew"
+      assert msg2.blocks.entries[1].renderer === r1_before
+      assert msg2.blocks.entries[2].data == "second-grew"
     end
 
     test "thinking block uses the ThinkingBlock renderer module" do
@@ -86,8 +87,8 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :thinking, "ponder")
 
-      assert msg.blocks.modules[0] == ThinkingBlock
-      assert %ThinkingBlock{snapshot: "ponder"} = msg.blocks.renderers[0]
+      assert msg.blocks.entries[0].module == ThinkingBlock
+      assert %ThinkingBlock{snapshot: "ponder"} = msg.blocks.entries[0].renderer
     end
   end
 
@@ -98,7 +99,7 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "hello world")
         |> AssistantMessage.finalize_block(0)
 
-      assert MapSet.member?(msg.blocks.finalized, 0)
+      assert Transcript.finalized?(msg.blocks, 0)
     end
 
     test "no-op for an unknown block id" do
@@ -131,15 +132,15 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         AssistantMessage.new(@theme, width: 80)
         |> AssistantMessage.put_block(0, :text, "hello")
 
-      r_before = msg.blocks.renderers[0]
+      r_before = msg.blocks.entries[0].renderer
       _ = AssistantMessage.render(msg, 60)
 
       # AssistantMessage.render returns lines but doesn't mutate msg.
       # The cache rebuild only "sticks" if the caller persists the
       # updated transcript via update_content(width: 60).
       msg2 = AssistantMessage.update_content(msg, width: 60)
-      assert %MdRender{width: 60} = msg2.blocks.renderers[0]
-      refute msg2.blocks.renderers[0] === r_before
+      assert %MdRender{width: 60} = msg2.blocks.entries[0].renderer
+      refute msg2.blocks.entries[0].renderer === r_before
     end
   end
 
@@ -148,10 +149,10 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
       msg = AssistantMessage.new(nil)
       msg = AssistantMessage.update_content(msg, content: [{:text, "x"}])
 
-      assert msg.blocks.renderers[0] == {:deferred, "x"}
+      assert msg.blocks.entries[0].renderer == {:deferred, "x"}
 
       msg = AssistantMessage.update_content(msg, theme: @theme, width: 80)
-      assert %MdRender{width: 80} = msg.blocks.renderers[0]
+      assert %MdRender{width: 80} = msg.blocks.entries[0].renderer
     end
 
     test "width change resizes existing renderers via Transcript.resize" do
@@ -160,7 +161,7 @@ defmodule OctoPi.TUI.Components.AssistantMessageBlocksTest do
         |> AssistantMessage.put_block(0, :text, "hello")
 
       msg2 = AssistantMessage.update_content(msg, width: 60)
-      assert %MdRender{width: 60} = msg2.blocks.renderers[0]
+      assert %MdRender{width: 60} = msg2.blocks.entries[0].renderer
       assert msg2.blocks.ctx.width == 60
     end
   end

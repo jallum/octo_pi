@@ -21,6 +21,7 @@ defmodule OctoPi.TUI.Interactive do
 
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Event.MessageEnd
+  alias OctoPi.AI.Content.Text
   alias OctoPi.AI.Model
   alias OctoPi.Coder
   alias OctoPi.Coder.Event.CompactionEnd
@@ -43,6 +44,8 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Clipboard
   alias OctoPi.TUI.Components
   alias OctoPi.TUI.Components.AssistantMessage
+  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
+  alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.CompactionSummaryMessage, as: TUICSM
   alias OctoPi.TUI.Components.Container
@@ -77,8 +80,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Transcript.AssistantHeader
   alias OctoPi.TUI.Transcript.AssistantStatus
   alias OctoPi.TUI.Transcript.ComponentWrapper
-  alias OctoPi.TUI.Components.AssistantMessage.TextBlock
-  alias OctoPi.TUI.Components.AssistantMessage.ThinkingBlock
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -208,8 +209,8 @@ defmodule OctoPi.TUI.Interactive do
   `Transcript.render/2`.
   """
   @spec transcript_entries(t()) :: [term()]
-  def transcript_entries(%{transcript: %Transcript{order: order, data: data}}) do
-    order |> Enum.reverse() |> Enum.map(&Map.fetch!(data, &1))
+  def transcript_entries(%{transcript: %Transcript{} = t}) do
+    t.order |> Enum.reverse() |> Enum.map(&Transcript.fetch_data!(t, &1))
   end
 
   @doc "Build a UIContext bound to `interactive_pid`. Delegates to `UIHost`."
@@ -1193,14 +1194,6 @@ defmodule OctoPi.TUI.Interactive do
     flush_compaction_queue(state)
   end
 
-  defp append_csm(transcript, csm) do
-    key = compaction_key()
-
-    transcript
-    |> Transcript.append(key, csm, ComponentWrapper)
-    |> Transcript.finalize(key, csm)
-  end
-
   def handle_event(state, {:octo_pi_agent_event, %CompactionEnd{} = ev}) do
     Terminal.set_progress(state.terminal, false)
 
@@ -1262,7 +1255,10 @@ defmodule OctoPi.TUI.Interactive do
     |> append_block(id, kind, "")
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.MessageBlockDelta{block_id: id, kind: kind, snapshot: snapshot}}) do
+  def handle_event(
+        state,
+        {:octo_pi_agent_event, %Event.MessageBlockDelta{block_id: id, kind: kind, snapshot: snapshot}}
+      ) do
     state
     |> stamp_streaming_tick()
     |> upsert_block(id, kind, snapshot)
@@ -1275,7 +1271,7 @@ defmodule OctoPi.TUI.Interactive do
     |> finalize_block(id)
   end
 
-  def handle_event(state, {:octo_pi_agent_event, %Event.MessageEnd{message: msg} = event}) do
+  def handle_event(state, {:octo_pi_agent_event, %MessageEnd{message: msg} = event}) do
     msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
     has_tool_calls? = has_tool_calls?(msg)
     stop_reason = extract_stop_reason(msg)
@@ -1288,7 +1284,7 @@ defmodule OctoPi.TUI.Interactive do
     }
 
     transcript = maybe_update_header_tool_flag(state.transcript, msg_id, has_tool_calls?)
-    header = Map.fetch!(transcript.data, header_key(msg_id))
+    header = Transcript.fetch_data!(transcript, header_key(msg_id))
 
     transcript =
       transcript
@@ -1322,7 +1318,7 @@ defmodule OctoPi.TUI.Interactive do
   def handle_event(state, {:bash_done, id, output, exit_code}) do
     key = bash_key(id)
 
-    case Map.get(state.transcript.data, key) do
+    case Transcript.get_data(state.transcript, key) do
       %BashExecution{} = be ->
         updated =
           be
@@ -1342,6 +1338,14 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_event(state, _), do: state
+
+  defp append_csm(transcript, csm) do
+    key = compaction_key()
+
+    transcript
+    |> Transcript.append(key, csm, ComponentWrapper)
+    |> Transcript.finalize(key, csm)
+  end
 
   defp handle_event_after_app(%{extension_shortcuts: [_ | _] = shortcuts} = state, key) do
     case try_extension_shortcut(shortcuts, key, state) do
@@ -1683,14 +1687,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_slash_command("clear", state), do: %{state | transcript: %Transcript{}}
 
-  defp append_user_msg(transcript, user_msg) do
-    key = user_key()
-
-    transcript
-    |> Transcript.append(key, user_msg, ComponentWrapper)
-    |> Transcript.finalize(key, user_msg)
-  end
-
   defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
@@ -1744,6 +1740,14 @@ defmodule OctoPi.TUI.Interactive do
     focus(%{state | session_selector: ss}, {:dialog, :session_selector})
   end
 
+  defp append_user_msg(transcript, user_msg) do
+    key = user_key()
+
+    transcript
+    |> Transcript.append(key, user_msg, ComponentWrapper)
+    |> Transcript.finalize(key, user_msg)
+  end
+
   defp try_extension_shortcut([], _key, _state), do: :pass
 
   defp try_extension_shortcut([{match_fn, handler} | rest], key, state) do
@@ -1764,7 +1768,7 @@ defmodule OctoPi.TUI.Interactive do
   defp update_transcript(transcript, %{__struct__: OctoPi.Agent.Event.ToolExecutionEnd} = ev, _theme) do
     key = tool_key(ev.tool_call_id)
 
-    case Map.get(transcript.data, key) do
+    case Transcript.get_data(transcript, key) do
       %ToolExecution{} = te ->
         result_text = extract_tool_result_text(ev.result)
         is_error = Map.get(ev.result, :is_error?, false)
@@ -1869,7 +1873,7 @@ defmodule OctoPi.TUI.Interactive do
     key = block_key(msg_id, block_id)
 
     transcript =
-      if Map.has_key?(state.transcript.data, key) do
+      if Transcript.has_entry?(state.transcript, key) do
         Transcript.update(state.transcript, key, snapshot)
       else
         Transcript.append(state.transcript, key, snapshot, renderer_for_kind(kind))
@@ -1882,7 +1886,7 @@ defmodule OctoPi.TUI.Interactive do
     msg_id = state.current_msg_id || "turn-#{state.turn_seq}"
     key = block_key(msg_id, block_id)
 
-    case Map.get(state.transcript.data, key) do
+    case Transcript.get_data(state.transcript, key) do
       nil -> state
       entry -> %{state | transcript: Transcript.finalize(state.transcript, key, entry)}
     end
@@ -1905,14 +1909,10 @@ defmodule OctoPi.TUI.Interactive do
 
   # --- header lookup / mutation ----------------------------------
 
-  defp header_for(transcript, msg_id) do
-    Map.get(transcript.data, header_key(msg_id))
-  end
-
   defp maybe_update_header_tool_flag(transcript, msg_id, has_tool_calls?) do
     key = header_key(msg_id)
 
-    case Map.get(transcript.data, key) do
+    case Transcript.get_data(transcript, key) do
       %AssistantHeader{} = h ->
         Transcript.update(transcript, key, %{h | has_tool_calls?: has_tool_calls?})
 
@@ -1920,27 +1920,6 @@ defmodule OctoPi.TUI.Interactive do
         transcript
     end
   end
-
-  # Locates the currently-streaming AssistantHeader entry — i.e., the
-  # most recently appended header whose matching `:end` status entry
-  # has not been added yet, AND whose msg_id matches state.current_msg_id.
-  defp find_streaming_header(state) do
-    case state.current_msg_id do
-      nil -> nil
-      msg_id -> Map.get(state.transcript.data, header_key(msg_id))
-    end
-  end
-
-
-  defp extract_content_blocks(%{content: content}) when is_list(content) do
-    Enum.flat_map(content, fn
-      %OctoPi.AI.Content.Text{text: text} -> [{:text, text}]
-      %OctoPi.AI.Content.Thinking{thinking: text} -> [{:thinking, text}]
-      _ -> []
-    end)
-  end
-
-  defp extract_content_blocks(_), do: []
 
   defp extract_stop_reason(%{stop_reason: :stop}), do: nil
   defp extract_stop_reason(%{stop_reason: reason}) when is_atom(reason), do: reason
@@ -1994,7 +1973,7 @@ defmodule OctoPi.TUI.Interactive do
       RenderTelemetry.with_transcript_render(
         %{
           msg_count: length(transcript.order),
-          streaming?: RenderTelemetry.transcript_streaming?(transcript)
+          streaming?: Transcript.streaming?(transcript)
         },
         fn -> render_transcript(transcript, width, state.theme, state.thinking_visible) end
       )
@@ -2076,6 +2055,7 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp flush_compaction_queue(%{compaction_queue: []} = state), do: state
+
   defp flush_compaction_queue(%{compaction_queue: queue, session: session} = state) do
     # Use follow_up rather than prompt so the messages join the
     # follow_up_queue and get drained at the next idle/run boundary.
@@ -2134,7 +2114,7 @@ defmodule OctoPi.TUI.Interactive do
   # reconstructed from session state).
   defp message_text(%{content: c}) when is_list(c) do
     Enum.map_join(c, "\n", fn
-      %{__struct__: OctoPi.AI.Content.Text, text: t} -> t
+      %{__struct__: Text, text: t} -> t
       %{text: t} when is_binary(t) -> t
       _ -> ""
     end)
@@ -2446,7 +2426,12 @@ defmodule OctoPi.TUI.Interactive do
     {iodata, _t} = Transcript.render(transcript, ctx)
 
     bin = IO.iodata_to_binary(iodata)
-    if bin == "", do: [], else: String.split(bin, "\n")
+
+    cond do
+      bin == "" -> []
+      String.ends_with?(bin, "\n") -> bin |> binary_part(0, byte_size(bin) - 1) |> String.split("\n")
+      true -> String.split(bin, "\n")
+    end
   end
 
   defp render_transcript(transcript, width, theme, thinking_visible) when is_list(transcript) do

@@ -33,7 +33,13 @@ defmodule OctoPi.TUI.Transcript.AssistantHeader do
   @impl true
   def finalize(%__MODULE__{} = s, %__MODULE__{} = entry), do: %{entry | theme: s.theme}
 
+  # The OSC 133 zone-start marker is zero-width side-channel — emit
+  # it inline (no terminator) so it attaches to the start of the
+  # next entry's first line rather than consuming its own row. The
+  # vertical gap before the assistant zone is owned by the previous
+  # entry (UserMessage's own bottom-of-bubble blank), so we don't
+  # add one here.
   @impl true
-  def to_iolist(%__MODULE__{has_tool_calls?: true}), do: [""]
-  def to_iolist(%__MODULE__{}), do: ["", @osc133_zone_start]
+  def to_iolist(%__MODULE__{has_tool_calls?: true}), do: []
+  def to_iolist(%__MODULE__{}), do: [@osc133_zone_start]
 end

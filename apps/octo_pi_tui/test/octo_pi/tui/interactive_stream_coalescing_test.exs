@@ -60,7 +60,7 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Hel")})
 
       key = "#{s1.current_msg_id}:0"
-      assert Map.fetch!(s1.transcript.data, key) == "Hel"
+      assert Transcript.fetch_data!(s1.transcript, key) == "Hel"
     end
 
     test "second delta replaces snapshot for the same block (latest wins)" do
@@ -70,7 +70,7 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s2 = Interactive.handle_event(s1, {:octo_pi_agent_event, delta("ab")})
 
       key = "#{s2.current_msg_id}:0"
-      assert Map.fetch!(s2.transcript.data, key) == "ab"
+      assert Transcript.fetch_data!(s2.transcript, key) == "ab"
 
       # Only one block slot exists for this turn — latest wins.
       block_keys = Enum.filter(s2.transcript.order, &String.ends_with?(&1, ":0"))
@@ -97,7 +97,7 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("hi")})
 
       key = "#{s1.current_msg_id}:0"
-      assert Map.fetch!(s1.transcript.modules, key) == TextBlock
+      assert Transcript.fetch_module!(s1.transcript, key) == TextBlock
     end
   end
 
@@ -107,7 +107,7 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s1 = Interactive.handle_event(s0, {:octo_pi_agent_event, delta("Hello world")})
 
       key = "#{s1.current_msg_id}:0"
-      assert Map.fetch!(s1.transcript.data, key) == "Hello world"
+      assert Transcript.fetch_data!(s1.transcript, key) == "Hello world"
       assert s1.streaming_tick_at != nil
 
       s2 = Interactive.flush_pending_partial(s1)
@@ -133,11 +133,11 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       header_key = "#{msg_id}:hdr"
       status_key = "#{msg_id}:end"
 
-      assert %AssistantHeader{msg_id: ^msg_id} = Map.fetch!(s2.transcript.data, header_key)
-      assert %AssistantStatus{stop_reason: nil} = Map.fetch!(s2.transcript.data, status_key)
+      assert %AssistantHeader{msg_id: ^msg_id} = Transcript.fetch_data!(s2.transcript, header_key)
+      assert %AssistantStatus{stop_reason: nil} = Transcript.fetch_data!(s2.transcript, status_key)
 
-      assert MapSet.member?(s2.transcript.finalized, header_key)
-      assert MapSet.member?(s2.transcript.finalized, status_key)
+      assert Transcript.finalized?(s2.transcript, header_key)
+      assert Transcript.finalized?(s2.transcript, status_key)
     end
   end
 
@@ -155,7 +155,7 @@ defmodule OctoPi.TUI.InteractiveStreamCoalescingTest do
       s2 = Interactive.handle_event(s1, {:octo_pi_agent_event, ev_tool})
 
       tool_key = "tool:tc-1"
-      assert Map.has_key?(s2.transcript.data, tool_key)
+      assert Transcript.has_entry?(s2.transcript, tool_key)
       # Tool entry order index is later than the block entry's.
       assert Enum.find_index(Enum.reverse(s2.transcript.order), &(&1 == tool_key)) >
                Enum.find_index(Enum.reverse(s2.transcript.order), &String.ends_with?(&1, ":0"))

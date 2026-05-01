@@ -19,13 +19,16 @@ defmodule OctoPi.TUI.Transcript do
 
       %Transcript{
         order:     [id, ...],          # newest-head; append by [id | order]
-        data:      %{id => entry},     # current value per slot
-        modules:   %{id => mod},       # renderer module per slot
-        renderers: %{id => state},     # only present while pending render
-        finalized: MapSet of finalized ids
+        entries:   %{id => %Entry{}},  # data + module + live renderer per slot
+        streaming: MapSet of in-flight ids (added on append, removed on finalize)
         rendered:  %{id => iodata()}   # cached output per slot
         ctx:       term() | nil        # current render context
       }
+
+  We track `streaming` (small, bounded by concurrent in-flight work)
+  rather than `finalized` (would grow monotonically with the
+  transcript). An entry is finalized iff it's present in `entries`
+  and absent from `streaming`.
   """
 
   defmodule Renderer do
@@ -47,24 +50,30 @@ defmodule OctoPi.TUI.Transcript do
     @callback to_iolist(state :: term()) :: iodata()
   end
 
+  defmodule Entry do
+    @moduledoc "Per-slot triple: canonical data, renderer module, live renderer state."
+    @type t :: %__MODULE__{
+            data: term(),
+            module: module(),
+            renderer: term()
+          }
+    defstruct [:data, :module, :renderer]
+  end
+
   @type id :: term()
   @type entry :: term()
   @type ctx :: term()
   @type t :: %__MODULE__{
           order: [id()],
-          data: %{id() => entry()},
-          modules: %{id() => module()},
-          renderers: %{id() => term()},
-          finalized: MapSet.t(),
+          entries: %{id() => Entry.t()},
+          streaming: MapSet.t(),
           rendered: %{id() => iodata()},
           ctx: ctx()
         }
 
   defstruct order: [],
-            data: %{},
-            modules: %{},
-            renderers: %{},
-            finalized: MapSet.new(),
+            entries: %{},
+            streaming: MapSet.new(),
             rendered: %{},
             ctx: nil
 
@@ -73,22 +82,23 @@ defmodule OctoPi.TUI.Transcript do
 
   @doc "Append a new entry. `mod` must implement `Renderer`."
   @spec append(t(), id(), entry(), module()) :: t()
-  def append(%__MODULE__{} = t, id, entry, mod) when is_atom(mod) do
+  def append(%__MODULE__{} = t, id, data, mod) when is_atom(mod) do
+    e = %Entry{data: data, module: mod, renderer: mod.new(data, t.ctx)}
+
     %{
       t
       | order: [id | t.order],
-        data: Map.put(t.data, id, entry),
-        modules: Map.put(t.modules, id, mod),
-        renderers: Map.put(t.renderers, id, mod.new(entry, t.ctx))
+        entries: Map.put(t.entries, id, e),
+        streaming: MapSet.put(t.streaming, id)
     }
   end
 
   @doc "Update an existing entry mid-stream. Renderer must still be live."
   @spec update(t(), id(), entry()) :: t()
-  def update(%__MODULE__{} = t, id, entry) do
-    mod = Map.fetch!(t.modules, id)
-    state = mod.put(Map.fetch!(t.renderers, id), entry)
-    %{t | data: Map.put(t.data, id, entry), renderers: Map.put(t.renderers, id, state)}
+  def update(%__MODULE__{} = t, id, data) do
+    %Entry{module: mod, renderer: r} = e = Map.fetch!(t.entries, id)
+    e = %{e | data: data, renderer: mod.put(r, data)}
+    %{t | entries: Map.put(t.entries, id, e)}
   end
 
   @doc """
@@ -96,17 +106,44 @@ defmodule OctoPi.TUI.Transcript do
   into `rendered` and drop the renderer.
   """
   @spec finalize(t(), id(), entry()) :: t()
-  def finalize(%__MODULE__{} = t, id, entry) do
-    mod = Map.fetch!(t.modules, id)
-    state = mod.finalize(Map.fetch!(t.renderers, id), entry)
-
-    %{
-      t
-      | data: Map.put(t.data, id, entry),
-        renderers: Map.put(t.renderers, id, state),
-        finalized: MapSet.put(t.finalized, id)
-    }
+  def finalize(%__MODULE__{} = t, id, data) do
+    %Entry{module: mod, renderer: r} = e = Map.fetch!(t.entries, id)
+    e = %{e | data: data, renderer: mod.finalize(r, data)}
+    %{t | entries: Map.put(t.entries, id, e), streaming: MapSet.delete(t.streaming, id)}
   end
+
+  @doc "Whether `id` is present in the transcript."
+  @spec has_entry?(t(), id()) :: boolean()
+  def has_entry?(%__MODULE__{entries: entries}, id), do: Map.has_key?(entries, id)
+
+  @doc """
+  True if any entry has not yet been finalized. O(1) via `MapSet.size/1`
+  on the small in-flight set.
+  """
+  @spec streaming?(t()) :: boolean()
+  def streaming?(%__MODULE__{streaming: streaming}), do: MapSet.size(streaming) > 0
+
+  @doc "Whether `id` is present and finalized (i.e., not in the streaming set)."
+  @spec finalized?(t(), id()) :: boolean()
+  def finalized?(%__MODULE__{entries: entries, streaming: streaming}, id),
+    do: Map.has_key?(entries, id) and not MapSet.member?(streaming, id)
+
+  @doc "Fetch the canonical data for `id`. Raises if not present."
+  @spec fetch_data!(t(), id()) :: entry()
+  def fetch_data!(%__MODULE__{entries: entries}, id), do: Map.fetch!(entries, id).data
+
+  @doc "Get the canonical data for `id`, or `default` if not present."
+  @spec get_data(t(), id(), term()) :: entry() | term()
+  def get_data(%__MODULE__{entries: entries}, id, default \\ nil) do
+    case Map.get(entries, id) do
+      nil -> default
+      %Entry{data: data} -> data
+    end
+  end
+
+  @doc "Fetch the renderer module for `id`. Raises if not present."
+  @spec fetch_module!(t(), id()) :: module()
+  def fetch_module!(%__MODULE__{entries: entries}, id), do: Map.fetch!(entries, id).module
 
   @doc """
   Render the transcript. If `ctx` is given and differs from the
@@ -130,18 +167,17 @@ defmodule OctoPi.TUI.Transcript do
         true -> resize(t, ctx)
       end
 
-    {rendered, renderers} =
-      Enum.reduce(t.order, {t.rendered, t.renderers}, fn id, {rmap, rrmap} ->
-        case Map.fetch(rrmap, id) do
-          {:ok, state} ->
-            mod = Map.fetch!(t.modules, id)
-            io = mod.to_iolist(state)
+    {rendered, entries} =
+      Enum.reduce(t.order, {t.rendered, t.entries}, fn id, {rmap, emap} ->
+        case Map.fetch(emap, id) do
+          {:ok, %Entry{module: mod, renderer: r} = e} when r != nil ->
+            io = mod.to_iolist(r)
             rmap2 = Map.put(rmap, id, io)
-            rrmap2 = if MapSet.member?(t.finalized, id), do: Map.delete(rrmap, id), else: rrmap
-            {rmap2, rrmap2}
+            emap2 = if MapSet.member?(t.streaming, id), do: emap, else: Map.put(emap, id, %{e | renderer: nil})
+            {rmap2, emap2}
 
-          :error ->
-            {rmap, rrmap}
+          _ ->
+            {rmap, emap}
         end
       end)
 
@@ -150,7 +186,7 @@ defmodule OctoPi.TUI.Transcript do
       |> Enum.reverse()
       |> Enum.map(&Map.get(rendered, &1, []))
 
-    {iolist, %{t | rendered: rendered, renderers: renderers}}
+    {iolist, %{t | rendered: rendered, entries: entries}}
   end
 
   @doc """
@@ -160,14 +196,13 @@ defmodule OctoPi.TUI.Transcript do
   """
   @spec resize(t(), ctx()) :: t()
   def resize(%__MODULE__{} = t, ctx) do
-    renderers =
-      Enum.reduce(t.data, %{}, fn {id, entry}, acc ->
-        mod = Map.fetch!(t.modules, id)
-        state = mod.new(entry, ctx)
-        state = if MapSet.member?(t.finalized, id), do: mod.finalize(state, entry), else: state
-        Map.put(acc, id, state)
+    entries =
+      Map.new(t.entries, fn {id, %Entry{data: data, module: mod} = e} ->
+        r = mod.new(data, ctx)
+        r = if MapSet.member?(t.streaming, id), do: r, else: mod.finalize(r, data)
+        {id, %{e | renderer: r}}
       end)
 
-    %{t | renderers: renderers, rendered: %{}, ctx: ctx}
+    %{t | entries: entries, rendered: %{}, ctx: ctx}
   end
 end

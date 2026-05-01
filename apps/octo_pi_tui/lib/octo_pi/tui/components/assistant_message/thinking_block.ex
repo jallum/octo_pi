@@ -46,7 +46,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.ThinkingBlock do
 
   @impl true
   def to_iolist(%__MODULE__{theme: theme, hide?: true, hidden_label: label}) do
-    [" ", Theme.fg(theme, :thinking_text, Theme.italic(label))]
+    [" ", Theme.fg(theme, :thinking_text, Theme.italic(label)), "\n"]
   end
 
   def to_iolist(%__MODULE__{snapshot: snapshot, theme: theme, width: width}) do
@@ -59,8 +59,9 @@ defmodule OctoPi.TUI.Components.AssistantMessage.ThinkingBlock do
 
       text
       |> WrapAnsi.wrap(content_width)
-      |> Enum.map(fn line -> " " <> Theme.fg(theme, :thinking_text, Theme.italic(line)) end)
-      |> Enum.intersperse("\n")
+      |> Enum.flat_map(fn line ->
+        [" ", Theme.fg(theme, :thinking_text, Theme.italic(line)), "\n"]
+      end)
     end
   end
 end

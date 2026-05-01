@@ -68,25 +68,6 @@ defmodule OctoPi.TUI.RenderTelemetry do
     )
   end
 
-  @doc """
-  Compute streaming? for a Transcript: true if any AssistantHeader entry
-  has not yet been finalized.
-  """
-  @spec transcript_streaming?(OctoPi.TUI.Transcript.t() | list()) :: boolean()
-  def transcript_streaming?(%OctoPi.TUI.Transcript{data: data, finalized: finalized}) do
-    Enum.any?(data, fn
-      {key, %OctoPi.TUI.Transcript.AssistantHeader{}} -> not MapSet.member?(finalized, key)
-      _ -> false
-    end)
-  end
-
-  def transcript_streaming?(transcript) when is_list(transcript) do
-    Enum.any?(transcript, fn
-      %{__struct__: OctoPi.TUI.Components.AssistantMessage, streaming?: true} -> true
-      _ -> false
-    end)
-  end
-
   defp classify({:hid_event, _, _}), do: :hid_event
   defp classify({:hid_event, _}), do: :hid_event
   defp classify({:octo_pi_agent_event, _}), do: :octo_pi_agent_event
