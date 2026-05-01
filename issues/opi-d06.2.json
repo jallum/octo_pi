@@ -16,13 +16,13 @@
   ],
   "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
-  "description": "GenServer (OctoPi.TUI.UI) owns root component, hook-cell map keyed by hole id, invalidation set, aggregated next-frame deadline. Hook handle `h` is passed to render fns explicitly (no implicit closure-of-current-component). use_frame requests aggregate into one deadline fed to RenderLoop — components never read System.monotonic_time directly, the reconciler passes frame index in (deterministic in tests). Hook-cell GC: cells not visited this frame retained one frame, then dropped. Tests: state survives rerenders, memo invalidation triggers rerender, frame deadlines coalesce correctly, key subscriptions mount/unmount cleanly.",
+  "description": "The reconciler is **not** a GenServer. It is a pure functional\nmodule over an immutable `%UI.State{}` value:\n\n  * `UI.State.new(root_component, props)` — initial state.\n  * `UI.State.handle_key(state, %Key{}) :: state` — fold a key event\n    through hook subscriptions, return updated state.\n  * `UI.State.handle_event(state, term) :: state` — same for\n    arbitrary messages routed to a hole (streaming snapshots,\n    timer wakeups, etc.).\n  * `UI.State.tick(state, now_ms) :: state` — advance frame clock;\n    invalidates any holes whose `use_frame` deadline has passed.\n  * `UI.State.paint(state, %RenderContext{}) :: {state, iodata, cursor_or_nil}`\n    — single-pass paint; returns updated state (memo cache,\n    visited-cell GC) plus the bytes the renderer will diff.\n  * `UI.State.next_wait_ms(state) :: non_neg_integer() | :infinity`\n    — earliest pending deadline across every active `use_frame`\n    cell, expressed as ms-from-now. Interactive's existing\n    receive/after loop reads this to set its next timeout.\n\nHook handle `h` carries a reference to the hole's cell within the\nstate value; `use_state(h, init) -> {value, setter}` returns a\nsetter that, when called, returns a new state value (no message\nsends). State updates flow through the same return-the-state\npattern Interactive already uses.\n\n`Interactive` keeps its existing GenServer + RenderLoop; the only\naddition is calling `UI.State.paint/2` instead of `build_screen/2`,\nand using `UI.State.next_wait_ms/1` to schedule its next tick.\nRenderLoop is unchanged.\n\nHooks delivered: `use_state`, `use_memo`, `use_frame`, `use_key`,\n`use_effect`. Hook-cell GC: cells not visited during a paint are\nretained one frame, then dropped — implemented as a generation\ncounter on the state value, no GenServer timers.\n\nTests: pure-function tests over `UI.State` — feed a key sequence,\nassert the resulting state's painted bytes; assert `next_wait_ms`\ncoalesces correctly across multiple animated holes; assert memo\ninvalidation triggers repaint of just the affected subtree.",
   "id": "opi-d06.2",
   "labels": [],
   "parent": "opi-d06",
   "priority": 2,
   "status": "open",
-  "title": "Reconciler + hooks: use_state, use_memo, use_frame, use_key, use_effect",
+  "title": "Reconciler state + hooks (pure functions; Interactive drives the loop)",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:39.756174Z"
+  "updated_at": "2026-05-01T11:25:56.021292Z"
 }
