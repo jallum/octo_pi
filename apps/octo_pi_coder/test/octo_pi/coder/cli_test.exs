@@ -157,6 +157,71 @@ defmodule OctoPi.Coder.CLITest do
     end
   end
 
+  describe "dispatch/1" do
+    alias OctoPi.Agent.TestSupport.FakeTransport
+    alias OctoPi.AI.Event, as: AIEvent
+    alias OctoPi.AI.Message.Assistant
+    alias OctoPi.AI.Model
+    alias OctoPi.AI.Usage
+
+    setup do
+      on_exit(&FakeTransport.clear/0)
+      :ok
+    end
+
+    defp print_model do
+      %Model{
+        id: "fake-model",
+        name: "fake",
+        api: :fake_api,
+        provider: :fake,
+        base_url: "http://fake",
+        context_window: 100,
+        max_tokens: 100
+      }
+    end
+
+    defp print_assistant(content, stop_reason) do
+      %Assistant{
+        api: :fake_api,
+        provider: :fake,
+        model: "fake-model",
+        timestamp: 0,
+        content: content,
+        stop_reason: stop_reason,
+        usage: %Usage{}
+      }
+    end
+
+    test "print mode accepts the opts map produced by parse_args" do
+      final = print_assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+
+      FakeTransport.set_script([
+        [
+          %AIEvent.Start{partial: print_assistant([], nil)},
+          %AIEvent.TextDelta{content_index: 0, delta: "ok", partial: final},
+          %AIEvent.Done{reason: :stop, message: final}
+        ]
+      ])
+
+      opts = %{
+        mode: :print,
+        prompt: "hi",
+        model: print_model(),
+        cwd: File.cwd!(),
+        tools: [],
+        transport: FakeTransport,
+        debug_render: false,
+        continue: false,
+        log_telemetry: nil,
+        no_telemetry: [],
+        list_telemetry: false
+      }
+
+      ExUnit.CaptureIO.capture_io(fn -> assert 0 = CLI.dispatch(opts) end)
+    end
+  end
+
   describe "RPC event forwarder" do
     alias OctoPi.Agent.Event
 

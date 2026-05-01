@@ -35,7 +35,7 @@ defmodule OctoPi.TUI.UI.State do
 
   defmodule StateCell do
     @moduledoc "use_state cell"
-    defstruct [:value]
+    defstruct [:value, :gen]
   end
 
   defmodule MemoCell do
@@ -166,24 +166,24 @@ defmodule OctoPi.TUI.UI.State do
       OctoPi.TUI.VDOM.Paint.paint(vnode, OctoPi.TUI.VDOM.LineBuf.new(), render_ctx)
     )
 
-    state = %{state | dirty: false, last_paint_at_ms: now, hook_cells: ctx.state.hook_cells}
+    state = %{state | dirty: false, dirty_since_ms: nil, last_paint_at_ms: now, hook_cells: ctx.state.hook_cells}
 
     {state, iodata, cursor}
   end
 
-  @spec use_state(t(), cell_id(), term() | (() -> term())) :: {term(), (term() -> t())}
-  def use_state(%__MODULE__{hook_cells: cells} = state, id, init) do
+  @spec use_state(t(), cell_id(), term() | (() -> term())) :: {{term(), (term() -> t())}, t()}
+  def use_state(%__MODULE__{hook_cells: cells, gen: gen} = state, id, init) do
     case cells do
       %{^id => %StateCell{value: value}} ->
         setter = &update_state_cell(&1, id, &2)
-        {value, setter}
+        {{value, setter}, state}
 
       _ ->
         value = if is_function(init, 0), do: init.(), else: init
-        cell = %StateCell{value: value}
+        cell = %StateCell{value: value, gen: gen}
         cells = Map.put(cells, id, cell)
         setter = &update_state_cell(&1, id, &2)
-        {value, %{state | hook_cells: cells}, setter}
+        {{value, setter}, %{state | hook_cells: cells}}
     end
   end
 
@@ -235,15 +235,15 @@ defmodule OctoPi.TUI.UI.State do
         if cell.deadline_ms != deadline do
           new_cell = %{cell | deadline_ms: deadline}
           cells = Map.put(cells, id, new_cell)
-          {%{state | hook_cells: cells}, frame}
+          {frame, %{state | hook_cells: cells}}
         else
-          {state, frame}
+          {frame, state}
         end
 
       _ ->
         cell = %FrameCell{deadline_ms: deadline, frame_index: frame, gen: gen}
         cells = Map.put(cells, id, cell)
-        {%{state | hook_cells: cells}, frame}
+        {frame, %{state | hook_cells: cells}}
     end
   end
 
@@ -254,15 +254,57 @@ defmodule OctoPi.TUI.UI.State do
     %{state | hook_cells: cells}
   end
 
+  @spec use_effect(t(), cell_id(), term(), (() -> term() | nil), [term()]) :: t()
+  def use_effect(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, effect_fn, deps) do
+    deps_list = if is_list(deps), do: deps, else: [deps]
+    
+    case cells do
+      %{^id => %EffectCell{key: existing_key, cleanup: existing_cleanup} = cell} ->
+        # Cell exists - check if deps changed
+        if existing_key == key do
+          # Deps unchanged - just refresh gen
+          new_cell = %{cell | gen: gen}
+          cells = Map.put(cells, id, new_cell)
+          %{state | hook_cells: cells}
+        else
+          # Deps changed - run cleanup then effect
+          if is_function(existing_cleanup), do: existing_cleanup.()
+          
+          cleanup = effect_fn.()
+          new_cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
+          cells = Map.put(cells, id, new_cell)
+          %{state | hook_cells: cells}
+        end
+        
+      _ ->
+        # New cell - run effect and store cleanup
+        cleanup = effect_fn.()
+        cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
+        cells = Map.put(cells, id, cell)
+        %{state | hook_cells: cells}
+    end
+  end
+
   @spec gc(t()) :: t()
   def gc(%__MODULE__{hook_cells: cells, gen: gen} = state) do
-    cells =
+    {cells_to_keep, cells_to_drop} = 
       cells
-      |> Enum.filter(fn {_id, cell} ->
+      |> Enum.split_with(fn {_id, cell} ->
         cell.gen >= gen - 1
       end)
-      |> Map.new()
-
-    %{state | hook_cells: cells}
+    
+    # Call cleanup on dropped cells
+    cells_to_drop = Map.drop(cells, Enum.map(cells_to_keep, fn {id, _} -> id end))
+    
+    Enum.each(cells_to_drop, fn {_id, cell} ->
+      case cell do
+        %EffectCell{cleanup: cleanup} when is_function(cleanup) ->
+          cleanup.()
+        _ ->
+          :ok
+      end
+    end)
+    
+    %{state | hook_cells: Map.new(cells_to_keep)}
   end
 end

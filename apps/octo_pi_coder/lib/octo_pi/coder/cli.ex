@@ -145,15 +145,16 @@ defmodule OctoPi.Coder.CLI do
     Enum.each(excluded, &OctoPi.Tracer.detach/1)
   end
 
-  defp dispatch(%{mode: :print} = opts) do
-    case Print.run(opts) do
+  @doc false
+  def dispatch(%{mode: :print} = opts) do
+    case Print.run(Map.to_list(opts)) do
       {:ok, _reason} -> 0
       {:error, _reason} -> 1
     end
   end
 
-  defp dispatch(%{mode: :rpc} = opts), do: run_rpc(opts)
-  defp dispatch(%{mode: :interactive} = opts), do: run_interactive(opts)
+  def dispatch(%{mode: :rpc} = opts), do: run_rpc(opts)
+  def dispatch(%{mode: :interactive} = opts), do: run_interactive(opts)
 
   defp run_interactive(opts) do
     case ensure_tui_available() do

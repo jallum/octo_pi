@@ -2,4 +2,6 @@
 # +Bc suppresses the BEAM break handler so Ctrl+C (0x03) reaches
 # the TUI's raw-mode stdin reader instead of triggering the Erlang
 # shell's "User switch command" menu.
-exec elixir --erl "+Bc" -S mix pi "$@"
+CALLER_DIR="$PWD"
+cd "$(dirname "$0")/.." || exit 1
+exec elixir --erl "+Bc" -S mix pi --cwd "$CALLER_DIR" "$@"
