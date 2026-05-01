@@ -9,7 +9,7 @@
   ],
   "comments": [],
   "created": "2026-05-01T11:23:14.575891Z",
-  "description": "Migrate `Components.AssistantMessage.TextBlock`,\n`Components.AssistantMessage.ThinkingBlock`, and\n`Components.CompactionSummaryMessage` to the VDom contract.\n\nThese are streaming-aware: today they implement the `update/2` +\n`finalize/2` callbacks. Under VDom, those become hook-cell snapshots\nmanaged by the reconciler — the component function reads the\ncurrent snapshot from `use_state`/dedicated streaming hook and emits\na VFlow of VText.\n\nAcceptance: structs and `@behaviour OctoPi.TUI.Component` callbacks\ndeleted; existing transcript_test.exs assertions stay green;\nstreaming smoke test in tmux shows tokens append at the same\ncadence.",
+  "description": "Migrate `Components.AssistantMessage.TextBlock`,\n`Components.AssistantMessage.ThinkingBlock`, and\n`Components.CompactionSummaryMessage` to the VDom contract.\n\nThese are streaming-aware: today they implement the `update/2` +\n`finalize/2` callbacks. Under VDom, those callbacks disappear.\nSnapshots are passed in as props by the parent (Transcript hole\nreads them off the live `%MessageState{}`); the component reads\nthe previous render-state from a `use_state` hook cell, applies\nthe snapshot delta via the existing pure helper\n(`MdRender.put/2`, etc.), and stores the new state.\n\nTextBlock and ThinkingBlock both delegate to the markdown\nsubsystem (d06.10): once that ticket lands, these become thin\n~30-line wrappers that compose `Components.Markdown` with a small\nheader and styling. CompactionSummaryMessage is even simpler —\nplain text with theme styling.\n\nAcceptance:\n  * Structs and `@behaviour OctoPi.TUI.Component` callbacks\n    deleted.\n  * Existing transcript_test.exs assertions stay green.\n  * Streaming smoke test in tmux shows tokens append at the same\n    cadence as today; telemetry confirms hook-cell snapshot churn\n    is exactly one set_state per delta.",
   "id": "opi-d06.9",
   "labels": [],
   "parent": "opi-d06",
@@ -17,5 +17,5 @@
   "status": "open",
   "title": "Convert AssistantMessage blocks + CompactionSummaryMessage",
   "type": "task",
-  "updated_at": "2026-05-01T11:25:07.037663Z"
+  "updated_at": "2026-05-01T11:39:45.411234Z"
 }
