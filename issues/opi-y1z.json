@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Replace hardcoded OctoPi.Coder.Models with runner-driven model registry",
   "type": "epic",
-  "updated_at": "2026-04-30T03:34:42.188590Z"
+  "updated_at": "2026-05-01T12:57:23.815577Z"
 }
