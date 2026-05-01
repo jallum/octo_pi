@@ -8,7 +8,8 @@
   ],
   "blocks": [
     "opi-d06.8",
-    "opi-d06.15"
+    "opi-d06.15",
+    "opi-d06.16"
   ],
   "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
@@ -20,5 +21,5 @@
   "status": "open",
   "title": "Replace Interactive.build_screen/2 with a single root component",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:57.951259Z"
+  "updated_at": "2026-05-01T11:35:40.359926Z"
 }
