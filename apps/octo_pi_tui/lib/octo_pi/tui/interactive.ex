@@ -573,7 +573,10 @@ defmodule OctoPi.TUI.Interactive do
   def handle_info({:octo_pi_agent_event, %ev{}} = agent_msg, state)
       when ev in [Event.MessageBlockStart, Event.MessageBlockDelta, Event.MessageBlockEnd] do
     RenderTelemetry.with_handle_info(agent_msg, fn ->
-      new_state = handle_event(state, agent_msg)
+      new_state =
+        state
+        |> handle_event(agent_msg)
+        |> drain_block_deltas()
       {:noreply, new_state, compute_timeout(new_state)}
     end)
   end
@@ -1837,6 +1840,16 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp stamp_streaming_tick(state), do: state
+
+  defp drain_block_deltas(state) do
+    receive do
+      {:octo_pi_agent_event, %ev{}} = msg
+          when ev in [Event.MessageBlockDelta, Event.MessageBlockEnd] ->
+        drain_block_deltas(handle_event(state, msg))
+    after
+      0 -> state
+    end
+  end
 
   @doc """
   No-op shim for the legacy flush API. With `.13`, block events update
