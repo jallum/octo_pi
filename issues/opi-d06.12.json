@@ -4,7 +4,9 @@
   "blocked_by": [
     "opi-d06.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-d06.15"
+  ],
   "comments": [],
   "created": "2026-05-01T11:23:39.696379Z",
   "description": "`Components.Text` and `Components.TruncatedText` are thin\nsingle-purpose wrappers. Under VDom they become helper functions\n(`text/1`, `truncate/2`) returning `%VText{}` — the modules go away.\nWrapAnsi.truncate_to_width logic moves into the painter at the leaf\nwhere width is known.\n\nAcceptance: callers updated; modules deleted; visible_width\ncalculation moves to LineBuf push path so width tracking remains\ncorrect.",
@@ -15,5 +17,5 @@
   "status": "open",
   "title": "Collapse Text + TruncatedText into VText helpers",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:30.914892Z"
+  "updated_at": "2026-05-01T11:25:19.660120Z"
 }
