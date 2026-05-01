@@ -6,7 +6,8 @@
   ],
   "blocks": [
     "opi-d06.6",
-    "opi-d06.8"
+    "opi-d06.8",
+    "opi-d06.15"
   ],
   "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "Convert leaf components: WelcomeBanner, Header, Loader, Footer",
   "type": "task",
-  "updated_at": "2026-05-01T11:20:50.205905Z"
+  "updated_at": "2026-05-01T11:24:49.432899Z"
 }
