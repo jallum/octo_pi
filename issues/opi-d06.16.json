@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-d06.6"
+    "opi-d06.6",
+    "opi-d06.13"
   ],
   "blocks": [],
   "comments": [],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Coder.Extensions.UI: wire slot registry + message renderer registry to the extension API",
   "type": "task",
-  "updated_at": "2026-05-01T11:35:40.359926Z"
+  "updated_at": "2026-05-01T11:35:45.848359Z"
 }

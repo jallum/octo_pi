@@ -5,7 +5,8 @@
     "opi-d06.2"
   ],
   "blocks": [
-    "opi-d06.15"
+    "opi-d06.15",
+    "opi-d06.16"
   ],
   "comments": [],
   "created": "2026-05-01T11:23:48.583455Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Convert dialogs: LoginDialog + SummarizePrompt",
   "type": "task",
-  "updated_at": "2026-05-01T11:25:26.647909Z"
+  "updated_at": "2026-05-01T11:35:45.848359Z"
 }
