@@ -92,21 +92,12 @@ defmodule OctoPi.TUI.VDOM.Paint do
     end
   end
 
-  def paint(%VDOM.VMemo{key: key, thunk: thunk, cell: cell}, buf, ctx) do
+  def paint(%VDOM.VMemo{key: key, thunk: thunk, cell: cell}, _buf, ctx) do
     # Read the reconciler cell; opaque to paint.
     # The cell stores memo data OR returns a miss signal.
     case read_memo_cell(cell, key) do
-      {:hit, {iodata, _visible_width, cursor_offset}} ->
-        # Splice cached iodata and adjust cursor position.
-        buf = LineBuf.push(buf, iodata)
-
-        if cursor_offset do
-          {offset_line, _offset_col} = cursor_offset
-          LineBuf.mark_cursor(%{buf | visible_width: buf.visible_width + _visible_width})
-        else
-          %{buf | visible_width: buf.visible_width + _visible_width}
-        end
-
+      # {:hit, ...} clause suppressed until memo cell is wired (d06.10+);
+      # read_memo_cell/2 currently always returns {:miss, nil}.
       {:miss, cell2} ->
         # Evaluate thunk and store result in cell.
         result = thunk.()

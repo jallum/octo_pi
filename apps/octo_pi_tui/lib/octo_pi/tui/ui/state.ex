@@ -271,8 +271,7 @@ defmodule OctoPi.TUI.UI.State do
   end
 
   @spec use_effect(t(), cell_id(), term(), (() -> term() | nil), [term()]) :: t()
-  def use_effect(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, effect_fn, deps) do
-    deps_list = if is_list(deps), do: deps, else: [deps]
+  def use_effect(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, effect_fn, _deps) do
     
     case cells do
       %{^id => %EffectCell{key: existing_key, cleanup: existing_cleanup} = cell} ->
@@ -303,16 +302,16 @@ defmodule OctoPi.TUI.UI.State do
 
   @spec gc(t()) :: t()
   def gc(%__MODULE__{hook_cells: cells, gen: gen} = state) do
-    {cells_to_keep, cells_to_drop} = 
+    {cells_to_keep, _cells_to_drop} = 
       cells
       |> Enum.split_with(fn {_id, cell} ->
         cell.gen >= gen - 1
       end)
     
     # Call cleanup on dropped cells
-    cells_to_drop = Map.drop(cells, Enum.map(cells_to_keep, fn {id, _} -> id end))
+    dropped_cells = Map.drop(cells, Enum.map(cells_to_keep, fn {id, _} -> id end))
     
-    Enum.each(cells_to_drop, fn {_id, cell} ->
+    Enum.each(dropped_cells, fn {_id, cell} ->
       case cell do
         %EffectCell{cleanup: cleanup} when is_function(cleanup) ->
           cleanup.()

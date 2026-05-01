@@ -77,7 +77,7 @@ defmodule OctoPi.TUI.UI.StateTest do
   describe "use_state/3" do
     test "initializes state cell" do
       state = State.new(State.TestComponent, %{})
-      {{value, setter}, state2} = State.use_state(state, {:state, 0}, "initial")
+      {{value, setter}, _state2} = State.use_state(state, {:state, 0}, "initial")
       assert value == "initial"
       assert is_function(setter, 2)
     end
@@ -125,7 +125,7 @@ defmodule OctoPi.TUI.UI.StateTest do
         "computed"
       end
 
-      {value, state2} = State.use_memo(state, id, :key1, thunk)
+      {value, _state2} = State.use_memo(state, id, :key1, thunk)
 
       assert value == "computed"
       [{_, count}] = :ets.lookup(:test_counts, call_count)
@@ -272,7 +272,8 @@ defmodule OctoPi.TUI.UI.StateTest do
       assert count1 == 1
       
       # Second call with same deps
-      state3 = State.use_effect(state2, id, key, effect, [])
+
+      _state3 = State.use_effect(state2, id, key, effect, [])
       [{_, count2}] = :ets.lookup(:effect_counts, call_count)
       assert count2 == 1  # Should still be 1, not re-run
     end
@@ -296,7 +297,8 @@ defmodule OctoPi.TUI.UI.StateTest do
       assert count1 == 1
       
       # Second call with different deps [2]
-      state3 = State.use_effect(state2, id, :deps2, effect, [2])
+
+      _state3 = State.use_effect(state2, id, :deps2, effect, [2])
       [{_, count2}] = :ets.lookup(:effect_counts, call_count)
       assert count2 == 2  # Should be 2, re-run with new deps
     end
@@ -322,7 +324,8 @@ defmodule OctoPi.TUI.UI.StateTest do
       assert cleanup1 == 0  # No cleanup yet
       
       # Second call with different deps - cleanup should run
-      state3 = State.use_effect(state2, id, :key2, effect, [2])
+
+      _state3 = State.use_effect(state2, id, :key2, effect, [2])
       [{_, cleanup2}] = :ets.lookup(:cleanup_calls, cleanup_called)
       assert cleanup2 == 1  # Cleanup ran once
     end

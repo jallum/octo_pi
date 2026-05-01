@@ -83,14 +83,10 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
 
       node = %VDOM.VFlow{children: children}
 
-      {_, duration} =
-        :timer.tc(fn ->
-          Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
-        end)
-
-      # Should complete in reasonable time (<50ms for 100 nodes)
-      # Full memo implementation will make this much faster
-      # assert duration < 50_000  # TODO: Enable in d06.2
+      # Performance check (not enabled yet - wait for memo)
+      :timer.tc(fn ->
+        Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      end)
       :ok
     end
 
