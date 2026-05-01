@@ -1,17 +1,15 @@
 {
-  "annotations": [],
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
-  "comments": [],
   "created": "2026-04-30T14:32:48.017123Z",
   "description": "## Symptom\n\nWhile compaction is in flight, no visible animation indicates work is happening — the loader appears static.\n\n## Cause (suspected)\n\n`apps/octo_pi_tui/lib/octo_pi/tui/components/loader.ex:41` derives the Braille spinner frame from `System.monotonic_time(:millisecond) / 80ms`, so the *value* advances with wall-clock time — but only when the component is **re-rendered**.\n\n`interactive.ex:1118` has a no-op `:loader_tick` handler, suggesting an animation tick is intended but may not be wired (or not fire when only `state.loader` is set with no streaming events).\n\n## Upstream behavior\n\n`tmp/pi-mono/packages/tui/src/components/loader.ts:17-85`: a dedicated `setInterval` at 80ms (`start()` lines 41-44) drives a re-render each tick. The animation does not depend on event traffic.\n\n## Proposed fix\n\n1. Confirm whether anything emits `:loader_tick` on an ~80ms cadence while a loader is mounted.\n2. If not, add a periodic ticker that emits a re-render event while `state.loader != nil`. Mirror upstream's `intervalId` lifecycle: start on loader mount, stop on dismount.\n\n## TDD plan\n\n1. **Red — investigation test.** Write a test that mounts a loader and asserts that within ~250ms the interactive process has received at least 2 `:loader_tick` (or equivalent re-render) messages. Use telemetry / `assert_receive` — **no `Process.sleep`** for the assertion (per project rule); use `assert_receive` with timeout.\n2. **Red — frame-advance test.** With the above ticker in place, render the loader at t=0 and again after a tick is processed; assert the spinner frame character differs. (The frame derivation is monotonic-time based, so this is a state-machine + rerender contract test, not a pure unit test.)\n3. **Green.** Add the loader-tick scheduler and dismount logic.\n4. **Validate.** Run a long `/compact` in tmux; spinner animates smoothly.",
   "id": "opi-owj.2",
   "labels": [],
   "parent": "opi-owj",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "No animated spinner while compaction runs",
   "type": "bug",
-  "updated_at": "2026-04-30T14:33:23.373285Z"
+  "updated_at": "2026-05-01T21:35:25Z"
 }
