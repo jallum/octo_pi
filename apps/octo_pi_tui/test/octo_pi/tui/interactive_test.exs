@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.InteractiveTest do
   use ExUnit.Case, async: true
 
-  require Logger
-
   alias OctoPi.Agent.Event
   alias OctoPi.Agent.Tool.Result
   alias OctoPi.AI.Content.Text
@@ -39,6 +37,8 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Transcript
   alias OctoPi.TUI.Transcript.AssistantHeader
   alias OctoPi.TUI.Transcript.AssistantStatus
+
+  require Logger
 
   # The "child crash still restores tty" test below kills the Terminal
   # GenServer to verify the after-block cleanup. OTP's proc_lib emits

@@ -7,6 +7,7 @@ defmodule OctoPi.Coder.CLI do
     selected mode. Returns an integer exit code.
   """
 
+  alias OctoPi.AI.Model
   alias OctoPi.AI.ModelRegistry
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
@@ -34,7 +35,7 @@ defmodule OctoPi.Coder.CLI do
   @type opts :: %{
           mode: :print | :rpc | :interactive,
           prompt: String.t() | nil,
-          model: OctoPi.AI.Model.t(),
+          model: Model.t(),
           cwd: String.t()
         }
 
@@ -276,7 +277,7 @@ defmodule OctoPi.Coder.CLI do
 
   defp resolve_model(ref) when is_binary(ref) do
     case ModelRegistry.resolve(ModelRegistry.global!(), ref) do
-      {:ok, %OctoPi.AI.Model{} = model} ->
+      {:ok, %Model{} = model} ->
         model
 
       {:error, {:bad_ref, _}} ->

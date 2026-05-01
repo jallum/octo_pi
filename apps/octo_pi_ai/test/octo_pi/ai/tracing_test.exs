@@ -108,6 +108,7 @@ defmodule OctoPi.AI.TracingTest do
   describe "maybe_attach/0" do
     setup do
       original = Application.get_env(:octo_pi_ai, :trace)
+
       on_exit(fn ->
         case original do
           nil -> Application.delete_env(:octo_pi_ai, :trace)

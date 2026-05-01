@@ -1,13 +1,13 @@
 defmodule OctoPi.AITest do
   use ExUnit.Case, async: true
 
+  alias OctoPi.AI.Api
   alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Content
   alias OctoPi.AI.Context
   alias OctoPi.AI.Event
   alias OctoPi.AI.Message
   alias OctoPi.AI.Model
-  alias OctoPi.AI.Api
   alias OctoPi.AI.Tool
   alias OctoPi.AI.ToolCall
   alias OctoPi.AI.Usage

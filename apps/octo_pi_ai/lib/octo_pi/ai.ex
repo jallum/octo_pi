@@ -17,10 +17,10 @@ defmodule OctoPi.AI do
   See `docs/port-map/anthropic.md` for the Anthropic reference port.
   """
 
+  alias OctoPi.AI.ApiRegistry
   alias OctoPi.AI.CallOptions
   alias OctoPi.AI.Context
   alias OctoPi.AI.Model
-  alias OctoPi.AI.ApiRegistry
 
   @type thinking_level :: :minimal | :low | :medium | :high | :xhigh
 

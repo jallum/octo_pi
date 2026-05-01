@@ -74,13 +74,12 @@ defmodule OctoPi.AI.Tracing do
   end
 
   defp format_line(event, measurements, metadata) do
-    name = event |> Enum.map(&Atom.to_string/1) |> Enum.join(".")
+    name = Enum.map_join(event, ".", &Atom.to_string/1)
     meta_parts = filter_meta(event, metadata)
     duration_part = duration_part(measurements)
 
     suffix =
-      (meta_parts ++ duration_part)
-      |> Enum.map_join("", fn {k, v} -> " #{k}=#{format_val(v)}" end)
+      Enum.map_join(meta_parts ++ duration_part, "", fn {k, v} -> " #{k}=#{format_val(v)}" end)
 
     "[trace] #{name}#{suffix}"
   end
@@ -97,7 +96,7 @@ defmodule OctoPi.AI.Tracing do
 
   defp filter_meta(_event, metadata) do
     metadata
-    |> Map.drop([:telemetry_span_context])
+    |> Map.delete(:telemetry_span_context)
     |> Enum.to_list()
   end
 
