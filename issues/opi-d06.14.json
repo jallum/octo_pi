@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-d06.2"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-05-01T11:23:57.804377Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Convert selectors: Model, Session, Settings, SettingsList, Tree, SelectList",
   "type": "task",
-  "updated_at": "2026-05-01T11:23:57.804377Z"
+  "updated_at": "2026-05-01T11:24:39.756174Z"
 }
