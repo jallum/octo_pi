@@ -1,7 +1,9 @@
 {
   "annotations": [],
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-d06.2"
+  ],
   "blocks": [],
   "comments": [],
   "created": "2026-05-01T11:23:23.765199Z",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Convert Markdown subsystem (markdown.ex + markdown/{inline,lexer,render,stream})",
   "type": "task",
-  "updated_at": "2026-05-01T11:23:23.765199Z"
+  "updated_at": "2026-05-01T11:24:18.816774Z"
 }
