@@ -9,8 +9,6 @@ defmodule OctoPi.TUI.Components.Text do
   helper; MVP Text is intentionally minimal.
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.WrapAnsi
 
   @enforce_keys [:content]
@@ -18,7 +16,6 @@ defmodule OctoPi.TUI.Components.Text do
 
   @type t :: %__MODULE__{content: String.t()}
 
-  @impl true
   def render(%__MODULE__{content: content}, width) do
     content
     |> String.replace("\t", "   ")

@@ -33,8 +33,6 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   | `app.tree.filter.cycleBackward` | shift+ctrl+o  |
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.Coder.Components.TreeSelector, as: Tree
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.TUI.Key
@@ -108,7 +106,6 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
-  @impl true
   def render(%__MODULE__{} = state, _width) do
     Tree.render_lines(state.filtered_nodes,
       leaf_id: state.leaf_id,
@@ -116,7 +113,6 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     )
   end
 
-  @impl true
   def handle_key(%__MODULE__{} = state, %Key{} = key) do
     kb = state.keybindings
 
@@ -131,7 +127,6 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.LoginDialog do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Components.Box
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Key
@@ -30,7 +28,6 @@ defmodule OctoPi.TUI.Components.LoginDialog do
     %{d | value: v <> char, error: nil}
   end
 
-  @impl true
   def handle_key(%__MODULE__{} = d, %Key{key: :escape}), do: {d, [:cancel]}
 
   def handle_key(%__MODULE__{value: v} = d, %Key{key: :backspace}) do
@@ -52,7 +49,6 @@ defmodule OctoPi.TUI.Components.LoginDialog do
 
   def handle_key(%__MODULE__{} = d, %Key{}), do: {d, []}
 
-  @impl true
   def render(%__MODULE__{} = d, width) do
     title = Theme.fg(d.theme, :warning, "Login to #{d.provider}")
     masked = mask_value(d.value)
@@ -88,7 +84,6 @@ defmodule OctoPi.TUI.Components.LoginDialog do
     Box.render(box, width)
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

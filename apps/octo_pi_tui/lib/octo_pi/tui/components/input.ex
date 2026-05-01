@@ -4,8 +4,6 @@ defmodule OctoPi.TUI.Components.Input do
   kill ring, undo stack, and word-boundary navigation.
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Autocomplete
   alias OctoPi.TUI.Autocomplete.Suggestion
   alias OctoPi.TUI.Key
@@ -90,7 +88,6 @@ defmodule OctoPi.TUI.Components.Input do
 
   # --- render ---
 
-  @impl true
   def render(%__MODULE__{value: value, theme: theme, height: height, padding_x: px} = input, width) do
     {effective_px, content_w, lw} = layout_width(width, px)
     all_lines = layout_lines(value, lw)
@@ -252,7 +249,6 @@ defmodule OctoPi.TUI.Components.Input do
     Enum.find(@autocomplete_action_priority, fn action -> Keybindings.matches?(kb, key, action) end)
   end
 
-  @impl true
   def handle_key(%__MODULE__{} = s, %Key{} = key), do: handle_key(s, key, nil)
 
   @doc "Handle a key event, dispatching via `keybindings` (or defaults when nil)."

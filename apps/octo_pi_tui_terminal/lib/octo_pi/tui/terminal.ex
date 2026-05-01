@@ -332,13 +332,10 @@ defmodule OctoPi.TUI.Terminal do
   end
 
   # Tag :hid_event tuples with the monotonic time at narrowcast send so
-  # receivers can compute key arrival → handled latency. Other message
-  # shapes pass through unchanged.
+  # receivers can compute key arrival → handled latency.
   defp stamp_hid_event({:hid_event, payload}) do
     {:hid_event, payload, System.monotonic_time(:microsecond)}
   end
-
-  defp stamp_hid_event(other), do: other
 
   defp add_subscriber(%{subscribers: subs} = state, pid) do
     case Map.fetch(subs, pid) do

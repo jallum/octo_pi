@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.Container do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   @type t :: %__MODULE__{children: [struct()]}
 
   defstruct children: []
@@ -34,12 +32,10 @@ defmodule OctoPi.TUI.Components.Container do
   @spec child_count(t()) :: non_neg_integer()
   def child_count(%__MODULE__{children: children}), do: length(children)
 
-  @impl true
   def render(%__MODULE__{children: children}, width) do
     Enum.flat_map(children, &render_child(&1, width))
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

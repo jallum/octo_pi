@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.SettingsList do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
@@ -61,7 +59,6 @@ defmodule OctoPi.TUI.Components.SettingsList do
     %{s | items: items}
   end
 
-  @impl true
   def handle_key(%__MODULE__{items: items, selected: sel} = s, %Key{key: :up}) do
     %{s | selected: wrap(sel - 1, length(items))}
   end
@@ -75,7 +72,6 @@ defmodule OctoPi.TUI.Components.SettingsList do
   def handle_key(%__MODULE__{} = s, %Key{key: :escape}), do: {s, [:cancel]}
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
-  @impl true
   def render(%__MODULE__{items: items, selected: sel, theme: theme}, _width) do
     items
     |> Enum.with_index()
@@ -88,7 +84,6 @@ defmodule OctoPi.TUI.Components.SettingsList do
     end)
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

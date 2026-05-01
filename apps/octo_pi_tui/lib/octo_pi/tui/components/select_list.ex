@@ -23,8 +23,6 @@ defmodule OctoPi.TUI.Components.SelectList do
   Escape cancels.
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.WrapAnsi
 
@@ -57,7 +55,6 @@ defmodule OctoPi.TUI.Components.SelectList do
 
   # --- render ---
 
-  @impl true
   def render(%__MODULE__{items: []}, _width), do: ["(empty)"]
 
   def render(%__MODULE__{} = state, width) do
@@ -149,7 +146,6 @@ defmodule OctoPi.TUI.Components.SelectList do
 
   # --- handle_key: multi-head dispatch ---
 
-  @impl true
   def handle_key(%__MODULE__{items: []} = s, _), do: s
 
   def handle_key(%__MODULE__{items: items, selected: sel} = s, %Key{key: :up}),
@@ -167,7 +163,6 @@ defmodule OctoPi.TUI.Components.SelectList do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

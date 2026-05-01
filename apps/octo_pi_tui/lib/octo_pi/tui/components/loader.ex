@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.Loader do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
@@ -33,7 +31,6 @@ defmodule OctoPi.TUI.Components.Loader do
     %{loader | message: message}
   end
 
-  @impl true
   def render(%__MODULE__{} = loader, width), do: render(loader, width, nil)
 
   @spec render(t(), pos_integer(), Theme.t() | nil) :: [String.t()]
@@ -54,7 +51,6 @@ defmodule OctoPi.TUI.Components.Loader do
     ["", line]
   end
 
-  @impl true
   def handle_key(%__MODULE__{cancellable: true} = loader, %Key{key: :escape}) do
     {loader, [:cancel]}
   end

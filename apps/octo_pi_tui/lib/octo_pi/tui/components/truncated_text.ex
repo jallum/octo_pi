@@ -10,8 +10,6 @@ defmodule OctoPi.TUI.Components.TruncatedText do
   bleed into the trailing pad.
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.WrapAnsi
 
   @type t :: %__MODULE__{
@@ -22,7 +20,6 @@ defmodule OctoPi.TUI.Components.TruncatedText do
 
   defstruct text: "", padding_x: 0, padding_y: 0
 
-  @impl true
   def render(%__MODULE__{text: text, padding_x: px, padding_y: py}, width) do
     empty_line = String.duplicate(" ", width)
     available = max(1, width - px * 2)
@@ -38,7 +35,6 @@ defmodule OctoPi.TUI.Components.TruncatedText do
     List.duplicate(empty_line, py) ++ [content_line] ++ List.duplicate(empty_line, py)
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 end

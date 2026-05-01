@@ -29,8 +29,6 @@ defmodule OctoPi.TUI.Components.SummarizePrompt do
     * `{:result, {:yes, txt}}` → `user_wants_summary: {:yes, txt}`
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
 
   @options ["No summary", "Summarize", "Summarize with custom prompt"]
@@ -70,7 +68,6 @@ defmodule OctoPi.TUI.Components.SummarizePrompt do
   @spec options() :: [String.t()]
   def options, do: @options
 
-  @impl true
   def render(%__MODULE__{selected: sel, title: title}, _width) do
     header = ["", title, ""]
 
@@ -84,7 +81,6 @@ defmodule OctoPi.TUI.Components.SummarizePrompt do
     header ++ rows ++ [""]
   end
 
-  @impl true
   def handle_key(%__MODULE__{selected: sel} = state, %Key{key: :up}) do
     {%{state | selected: rem(sel - 1 + @count, @count)}, []}
   end
@@ -110,7 +106,6 @@ defmodule OctoPi.TUI.Components.SummarizePrompt do
 
   def handle_key(%__MODULE__{} = state, %Key{}), do: {state, []}
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 end

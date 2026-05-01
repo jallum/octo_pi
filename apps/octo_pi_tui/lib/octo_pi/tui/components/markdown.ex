@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.Markdown do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Components.Markdown.Lexer
   alias OctoPi.TUI.SyntaxHighlight
   alias OctoPi.TUI.Theme
@@ -27,7 +25,6 @@ defmodule OctoPi.TUI.Components.Markdown do
     }
   end
 
-  @impl true
   def render(%__MODULE__{text: text}, _width) when text in ["", nil], do: []
 
   def render(%__MODULE__{text: text} = md, width) do

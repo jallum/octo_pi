@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.SessionSelector do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
@@ -51,7 +49,6 @@ defmodule OctoPi.TUI.Components.SessionSelector do
     %{s | filtered_sessions: filtered, filter_text: text, selected: 0}
   end
 
-  @impl true
   def handle_key(%__MODULE__{filtered_sessions: sessions, selected: sel} = s, %Key{key: :up}) do
     %{s | selected: wrap(sel - 1, length(sessions))}
   end
@@ -78,7 +75,6 @@ defmodule OctoPi.TUI.Components.SessionSelector do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
-  @impl true
   def render(%__MODULE__{filtered_sessions: [], theme: theme}, _width) do
     [Theme.fg(theme, :muted, "(no sessions)")]
   end
@@ -89,7 +85,6 @@ defmodule OctoPi.TUI.Components.SessionSelector do
     |> Enum.map(&render_item(&1, s))
   end
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

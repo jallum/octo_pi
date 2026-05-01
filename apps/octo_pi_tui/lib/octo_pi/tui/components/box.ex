@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.Box do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.WrapAnsi
 
   @type t :: %__MODULE__{
@@ -36,7 +34,6 @@ defmodule OctoPi.TUI.Components.Box do
   @spec clear(t()) :: t()
   def clear(%__MODULE__{} = box), do: %{box | children: []}
 
-  @impl true
   def render(%__MODULE__{children: []}, _width), do: []
 
   def render(%__MODULE__{border: true} = box, width) do

@@ -4,15 +4,12 @@ defmodule OctoPi.TUI.Components.Header do
   Supports compact (single-line hints) and expanded (multi-line) modes.
   """
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
 
   @type t :: %__MODULE__{expanded: boolean()}
 
   defstruct expanded: false
 
-  @impl true
   def render(%__MODULE__{expanded: expanded}, _width) do
     logo = "\e[1m\e[36mOctoPi\e[0m" <> dim(" v#{version()}")
 
@@ -54,14 +51,12 @@ defmodule OctoPi.TUI.Components.Header do
     ["" | lines] ++ [""]
   end
 
-  @impl true
   def handle_key(%__MODULE__{expanded: exp} = s, %Key{key: ??, modifiers: []}) do
     %{s | expanded: not exp}
   end
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
-  @impl true
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
 

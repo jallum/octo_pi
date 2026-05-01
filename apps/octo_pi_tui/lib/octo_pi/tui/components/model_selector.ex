@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.ModelSelector do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
@@ -52,7 +50,6 @@ defmodule OctoPi.TUI.Components.ModelSelector do
     %{s | filtered_models: filtered, filter_text: text, selected: 0}
   end
 
-  @impl true
   def handle_key(%__MODULE__{filtered_models: models, selected: sel} = s, %Key{key: :up}) do
     len = length(models)
     %{s | selected: wrap(sel - 1, len)}
@@ -74,7 +71,6 @@ defmodule OctoPi.TUI.Components.ModelSelector do
 
   def handle_key(%__MODULE__{} = s, %Key{}), do: s
 
-  @impl true
   def render(%__MODULE__{filtered_models: [], theme: theme}, _width) do
     [Theme.fg(theme, :muted, "(no models match)")]
   end

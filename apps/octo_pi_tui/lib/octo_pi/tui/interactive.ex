@@ -1844,7 +1844,7 @@ defmodule OctoPi.TUI.Interactive do
   is kept callable so existing callers (and tests written against the
   pre-`.13` shape) compile and pass through unchanged.
   """
-  @spec flush_pending_partial(Interactive.t()) :: Interactive.t()
+  @spec flush_pending_partial(t()) :: t()
   def flush_pending_partial(state), do: %{state | streaming_tick_at: nil}
 
   @doc false

@@ -1,8 +1,6 @@
 defmodule OctoPi.TUI.Components.WelcomeBanner do
   @moduledoc false
 
-  @behaviour OctoPi.TUI.Component
-
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Theme
 
@@ -25,7 +23,6 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
     }
   end
 
-  @impl true
   def render(%__MODULE__{quiet: true}, _width), do: []
 
   def render(%__MODULE__{expanded: false, theme: theme}, _width) do
@@ -52,7 +49,6 @@ defmodule OctoPi.TUI.Components.WelcomeBanner do
     ]
   end
 
-  @impl true
   def handle_key(%__MODULE__{expanded: expanded} = banner, %Key{key: ??}) do
     %{banner | expanded: !expanded}
   end
