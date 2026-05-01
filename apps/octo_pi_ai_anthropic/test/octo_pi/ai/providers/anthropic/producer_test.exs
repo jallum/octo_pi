@@ -276,8 +276,7 @@ defmodule OctoPi.AI.Providers.Anthropic.ProducerTest do
       pid = start_producer(chunks)
       _events = collect_events(pid)
 
-      assert_receive {^tref, [:octo_pi_ai, :request, :start], meas, meta}
-      assert is_integer(meas.system_time)
+      assert_receive {^tref, [:octo_pi_ai, :request, :start], _meas, meta}
       assert meta.api == :anthropic_messages
       assert meta.model == "claude-haiku-4-5"
       assert meta.auth_type == :api_key

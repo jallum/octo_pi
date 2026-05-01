@@ -324,7 +324,7 @@ defmodule OctoPi.Coder.Loop do
 
     :telemetry.execute(
       [:octo_pi_coder, :navigate, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{target_id: target_id, old_leaf_id: old_leaf_id}
     )
 
@@ -425,7 +425,7 @@ defmodule OctoPi.Coder.Loop do
 
     :telemetry.execute(
       [:octo_pi_coder, :compact, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{source: source, tokens_before: tokens_before}
     )
 

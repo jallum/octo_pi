@@ -33,7 +33,7 @@ defmodule OctoPi.AI.Telemetry do
   def request_start(%Model{} = model, extras \\ %{}) do
     :telemetry.execute(
       [:octo_pi_ai, :request, :start],
-      %{system_time: System.system_time()},
+      %{},
       Map.merge(%{api: model.api, model: model.id}, extras)
     )
   end

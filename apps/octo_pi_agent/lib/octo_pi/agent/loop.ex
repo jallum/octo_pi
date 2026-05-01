@@ -314,7 +314,7 @@ defmodule OctoPi.Agent.Loop do
 
     :telemetry.execute(
       [:octo_pi_agent, :loop, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{model: store.loop.model.id, session_id: session_id}
     )
 
@@ -356,7 +356,7 @@ defmodule OctoPi.Agent.Loop do
 
     :telemetry.execute(
       [:octo_pi_agent, :turn, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{turn: t, session_id: store.loop.session_id}
     )
 

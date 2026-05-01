@@ -354,7 +354,7 @@ defmodule OctoPi.Coder.Extension.Dispatcher do
 
     :telemetry.execute(
       [:octo_pi_coder, :extension, :handler, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{extension_id: ext.id, event_type: event_type}
     )
 

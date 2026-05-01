@@ -1,6 +1,6 @@
 ---
 name: deep-research
-description: Deep research into the codebase. Use this skill when a question requires thorough investigation — tracing how something works end-to-end, verifying assumptions against source code, or building a factual picture of a subsystem. Examples include: how does module X work? how are requests routed? what are the dependencies between subsystems?
+description: Deep research into the codebase. Use this skill when a question requires thorough investigation — tracing how something works end-to-end, verifying assumptions against source code, or building a factual picture of a subsystem. Examples include how does module X work? how are requests routed? what are the dependencies between subsystems?
 ---
 
 # Deep Research

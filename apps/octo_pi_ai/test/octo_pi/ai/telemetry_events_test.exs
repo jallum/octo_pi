@@ -74,7 +74,7 @@ defmodule OctoPi.AI.TelemetryEventsTest do
       assert {:ok, _reg} =
                ModelRegistry.load(models_file: path, runners: %{stub: StubRunner})
 
-      assert_receive {:telem, [:octo_pi_ai, :model_registry, :load, :start], %{system_time: _}, %{path: ^path}}
+      assert_receive {:telem, [:octo_pi_ai, :model_registry, :load, :start], %{}, %{path: ^path}}
 
       assert_receive {:telem, [:octo_pi_ai, :model_registry, :load, :stop], %{duration: _},
                       %{path: ^path, runner_count: 1, model_count: 2}}

@@ -1,9 +1,14 @@
 defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
   use ExUnit.Case, async: false
 
-  alias OctoPi.AI.{CallOptions, Context, Event, Message, Model, ToolCall}
+  alias OctoPi.AI.CallOptions
+  alias OctoPi.AI.Context
+  alias OctoPi.AI.Event
+  alias OctoPi.AI.Message
+  alias OctoPi.AI.Model
   alias OctoPi.AI.Providers.OpenAI.Producer
   alias OctoPi.AI.TestSupport.FakeOpenAIPlug, as: Fake
+  alias OctoPi.AI.ToolCall
 
   def __telemetry_forward__(name, meas, meta, %{pid: pid, ref: ref}) do
     send(pid, {ref, name, meas, meta})
@@ -118,7 +123,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
             %{
               "delta" => %{
                 "tool_calls" => [
-                  %{"index" => 0, "function" => %{"arguments" => "{\"path\":\"foo.txt\"}"}}
+                  %{"index" => 0, "function" => %{"arguments" => ~s({"path":"foo.txt"})}}
                 ]
               },
               "finish_reason" => nil
@@ -249,8 +254,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       pid = start_producer(chunks)
       _events = collect_events(pid)
 
-      assert_receive {^tref, [:octo_pi_ai, :request, :start], meas, meta}
-      assert is_integer(meas.system_time)
+      assert_receive {^tref, [:octo_pi_ai, :request, :start], _meas, meta}
       assert meta.api == :openai_completions
       assert meta.model == "gpt-4o"
 
@@ -264,7 +268,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
     end
 
     test "emits stop with http_status on non-2xx response", %{telemetry_ref: tref} do
-      pid = start_producer(["{\"error\":\"boom\"}"], 500)
+      pid = start_producer([~s({"error":"boom"})], 500)
       _events = collect_events(pid)
 
       assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, meta}
@@ -301,8 +305,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       Process.exit(caller, :kill)
       assert_receive {:DOWN, ^caller_mon, :process, ^caller, :killed}, 500
 
-      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas,
-                      %{stop_reason: :aborted}},
+      assert_receive {^tref, [:octo_pi_ai, :request, :stop], _meas, %{stop_reason: :aborted}},
                      2_000
     end
   end

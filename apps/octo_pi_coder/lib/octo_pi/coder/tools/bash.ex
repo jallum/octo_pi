@@ -71,7 +71,7 @@ defmodule OctoPi.Coder.Tools.Bash do
 
     :telemetry.execute(
       [:octo_pi_coder, :bash, :start],
-      %{system_time: System.system_time()},
+      %{},
       %{cmd: cmd, cwd: cwd}
     )
 

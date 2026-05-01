@@ -260,7 +260,7 @@ defmodule OctoPi.Agent.Turn.Worker do
 
         :telemetry.execute(
           [:octo_pi_agent, :tool, :start],
-          %{system_time: System.system_time()},
+          %{},
           %{tool_call_id: call.id, tool_name: call.name, session_id: opts[:session_id]}
         )
 
