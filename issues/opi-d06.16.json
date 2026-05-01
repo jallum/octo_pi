@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:35:35.709864Z",
+  "description": "Follow-on to the VDom epic. Once d06.6 (Screen root + UI.Slots\nregistry) and d06.13/14 (dialogs + selectors as overlay components)\nare in, expose the upstream pi-mono extension surface to octo_pi\nextension authors:\n\n  * `Coder.Extensions.UI.set_header(api, mod | nil)`\n  * `Coder.Extensions.UI.set_footer(api, mod | nil)`\n  * `Coder.Extensions.UI.set_widget(api, key, mod | nil, opts \\\\ [])`\n  * `Coder.Extensions.UI.register_message_renderer(api, type, mod)`\n  * `Coder.Extensions.UI.set_status(api, text | nil)`\n  * `Coder.Extensions.UI.set_title(api, title)`\n  * `Coder.Extensions.UI.custom(api, factory, opts) :: {:ok, result}`\n    (focus-grabbing overlay; resolves when the component calls\n    `done(result)`)\n\nEach function casts a `{:slot_override, …}` / `{:renderer_register,\n…}` / `{:overlay_push, …}` message to Interactive, which folds it\ninto `UI.State` via `UI.Slots.override/3` (or the renderer\nregistry / overlay slot equivalent) and pushes affected ids into\nthe invalidated set.\n\nReferences (upstream):\n  - `tmp/pi-mono/packages/coding-agent/src/core/extensions/types.ts`\n    (the `ExtensionUI` interface, ~line 160-200).\n  - `tmp/pi-mono/packages/coding-agent/examples/extensions/custom-header.ts`\n    `custom-footer.ts`, `message-renderer.ts`,\n    `widget-placement.ts`, `doom-overlay/`.\n\nAcceptance:\n  * An extension can replace the header at runtime; visual smoke\n    test in tmux confirms the swap with no flicker.\n  * A custom message-type renderer survives a full TUI lifecycle\n    (registered → received → rendered → unregistered).\n  * `Coder.Extensions.UI.custom/3` can show an overlay that\n    captures keys until `done/1` is called; existing\n    overlay-non-capturing behaviour still available via opts.\n  * Test parity with upstream's\n    `compaction-extensions.test.ts`, `extensions-input-event.test.ts`\n    where the equivalent UI override paths exist.\n\nOut of scope: the loader/discovery side of extensions\n(`Coder.Extensions.Loader`) — that lives elsewhere. This ticket is\nstrictly about the UI plumbing exposed to already-loaded\nextensions.",
+  "id": "opi-d06.16",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Coder.Extensions.UI: wire slot registry + message renderer registry to the extension API",
+  "type": "task",
+  "updated_at": "2026-05-01T11:35:35.709864Z"
+}
