@@ -1396,7 +1396,7 @@ defmodule OctoPi.TUI.Interactive do
     state
   end
 
-  defp dispatch_app_action("app.clear", state, _key), do: state
+  defp dispatch_app_action("app.clear", state, _key), do: %{state | transcript: %Transcript{}}
 
   defp dispatch_app_action("app.exit", %{input: %{value: ""}} = state, _key), do: %{state | exit: true}
   defp dispatch_app_action("app.exit", state, key), do: handle_event_key(state, key)
