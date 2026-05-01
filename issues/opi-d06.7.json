@@ -5,7 +5,8 @@
     "opi-d06.1"
   ],
   "blocks": [
-    "opi-d06.8"
+    "opi-d06.8",
+    "opi-d06.11"
   ],
   "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Cursor-as-VNode: Input emits VCursor; renderer derives cursor_seq from buffer",
   "type": "task",
-  "updated_at": "2026-05-01T11:20:50.205905Z"
+  "updated_at": "2026-05-01T11:24:26.976257Z"
 }

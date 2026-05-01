@@ -2,7 +2,8 @@
   "annotations": [],
   "assignee": "",
   "blocked_by": [
-    "opi-d06.2"
+    "opi-d06.2",
+    "opi-d06.7"
   ],
   "blocks": [],
   "comments": [],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Convert Input component (full surface beyond cursor)",
   "type": "task",
-  "updated_at": "2026-05-01T11:24:22.589391Z"
+  "updated_at": "2026-05-01T11:24:26.976257Z"
 }
