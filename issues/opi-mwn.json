@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-d06.2"
+  ],
   "created": "2026-05-01T17:22:06Z",
   "description": "",
   "id": "opi-mwn",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "opi-d06.2.1",
   "type": "task",
-  "updated_at": "2026-05-01T17:22:06Z"
+  "updated_at": "2026-05-01T17:22:37Z"
 }
