@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-rhf.3"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-rhf",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "app.clear base case: Ctrl+C does not clear transcript when idle",
   "type": "bug",
-  "updated_at": "2026-05-01T20:26:29Z"
+  "updated_at": "2026-05-01T20:37:15Z"
 }
