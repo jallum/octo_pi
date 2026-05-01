@@ -1,0 +1,17 @@
+{
+  "annotations": [],
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "comments": [],
+  "created": "2026-05-01T11:23:48.583455Z",
+  "description": "Modal dialog components. Today they're rendered via\n`render_dialog_overlay/3` in Interactive — a switch statement\nmatching on dialog type. Under VDom they become regular components\nmounted at the screen root when active; the overlay switch\ndisappears.\n\nEach dialog uses `use_key` for keyboard handling and emits its own\n`%VCursor{}` if it owns input focus (last-paint-wins gives correct\nbehaviour without explicit focus arbitration).\n\nAcceptance: dialog_test.exs stays green; visual smoke test in tmux\nconfirms positioning and key handling unchanged.",
+  "id": "opi-d06.13",
+  "labels": [],
+  "parent": "opi-d06",
+  "priority": 2,
+  "status": "open",
+  "title": "Convert dialogs: LoginDialog + SummarizePrompt",
+  "type": "task",
+  "updated_at": "2026-05-01T11:23:48.583455Z"
+}
