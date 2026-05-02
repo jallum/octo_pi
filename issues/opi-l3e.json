@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T15:22:37Z",
+  "description": "",
+  "id": "opi-l3e",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Refactor Input into a proper container component",
+  "type": "epic",
+  "updated_at": "2026-05-02T15:22:37Z"
+}
