@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T15:23:01Z",
+  "description": "",
+  "id": "opi-l3e.5",
+  "labels": [],
+  "parent": "opi-l3e",
+  "priority": 1,
+  "status": "open",
+  "title": "End-to-end verification: Input refactor acceptance",
+  "type": "task",
+  "updated_at": "2026-05-02T15:23:01Z"
+}
