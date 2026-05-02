@@ -243,6 +243,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
       alias OctoPi.TUI.Components.Input
       alias OctoPi.TUI.Components.UserMessage
       alias OctoPi.TUI.Interactive
+      alias OctoPi.TUI.RenderContext
       alias OctoPi.TUI.Theme
       alias OctoPi.TUI.Transcript
 
@@ -274,7 +275,7 @@ defmodule OctoPi.TUI.TuiRenderTest do
       # Input renders: [border, content, border] = 3 lines
       # Footer renders: 3 lines
       # Total last 6 lines = input(3) + footer(3)
-      footer_lines = Footer.render(state.footer, 80)
+      footer_lines = elem(Footer.render(state.footer, %RenderContext{width: 80, theme: nil}), 1).lines
       input_lines = Input.render(state.input, 80)
 
       # Verify input border is present in the output

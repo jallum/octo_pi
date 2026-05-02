@@ -17,6 +17,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Components.LoginDialog
@@ -334,7 +335,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "footer thinking_level rendered in stats line after cycle" do
       s = %Interactive{thinking_level: :off, footer: %Footer{context_window: 200_000}}
       s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
-      [_, stats | _] = Footer.render(s2.footer, 80)
+      [_, stats | _] = elem(Footer.render(s2.footer, %RenderContext{width: 80, theme: nil}), 1).lines
       assert String.replace(stats, ~r/\e\[[0-9;]*m/, "") =~ "low"
     end
 

@@ -2,6 +2,7 @@ defmodule OctoPi.TUI.Components.FooterTest do
   use ExUnit.Case, async: true
 
   alias OctoPi.TUI.Components.Footer
+  alias OctoPi.TUI.RenderContext
 
   defp strip_ansi(str), do: String.replace(str, ~r/\e\[[0-9;]*m/, "")
 
@@ -15,86 +16,84 @@ defmodule OctoPi.TUI.Components.FooterTest do
     )
   end
 
+  defp ctx(width), do: %RenderContext{width: width, theme: nil}
+
+  defp render_lines(footer, width \\ 80) do
+    elem(Footer.render(footer, ctx(width)), 1).lines
+  end
+
   describe "render/2" do
     test "renders 2 lines by default (pwd + stats)" do
-      lines = Footer.render(footer(), 80)
+      lines = render_lines(footer())
       assert length(lines) == 2
     end
 
     test "pwd line shows cwd" do
-      lines = Footer.render(footer(), 80)
+      lines = render_lines(footer())
       assert strip_ansi(hd(lines)) =~ "/home/user/project"
     end
 
     test "pwd line includes git branch" do
-      lines = Footer.render(footer(%{git_branch: "main"}), 80)
+      lines = render_lines(footer(%{git_branch: "main"}))
       assert strip_ansi(hd(lines)) =~ "(main)"
     end
 
     test "pwd line includes session name" do
-      lines = Footer.render(footer(%{session_name: "my-session"}), 80)
+      lines = render_lines(footer(%{session_name: "my-session"}))
       assert strip_ansi(hd(lines)) =~ "my-session"
     end
 
     test "stats line shows token counts" do
       f = footer(%{input_tokens: 5_000, output_tokens: 1_234})
-      lines = Footer.render(f, 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
       assert stats =~ "↑5.0k"
       assert stats =~ "↓1.2k"
     end
 
     test "stats line shows model name" do
-      lines = Footer.render(footer(), 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(footer()), 1))
       assert stats =~ "claude-opus-4-6"
     end
 
     test "stats line shows thinking level" do
       f = footer(%{thinking_level: "medium"})
-      lines = Footer.render(f, 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
       assert stats =~ "medium"
     end
 
     test "context percent > 90 renders in red" do
       f = footer(%{context_percent: 95.0})
-      lines = Footer.render(f, 80)
-      raw = Enum.at(lines, 1)
+      raw = Enum.at(render_lines(f), 1)
       assert raw =~ "\e[31m"
     end
 
     test "context percent > 70 renders in yellow" do
       f = footer(%{context_percent: 75.0})
-      lines = Footer.render(f, 80)
-      raw = Enum.at(lines, 1)
+      raw = Enum.at(render_lines(f), 1)
       assert raw =~ "\e[33m"
     end
 
     test "nil context percent shows ?" do
       f = footer(%{context_percent: nil})
-      lines = Footer.render(f, 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
       assert stats =~ "?%"
     end
 
     test "shows provider in parentheses when set" do
       f = footer(%{provider: :ollama})
-      lines = Footer.render(f, 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
       assert stats =~ "(ollama)"
     end
 
     test "omits provider when nil" do
       f = footer(%{provider: nil})
-      lines = Footer.render(f, 80)
-      stats = strip_ansi(Enum.at(lines, 1))
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
       refute stats =~ "()"
     end
 
     test "extension statuses add a third line" do
       f = footer(%{extension_statuses: %{"mcp" => "connected", "auth" => "ready"}})
-      lines = Footer.render(f, 80)
+      lines = render_lines(f)
       assert length(lines) == 3
       ext = strip_ansi(Enum.at(lines, 2))
       assert ext =~ "connected"
@@ -103,8 +102,7 @@ defmodule OctoPi.TUI.Components.FooterTest do
 
     test "extension statuses sorted alphabetically" do
       f = footer(%{extension_statuses: %{"z_ext" => "Z", "a_ext" => "A"}})
-      lines = Footer.render(f, 80)
-      ext = strip_ansi(Enum.at(lines, 2))
+      ext = strip_ansi(Enum.at(render_lines(f), 2))
       assert ext =~ ~r/A.*Z/
     end
   end

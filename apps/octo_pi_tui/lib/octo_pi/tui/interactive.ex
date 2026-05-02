@@ -1948,9 +1948,7 @@ defmodule OctoPi.TUI.Interactive do
         ctx
       )
 
-    footer_vnode = %VDOM.VLines{
-      lines: footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
-    }
+    footer_vnode = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, ctx)
 
     dropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}
     notif_vnode = %VDOM.VLines{lines: render_notification(state.notification, width)}
@@ -2301,10 +2299,14 @@ defmodule OctoPi.TUI.Interactive do
     Enum.at(models, new_idx)
   end
 
-  defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2),
-    do: render_fn.(width, build_footer_context(footer, footer_data_pid))
+  defp footer_lines(render_fn, footer, footer_data_pid, %RenderContext{width: width})
+      when is_function(render_fn, 2) do
+    lines = render_fn.(width, build_footer_context(footer, footer_data_pid))
+    %VDOM.VLines{lines: lines}
+  end
 
-  defp footer_lines(nil, footer, _footer_data_pid, width), do: Footer.render(footer, width)
+  defp footer_lines(nil, footer, _footer_data_pid, %RenderContext{} = ctx),
+    do: elem(Footer.render(footer, ctx), 1)
 
   defp build_footer_context(footer, footer_data_pid) do
     %{

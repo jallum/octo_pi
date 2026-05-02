@@ -4,6 +4,9 @@ defmodule OctoPi.TUI.Components.Footer do
   Renders 2-3 lines anchored to the bottom of the terminal.
   """
 
+  @behaviour OctoPi.TUI.Component
+
+  alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi
 
   @type t :: %__MODULE__{
@@ -40,18 +43,32 @@ defmodule OctoPi.TUI.Components.Footer do
             thinking_level: nil,
             extension_statuses: %{}
 
-  def render(%__MODULE__{} = f, width) do
-    pwd_line = build_pwd_line(f, width)
-    stats_line = build_stats_line(f, width)
+  @impl true
+  def render(%__MODULE__{} = self, %{width: width}) do
+    pwd_line = build_pwd_line(self, width)
+    stats_line = build_stats_line(self, width)
     lines = [pwd_line, stats_line]
 
-    case build_extension_line(f, width) do
-      nil -> lines
-      ext -> lines ++ [ext]
-    end
+    lines =
+      case build_extension_line(self, width) do
+        nil -> lines
+        ext -> lines ++ [ext]
+      end
+
+    {self, %VDOM.VLines{lines: lines}}
   end
 
-  def handle_key(s, _key), do: s
+  @impl true
+  def handle_key(self, _key), do: self
+
+  @impl true
+  def invalidate(self), do: self
+
+  @impl true
+  def update(self, _), do: self
+
+  @impl true
+  def finalize(self, _), do: self
 
   # --- line builders ---
 
