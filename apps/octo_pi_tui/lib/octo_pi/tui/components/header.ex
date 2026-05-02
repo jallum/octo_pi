@@ -31,22 +31,22 @@ defmodule OctoPi.TUI.Components.Header do
   def render(%__MODULE__{quiet: true} = self, %RenderContext{}), do: {self, %VDOM.VLines{lines: []}}
 
   def render(%__MODULE__{expanded: false, theme: theme} = self, %RenderContext{}) do
-    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
-    hints = dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more")
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> Theme.dim(version())
+    hints = Theme.dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more")
     {self, %VDOM.VLines{lines: [" #{title}", hints, ""]}}
   end
 
   def render(%__MODULE__{expanded: true, theme: theme} = self, %RenderContext{}) do
-    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> Theme.dim(version())
 
     lines = [
       " #{title}",
       "",
-      dim("  Esc        interrupt generation"),
-      dim("  Ctrl+C     clear / Ctrl+D exit"),
-      dim("  /          commands"),
-      dim("  !          run bash command"),
-      dim("  ?          toggle this banner"),
+      Theme.dim("  Esc        interrupt generation"),
+      Theme.dim("  Ctrl+C     clear / Ctrl+D exit"),
+      Theme.dim("  /          commands"),
+      Theme.dim("  !          run bash command"),
+      Theme.dim("  ?          toggle this banner"),
       ""
     ]
 
@@ -67,5 +67,4 @@ defmodule OctoPi.TUI.Components.Header do
     end
   end
 
-  defp dim(text), do: "\e[2m#{text}\e[22m"
 end

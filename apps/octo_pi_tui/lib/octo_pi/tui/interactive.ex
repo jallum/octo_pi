@@ -2083,7 +2083,7 @@ defmodule OctoPi.TUI.Interactive do
   defp render_notification(nil, _width), do: []
 
   defp render_notification(text, width) do
-    [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
+    [%TruncatedText{text: Theme.dim(text)}] |> Container.new() |> Container.render(width)
   end
 
   # Extract a plain string from a queued message struct. Post-
@@ -2319,5 +2319,4 @@ defmodule OctoPi.TUI.Interactive do
   defp branch_from(nil), do: nil
   defp branch_from(pid), do: FooterData.get_git_branch(pid)
 
-  defp dim(text), do: "\e[2m#{text}\e[22m"
 end

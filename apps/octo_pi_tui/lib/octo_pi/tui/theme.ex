@@ -282,6 +282,9 @@ defmodule OctoPi.TUI.Theme do
   @spec bold(String.t()) :: String.t()
   def bold(text), do: "\e[1m#{text}\e[22m"
 
+  @spec dim(String.t()) :: String.t()
+  def dim(text), do: "\e[2m#{text}\e[22m"
+
   @spec italic(String.t()) :: String.t()
   def italic(text), do: "\e[3m#{text}\e[23m"
 

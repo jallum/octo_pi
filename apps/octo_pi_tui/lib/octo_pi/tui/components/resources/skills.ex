@@ -20,9 +20,9 @@ defmodule OctoPi.TUI.Components.Resources.Skills do
   def render(%__MODULE__{skills: skills, expanded: expanded} = self, %RenderContext{theme: theme}) do
     body =
       if expanded do
-        Enum.map_join(skills, "\n", &("  " <> dim(&1.name)))
+        Enum.map_join(skills, "\n", &("  " <> Theme.dim(&1.name)))
       else
-        dim("  " <> Enum.map_join(skills, ", ", & &1.name))
+        Theme.dim("  " <> Enum.map_join(skills, ", ", & &1.name))
       end
 
     {self, %VDOM.VLines{lines: [section_header(theme, "Skills"), body, ""]}}
@@ -30,6 +30,4 @@ defmodule OctoPi.TUI.Components.Resources.Skills do
 
   defp section_header(nil, name), do: "[#{name}]"
   defp section_header(theme, name), do: Theme.fg(theme, :md_heading, "[#{name}]")
-
-  defp dim(text), do: "\e[2m#{text}\e[22m"
 end

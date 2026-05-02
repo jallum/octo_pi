@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.Components.Footer do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.Theme
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi
 
@@ -90,49 +91,48 @@ defmodule OctoPi.TUI.Components.Footer do
     cond do
       left_w + 2 + right_w <= width ->
         padding = String.duplicate(" ", width - left_w - right_w)
-        dim(left) <> dim(padding) <> dim(right)
+        Theme.dim(left) <> Theme.dim(padding) <> Theme.dim(right)
 
       left_w + 2 <= width ->
         avail = width - left_w - 2
         trunc_right = String.slice(right, 0, avail)
         padding = String.duplicate(" ", max(0, width - left_w - String.length(trunc_right)))
-        dim(left) <> dim(padding) <> dim(trunc_right)
+        Theme.dim(left) <> Theme.dim(padding) <> Theme.dim(trunc_right)
 
       true ->
-        dim(left)
+        Theme.dim(left)
     end
   end
 
   defp build_extension_line(%{extension_statuses: ext}, _width) when map_size(ext) == 0, do: nil
 
   defp build_extension_line(%{extension_statuses: ext}, width) do
-    line =
-      ext
-      |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map_join(" ", fn {_, v} -> sanitize_status(v) end)
-
-    truncate_dim(line, width)
+    ext
+    |> Enum.sort_by(fn {k, _} -> k end)
+    |> Enum.map_join(" ", fn {_, v} -> sanitize_status(v) end)
+    |> truncate_dim(width)
   end
 
   # --- token formatting ---
 
-  defp token_parts(f) do
-    parts = []
-    parts = if f.input_tokens > 0, do: parts ++ ["↑#{format_tokens(f.input_tokens)}"], else: parts
-
-    parts =
-      if f.output_tokens > 0, do: parts ++ ["↓#{format_tokens(f.output_tokens)}"], else: parts
-
-    parts = if f.cache_read > 0, do: parts ++ ["R#{format_tokens(f.cache_read)}"], else: parts
-    parts = if f.cache_write > 0, do: parts ++ ["W#{format_tokens(f.cache_write)}"], else: parts
-
-    parts =
-      if f.cost > 0,
-        do: parts ++ ["$#{:erlang.float_to_binary(f.cost, decimals: 3)}"],
-        else: parts
-
-    parts
+  defp token_parts(%{
+         input_tokens: input,
+         output_tokens: output,
+         cache_read: cache_read,
+         cache_write: cache_write,
+         cost: cost
+       }) do
+    []
+    |> maybe_add_section(input > 0, {"↑", input})
+    |> maybe_add_section(output > 0, {"↓", output})
+    |> maybe_add_section(cache_read > 0, {"R", cache_read})
+    |> maybe_add_section(cache_write > 0, {"W", cache_write})
+    |> maybe_add_section(cost > 0, "$#{:erlang.float_to_binary(cost, decimals: 3)}")
   end
+
+  defp maybe_add_section(parts, true, {marker, n}), do: ["#{marker}#{format_tokens(n)}" | parts]
+  defp maybe_add_section(parts, true, text) when is_binary(text), do: [text | parts]
+  defp maybe_add_section(parts, _, _), do: parts
 
   @doc false
   def format_tokens(n) when n < 1_000, do: Integer.to_string(n)
@@ -193,11 +193,9 @@ defmodule OctoPi.TUI.Components.Footer do
 
   defp truncate_dim(text, width) do
     if WrapAnsi.visible_width(text) > width do
-      dim(String.slice(text, 0, width - 3) <> "...")
+      Theme.dim(String.slice(text, 0, width - 3) <> "...")
     else
-      dim(text)
+      Theme.dim(text)
     end
   end
-
-  defp dim(text), do: "\e[2m#{text}\e[22m"
 end

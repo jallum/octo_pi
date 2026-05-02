@@ -19,9 +19,9 @@ defmodule OctoPi.TUI.Components.Resources.Context do
   def render(%{files: files, expanded: expanded} = self, %{theme: theme}) do
     body =
       if expanded do
-        Enum.map_join(files, "\n", &("  " <> dim(&1.path)))
+        Enum.map_join(files, "\n", &("  " <> Theme.dim(&1.path)))
       else
-        dim("  " <> Enum.map_join(files, ", ", &Path.basename(&1.path)))
+        Theme.dim("  " <> Enum.map_join(files, ", ", &Path.basename(&1.path)))
       end
 
     {self, %VDOM.VLines{lines: [section_header(theme, "Context"), body, ""]}}
@@ -29,6 +29,4 @@ defmodule OctoPi.TUI.Components.Resources.Context do
 
   defp section_header(nil, name), do: "[#{name}]"
   defp section_header(theme, name), do: Theme.fg(theme, :md_heading, "[#{name}]")
-
-  defp dim(text), do: "\e[2m#{text}\e[22m"
 end
