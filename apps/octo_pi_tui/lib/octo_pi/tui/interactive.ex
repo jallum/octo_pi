@@ -1975,7 +1975,10 @@ defmodule OctoPi.TUI.Interactive do
         header_vnode,
         resource_vnode,
         transcript_vnode,
-        %VDOM.VLines{lines: render_loader(loader, width, state.theme)},
+        case loader do
+          nil -> %VDOM.VLines{lines: []}
+          %Components.Loader{} -> elem(Components.Loader.render(loader, ctx), 1)
+        end,
         %VDOM.VLines{lines: pending_lines},
         input_vnode,
         dropdown_vnode,
@@ -2080,8 +2083,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp vnode_height(vnode, ctx), do: Paint.paint(vnode, LineBuf.new(), ctx).line_count
 
-  defp render_loader(nil, _width, _theme), do: []
-  defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
 
   defp render_notification(nil, _width), do: []
 

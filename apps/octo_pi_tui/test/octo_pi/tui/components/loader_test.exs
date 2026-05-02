@@ -3,9 +3,17 @@ defmodule OctoPi.TUI.Components.LoaderTest do
 
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
 
-  defp theme, do: Theme.load_builtin(:dark, :truecolor)
+  defp ctx(opts \\ []) do
+    struct!(RenderContext, Keyword.merge([theme: nil, width: 80], opts))
+  end
+
+  defp render_lines(loader, opts \\ []) do
+    {_, %{lines: lines}} = Loader.render(loader, ctx(opts))
+    lines
+  end
 
   describe "new/1" do
     test "creates loader with default message" do
@@ -32,20 +40,20 @@ defmodule OctoPi.TUI.Components.LoaderTest do
   describe "render/2" do
     test "renders spinner frame and message" do
       loader = Loader.new()
-      [blank, line] = Loader.render(loader, 40)
+      [blank, line] = render_lines(loader, width: 40)
       assert blank == ""
       assert line =~ "Loading..."
     end
 
     test "renders current animation frame" do
       loader = Loader.new(frames: ["X", "Y"])
-      [_blank, line] = Loader.render(loader, 40)
+      [_blank, line] = render_lines(loader, width: 40)
       assert line =~ "X" or line =~ "Y"
     end
 
     test "does not add a separate cancel-hint line (upstream parity: hint is inline in message)" do
       loader = Loader.new(message: "Working... (Esc to cancel)", cancellable: true)
-      lines = Loader.render(loader, 80)
+      lines = render_lines(loader)
       joined = Enum.join(lines, "\n")
       esc_count = joined |> String.split("Esc") |> length() |> Kernel.-(1)
       assert esc_count == 1, "expected exactly 1 'Esc' occurrence, got #{esc_count}: #{inspect(lines)}"
@@ -53,16 +61,21 @@ defmodule OctoPi.TUI.Components.LoaderTest do
 
     test "no cancel hint rendered when cancellable but message has none" do
       loader = Loader.new(message: "Working...", cancellable: true)
-      lines = Loader.render(loader, 80)
+      lines = render_lines(loader)
       refute Enum.any?(lines, &(&1 =~ "Esc"))
     end
 
     test "renders with theme colors" do
       loader = Loader.new()
-      theme = theme()
-      lines = Loader.render(loader, 40, theme)
+      lines = render_lines(loader, theme: Theme.load_builtin(:dark, :truecolor), width: 40)
       assert is_list(lines)
       assert length(lines) >= 2
+    end
+
+    test "render returns updated loader struct" do
+      loader = Loader.new()
+      {returned, _vnode} = Loader.render(loader, ctx())
+      assert returned == loader
     end
   end
 
