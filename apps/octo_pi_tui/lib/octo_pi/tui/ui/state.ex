@@ -276,29 +276,41 @@ defmodule OctoPi.TUI.UI.State do
   def use_effect(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, effect_fn, _deps) do
     case cells do
       %{^id => %EffectCell{key: existing_key, cleanup: existing_cleanup} = cell} ->
-        # Cell exists - check if deps changed
-        if existing_key == key do
-          # Deps unchanged - just refresh gen
-          new_cell = %{cell | gen: gen}
-          cells = Map.put(cells, id, new_cell)
-          %{state | hook_cells: cells}
-        else
-          # Deps changed - run cleanup then effect
-          if is_function(existing_cleanup), do: existing_cleanup.()
-
-          cleanup = effect_fn.()
-          new_cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
-          cells = Map.put(cells, id, new_cell)
-          %{state | hook_cells: cells}
-        end
+        use_effect_existing_cell(state, id, cell, existing_key, existing_cleanup, key, effect_fn, gen)
 
       _ ->
-        # New cell - run effect and store cleanup
-        cleanup = effect_fn.()
-        cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
-        cells = Map.put(cells, id, cell)
-        %{state | hook_cells: cells}
+        use_effect_new_cell(state, id, key, effect_fn, gen)
     end
+  end
+
+  defp use_effect_existing_cell(state, id, cell, existing_key, existing_cleanup, key, effect_fn, gen) do
+    if existing_key == key do
+      use_effect_deps_unchanged(state, id, cell, gen)
+    else
+      use_effect_deps_changed(state, id, existing_key, existing_cleanup, effect_fn, gen)
+    end
+  end
+
+  defp use_effect_deps_unchanged(state, id, cell, gen) do
+    new_cell = %{cell | gen: gen}
+    cells = Map.put(state.hook_cells, id, new_cell)
+    %{state | hook_cells: cells}
+  end
+
+  defp use_effect_deps_changed(state, id, key, existing_cleanup, effect_fn, gen) do
+    if is_function(existing_cleanup), do: existing_cleanup.()
+
+    cleanup = effect_fn.()
+    cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
+    cells = Map.put(state.hook_cells, id, cell)
+    %{state | hook_cells: cells}
+  end
+
+  defp use_effect_new_cell(state, id, key, effect_fn, gen) do
+    cleanup = effect_fn.()
+    cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
+    cells = Map.put(state.hook_cells, id, cell)
+    %{state | hook_cells: cells}
   end
 
   @spec gc(t()) :: t()

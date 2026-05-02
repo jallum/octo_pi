@@ -66,5 +66,4 @@ defmodule OctoPi.TUI.Components.Header do
       _ -> "dev"
     end
   end
-
 end

@@ -138,19 +138,6 @@ defmodule OctoPi.TUI.VDOM do
                   is_struct(term, VCursor)
 
   @doc "Returns true if term is a VNode struct."
-  @spec is_vnode_term(term()) :: boolean()
-  def is_vnode_term(term) do
-    case term do
-      %VText{} -> true
-      %VLines{} -> true
-      %VFlow{} -> true
-      %VRow{} -> true
-      %VBox{} -> true
-      %VZone{} -> true
-      %VMemo{} -> true
-      %VHole{} -> true
-      %VCursor{} -> true
-      _ -> false
-    end
-  end
+  @spec vnode_term?(term()) :: boolean()
+  def vnode_term?(term), do: is_vnode(term)
 end

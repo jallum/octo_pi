@@ -17,10 +17,11 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.Components.Diff
   alias OctoPi.TUI.Components.Footer
-  alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.Components.Header
   alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Components.Loader
   alias OctoPi.TUI.Components.LoginDialog
+  alias OctoPi.TUI.Components.Resources
   alias OctoPi.TUI.Components.SelectList
   alias OctoPi.TUI.Components.SessionSelector
   alias OctoPi.TUI.Components.SettingsList
@@ -29,11 +30,10 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.UserMessage
-  alias OctoPi.TUI.Components.Header
-  alias OctoPi.TUI.Components.Resources
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Paste
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Terminal.Resize
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.Transcript
@@ -1964,7 +1964,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
-
   describe "render/1 — notification truncation" do
     test "notification is rendered and truncated to width" do
       long_text = String.duplicate("x", 200)
@@ -3302,7 +3301,8 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "context expanded shows full paths" do
       resources =
-        fake_resources(%{context_files: [%{path: "/project/CLAUDE.md"}]})
+        %{context_files: [%{path: "/project/CLAUDE.md"}]}
+        |> fake_resources()
         |> Map.put(:expanded, true)
 
       s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: true}
