@@ -1,21 +1,23 @@
 defmodule OctoPi.TUI.VDOM.PaintTest do
   use ExUnit.Case, async: true
+
   alias OctoPi.TUI.VDOM
-  alias OctoPi.TUI.VDOM.{Paint, LineBuf}
+  alias OctoPi.TUI.VDOM.LineBuf
+  alias OctoPi.TUI.VDOM.Paint
   alias Paint.RenderCtx
 
   describe "basic nodes" do
     test "paint VText" do
       ctx = %RenderCtx{width: 80}
       node = %VDOM.VText{text: "hello", width: 5}
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       assert binary_from_iolist(iolist) =~ "hello"
     end
 
     test "paint VLines" do
       ctx = %RenderCtx{width: 80}
       node = %VDOM.VLines{lines: ["line1", "line2"]}
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
       assert result =~ "line1"
       assert result =~ "line2"
@@ -25,7 +27,7 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
     test "paint VFlow with text children" do
       ctx = %RenderCtx{width: 80}
       node = %VDOM.VFlow{children: ["a\n", "b\n", "c"]}
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
       lines = String.split(result, "\n")
       assert "a" in lines
@@ -36,7 +38,7 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
     test "paint VRow concatenates inline" do
       ctx = %RenderCtx{width: 80}
       node = %VDOM.VRow{children: ["a", "b", "c"]}
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
       # All on one line
       refute result =~ "\n"
@@ -48,7 +50,8 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
       node = %VDOM.VCursor{style: :bar}
 
       {_, cursor} =
-        Paint.paint(node, LineBuf.new() |> LineBuf.push("prefix"), ctx)
+        node
+        |> Paint.paint(LineBuf.push(LineBuf.new(), "prefix"), ctx)
         |> LineBuf.finalize()
 
       assert cursor == {0, 6, :bar}
@@ -59,7 +62,8 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
       node = %VDOM.VCursor{style: :block}
 
       {_, cursor} =
-        Paint.paint(node, LineBuf.new() |> LineBuf.push("prefix"), ctx)
+        node
+        |> Paint.paint(LineBuf.push(LineBuf.new(), "prefix"), ctx)
         |> LineBuf.finalize()
 
       assert cursor == {0, 6, :block}
@@ -69,7 +73,7 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
       ctx = %RenderCtx{width: 80}
       text = %VDOM.VText{text: "hello", width: 5}
       node = %VDOM.VFlow{children: [text]}
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       assert binary_from_iolist(iolist) =~ "hello"
     end
 
@@ -85,8 +89,9 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
 
       # Performance check (not enabled yet - wait for memo)
       :timer.tc(fn ->
-        Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+        node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       end)
+
       :ok
     end
 
@@ -100,40 +105,69 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
         cell: nil
       }
 
-      Paint.paint(memo, LineBuf.new(), ctx) |> LineBuf.finalize()
+      memo |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       # VMemo implementation is stubbed - just ensure it doesn't crash
       # Full memo tests come in d06.2
     end
 
-    test "VZone output zone with content" do
+    test "VZone single-line zone: both markers on that line" do
       ctx = %RenderCtx{width: 40}
+      zone = %VDOM.VZone{type: :prompt, id: "z1", children: [%VDOM.VLines{lines: ["hello"]}]}
 
-      children = [
-        %VDOM.VText{text: "output", width: 6},
-        "\n",
-        %VDOM.VText{text: "more", width: 4}
-      ]
-
-      zone = %VDOM.VZone{type: :output, id: "zone1", children: children}
-
-      {iolist, _} = Paint.paint(zone, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = zone |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
+      lines = result |> String.split("\n") |> Enum.reject(&(&1 == ""))
 
-      # VZone wrapping is stubbed - full implementation requires reconciler
-      # This test just ensures children are painted
-      assert result =~ "output"
-      assert result =~ "more"
+      assert length(lines) == 1
+      assert hd(lines) =~ "\e]133;A\a"
+      assert hd(lines) =~ "\e]133;B\a"
     end
 
-    test "VZone empty zone" do
+    test "VZone multi-line zone: open on first line, close on last line" do
+      ctx = %RenderCtx{width: 40}
+
+      zone = %VDOM.VZone{
+        type: :output,
+        id: "z2",
+        children: [%VDOM.VLines{lines: ["line1", "line2", "line3"]}]
+      }
+
+      {iolist, _} = zone |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
+      result = binary_from_iolist(iolist)
+      lines = result |> String.split("\n") |> Enum.reject(&(&1 == ""))
+
+      assert length(lines) == 3
+      assert hd(lines) =~ "\e]133;A\a"
+      refute hd(lines) =~ "\e]133;B\a"
+      assert List.last(lines) =~ "\e]133;B\a"
+      refute List.last(lines) =~ "\e]133;A\a"
+      assert lines |> Enum.at(1) |> then(&(not (&1 =~ "\e]133;")))
+    end
+
+    test "VZone empty zone: both markers on one flushed line" do
       ctx = %RenderCtx{width: 40}
       zone = %VDOM.VZone{type: :prompt, id: "empty", children: []}
 
-      {iolist, _} = Paint.paint(zone, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = zone |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
+      result = binary_from_iolist(iolist)
+      lines = result |> String.split("\n") |> Enum.reject(&(&1 == ""))
+
+      assert length(lines) == 1
+      assert hd(lines) =~ "\e]133;A\a"
+      assert hd(lines) =~ "\e]133;B\a"
+    end
+
+    test "VZone nested zones: no interference" do
+      ctx = %RenderCtx{width: 40}
+
+      inner = %VDOM.VZone{type: :prompt, id: "inner", children: [%VDOM.VLines{lines: ["hi"]}]}
+      outer = %VDOM.VZone{type: :output, id: "outer", children: [inner]}
+
+      {iolist, _} = outer |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
 
-      # Empty zone emits markers on a single line
-      assert result =~ "empty"
+      assert result =~ "hi"
+      assert result |> String.split("\e]133;A\a") |> length() == 3
     end
 
     test "VBox with border and padding" do
@@ -146,7 +180,7 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
         children: [%VDOM.VText{text: "content", width: 7}]
       }
 
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
 
       # Should contain border characters
@@ -167,7 +201,7 @@ defmodule OctoPi.TUI.VDOM.PaintTest do
         children: [%VDOM.VText{text: "x", width: 1}]
       }
 
-      {iolist, _} = Paint.paint(node, LineBuf.new(), ctx) |> LineBuf.finalize()
+      {iolist, _} = node |> Paint.paint(LineBuf.new(), ctx) |> LineBuf.finalize()
       result = binary_from_iolist(iolist)
 
       # Should have padded lines (spaces)

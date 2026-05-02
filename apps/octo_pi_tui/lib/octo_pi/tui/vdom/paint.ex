@@ -61,35 +61,18 @@ defmodule OctoPi.TUI.VDOM.Paint do
     end
   end
 
-  def paint(%VDOM.VZone{type: type, id: id, children: children}, buf, ctx) do
-    # OSC 133: prepend open to first line, append close+final to last.
-    open_seq = "\e]133;A;"
-    final_seq = "\e]133;B;"
+  def paint(%VDOM.VZone{type: _type, id: _id, children: children}, buf, ctx) do
+    open = "\e]133;A\a"
+    close = "\e]133;B\a\e]133;C\a"
 
-    open_with_attrs =
-      case type do
-        :prompt -> open_seq <> "type=prompt;"
-        :output -> open_seq <> "type=output;"
-        :command -> open_seq <> "type=command;"
-      end
-
-    open_full = open_with_attrs <> "id=" <> id <> "\e\\"
-    close_full = final_seq <> "id=" <> id <> "\e\\"
-
-    # To avoid a second pass, we emit open on first line, close on last.
-    # Strategy: paint children, track if any lines were emitted.
     before = buf.line_count
     buf = paint_kids(children, buf, ctx)
     after_count = buf.line_count
 
     if before == after_count do
-      # Empty zone: emit all three markers on a single line, then flush.
-      buf |> LineBuf.push(open_full) |> LineBuf.push(close_full) |> LineBuf.flush_line()
+      buf |> LineBuf.push(open) |> LineBuf.push(close) |> LineBuf.flush_line()
     else
-      # Zone had content: wrap via iodata manipulation.
-      # Prepend open to first line of emitted block, append close to last line.
-      # This requires zipping open/close into the iolist_rev structure.
-      wrap_zone(buf, open_full, close_full, after_count - before)
+      wrap_zone(buf, open, close, after_count - before)
     end
   end
 
@@ -215,10 +198,15 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
   defp wrap_zone(buf, _open, _close, 0), do: buf
 
-  defp wrap_zone(buf, _open, _close, _line_count) do
-    # FIXME: Actual zone wrapping requires manipulating iolist_rev structure.
-    # For now we emit markers via VZone painting logic at call site.
-    buf
+  defp wrap_zone(buf, open, close, n) do
+    first_idx = 2 * (n - 1)
+
+    iolist_rev =
+      buf.iolist_rev
+      |> List.update_at(0, fn l -> [close | List.wrap(l)] end)
+      |> List.update_at(first_idx, fn l -> [open | List.wrap(l)] end)
+
+    %{buf | iolist_rev: iolist_rev}
   end
 
   ## Simulated memo cell (reconciler will replace this in d06.2)
