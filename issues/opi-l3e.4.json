@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-l3e.5"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-l3e.3"
+  ],
   "created": "2026-05-02T15:22:56Z",
   "description": "Update `interactive.ex` to use the new unified `Input` API.\n\n**Current Code (lines ~1959-1963):**\n```elixir\ninput_vnode = %VDOM.VLines{lines: Components.Input.render(input, width)}\ndropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}\n...\nchildren: [\n  ...\n  input_vnode,\n  dropdown_vnode,  # \u003c-- separate child, should be part of Input\n  ...\n]\n```\n\n**Changes:**\n\n1. **Simplify `build_screen/2`:**\n```elixir\n# BEFORE:\ninput_vnode = %VDOM.VLines{lines: Components.Input.render(input, width)}\ndropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}\n...\nchildren: [\n  ...\n  input_vnode,\n  dropdown_vnode,  # separate child\n  ...\n]\n\n# AFTER:\ninput_vnode = %VDOM.VLines{lines: Components.Input.render(input, width)}\n...\nchildren: [\n  ...\n  input_vnode,  # dropdown is now inside Input.render output\n  ...\n]\n```\n\n2. **Remove separate `dropdown_vnode`:**\nDelete the line that creates `dropdown_vnode` and remove it from the children list.\n\n3. **Update layout calculation:**\n```elixir\n# BEFORE:\nlayout = %{\n  footer_height: vnode_height(footer_vnode, ctx),\n  dropdown_height: vnode_height(dropdown_vnode, ctx),  # separate vnode\n  notification_height: vnode_height(notif_vnode, ctx)\n}\n\n# AFTER:\nlayout = %{\n  footer_height: vnode_height(footer_vnode, ctx),\n  dropdown_height: Components.Input.dropdown_height(state.input),  # accessor\n  notification_height: vnode_height(notif_vnode, ctx)\n}\n```\n\n4. **Update cursor position calculation (lines ~1130-1140):**\n```elixir\n# The cursor_rc already accounts for dropdown height internally,\n# so the calculation stays the same but uses the new API:\n\n# BEFORE (had to add dropdown height):\ncursor_row + dropdown_height + notification_height + 1\n\n# AFTER:\n# cursor_rc now returns position relative to where the field STARTED in the output,\n# INCLUDING dropdown if visible. So the offset math stays the same.\n```\n\n5. **Search for all usages of `render_dropdown`:**\n```bash\ngrep -n \"render_dropdown\" apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n```\nRemove all calls to `Components.Input.render_dropdown`.\n\n6. **Verify key handling:**\nThe key handling in `interactive.ex` should NOT change:\n- `Input.handle_key/2` returns `{input, events}` for autocomplete navigation\n- This still works because `Input` now owns the dropdown internally\n\n**File to Edit:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`\n\n**Search Patterns:**\n- `Components.Input.render_dropdown`\n- `dropdown_vnode`\n- `%VDOM.VLines{lines: ... Input.render_dropdown ...}`\n\n**Exit Criteria:**\n- `interactive.ex` compiles without errors\n- No calls to `Input.render_dropdown/2` remain\n- `build_screen/2` passes single `input_vnode` to the VFlow\n- Layout map uses `Input.dropdown_height/1`",
   "id": "opi-l3e.4",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Refactor Input to own dropdown state and composition",
   "type": "task",
-  "updated_at": "2026-05-02T15:24:22Z"
+  "updated_at": "2026-05-02T15:24:30Z"
 }
