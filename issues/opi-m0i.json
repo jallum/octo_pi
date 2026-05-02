@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-rv3"
+  ],
   "blocks": [],
   "created": "2026-05-02T00:46:16Z",
   "description": "Currently a turn is scattered across multiple Transcript entries: AssistantHeader (key turn-N:header), N block entries (key turn-N:block-K), AssistantStatus (key turn-N:status). weld_assistant_turns exists only because no single entry owns the turn.\n\nReplace with a single AssistantMessage Transcript entry per turn (key turn-N). Its render/2 returns %VZone{type: :output} wrapping all content for text turns, or the content VFlow directly for tool-use turns.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/assistant_message.ex\n\nStruct:\n  defstruct blocks: [],          # [{id, :text|:thinking, snapshot, finalized?}]\n            has_tool_calls?: false,\n            stop_reason: nil,\n            error_message: nil\n\nStreaming protocol:\n  def update(%__MODULE__{} = self, {:upsert_block, id, kind, snapshot}), do: ...\n  def update(%__MODULE__{} = self, {:finalize_block, id}),               do: ...\n  def update(%__MODULE__{} = self, {:set_tool_calls, bool}),             do: ...\n  def finalize(%__MODULE__{} = self, {reason, error_msg}),               do: ...\n\nRender:\n  def render(%__MODULE__{blocks: []} = self, _ctx),\n    do: {self, %VDOM.VFlow{children: []}, nil}\n\n  def render(%__MODULE__{has_tool_calls?: true} = self, ctx),\n    do: {self, content_vflow(self, ctx), nil}   # no zone for tool-use turns\n\n  def render(%__MODULE__{} = self, ctx) do\n    vnode = %VDOM.VZone{type: :output, id: \"assistant\",\n                        children: content_vflow(self, ctx)}\n    {self, vnode, nil}\n  end\n\n  defp content_vflow/2 renders each block via its component (TextBlock, ThinkingBlock, etc.), appends status line if stop_reason warrants it (mirrors AssistantStatus logic)\n\nEvent handler changes in interactive.ex:\n- MessageStart (line 1244): append %AssistantMessage{} with key \"turn-N\" instead of %AssistantHeader{}\n- MessageBlockStart/Delta/End (lines 1264–1284): Transcript.update(t, \"turn-N\", {:upsert_block, ...}) and {:finalize_block, ...} instead of appending/upserting separate block entries\n- MessageEnd (line 1286): Transcript.update then Transcript.finalize({stop_reason, error_msg}) instead of appending %AssistantStatus{}\n- maybe_update_header_tool_flag/3 (line 1298): logic moves into :set_tool_calls update message — delete the helper\n\n⚠ Read Transcript.update/3 protocol at transcript.ex:77 before implementing — entry.__struct__.update(entry, snapshot) call must match update/2 clauses above.\n⚠ render/2 must be safe to call mid-stream (partial blocks, no stop_reason). Empty blocks → empty VFlow. In-flight blocks render current snapshot.\n⚠ Read append_block/3, upsert_block/3, finalize_block/2 in interactive.ex before cutting — full logic must transfer into update message handlers.\n\nTests: Complete text turn → VZone with content. Tool-use turn → VFlow, no zone. Partial stream (no status) → content VFlow, no zone. Error stop → error line in content. Empty → empty VFlow.",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "AssistantMessage composite component",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:16Z"
+  "updated_at": "2026-05-02T00:46:51Z"
 }
