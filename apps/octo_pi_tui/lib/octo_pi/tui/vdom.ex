@@ -94,7 +94,7 @@ defmodule OctoPi.TUI.VDOM do
 
     @type t :: %__MODULE__{
             key: term(),
-            thunk: (() -> VFlow.children()),
+            thunk: (-> VFlow.children()),
             cell: reference() | nil
           }
   end
@@ -128,14 +128,14 @@ defmodule OctoPi.TUI.VDOM do
 
   defguard is_vnode(term)
            when is_struct(term, VText) or
-                is_struct(term, VLines) or
-                is_struct(term, VFlow) or
-                is_struct(term, VRow) or
-                is_struct(term, VBox) or
-                is_struct(term, VZone) or
-                is_struct(term, VMemo) or
-                is_struct(term, VHole) or
-                is_struct(term, VCursor)
+                  is_struct(term, VLines) or
+                  is_struct(term, VFlow) or
+                  is_struct(term, VRow) or
+                  is_struct(term, VBox) or
+                  is_struct(term, VZone) or
+                  is_struct(term, VMemo) or
+                  is_struct(term, VHole) or
+                  is_struct(term, VCursor)
 
   @doc "Returns true if term is a VNode struct."
   @spec is_vnode_term(term()) :: boolean()

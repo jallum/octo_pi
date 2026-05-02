@@ -16,7 +16,8 @@ defmodule OctoPi.TUI.Compat do
   wrapped vs. direct.
   """
 
-  alias OctoPi.TUI.{Component, RenderContext}
+  alias OctoPi.TUI.Component
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi
 
@@ -36,7 +37,7 @@ defmodule OctoPi.TUI.Compat do
     # Call the old contract render function directly. If it crashes, let it bubble.
     lines = module.render(state, width)
 
-    unless is_list(lines) do
+    if !is_list(lines) do
       raise ArgumentError,
             "Compat.wrap_old_contract: expected [binary()] from #{module}.render/2, got #{inspect(lines)}"
     end

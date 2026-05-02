@@ -1,5 +1,6 @@
 defmodule OctoPi.TUI.VDOMTest do
   use ExUnit.Case, async: true
+
   alias OctoPi.TUI.VDOM
 
   describe "VNode types" do

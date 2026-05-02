@@ -3,7 +3,9 @@ defmodule OctoPi.TUI.UI.State do
   Pure-functional reconciler state for the React-style component system.
   """
 
-  alias OctoPi.TUI.{RenderContext, Key}
+  alias OctoPi.TUI.Key
+  alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM.LineBuf
 
   defstruct [
     :root_component,
@@ -128,8 +130,7 @@ defmodule OctoPi.TUI.UI.State do
 
   @spec handle_key(t(), Key.t()) :: t()
   def handle_key(%__MODULE__{hook_cells: cells} = state, key) do
-    cells
-    |> Enum.reduce(state, fn {id, cell}, acc_state ->
+    Enum.reduce(cells, state, fn {id, cell}, acc_state ->
       case cell do
         %KeyCell{spec: :any, handler: handler} ->
           handler.(acc_state, key, id)
@@ -162,9 +163,7 @@ defmodule OctoPi.TUI.UI.State do
     vnode = component.render(state.props, ctx)
 
     # Paint VDOM to iodata
-    {iodata, cursor} = OctoPi.TUI.VDOM.LineBuf.finalize(
-      OctoPi.TUI.VDOM.Paint.paint(vnode, OctoPi.TUI.VDOM.LineBuf.new(), render_ctx)
-    )
+    {iodata, cursor} = LineBuf.finalize(OctoPi.TUI.VDOM.Paint.paint(vnode, LineBuf.new(), render_ctx))
 
     state = %{state | dirty: false, dirty_since_ms: nil, last_paint_at_ms: now, hook_cells: ctx.state.hook_cells}
 
@@ -175,19 +174,22 @@ defmodule OctoPi.TUI.UI.State do
 
   # Format cursor position into ANSI sequence
   defp format_cursor(nil), do: ""
+
   defp format_cursor({row, col, style}) do
-    style_seq = case style do
-      :bar -> "\e[5 q"
-      :block -> "\e[1 q"
-      :underline -> "\e[3 q"
-      _ -> "\e[5 q"  # default bar
-    end
+    style_seq =
+      case style do
+        :bar -> "\e[5 q"
+        :block -> "\e[1 q"
+        :underline -> "\e[3 q"
+        # default bar
+        _ -> "\e[5 q"
+      end
 
     # cursor is 1-based in ANSI
     "\e[?25h#{style_seq}\e[#{row + 1};#{col + 1}H"
   end
 
-  @spec use_state(t(), cell_id(), term() | (() -> term())) :: {{term(), (term() -> t())}, t()}
+  @spec use_state(t(), cell_id(), term() | (-> term())) :: {{term(), (term() -> t())}, t()}
   def use_state(%__MODULE__{hook_cells: cells, gen: gen} = state, id, init) do
     case cells do
       %{^id => %StateCell{value: value}} ->
@@ -219,7 +221,7 @@ defmodule OctoPi.TUI.UI.State do
     end
   end
 
-  @spec use_memo(t(), cell_id(), term(), (() -> term())) :: {term(), t()}
+  @spec use_memo(t(), cell_id(), term(), (-> term())) :: {term(), t()}
   def use_memo(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, thunk) do
     case cells do
       %{^id => %MemoCell{key: ^key, gen: ^gen} = cell} ->
@@ -248,12 +250,12 @@ defmodule OctoPi.TUI.UI.State do
 
     case cells do
       %{^id => %FrameCell{gen: ^gen} = cell} ->
-        if cell.deadline_ms != deadline do
+        if cell.deadline_ms == deadline do
+          {frame, state}
+        else
           new_cell = %{cell | deadline_ms: deadline}
           cells = Map.put(cells, id, new_cell)
           {frame, %{state | hook_cells: cells}}
-        else
-          {frame, state}
         end
 
       _ ->
@@ -270,9 +272,8 @@ defmodule OctoPi.TUI.UI.State do
     %{state | hook_cells: cells}
   end
 
-  @spec use_effect(t(), cell_id(), term(), (() -> term() | nil), [term()]) :: t()
+  @spec use_effect(t(), cell_id(), term(), (-> term() | nil), [term()]) :: t()
   def use_effect(%__MODULE__{hook_cells: cells, gen: gen} = state, id, key, effect_fn, _deps) do
-    
     case cells do
       %{^id => %EffectCell{key: existing_key, cleanup: existing_cleanup} = cell} ->
         # Cell exists - check if deps changed
@@ -284,13 +285,13 @@ defmodule OctoPi.TUI.UI.State do
         else
           # Deps changed - run cleanup then effect
           if is_function(existing_cleanup), do: existing_cleanup.()
-          
+
           cleanup = effect_fn.()
           new_cell = %EffectCell{key: key, mount: effect_fn, cleanup: cleanup, gen: gen}
           cells = Map.put(cells, id, new_cell)
           %{state | hook_cells: cells}
         end
-        
+
       _ ->
         # New cell - run effect and store cleanup
         cleanup = effect_fn.()
@@ -302,24 +303,24 @@ defmodule OctoPi.TUI.UI.State do
 
   @spec gc(t()) :: t()
   def gc(%__MODULE__{hook_cells: cells, gen: gen} = state) do
-    {cells_to_keep, _cells_to_drop} = 
-      cells
-      |> Enum.split_with(fn {_id, cell} ->
+    {cells_to_keep, _cells_to_drop} =
+      Enum.split_with(cells, fn {_id, cell} ->
         cell.gen >= gen - 1
       end)
-    
+
     # Call cleanup on dropped cells
     dropped_cells = Map.drop(cells, Enum.map(cells_to_keep, fn {id, _} -> id end))
-    
+
     Enum.each(dropped_cells, fn {_id, cell} ->
       case cell do
         %EffectCell{cleanup: cleanup} when is_function(cleanup) ->
           cleanup.()
+
         _ ->
           :ok
       end
     end)
-    
+
     %{state | hook_cells: Map.new(cells_to_keep)}
   end
 end

@@ -1,7 +1,7 @@
 defmodule OctoPi.TUI.UI.State.TestComponent do
   @moduledoc false
-  alias OctoPi.TUI.UI.State
   alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.UI.State
 
   defstruct [:label]
 
@@ -14,9 +14,10 @@ end
 
 defmodule OctoPi.TUI.UI.StateTest do
   use ExUnit.Case, async: true
-  alias OctoPi.TUI.UI.State
-  alias OctoPi.TUI.RenderContext
+
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.UI.State
 
   describe "new/2" do
     test "creates initial state" do
@@ -50,7 +51,7 @@ defmodule OctoPi.TUI.UI.StateTest do
 
   describe "tick/2" do
     test "increments frame counter" do
-      state = State.new(State.TestComponent, %{}) |> State.tick(0)
+      state = State.TestComponent |> State.new(%{}) |> State.tick(0)
       assert state.frame == 1
       state = State.tick(state, 0)
       assert state.frame == 2
@@ -59,7 +60,7 @@ defmodule OctoPi.TUI.UI.StateTest do
 
   describe "next_wait_ms/1" do
     test "returns max_staleness_ms when dirty" do
-      state = State.new(State.TestComponent, %{}) |> State.mark_dirty(100)
+      state = State.TestComponent |> State.new(%{}) |> State.mark_dirty(100)
       wait = State.next_wait_ms(state)
       assert wait <= 16
       assert wait >= 0
@@ -158,7 +159,7 @@ defmodule OctoPi.TUI.UI.StateTest do
 
   describe "use_frame/3" do
     test "initializes frame cell with deadline" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:frame, 0}
 
       {frame, state2} = State.use_frame(state, id, 100)
@@ -171,7 +172,7 @@ defmodule OctoPi.TUI.UI.StateTest do
 
   describe "handle_key/2" do
     test "routes key to matching handler" do
-      state = State.new(State.TestComponent, %{}) |> State.tick(0)
+      state = State.TestComponent |> State.new(%{}) |> State.tick(0)
 
       # Start with clean state
       state = %{state | dirty: false, dirty_since_ms: nil}
@@ -234,128 +235,134 @@ defmodule OctoPi.TUI.UI.StateTest do
 
   describe "use_effect/5" do
     test "runs effect on first mount" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:effect, 0}
-      
+
       effect_called = make_ref()
       :ets.new(:effect_calls, [:named_table, :public])
       :ets.insert(:effect_calls, {effect_called, false})
-      
+
       effect = fn ->
         :ets.insert(:effect_calls, {effect_called, true})
       end
-      
+
       state_after = State.use_effect(state, id, :mount, effect, [])
-      
+
       [{_, called}] = :ets.lookup(:effect_calls, effect_called)
       assert called == true
       assert Map.has_key?(state_after.hook_cells, id)
     end
-    
+
     test "does not re-run effect when deps unchanged" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:effect, 0}
       key = :stable
-      
+
       call_count = make_ref()
       :ets.new(:effect_counts, [:named_table, :public])
       :ets.insert(:effect_counts, {call_count, 0})
-      
+
       effect = fn ->
         [{_, count}] = :ets.lookup(:effect_counts, call_count)
         :ets.insert(:effect_counts, {call_count, count + 1})
       end
-      
+
       # First call
       state2 = State.use_effect(state, id, key, effect, [])
       [{_, count1}] = :ets.lookup(:effect_counts, call_count)
       assert count1 == 1
-      
+
       # Second call with same deps
 
       _state3 = State.use_effect(state2, id, key, effect, [])
       [{_, count2}] = :ets.lookup(:effect_counts, call_count)
-      assert count2 == 1  # Should still be 1, not re-run
+      # Should still be 1, not re-run
+      assert count2 == 1
     end
-    
+
     test "re-runs effect when deps change" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:effect, 0}
-      
+
       call_count = make_ref()
       :ets.new(:effect_counts, [:named_table, :public])
       :ets.insert(:effect_counts, {call_count, 0})
-      
+
       effect = fn ->
         [{_, count}] = :ets.lookup(:effect_counts, call_count)
         :ets.insert(:effect_counts, {call_count, count + 1})
       end
-      
+
       # First call with deps [1]
       state2 = State.use_effect(state, id, :deps1, effect, [1])
       [{_, count1}] = :ets.lookup(:effect_counts, call_count)
       assert count1 == 1
-      
+
       # Second call with different deps [2]
 
       _state3 = State.use_effect(state2, id, :deps2, effect, [2])
       [{_, count2}] = :ets.lookup(:effect_counts, call_count)
-      assert count2 == 2  # Should be 2, re-run with new deps
+      # Should be 2, re-run with new deps
+      assert count2 == 2
     end
-    
+
     test "calls cleanup on deps change" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:effect, 0}
-      
+
       cleanup_called = make_ref()
       :ets.new(:cleanup_calls, [:named_table, :public])
       :ets.insert(:cleanup_calls, {cleanup_called, 0})
-      
+
       effect = fn ->
-        fn ->  # cleanup function
+        # cleanup function
+        fn ->
           [{_, count}] = :ets.lookup(:cleanup_calls, cleanup_called)
           :ets.insert(:cleanup_calls, {cleanup_called, count + 1})
         end
       end
-      
+
       # First call
       state2 = State.use_effect(state, id, :key1, effect, [1])
       [{_, cleanup1}] = :ets.lookup(:cleanup_calls, cleanup_called)
-      assert cleanup1 == 0  # No cleanup yet
-      
+      # No cleanup yet
+      assert cleanup1 == 0
+
       # Second call with different deps - cleanup should run
 
       _state3 = State.use_effect(state2, id, :key2, effect, [2])
       [{_, cleanup2}] = :ets.lookup(:cleanup_calls, cleanup_called)
-      assert cleanup2 == 1  # Cleanup ran once
+      # Cleanup ran once
+      assert cleanup2 == 1
     end
-    
+
     test "calls cleanup on gc" do
-      state = State.new(State.TestComponent, %{}) 
+      state = State.new(State.TestComponent, %{})
       id = {:effect, 0}
-      
+
       cleanup_called = make_ref()
       :ets.new(:cleanup_gc_calls, [:named_table, :public])
       :ets.insert(:cleanup_gc_calls, {cleanup_called, 0})
-      
+
       effect = fn ->
-        fn ->  # cleanup function
+        # cleanup function
+        fn ->
           [{_, count}] = :ets.lookup(:cleanup_gc_calls, cleanup_called)
           :ets.insert(:cleanup_gc_calls, {cleanup_called, count + 1})
         end
       end
-      
+
       # Create effect in gen 0
       state2 = State.use_effect(state, id, :gc_test, effect, [])
-      
+
       # Advance gen to make cell eligible for GC (gen 0 < gen 2 - 1)
       state3 = %{state2 | gen: 2}
       state4 = State.gc(state3)
-      
+
       # Verify cleanup ran
       [{_, cleanup_count}] = :ets.lookup(:cleanup_gc_calls, cleanup_called)
       assert cleanup_count == 1
-      
+
       # Verify cell was removed
       refute Map.has_key?(state4.hook_cells, id)
     end
@@ -369,7 +376,7 @@ defmodule OctoPi.TUI.UI.StateTest do
       {state2, iodata, cursor} = State.paint(state, ctx)
 
       assert is_list(iodata)
-      assert state2.last_paint_at_ms != nil
+      assert state2.last_paint_at_ms
       assert state2.dirty == false
       assert state2.dirty_since_ms == nil
       assert cursor == ""

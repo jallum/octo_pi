@@ -3,6 +3,7 @@ defmodule OctoPi.Coder.CLITest do
 
   # See RpcTest: agent turn-Task teardown can race session stop and
   # log an expected error.
+  alias OctoPi.AI.Content.Text
   alias OctoPi.Coder.CLI
 
   @moduletag capture_log: true
@@ -194,7 +195,7 @@ defmodule OctoPi.Coder.CLITest do
     end
 
     test "print mode accepts the opts map produced by parse_args" do
-      final = print_assistant([%OctoPi.AI.Content.Text{text: "ok"}], :stop)
+      final = print_assistant([%Text{text: "ok"}], :stop)
 
       FakeTransport.set_script([
         [
@@ -266,7 +267,7 @@ defmodule OctoPi.Coder.CLITest do
           provider: :fake,
           model: "fake-model",
           timestamp: 0,
-          content: [%OctoPi.AI.Content.Text{text: "hi"}],
+          content: [%Text{text: "hi"}],
           stop_reason: :stop,
           usage: %OctoPi.AI.Usage{}
         }

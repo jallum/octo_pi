@@ -17,15 +17,18 @@ defmodule OctoPi.TUI.Debug do
           %{msg_count: 10, streaming?: true},
           %{type: "large"}
         )
+
       "small" ->
-         :telemetry.execute(
+        :telemetry.execute(
           [:octo_pi_tui, :transcript, :render],
           %{msg_count: 1, streaming?: false},
           %{type: "small"}
         )
+
       _ ->
         :ok
     end
+
     :ok
   end
 end

@@ -55,7 +55,7 @@ defmodule OctoPi.TUI.VDOM.LineBuf do
     # Called by paint_kids when it knows the total width upfront.
     %{
       buf
-      | line_iolist_rev: Enum.reverse(segments) ++ buf.line_iolist_rev,
+      | line_iolist_rev: Enum.reverse(segments, buf.line_iolist_rev),
         visible_width: buf.visible_width + total_width
     }
   end

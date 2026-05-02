@@ -1976,9 +1976,6 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     ctx = render_ctx(state)
 
-    banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
-    resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
-
     {transcript_vnode, transcript2} =
       RenderTelemetry.with_transcript_render(
         %{
@@ -1990,8 +1987,6 @@ defmodule OctoPi.TUI.Interactive do
 
     state = %{state | transcript: transcript2}
 
-    loader_lines = render_loader(loader, width, state.theme)
-
     pending_lines =
       render_pending_messages(
         state.pending_steering,
@@ -2000,20 +1995,19 @@ defmodule OctoPi.TUI.Interactive do
         width
       )
 
-    dropdown_lines = Components.Input.render_dropdown(state.input, width)
-    notification_lines = render_notification(state.notification, width)
-    footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
+    footer_vnode = %VDOM.VLines{
+      lines: footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
+    }
 
-    footer_vnode = %VDOM.VLines{lines: footer_lines_val}
-    dropdown_vnode = %VDOM.VLines{lines: dropdown_lines}
-    notif_vnode = %VDOM.VLines{lines: notification_lines}
+    dropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}
+    notif_vnode = %VDOM.VLines{lines: render_notification(state.notification, width)}
 
     tree = %VDOM.VFlow{
       children: [
-        %VDOM.VLines{lines: banner_lines},
-        %VDOM.VLines{lines: resource_lines},
+        %VDOM.VLines{lines: header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)},
+        %VDOM.VLines{lines: render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)},
         transcript_vnode,
-        %VDOM.VLines{lines: loader_lines},
+        %VDOM.VLines{lines: render_loader(loader, width, state.theme)},
         %VDOM.VLines{lines: pending_lines},
         input_vnode,
         dropdown_vnode,
@@ -2022,8 +2016,11 @@ defmodule OctoPi.TUI.Interactive do
       ]
     }
 
-    buf = Paint.paint(tree, LineBuf.new(), ctx)
-    {iodata, _cursor} = LineBuf.finalize(buf)
+    {iodata, _cursor} =
+      tree
+      |> Paint.paint(LineBuf.new(), ctx)
+      |> LineBuf.finalize()
+
     all = iodata |> IO.iodata_to_binary() |> String.split("\n")
 
     layout = %{
@@ -2032,7 +2029,7 @@ defmodule OctoPi.TUI.Interactive do
       notification_height: vnode_height(notif_vnode, ctx)
     }
 
-    {[""] ++ all, layout, state}
+    {all, layout, state}
   end
 
   defp build_custom_theme(%{theme: nil}), do: %{fg: fn _color, text -> text end}

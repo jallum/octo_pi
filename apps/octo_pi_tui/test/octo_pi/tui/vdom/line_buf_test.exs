@@ -1,5 +1,6 @@
 defmodule OctoPi.TUI.VDOM.LineBufTest do
   use ExUnit.Case, async: true
+
   alias OctoPi.TUI.VDOM.LineBuf
 
   describe "basic operations" do
@@ -19,12 +20,12 @@ defmodule OctoPi.TUI.VDOM.LineBufTest do
     end
 
     test "push handles ANSI codes in width calculation" do
-      buf = LineBuf.new() |> LineBuf.push("\e[31mred\e[0m")
+      buf = LineBuf.push(LineBuf.new(), "\e[31mred\e[0m")
       assert buf.visible_width == 3
     end
 
     test "push_many adds multiple segments with known width" do
-      buf = LineBuf.new() |> LineBuf.push_many(["a", "b", "c"], 3)
+      buf = LineBuf.push_many(LineBuf.new(), ["a", "b", "c"], 3)
       assert buf.line_iolist_rev == ["c", "b", "a"]
       assert buf.visible_width == 3
     end
@@ -51,7 +52,13 @@ defmodule OctoPi.TUI.VDOM.LineBufTest do
     end
 
     test "mark_cursor last call wins" do
-      buf = LineBuf.new() |> LineBuf.push("a") |> LineBuf.mark_cursor(:bar) |> LineBuf.push("b") |> LineBuf.mark_cursor(:underline)
+      buf =
+        LineBuf.new()
+        |> LineBuf.push("a")
+        |> LineBuf.mark_cursor(:bar)
+        |> LineBuf.push("b")
+        |> LineBuf.mark_cursor(:underline)
+
       {_, cursor} = LineBuf.finalize(buf)
       assert cursor == {0, 2, :underline}
     end
@@ -87,12 +94,12 @@ defmodule OctoPi.TUI.VDOM.LineBufTest do
 
   describe "iodata handling" do
     test "nested iodata" do
-      buf = LineBuf.new() |> LineBuf.push(["a", "b", ["c", "d"]])
+      buf = LineBuf.push(LineBuf.new(), ["a", "b", ["c", "d"]])
       assert buf.visible_width == 4
     end
 
     test "finalize with pending line" do
-      buf = LineBuf.new() |> LineBuf.push("pending")
+      buf = LineBuf.push(LineBuf.new(), "pending")
       {iolist, _} = LineBuf.finalize(buf)
       assert is_list(iolist)
     end

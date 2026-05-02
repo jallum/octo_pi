@@ -1,13 +1,14 @@
 defmodule OctoPi.TUI.CompatTest.BadLegacy do
+  @moduledoc false
   defstruct [:value]
   def render(_, _), do: :not_a_list
 end
 
 defmodule OctoPi.TUI.CompatTest.LegacyText do
   @moduledoc false
-  defstruct [:text]
-
   alias OctoPi.TUI.RenderContext
+
+  defstruct [:text]
 
   # Old contract: render(state, width) :: [binary()]
   def render(%__MODULE__{text: text}, width) when is_integer(width) do
@@ -22,9 +23,12 @@ end
 
 defmodule OctoPi.TUI.CompatTest do
   use ExUnit.Case, async: true
-  alias OctoPi.TUI.{Compat, VDOM, RenderContext}
-  alias OctoPi.TUI.CompatTest.LegacyText
+
+  alias OctoPi.TUI.Compat
   alias OctoPi.TUI.CompatTest.BadLegacy
+  alias OctoPi.TUI.CompatTest.LegacyText
+  alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM
 
   describe "wrap_old_contract" do
     test "wraps legacy component as VLines" do
@@ -50,6 +54,7 @@ defmodule OctoPi.TUI.CompatTest do
 
     test "empty lines" do
       defmodule EmptyLegacy do
+        @moduledoc false
         def render(_, _), do: []
       end
 
@@ -73,6 +78,7 @@ defmodule OctoPi.TUI.CompatTest do
 
     test "rejects invalid return type" do
       defmodule BadTranscript do
+        @moduledoc false
         def render(_, _), do: {:bad, :shape}
       end
 
