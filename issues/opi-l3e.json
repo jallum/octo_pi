@@ -3,12 +3,12 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-02T15:22:37Z",
-  "description": "",
+  "description": "Refactor the monolithic Input component into a proper container that owns its dropdown.\n\n**Current Problem:**\n- `input.ex` is ~900 lines mixing text editing, history, autocomplete state, and dropdown rendering\n- The dropdown is rendered separately in `interactive.ex` (lines ~1960-1963):\n  ```\n  input_vnode = %VDOM.VLines{lines: Components.Input.render(input, width)}\n  dropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}\n  ```\n- Key handling dispatch is split between Input (for autocomplete navigation) and Interactive\n- Cursor calculation in Interactive must manually account for `dropdown_height`\n\n**Goal:**\n- Input becomes a container that owns the dropdown\n- Single `render/2` call returns the complete input area (field + dropdown)\n- Public API remains backward compatible\n- Cursor position accounts for dropdown when present\n\n**Ticket Order:**\n1. `opi-l3e.2` — Extract `Input.Dropdown` module\n2. `opi-l3e.3` — Refactor `Input` to own both and compose them  \n3. `opi-l3e.4` — Update `Interactive.ex` to use new API\n4. `opi-l3e.5` — End-to-end acceptance testing\n\n**Read First:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/input.ex` — the monolithic component\n- `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex` — where Input is used\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/container.ex` — simple container pattern\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/select_list.ex` — selector component for reference\n\n**Exit Criteria:**\n- `mix pi` runs in tmux without errors\n- Typing in the input field works correctly\n- Autocomplete dropdown appears when typing `/`\n- Arrow keys navigate suggestions\n- Tab accepts suggestion, Enter accepts and submits\n- Escape dismisses dropdown\n- All existing unit tests pass",
   "id": "opi-l3e",
   "labels": [],
   "priority": 2,
   "status": "open",
   "title": "Refactor Input into a proper container component",
   "type": "epic",
-  "updated_at": "2026-05-02T15:22:37Z"
+  "updated_at": "2026-05-02T15:23:11Z"
 }
