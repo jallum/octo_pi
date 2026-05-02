@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-fq0"
+  ],
   "created": "2026-05-02T00:45:11Z",
   "description": "Mechanical prerequisite for all other tickets. Every component that currently returns {self, [binary()], frame_ms} is updated to return {self, %VLines{lines: lines}, frame_ms}. Behavior is identical — VLines wraps the same bytes. The Transcript, interactive.ex, and build_screen are updated to work with VNodes throughout.\n\nChanges:\n- transcript.ex: cache type annotation %{id() =\u003e VDOM.t()}, render/2 typespec, do_render cache stores vnode not lines, replace lines_only/1 with as_vflow/1\n- interactive.ex: add vnode_height/2 helper, add render_ctx/1 helper, rewrite build_screen main clause to assemble %VFlow{} tree and call Paint.paint once, update render_transcript/2 signature (transcript, ctx) → {VDOM.t(), transcript}, update send_render to pass input_vnode\n- All components in apps/octo_pi_tui/lib/octo_pi/tui/components/ plus transcript entries (AssistantHeader, AssistantStatus, UserMessage, TextBlock, ThinkingBlock, ToolExecution, etc.): change {self, lines, frame_ms} → {self, %VLines{lines: lines}, frame_ms}\n\nKey helpers to add to interactive.ex:\n  defp vnode_height(vnode, ctx), do: Paint.paint(vnode, LineBuf.new(), ctx).line_count\n  defp render_ctx(state), do: %OctoPi.TUI.RenderContext{theme: state.theme, width: state.width, padding_x: 1, hide_thinking: not state.thinking_visible, hidden_thinking_label: \"Thinking...\"}\n\nNew build_screen assembles %VFlow{children: [header, loaded_resources, transcript_vnode, loader, pending_messages, input_vnode, dropdown_vnode, notif_vnode, footer_vnode]}, calls Paint.paint once, splits iodata to lines, computes layout via vnode_height.\n\nInvariants to preserve:\n- build_screen returns {[binary()], %{footer_height:, dropdown_height:, notification_height:}, state}\n- transcript cache mutation: state = %{state | transcript: transcript2} at interactive.ex:1982\n- custom_widget bypass clause at line 1959 left untouched\n\nTests: mix compile clean. mix test green. mix pi in tmux — screen renders identically.",
   "id": "opi-1da",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "Component contract migration: render/2 returns VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:45:11Z"
+  "updated_at": "2026-05-02T00:46:49Z"
 }

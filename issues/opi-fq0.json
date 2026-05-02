@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-1da"
+  ],
   "blocks": [],
   "created": "2026-05-02T00:45:20Z",
   "description": "New component file returning a proper %VFlow{} tree — no %VLines{} wrapper needed. Replaces render_resource_sections/3 and helpers in interactive.ex.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/loaded_resources.ex\n\nSpec: render(map() | nil, boolean(), RenderContext.t()) :: VDOM.t()\n- nil → %VDOM.VFlow{children: []}\n- resources, expanded, ctx → %VFlow{children: sections interspersed with blank separators}\n\nEach section: heading VText (Theme.fg :md_heading) + body VText items (Theme.fg :dim). Collapsed: comma-joined names on one line. Expanded: one VText per item.\n\nDelete from interactive.ex: render_resource_sections/3, render_context_section/3, render_skills_section/3, render_prompts_section/3, section_header/2\n\nTests: nil → empty VFlow. Collapsed: heading + comma line. Expanded: heading + one VText per item. Multiple sections: blank separators. Paint to LineBuf and verify byte output matches previous [binary()] output.",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "LoadedResources component — VNode tree",
   "type": "task",
-  "updated_at": "2026-05-02T00:45:20Z"
+  "updated_at": "2026-05-02T00:46:49Z"
 }
