@@ -7,9 +7,9 @@ defmodule OctoPi.Coder.CLI do
     selected mode. Returns an integer exit code.
   """
 
+  alias OctoPi.Agent
   alias OctoPi.AI.Model
   alias OctoPi.AI.ModelRegistry
-  alias OctoPi.Agent
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
@@ -199,7 +199,7 @@ defmodule OctoPi.Coder.CLI do
     system_prompt = ResourceLoader.build_system_prompt(loader, opts.cwd, tools)
 
     {:ok, session} =
-      OctoPi.Agent.start_loop(
+      Agent.start_loop(
         model: opts.model,
         tools: tools,
         system_prompt: system_prompt
@@ -209,7 +209,7 @@ defmodule OctoPi.Coder.CLI do
     # the main CLI process, which is about to block in IO.read on
     # stdin and would never drain its mailbox.
     event_forwarder = spawn_link(fn -> forward_events() end)
-    OctoPi.Agent.subscribe(session, event_forwarder, :async)
+    Agent.subscribe(session, event_forwarder, :async)
 
     rpc_loop(session)
     0
@@ -234,7 +234,7 @@ defmodule OctoPi.Coder.CLI do
   end
 
   @doc false
-  @spec response_for(String.t(), OctoPi.Agent.t()) :: map()
+  @spec response_for(String.t(), Agent.t()) :: map()
   def response_for(line, session) do
     case Rpc.parse_line(line) do
       {:ok, req} -> Rpc.handle_request(session, req)

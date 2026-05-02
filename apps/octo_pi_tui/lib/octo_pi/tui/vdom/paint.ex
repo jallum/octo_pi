@@ -14,9 +14,9 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
   import OctoPi.TUI.VDOM, only: [is_vnode: 1]
 
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.VDOM.LineBuf
-  alias OctoPi.TUI.RenderContext
 
   require Logger
 
