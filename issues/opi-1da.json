@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-44y",
@@ -15,8 +15,8 @@
   "id": "opi-1da",
   "labels": [],
   "priority": 0,
-  "status": "open",
+  "status": "in_progress",
   "title": "Component contract migration: render/2 returns VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:52Z"
+  "updated_at": "2026-05-02T00:58:04Z"
 }
