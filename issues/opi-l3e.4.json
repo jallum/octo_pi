@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-l3e.3"
+  ],
   "blocks": [
     "opi-l3e.5"
   ],
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Refactor Input to own dropdown state and composition",
   "type": "task",
-  "updated_at": "2026-05-02T15:26:13Z"
+  "updated_at": "2026-05-02T15:26:17Z"
 }
