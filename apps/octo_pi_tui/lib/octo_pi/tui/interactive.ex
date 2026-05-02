@@ -68,7 +68,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Paste
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.RenderLoop
-  alias OctoPi.TUI.RenderTelemetry
   alias OctoPi.TUI.Terminal
   alias OctoPi.TUI.Terminal.Image
   alias OctoPi.TUI.Terminal.RawMode
@@ -81,12 +80,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.VDOM.LineBuf
   alias OctoPi.TUI.VDOM.Paint
   alias OctoPi.TUI.WrapAnsi
-
-  @type resource_data :: %{
-          context_files: [%{path: String.t()}],
-          skills: [%{name: String.t()}],
-          prompt_templates: [%{name: String.t()}]
-        }
 
   @type t :: %__MODULE__{
           session: pid() | nil,
@@ -128,9 +121,8 @@ defmodule OctoPi.TUI.Interactive do
           pending_follow_up: [String.t()],
           working_message: String.t() | nil,
           notification: String.t() | nil,
-          banner: Components.WelcomeBanner.t() | nil,
-          header: Header.t(),
-          loaded_resources: resource_data() | nil,
+          banner: Header.t() | nil,
+          loaded_resources: Components.Resources.t() | nil,
           expand_prompt_fn: (String.t() -> String.t()) | nil,
           ui_overrides: map(),
           dialog: tuple() | nil,
@@ -158,7 +150,6 @@ defmodule OctoPi.TUI.Interactive do
             footer_data: nil,
             theme: nil,
             banner: nil,
-            header: %Header{},
             loaded_resources: nil,
             expand_prompt_fn: nil,
             width: 80,
@@ -250,7 +241,13 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   def handle_ui_request(state, {:set_tools_expanded, val}) do
-    {%{state | tools_expanded: val}, :ok}
+    resources =
+      case state.loaded_resources do
+        %Components.Resources{} = r -> %{r | expanded: val}
+        other -> other
+      end
+
+    {%{state | tools_expanded: val, loaded_resources: resources}, :ok}
   end
 
   def handle_ui_request(state, {:set_theme, name}) do
@@ -509,7 +506,7 @@ defmodule OctoPi.TUI.Interactive do
       width: w,
       height: h,
       theme: theme,
-      banner: Components.WelcomeBanner.new(theme, model: model.id),
+      banner: Header.new(theme, model: model.id),
       footer: footer,
       footer_data: footer_data,
       loaded_resources: loaded_resources,
@@ -532,42 +529,34 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   @impl GenServer
-  def handle_info({:hid_event, %Resize{width: w, height: h} = event} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      send(state.render_loop, {:resize, w, h})
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event}, state) do
+    send(state.render_loop, {:resize, w, h})
 
-      state
-      |> handle_event(event)
-      |> advance()
-    end)
+    state
+    |> handle_event(event)
+    |> advance()
   end
 
-  def handle_info({:hid_event, %Resize{width: w, height: h} = event, _mono_us} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      send(state.render_loop, {:resize, w, h})
+  def handle_info({:hid_event, %Resize{width: w, height: h} = event, _mono_us}, state) do
+    send(state.render_loop, {:resize, w, h})
 
-      state
-      |> handle_event(event)
-      |> advance()
-    end)
+    state
+    |> handle_event(event)
+    |> advance()
   end
 
-  def handle_info({:hid_event, event} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      state
-      |> Map.put(:notification, nil)
-      |> handle_event(event)
-      |> advance()
-    end)
+  def handle_info({:hid_event, event}, state) do
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(event)
+    |> advance()
   end
 
-  def handle_info({:hid_event, event, _mono_us} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      state
-      |> Map.put(:notification, nil)
-      |> handle_event(event)
-      |> advance()
-    end)
+  def handle_info({:hid_event, event, _mono_us}, state) do
+    state
+    |> Map.put(:notification, nil)
+    |> handle_event(event)
+    |> advance()
   end
 
   # opi-4dx.3 + .6: block-delta per-chunk path is intentionally cheap.
@@ -576,62 +565,48 @@ defmodule OctoPi.TUI.Interactive do
   # tick will fire.
   def handle_info({:octo_pi_agent_event, %ev{}} = agent_msg, state)
       when ev in [Event.MessageBlockStart, Event.MessageBlockDelta, Event.MessageBlockEnd] do
-    RenderTelemetry.with_handle_info(agent_msg, fn ->
-      new_state =
-        state
-        |> handle_event(agent_msg)
-        |> drain_block_deltas()
+    new_state =
+      state
+      |> handle_event(agent_msg)
+      |> drain_block_deltas()
 
-      {:noreply, new_state, compute_timeout(new_state)}
-    end)
+    {:noreply, new_state, compute_timeout(new_state)}
   end
 
   def handle_info({:octo_pi_agent_event, _} = agent_msg, state) do
-    RenderTelemetry.with_handle_info(agent_msg, fn ->
-      state
-      |> handle_event(agent_msg)
-      |> advance()
-    end)
+    state
+    |> handle_event(agent_msg)
+    |> advance()
   end
 
-  def handle_info({:extension_result, text} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      advance(%{state | notification: text})
-    end)
+  def handle_info({:extension_result, text}, state) do
+    advance(%{state | notification: text})
   end
 
-  def handle_info({:custom_done, from, result} = msg, %{custom_widget: {from, _}} = state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      GenServer.reply(from, result)
-      advance(%{state | custom_widget: nil})
-    end)
+  def handle_info({:custom_done, from, result}, %{custom_widget: {from, _}} = state) do
+    GenServer.reply(from, result)
+    advance(%{state | custom_widget: nil})
   end
 
-  def handle_info(:force_render = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      advance(state)
-    end)
+  def handle_info(:force_render, state) do
+    advance(state)
   end
 
   def handle_info({:bash_done, _id, _output, _exit_code} = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      state
-      |> handle_event(msg)
-      |> advance()
-    end)
+    state
+    |> handle_event(msg)
+    |> advance()
   end
 
   # Single :timeout multiplexes loader-tick and streaming-tick
   # (opi-4dx.3). Both may be due simultaneously; flush streaming first
   # so the loader animation is anchored to the freshly-rendered frame.
-  def handle_info(:timeout = msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      now = System.monotonic_time(:millisecond)
+  def handle_info(:timeout, state) do
+    now = System.monotonic_time(:millisecond)
 
-      state
-      |> maybe_flush_streaming_tick(now)
-      |> advance()
-    end)
+    state
+    |> maybe_flush_streaming_tick(now)
+    |> advance()
   end
 
   def handle_info({:EXIT, pid, _reason}, %{sup: sup} = state) when pid == sup do
@@ -642,10 +617,8 @@ defmodule OctoPi.TUI.Interactive do
     {:noreply, state, compute_timeout(state)}
   end
 
-  def handle_info(msg, state) do
-    RenderTelemetry.with_handle_info(msg, fn ->
-      {:noreply, state, compute_timeout(state)}
-    end)
+  def handle_info(_msg, state) do
+    {:noreply, state, compute_timeout(state)}
   end
 
   defp maybe_flush_streaming_tick(state, now) do
@@ -870,7 +843,7 @@ defmodule OctoPi.TUI.Interactive do
   def build_autocomplete_provider(loaded_resources, extensions \\ []) do
     template_commands =
       case loaded_resources do
-        %{prompt_templates: templates} ->
+        %Components.Resources{prompts: %Components.Resources.Prompts{templates: templates}} ->
           Enum.map(templates, fn t ->
             %Autocomplete.SlashCommand{name: t.name, description: "Prompt template"}
           end)
@@ -907,11 +880,11 @@ defmodule OctoPi.TUI.Interactive do
         nil
 
       loader ->
-        %{
+        Components.Resources.new(%{
           context_files: Enum.map(loader.context_files, &%{path: &1.path}),
           skills: Enum.map(loader.skills, &%{name: &1.name}),
           prompt_templates: Enum.map(loader.prompt_templates, &%{name: &1.name})
-        }
+        })
     end
   end
 
@@ -1419,13 +1392,17 @@ defmodule OctoPi.TUI.Interactive do
 
     banner =
       case state.banner do
-        %Components.WelcomeBanner{} = b -> %{b | expanded: expanded}
+        %Header{} = b -> %{b | expanded: expanded}
         other -> other
       end
 
-    header = if is_nil(state.banner), do: %{state.header | expanded: expanded}, else: state.header
+    resources =
+      case state.loaded_resources do
+        %Components.Resources{} = r -> %{r | expanded: expanded}
+        other -> other
+      end
 
-    %{state | tools_expanded: expanded, banner: banner, header: header}
+    %{state | tools_expanded: expanded, banner: banner, loaded_resources: resources}
   end
 
   defp dispatch_app_action("app.editor.external", state, _key), do: %{state | editor_pending: true}
@@ -1530,13 +1507,8 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
 
-  defp handle_event_key(
-         %{input: %{value: ""}, banner: nil, header: header} = state,
-         %Key{key: ??, modifiers: []} = key
-       ), do: %{state | header: Header.handle_key(header, key)}
-
-  defp handle_event_key(%{input: %{value: ""}, banner: %_{} = banner} = state, %Key{key: ??, modifiers: []} = key),
-    do: %{state | banner: Components.WelcomeBanner.handle_key(banner, key)}
+  defp handle_event_key(%{input: %{value: ""}, banner: %Header{} = banner} = state, %Key{key: ??, modifiers: []} = key),
+    do: %{state | banner: Header.handle_key(banner, key)}
 
   defp handle_event_key(%{input: input} = state, %Key{key: cp, modifiers: []}) when is_integer(cp),
     do: %{state | input: Components.Input.insert(input, <<cp::utf8>>)}
@@ -1966,8 +1938,7 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     ctx = render_ctx(state)
 
-    {slots, transcript2} = Transcript.render(transcript, ctx)
-    transcript_vnode = Transcript.as_vflow(slots)
+    {transcript2, transcript_vnode} = Transcript.render(transcript, ctx)
 
     state = %{state | transcript: transcript2}
 
@@ -1986,10 +1957,23 @@ defmodule OctoPi.TUI.Interactive do
     dropdown_vnode = %VDOM.VLines{lines: Components.Input.render_dropdown(state.input, width)}
     notif_vnode = %VDOM.VLines{lines: render_notification(state.notification, width)}
 
+    header_vnode =
+      case Map.get(state.ui_overrides, :header) do
+        render_fn when is_function(render_fn, 1) -> %VDOM.VLines{lines: render_fn.(width)}
+        nil when is_nil(banner) -> %VDOM.VLines{lines: []}
+        nil -> elem(Header.render(banner, ctx), 1)
+      end
+
+    resource_vnode =
+      case state.loaded_resources do
+        nil -> %VDOM.VLines{lines: []}
+        resources -> elem(Components.Resources.render(resources, ctx), 1)
+      end
+
     tree = %VDOM.VFlow{
       children: [
-        %VDOM.VLines{lines: header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)},
-        %VDOM.VLines{lines: render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)},
+        header_vnode,
+        resource_vnode,
         transcript_vnode,
         %VDOM.VLines{lines: render_loader(loader, width, state.theme)},
         %VDOM.VLines{lines: pending_lines},
@@ -2340,19 +2324,6 @@ defmodule OctoPi.TUI.Interactive do
     Enum.at(models, new_idx)
   end
 
-  defp render_banner(nil, _width), do: []
-
-  defp render_banner(banner, width) do
-    case Components.WelcomeBanner.render(banner, width) do
-      [] -> []
-      lines -> lines ++ [""]
-    end
-  end
-
-  defp header_lines(render_fn, _banner, _header, width) when is_function(render_fn, 1), do: render_fn.(width)
-  defp header_lines(nil, nil, header, width), do: Header.render(header, width)
-  defp header_lines(nil, banner, _header, width), do: render_banner(banner, width)
-
   defp footer_lines(render_fn, footer, footer_data_pid, width) when is_function(render_fn, 2),
     do: render_fn.(width, build_footer_context(footer, footer_data_pid))
 
@@ -2368,69 +2339,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp branch_from(nil), do: nil
   defp branch_from(pid), do: FooterData.get_git_branch(pid)
-
-  defp render_resource_sections(nil, _theme, _expanded), do: []
-
-  defp render_resource_sections(resources, theme, expanded) do
-    [
-      render_context_section(resources.context_files, theme, expanded),
-      render_skills_section(resources.skills, theme, expanded),
-      render_prompts_section(resources.prompt_templates, theme, expanded)
-    ]
-    |> Enum.reject(&(&1 == []))
-    |> Enum.flat_map(&(&1 ++ [""]))
-  end
-
-  defp render_context_section([], _theme, _expanded), do: []
-
-  defp render_context_section(files, theme, expanded) do
-    header = section_header(theme, "Context")
-
-    body =
-      if expanded do
-        Enum.map_join(files, "\n", &("  " <> dim(&1.path)))
-      else
-        names = Enum.map_join(files, ", ", &Path.basename(&1.path))
-        dim("  #{names}")
-      end
-
-    [header, body]
-  end
-
-  defp render_skills_section([], _theme, _expanded), do: []
-
-  defp render_skills_section(skills, theme, expanded) do
-    header = section_header(theme, "Skills")
-
-    body =
-      if expanded do
-        Enum.map_join(skills, "\n", &("  " <> dim(&1.name)))
-      else
-        names = Enum.map_join(skills, ", ", & &1.name)
-        dim("  #{names}")
-      end
-
-    [header, body]
-  end
-
-  defp render_prompts_section([], _theme, _expanded), do: []
-
-  defp render_prompts_section(templates, theme, expanded) do
-    header = section_header(theme, "Prompts")
-
-    body =
-      if expanded do
-        Enum.map_join(templates, "\n", &("  " <> dim("/#{&1.name}")))
-      else
-        names = Enum.map_join(templates, ", ", &"/#{&1.name}")
-        dim("  #{names}")
-      end
-
-    [header, body]
-  end
-
-  defp section_header(nil, name), do: "[#{name}]"
-  defp section_header(theme, name), do: Theme.fg(theme, :md_heading, "[#{name}]")
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 end

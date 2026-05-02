@@ -1,74 +1,71 @@
 defmodule OctoPi.TUI.Components.Header do
-  @moduledoc """
-  Header banner with logo, version, and keybinding hints.
-  Supports compact (single-line hints) and expanded (multi-line) modes.
-  """
+  @moduledoc false
+
+  @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.Key
+  alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
-  @type t :: %__MODULE__{expanded: boolean()}
+  @type t :: %__MODULE__{
+          theme: Theme.t(),
+          model: String.t(),
+          expanded: boolean(),
+          quiet: boolean()
+        }
 
-  defstruct expanded: false
+  defstruct [:theme, model: "", expanded: false, quiet: false]
 
-  def render(%__MODULE__{expanded: expanded}, _width) do
-    logo = "\e[1m\e[36mOctoPi\e[0m" <> dim(" v#{version()}")
-
-    hints =
-      if expanded do
-        Enum.join(
-          [
-            hint("Ctrl+C", "to interrupt"),
-            hint("Ctrl+L", "to clear"),
-            hint("Ctrl+L twice", "to exit"),
-            hint("Esc", "to exit (empty)"),
-            hint("Ctrl+K", "to delete to end"),
-            hint("/", "for commands"),
-            hint("!", "to run bash")
-          ],
-          "\n"
-        )
-      else
-        Enum.join(
-          [
-            hint("Ctrl+C", "interrupt"),
-            hint("Esc", "clear/exit"),
-            hint("/", "commands"),
-            hint("!", "bash"),
-            hint("?", "more")
-          ],
-          dim(" · ")
-        )
-      end
-
-    onboarding =
-      if expanded do
-        dim("OctoPi can explain its own features. Ask it how to use or extend OctoPi.")
-      else
-        dim("Press ? to show full startup help.")
-      end
-
-    lines = String.split("#{logo}\n#{hints}\n#{onboarding}", "\n")
-    ["" | lines] ++ [""]
+  @spec new(Theme.t(), keyword()) :: t()
+  def new(theme, opts \\ []) do
+    %__MODULE__{
+      theme: theme,
+      model: Keyword.get(opts, :model, ""),
+      expanded: Keyword.get(opts, :expanded, false),
+      quiet: Keyword.get(opts, :quiet, false)
+    }
   end
 
-  def handle_key(%__MODULE__{expanded: exp} = s, %Key{key: ??, modifiers: []}) do
-    %{s | expanded: not exp}
+  @impl true
+  def render(%__MODULE__{quiet: true} = self, %RenderContext{}), do: {self, %VDOM.VLines{lines: []}}
+
+  def render(%__MODULE__{expanded: false, theme: theme} = self, %RenderContext{}) do
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
+    hints = dim(" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more")
+    {self, %VDOM.VLines{lines: [" #{title}", hints, ""]}}
   end
 
-  def handle_key(%__MODULE__{} = s, %Key{}), do: s
+  def render(%__MODULE__{expanded: true, theme: theme} = self, %RenderContext{}) do
+    title = Theme.fg(theme, :accent, "octo_pi") <> " " <> dim(version())
 
-  @spec invalidate(t()) :: t()
-  def invalidate(state), do: state
+    lines = [
+      " #{title}",
+      "",
+      dim("  Esc        interrupt generation"),
+      dim("  Ctrl+C     clear / Ctrl+D exit"),
+      dim("  /          commands"),
+      dim("  !          run bash command"),
+      dim("  ?          toggle this banner"),
+      ""
+    ]
 
-  defp hint(key, desc), do: dim(key) <> muted(" #{desc}")
+    {self, %VDOM.VLines{lines: lines}}
+  end
 
-  defp dim(text), do: "\e[2m#{text}\e[22m"
-  defp muted(text), do: "\e[38;5;245m#{text}\e[39m"
+  @impl true
+  def handle_key(%__MODULE__{expanded: expanded} = header, %Key{key: ??}) do
+    %{header | expanded: !expanded}
+  end
+
+  def handle_key(%__MODULE__{} = header, %Key{}), do: header
 
   defp version do
     case :application.get_key(:octo_pi_tui, :vsn) do
-      {:ok, vsn} -> List.to_string(vsn)
-      _ -> "0.1.0"
+      {:ok, vsn} -> "v#{vsn}"
+      _ -> "dev"
     end
   end
+
+  defp dim(text), do: "\e[2m#{text}\e[22m"
 end

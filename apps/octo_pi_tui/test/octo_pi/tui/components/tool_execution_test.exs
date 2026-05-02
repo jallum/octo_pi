@@ -12,7 +12,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(te, width \\ 80) do
-    {_, %VDOM.VLines{lines: lines}, nil} = ToolExecution.render(te, ctx(width))
+    {_, %VDOM.VLines{lines: lines}} = ToolExecution.render(te, ctx(width))
     lines
   end
 

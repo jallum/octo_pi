@@ -12,7 +12,7 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(be, width \\ 80) do
-    {_, %VDOM.VLines{lines: lines}, nil} = BashExecution.render(be, ctx(width))
+    {_, %VDOM.VLines{lines: lines}} = BashExecution.render(be, ctx(width))
     lines
   end
 

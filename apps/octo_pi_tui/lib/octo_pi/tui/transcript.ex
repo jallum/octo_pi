@@ -21,6 +21,9 @@ defmodule OctoPi.TUI.Transcript do
   changes).
   """
 
+  @behaviour OctoPi.TUI.Component
+
+  alias OctoPi.TUI.Component
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.VDOM
 
@@ -96,6 +99,7 @@ defmodule OctoPi.TUI.Transcript do
   Bust every cached entry. Callers (typically Interactive on a
   resize or theme change) call this to force a full re-render.
   """
+  @impl Component
   @spec invalidate(t()) :: t()
   def invalidate(%__MODULE__{order: order} = t), do: %{t | dirty: MapSet.new(order)}
 
@@ -115,10 +119,10 @@ defmodule OctoPi.TUI.Transcript do
   Render the transcript at `ctx`. Walks slots oldest-first; calls
   `mod.render/2` on dirty slots, reuses `cache` for the rest.
 
-  Returns ordered `[{entry, vnode}]` (oldest-first). Callers can
-  compose results into a VFlow via `as_vflow/1`.
+  Returns `{t(), %VFlow{}}` conforming to the `Component` behaviour.
   """
-  @spec render(t(), RenderContext.t()) :: {[{struct(), VDOM.t()}], t()}
+  @impl Component
+  @spec render(t(), RenderContext.t()) :: {t(), VDOM.t()}
   def render(%__MODULE__{} = t, %RenderContext{} = ctx) do
     {data2, cache2, slots_rev} =
       t.order
@@ -128,12 +132,9 @@ defmodule OctoPi.TUI.Transcript do
       end)
 
     t = %{t | data: data2, cache: cache2, dirty: MapSet.new()}
-    {Enum.reverse(slots_rev), t}
+    vnode = %VDOM.VFlow{children: slots_rev |> Enum.reverse() |> Enum.map(fn {_, v} -> v end)}
+    {t, vnode}
   end
-
-  @doc "Compose `render/2`'s slot list into a single `%VFlow{}` node."
-  @spec as_vflow([{struct(), VDOM.t()}]) :: VDOM.VFlow.t()
-  def as_vflow(slots), do: %VDOM.VFlow{children: Enum.map(slots, fn {_, vnode} -> vnode end)}
 
   # ── internals ──────────────────────────────────────────────────
 

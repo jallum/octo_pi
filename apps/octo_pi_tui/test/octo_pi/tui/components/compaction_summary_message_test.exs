@@ -18,7 +18,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessageTest do
   end
 
   defp render_lines(comp, width \\ 80) do
-    {_, %VDOM.VLines{lines: lines}, nil} = Component.render(comp, ctx(width))
+    {_, %VDOM.VLines{lines: lines}} = Component.render(comp, ctx(width))
     lines
   end
 

@@ -15,13 +15,22 @@ defmodule OctoPi.TUI.TranscriptTest do
 
   defp flat(lines), do: Enum.join(lines, "\n")
 
-  defp lines_only(slots) do
+  defp lines_only(vnode) do
     alias OctoPi.TUI.VDOM
 
-    Enum.flat_map(slots, fn
-      {_, %VDOM.VLines{lines: lines}} -> lines
-      {_, lines} when is_list(lines) -> lines
-    end)
+    case vnode do
+      %VDOM.VFlow{children: children} ->
+        Enum.flat_map(children, fn
+          %VDOM.VLines{lines: lines} -> lines
+          lines when is_list(lines) -> lines
+        end)
+
+      [{_, _} | _] = slots ->
+        Enum.flat_map(slots, fn
+          {_, %VDOM.VLines{lines: lines}} -> lines
+          {_, lines} when is_list(lines) -> lines
+        end)
+    end
   end
 
   describe "new/0 + append/3" do
@@ -41,8 +50,8 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:c, %Static{snapshot: "gamma"})
 
       assert t.order == [:c, :b, :a]
-      {slots, _} = Transcript.render(t, ctx())
-      assert flat(lines_only(slots)) =~ ~r/alpha.*beta.*gamma/s
+      {_, vnode} = Transcript.render(t, ctx())
+      assert flat(lines_only(vnode)) =~ ~r/alpha.*beta.*gamma/s
     end
 
     test "appended slots start dirty (no cached lines yet)" do
@@ -56,24 +65,24 @@ defmodule OctoPi.TUI.TranscriptTest do
     test "after first render the slot is cached and clean" do
       t = Transcript.append(Transcript.new(), :a, %Static{snapshot: "alpha"})
 
-      {slots, t} = Transcript.render(t, ctx())
+      {t, vnode} = Transcript.render(t, ctx())
       refute MapSet.member?(t.dirty, :a)
       assert Map.has_key?(t.cache, :a)
-      assert flat(lines_only(slots)) =~ "alpha"
+      assert flat(lines_only(vnode)) =~ "alpha"
     end
 
     test "second render at the same ctx is a cache hit (component not called)" do
       t = Transcript.append(Transcript.new(), :a, %Static{snapshot: "alpha"})
 
-      {_, t1} = Transcript.render(t, ctx())
+      {t1, _} = Transcript.render(t, ctx())
       cached = Map.fetch!(t1.cache, :a)
 
       # Mutate the cache to a sentinel; if the second render reads
       # from cache, we'll see the sentinel rather than freshly built lines.
       t2 = put_in(t1.cache[:a], ["SENTINEL"])
-      {slots, _} = Transcript.render(t2, ctx())
+      {_, vnode} = Transcript.render(t2, ctx())
 
-      assert flat(lines_only(slots)) == "SENTINEL"
+      assert flat(lines_only(vnode)) == "SENTINEL"
       assert flat(lines_only([{nil, cached}])) =~ "alpha"
     end
 
@@ -83,11 +92,11 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, %Stream{snapshot: ""})
         |> Transcript.update(:a, "v1")
 
-      {_, t1} = Transcript.render(t, ctx())
+      {t1, _} = Transcript.render(t, ctx())
       assert t1.data[:a].snapshot == "v1"
 
       t1 = Transcript.update(t1, :a, "v2")
-      {_, t2} = Transcript.render(t1, ctx())
+      {t2, _} = Transcript.render(t1, ctx())
       assert t2.data[:a].snapshot == "v2"
     end
   end
@@ -95,7 +104,7 @@ defmodule OctoPi.TUI.TranscriptTest do
   describe "update/3 + finalize/3 (streaming)" do
     test "update marks the slot dirty so next render rebuilds" do
       t = Transcript.append(Transcript.new(), :a, %Stream{snapshot: ""})
-      {_, t} = Transcript.render(t, ctx())
+      {t, _} = Transcript.render(t, ctx())
       refute MapSet.member?(t.dirty, :a)
 
       t = Transcript.update(t, :a, "hello")
@@ -127,7 +136,7 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, %Static{snapshot: "alpha"})
         |> Transcript.append(:b, %Static{snapshot: "beta"})
 
-      {_, t} = Transcript.render(t, ctx())
+      {t, _} = Transcript.render(t, ctx())
       assert t.dirty == MapSet.new()
 
       t = Transcript.invalidate(t)
@@ -152,8 +161,8 @@ defmodule OctoPi.TUI.TranscriptTest do
         |> Transcript.append(:a, %Stream{snapshot: "hello", finalized?: true})
         |> Transcript.append(:b, %Stream{snapshot: "world", finalized?: true})
 
-      {p1, _} = Transcript.render(live, ctx())
-      {p2, _} = Transcript.render(fresh, ctx())
+      {_, p1} = Transcript.render(live, ctx())
+      {_, p2} = Transcript.render(fresh, ctx())
 
       assert flat(lines_only(p1)) == flat(lines_only(p2))
     end

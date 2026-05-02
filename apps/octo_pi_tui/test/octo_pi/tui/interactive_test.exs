@@ -28,7 +28,8 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.UserMessage
-  alias OctoPi.TUI.Components.WelcomeBanner
+  alias OctoPi.TUI.Components.Header
+  alias OctoPi.TUI.Components.Resources
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Paste
@@ -1313,6 +1314,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         transcript: seed_transcript([wrap(UserMessage.new("hi"))]),
         loader: loader,
         input: %Input{value: "", cursor: 0},
+        theme: Theme.load_builtin(:dark, :truecolor),
         width: 80,
         height: 40
       }
@@ -1327,6 +1329,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         transcript: seed_transcript([wrap(UserMessage.new("hi"))]),
         loader: nil,
         input: %Input{value: "", cursor: 0},
+        theme: Theme.load_builtin(:dark, :truecolor),
         width: 80,
         height: 40
       }
@@ -1907,6 +1910,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         transcript: seed_transcript([wrap(UserMessage.new("hi"))]),
         input: %Input{value: "", cursor: 0},
         footer: footer,
+        theme: Theme.load_builtin(:dark, :truecolor),
         width: 80,
         height: 24
       }
@@ -1922,7 +1926,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   describe "welcome banner" do
     test "renders banner when present" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme, model: "test-model")
+      banner = Header.new(theme, model: "test-model")
 
       s = %Interactive{
         transcript: %Transcript{},
@@ -1940,7 +1944,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "? toggles banner when input is empty" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme, model: "test-model")
+      banner = Header.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
@@ -1950,7 +1954,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "? types into input when input is not empty" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme, model: "test-model")
+      banner = Header.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: "hello", cursor: 5}, banner: banner, theme: theme}
 
       s2 = Interactive.handle_event(s, %Key{key: ??})
@@ -1959,44 +1963,6 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
   end
 
-  describe "header component" do
-    test "renders Header when banner is nil" do
-      s = %Interactive{banner: nil, width: 80}
-      lines = Interactive.build_screen(s)
-      text = lines |> Enum.join("\n") |> String.replace(~r/\e\[[0-9;]*m/, "")
-      assert text =~ "OctoPi"
-    end
-
-    test "? toggles header.expanded when banner is nil" do
-      s = %Interactive{input: %Input{value: ""}, banner: nil}
-      refute s.header.expanded
-      s2 = Interactive.handle_event(s, %Key{key: ??})
-      assert s2.header.expanded
-    end
-
-    test "? does not affect header when banner is present" do
-      theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme)
-      s = %Interactive{input: %Input{value: ""}, banner: banner}
-      s2 = Interactive.handle_event(s, %Key{key: ??})
-      assert s2.header == s.header
-    end
-
-    test "ctrl+o syncs header.expanded when banner is nil" do
-      s = %Interactive{tools_expanded: false, banner: nil}
-      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
-      assert s2.tools_expanded == true
-      assert s2.header.expanded == true
-    end
-
-    test "ctrl+o does not change header when banner is present" do
-      theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme)
-      s = %Interactive{tools_expanded: false, banner: banner}
-      s2 = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
-      assert s2.header == s.header
-    end
-  end
 
   describe "render/1 — notification truncation" do
     test "notification is rendered and truncated to width" do
@@ -2662,11 +2628,12 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "includes prompt templates from loaded_resources" do
-      resources = %{
-        context_files: [],
-        skills: [],
-        prompt_templates: [%{name: "my-template"}, %{name: "other"}]
-      }
+      resources =
+        Resources.new(%{
+          context_files: [],
+          skills: [],
+          prompt_templates: [%{name: "my-template"}, %{name: "other"}]
+        })
 
       provider = Interactive.build_autocomplete_provider(resources)
       {:ok, items} = Autocomplete.get_suggestions(provider, "/my")
@@ -2996,7 +2963,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "ctrl+o syncs banner expanded to match new tools_expanded" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme)
+      banner = Header.new(theme)
       s = %Interactive{tools_expanded: false, banner: banner}
       s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.tools_expanded == true
@@ -3005,7 +2972,7 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "ctrl+o banner sync works when collapsing" do
       theme = Theme.load_builtin(:dark, :truecolor)
-      banner = WelcomeBanner.new(theme, [])
+      banner = Header.new(theme, [])
       s = %Interactive{tools_expanded: false, banner: banner}
       s = Interactive.handle_event(s, %Key{key: ?o, modifiers: [:ctrl]})
       assert s.banner.expanded == true
@@ -3278,10 +3245,9 @@ defmodule OctoPi.TUI.InteractiveTest do
   # ── loaded_resources rendering ─────────────────────────────────
 
   defp fake_resources(overrides \\ %{}) do
-    Map.merge(
-      %{context_files: [], skills: [], prompt_templates: []},
-      overrides
-    )
+    %{context_files: [], skills: [], prompt_templates: []}
+    |> Map.merge(overrides)
+    |> Resources.new()
   end
 
   defp joined_render(state) do
@@ -3335,9 +3301,8 @@ defmodule OctoPi.TUI.InteractiveTest do
 
     test "context expanded shows full paths" do
       resources =
-        fake_resources(%{
-          context_files: [%{path: "/project/CLAUDE.md"}]
-        })
+        fake_resources(%{context_files: [%{path: "/project/CLAUDE.md"}]})
+        |> Map.put(:expanded, true)
 
       s = %Interactive{width: 80, height: 40, loaded_resources: resources, tools_expanded: true}
       assert strip_ansi(joined_render(s)) =~ "/project/CLAUDE.md"
@@ -3403,11 +3368,12 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "all three sections visible together" do
-      resources = %{
-        context_files: [%{path: "/p/CLAUDE.md"}],
-        skills: [%{name: "my-skill", file_path: "/s/SKILL.md"}],
-        prompt_templates: [%{name: "cmd"}]
-      }
+      resources =
+        Resources.new(%{
+          context_files: [%{path: "/p/CLAUDE.md"}],
+          skills: [%{name: "my-skill", file_path: "/s/SKILL.md"}],
+          prompt_templates: [%{name: "cmd"}]
+        })
 
       s = %Interactive{width: 80, height: 40, loaded_resources: resources}
       output = strip_ansi(joined_render(s))
