@@ -8,10 +8,6 @@ defmodule OctoPi.TUI.Components.UserMessage do
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.VDOM
 
-  @osc133_zone_start "\e]133;A\a"
-  @osc133_zone_end "\e]133;B\a"
-  @osc133_zone_final "\e]133;C\a"
-
   @type t :: %__MODULE__{text: String.t()}
 
   defstruct [:text]
@@ -20,28 +16,20 @@ defmodule OctoPi.TUI.Components.UserMessage do
   def new(text), do: %__MODULE__{text: text}
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, %VDOM.VLines{lines: build_lines(self, ctx)}, nil}
+  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, build_vnode(self, ctx), nil}
 
-  defp build_lines(%__MODULE__{text: text}, _ctx) when text in ["", nil], do: []
+  defp build_vnode(%__MODULE__{text: t}, _ctx) when t in ["", nil], do: %VDOM.VFlow{children: []}
 
-  defp build_lines(%__MODULE__{text: text}, %RenderContext{theme: theme, width: width}) do
+  defp build_vnode(%__MODULE__{text: text}, %RenderContext{theme: theme, width: width}) do
     if String.trim(text) == "" do
-      []
+      %VDOM.VFlow{children: []}
     else
-      do_render(text, theme, width)
+      md = Markdown.new(text, theme, padding_x: 1)
+      md_lines = Markdown.render(md, width)
+      bg_fn = fn l -> Theme.bg(theme, :user_message_bg, pad_to_width(l, width)) end
+      styled = [bg_fn.("") | Enum.map(md_lines, bg_fn)] ++ [bg_fn.("")]
+      %VDOM.VZone{type: :prompt, id: "USER", children: [%VDOM.VLines{lines: styled}]}
     end
-  end
-
-  defp do_render(text, theme, width) do
-    md = Markdown.new(text, theme, padding_x: 1)
-    content_lines = Markdown.render(md, width)
-
-    bg_fn = fn line -> Theme.bg(theme, :user_message_bg, pad_to_width(line, width)) end
-
-    lines =
-      [bg_fn.("") | Enum.map(content_lines, &bg_fn.(&1))] ++ [bg_fn.("")]
-
-    wrap_osc133(lines)
   end
 
   defp pad_to_width(line, width) do
@@ -53,15 +41,5 @@ defmodule OctoPi.TUI.Components.UserMessage do
     str
     |> String.replace(~r/\e\[[0-9;]*m/, "")
     |> String.length()
-  end
-
-  defp wrap_osc133([single]) do
-    [@osc133_zone_start <> single <> @osc133_zone_end <> @osc133_zone_final]
-  end
-
-  defp wrap_osc133([first | rest]) do
-    {middle, [last]} = Enum.split(rest, -1)
-    tagged_last = @osc133_zone_end <> @osc133_zone_final <> last
-    [@osc133_zone_start <> first | middle] ++ [tagged_last]
   end
 end

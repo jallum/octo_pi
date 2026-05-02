@@ -5,6 +5,8 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.VDOM
+  alias OctoPi.TUI.VDOM.LineBuf
+  alias OctoPi.TUI.VDOM.Paint
 
   @theme Theme.load_builtin(:dark, :truecolor)
 
@@ -14,16 +16,24 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
     String.replace(text, ~r/\e\][^\a]*\a|\e\[[0-9;]*m/, "")
   end
 
+  defp paint_lines(vnode, width) do
+    rctx = %Paint.RenderCtx{width: width}
+    buf = Paint.paint(vnode, LineBuf.new(), rctx)
+    {iodata, _} = LineBuf.finalize(buf)
+    iodata |> IO.iodata_to_binary() |> String.split("\n") |> Enum.reject(&(&1 == ""))
+  end
+
   defp render_lines(msg, ctx) do
-    {_, %VDOM.VLines{lines: lines}, _} = UserMessage.render(msg, ctx)
-    lines
+    {_, vnode, _} = UserMessage.render(msg, ctx)
+    paint_lines(vnode, ctx.width)
   end
 
   describe "render/2" do
     test "renders text content" do
       msg = UserMessage.new("hello world")
-      {_, %VDOM.VLines{lines: lines}, frame_ms} = UserMessage.render(msg, ctx())
+      {_, _vnode, frame_ms} = UserMessage.render(msg, ctx())
       assert frame_ms == nil
+      lines = render_lines(msg, ctx())
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "hello world"))
     end
@@ -34,7 +44,7 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
       assert Enum.any?(lines, &(&1 =~ "\e[1m"))
     end
 
-    test "wraps in OSC 133 command zones" do
+    test "wraps in OSC 133 prompt zone" do
       msg = UserMessage.new("hello")
       lines = render_lines(msg, ctx())
       first = hd(lines)
@@ -49,9 +59,9 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
       assert Enum.any?(lines, &(&1 =~ "\e[48;"))
     end
 
-    test "empty text returns empty list" do
+    test "empty text returns empty VFlow" do
       msg = UserMessage.new("")
-      assert {%UserMessage{}, %VDOM.VLines{lines: []}, nil} = UserMessage.render(msg, ctx())
+      assert {%UserMessage{}, %VDOM.VFlow{children: []}, nil} = UserMessage.render(msg, ctx())
     end
 
     test "includes padding" do
@@ -71,6 +81,12 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
         assert String.length(line) == 40,
                "line width #{String.length(line)} != 40: #{inspect(line)}"
       end)
+    end
+
+    test "no raw \\e]133; literals in source" do
+      path = Path.expand("../../../../lib/octo_pi/tui/components/user_message.ex", __DIR__)
+      source = File.read!(path)
+      refute source =~ "\e]133;"
     end
   end
 end
