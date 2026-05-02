@@ -66,6 +66,7 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Overlay
   alias OctoPi.TUI.Paste
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.RenderLoop
   alias OctoPi.TUI.RenderTelemetry
   alias OctoPi.TUI.Terminal
@@ -76,6 +77,9 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Transcript
   alias OctoPi.TUI.Transcript.AssistantHeader
   alias OctoPi.TUI.Transcript.AssistantStatus
+  alias OctoPi.TUI.VDOM
+  alias OctoPi.TUI.VDOM.LineBuf
+  alias OctoPi.TUI.VDOM.Paint
   alias OctoPi.TUI.WrapAnsi
 
   @type resource_data :: %{
@@ -577,6 +581,7 @@ defmodule OctoPi.TUI.Interactive do
         state
         |> handle_event(agent_msg)
         |> drain_block_deltas()
+
       {:noreply, new_state, compute_timeout(new_state)}
     end)
   end
@@ -1027,7 +1032,8 @@ defmodule OctoPi.TUI.Interactive do
     input = Components.Input.update_scroll(state.input, state.width)
     state = %{state | input: input}
     input_lines = Components.Input.render(input, state.width)
-    {lines, layout, state} = build_screen(state, input_lines)
+    input_vnode = %VDOM.VLines{lines: input_lines}
+    {lines, layout, state} = build_screen(state, input_vnode)
     lines = composite_active_overlay(state, lines)
 
     case Process.get(:debug_render_log) do
@@ -1844,7 +1850,7 @@ defmodule OctoPi.TUI.Interactive do
   defp drain_block_deltas(state) do
     receive do
       {:octo_pi_agent_event, %ev{}} = msg
-          when ev in [Event.MessageBlockDelta, Event.MessageBlockEnd] ->
+      when ev in [Event.MessageBlockDelta, Event.MessageBlockEnd] ->
         drain_block_deltas(handle_event(state, msg))
     after
       0 -> state
@@ -1951,11 +1957,12 @@ defmodule OctoPi.TUI.Interactive do
   """
   @spec build_screen(t()) :: [binary()]
   def build_screen(%{input: input, width: width} = state) do
-    {lines, _layout, _state} = build_screen(state, Components.Input.render(input, width))
+    input_vnode = %VDOM.VLines{lines: Components.Input.render(input, width)}
+    {lines, _layout, _state} = build_screen(state, input_vnode)
     lines
   end
 
-  @spec build_screen(t(), [binary()]) :: {[binary()], map(), t()}
+  @spec build_screen(t(), VDOM.t()) :: {[binary()], map(), t()}
   def build_screen(%{custom_widget: {_, component}, width: width, height: height} = state, _input_lines) do
     lines = component.render.(width)
     len = length(lines)
@@ -1965,18 +1972,20 @@ defmodule OctoPi.TUI.Interactive do
 
   def build_screen(
         %{transcript: transcript, footer: footer, banner: banner, loader: loader, width: width} = state,
-        input_lines
+        input_vnode
       ) do
+    ctx = render_ctx(state)
+
     banner_lines = header_lines(Map.get(state.ui_overrides, :header), banner, state.header, width)
     resource_lines = render_resource_sections(state.loaded_resources, state.theme, state.tools_expanded)
 
-    {transcript_lines, transcript2} =
+    {transcript_vnode, transcript2} =
       RenderTelemetry.with_transcript_render(
         %{
           msg_count: length(transcript.order),
           streaming?: state.current_msg_id != nil
         },
-        fn -> render_transcript(transcript, width, state.theme, state.thinking_visible) end
+        fn -> render_transcript(transcript, ctx) end
       )
 
     state = %{state | transcript: transcript2}
@@ -1995,17 +2004,32 @@ defmodule OctoPi.TUI.Interactive do
     notification_lines = render_notification(state.notification, width)
     footer_lines_val = footer_lines(Map.get(state.ui_overrides, :footer), footer, state.footer_data, width)
 
-    all =
-      banner_lines ++
-        resource_lines ++
-        transcript_lines ++
-        loader_lines ++
-        pending_lines ++ input_lines ++ dropdown_lines ++ notification_lines ++ footer_lines_val
+    footer_vnode = %VDOM.VLines{lines: footer_lines_val}
+    dropdown_vnode = %VDOM.VLines{lines: dropdown_lines}
+    notif_vnode = %VDOM.VLines{lines: notification_lines}
+
+    tree = %VDOM.VFlow{
+      children: [
+        %VDOM.VLines{lines: banner_lines},
+        %VDOM.VLines{lines: resource_lines},
+        transcript_vnode,
+        %VDOM.VLines{lines: loader_lines},
+        %VDOM.VLines{lines: pending_lines},
+        input_vnode,
+        dropdown_vnode,
+        notif_vnode,
+        footer_vnode
+      ]
+    }
+
+    buf = Paint.paint(tree, LineBuf.new(), ctx)
+    {iodata, _cursor} = LineBuf.finalize(buf)
+    all = iodata |> IO.iodata_to_binary() |> String.split("\n")
 
     layout = %{
-      footer_height: length(footer_lines_val),
-      dropdown_height: length(dropdown_lines),
-      notification_height: length(notification_lines)
+      footer_height: vnode_height(footer_vnode, ctx),
+      dropdown_height: vnode_height(dropdown_vnode, ctx),
+      notification_height: vnode_height(notif_vnode, ctx)
     }
 
     {[""] ++ all, layout, state}
@@ -2078,6 +2102,18 @@ defmodule OctoPi.TUI.Interactive do
   defp compaction_label(:mid_run), do: "Auto-compacting… (Esc to cancel)"
   defp compaction_label(:overflow), do: "Context overflow detected, auto-compacting… (Esc to cancel)"
   defp compaction_label(_), do: "Compacting context… (Esc to cancel)"
+
+  defp render_ctx(state) do
+    %RenderContext{
+      theme: state.theme,
+      width: state.width,
+      padding_x: 1,
+      hide_thinking: not state.thinking_visible,
+      hidden_thinking_label: "Thinking..."
+    }
+  end
+
+  defp vnode_height(vnode, ctx), do: Paint.paint(vnode, LineBuf.new(), ctx).line_count
 
   defp render_loader(nil, _width, _theme), do: []
   defp render_loader(%Components.Loader{} = loader, width, theme), do: Components.Loader.render(loader, width, theme)
@@ -2417,61 +2453,11 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
 
-  defp render_transcript(%Transcript{} = transcript, _width, nil, _thinking_visible), do: {[], transcript}
+  defp render_transcript(%Transcript{} = transcript, %RenderContext{theme: nil}),
+    do: {%VDOM.VFlow{children: []}, transcript}
 
-  defp render_transcript(%Transcript{} = transcript, width, theme, thinking_visible) do
-    ctx = %OctoPi.TUI.RenderContext{
-      theme: theme,
-      width: width,
-      padding_x: 1,
-      hide_thinking: not thinking_visible,
-      hidden_thinking_label: "Thinking..."
-    }
-
+  defp render_transcript(%Transcript{} = transcript, %RenderContext{} = ctx) do
     {slots, transcript2} = Transcript.render(transcript, ctx)
-    {slots |> weld_assistant_turns() |> List.flatten(), transcript2}
-  end
-
-  # OSC 133 zone welding. Walks the slot list grouping any range
-  # bounded by an `AssistantHeader` and the matching `AssistantStatus`
-  # (or the end of the list when the turn is still in flight). Tool-use
-  # turns and turns with no visible lines pass through untouched.
-  defp weld_assistant_turns(slots), do: do_weld(slots, [], nil)
-
-  defp do_weld([], acc_rev, nil), do: Enum.reverse(acc_rev)
-
-  defp do_weld([], acc_rev, {%AssistantHeader{} = h, buf_rev}),
-    do: do_weld([], [weld_lines(h, nil, Enum.reverse(buf_rev)) | acc_rev], nil)
-
-  defp do_weld([{%AssistantHeader{} = h, _lines} | rest], acc_rev, nil), do: do_weld(rest, acc_rev, {h, []})
-
-  defp do_weld([{%AssistantStatus{} = s, status_lines} | rest], acc_rev, {%AssistantHeader{} = h, buf_rev}) do
-    welded = weld_lines(h, s, Enum.reverse(buf_rev, status_lines))
-    do_weld(rest, [welded | acc_rev], nil)
-  end
-
-  defp do_weld([{_entry, lines} | rest], acc_rev, nil), do: do_weld(rest, [lines | acc_rev], nil)
-
-  defp do_weld([{_entry, lines} | rest], acc_rev, {h, buf_rev}), do: do_weld(rest, acc_rev, {h, [lines | buf_rev]})
-
-  @osc133_zone_start "\e]133;A\a"
-  @osc133_zone_end "\e]133;B\a"
-  @osc133_zone_final "\e]133;C\a"
-
-  defp weld_lines(_h, %AssistantStatus{has_tool_calls?: true}, lines), do: lines
-  defp weld_lines(%AssistantHeader{has_tool_calls?: true}, _s, lines), do: lines
-
-  defp weld_lines(_h, _s, lines) do
-    case List.flatten(lines) do
-      [] ->
-        []
-
-      [single] ->
-        [@osc133_zone_start <> @osc133_zone_end <> @osc133_zone_final <> single]
-
-      [first | rest] ->
-        {middle, [last]} = Enum.split(rest, -1)
-        [@osc133_zone_start <> first | middle] ++ [@osc133_zone_end <> @osc133_zone_final <> last]
-    end
+    {Transcript.as_vflow(slots), transcript2}
   end
 end

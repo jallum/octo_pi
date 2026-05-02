@@ -16,6 +16,15 @@ defmodule OctoPi.TUI.TranscriptTest do
 
   defp flat(lines), do: Enum.join(lines, "\n")
 
+  defp lines_only(slots) do
+    alias OctoPi.TUI.VDOM
+
+    Enum.flat_map(slots, fn
+      {_, %VDOM.VLines{lines: lines}} -> lines
+      {_, lines} when is_list(lines) -> lines
+    end)
+  end
+
   describe "new/0 + append/3" do
     test "starts empty" do
       t = Transcript.new()
@@ -35,7 +44,7 @@ defmodule OctoPi.TUI.TranscriptTest do
 
       assert t.order == [:c, :b, :a]
       {slots, _} = Transcript.render(t, ctx())
-      assert flat(Transcript.lines_only(slots)) =~ ~r/alpha.*beta.*gamma/s
+      assert flat(lines_only(slots)) =~ ~r/alpha.*beta.*gamma/s
     end
 
     test "appended slots start dirty (no cached lines yet)" do
@@ -52,7 +61,7 @@ defmodule OctoPi.TUI.TranscriptTest do
       {slots, t} = Transcript.render(t, ctx())
       refute MapSet.member?(t.dirty, :a)
       assert Map.has_key?(t.cache, :a)
-      assert flat(Transcript.lines_only(slots)) =~ "alpha"
+      assert flat(lines_only(slots)) =~ "alpha"
     end
 
     test "second render at the same ctx is a cache hit (component not called)" do
@@ -66,8 +75,8 @@ defmodule OctoPi.TUI.TranscriptTest do
       t2 = put_in(t1.cache[:a], ["SENTINEL"])
       {slots, _} = Transcript.render(t2, ctx())
 
-      assert flat(Transcript.lines_only(slots)) == "SENTINEL"
-      assert Enum.join(cached, "\n") =~ "alpha"
+      assert flat(lines_only(slots)) == "SENTINEL"
+      assert flat(lines_only([{nil, cached}])) =~ "alpha"
     end
 
     test "render threads the updated entry struct back into data" do
@@ -181,7 +190,7 @@ defmodule OctoPi.TUI.TranscriptTest do
       {p1, _} = Transcript.render(live, ctx())
       {p2, _} = Transcript.render(fresh, ctx())
 
-      assert flat(Transcript.lines_only(p1)) == flat(Transcript.lines_only(p2))
+      assert flat(lines_only(p1)) == flat(lines_only(p2))
     end
   end
 end

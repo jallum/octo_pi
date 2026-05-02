@@ -4,6 +4,7 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   alias OctoPi.TUI.Components.BashExecution
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   @theme Theme.load_builtin(:dark, :truecolor)
   @preview_lines 20
@@ -11,7 +12,7 @@ defmodule OctoPi.TUI.Components.BashExecutionTest do
   defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(be, width \\ 80) do
-    {_, lines, nil} = BashExecution.render(be, ctx(width))
+    {_, %VDOM.VLines{lines: lines}, nil} = BashExecution.render(be, ctx(width))
     lines
   end
 

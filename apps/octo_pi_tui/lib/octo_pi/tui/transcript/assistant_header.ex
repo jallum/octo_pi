@@ -13,6 +13,7 @@ defmodule OctoPi.TUI.Transcript.AssistantHeader do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM
 
   defstruct msg_id: nil, has_tool_calls?: false
 
@@ -26,5 +27,5 @@ defmodule OctoPi.TUI.Transcript.AssistantHeader do
   def finalize(%__MODULE__{} = self, _), do: self
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{}), do: {self, [], nil}
+  def render(%__MODULE__{} = self, %RenderContext{}), do: {self, %VDOM.VLines{lines: []}, nil}
 end

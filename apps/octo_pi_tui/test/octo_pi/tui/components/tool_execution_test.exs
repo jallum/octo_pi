@@ -4,6 +4,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi
 
   @theme Theme.load_builtin(:dark, :truecolor)
@@ -11,7 +12,7 @@ defmodule OctoPi.TUI.Components.ToolExecutionTest do
   defp ctx(width), do: %RenderContext{theme: @theme, width: width}
 
   defp render_lines(te, width \\ 80) do
-    {_, lines, nil} = ToolExecution.render(te, ctx(width))
+    {_, %VDOM.VLines{lines: lines}, nil} = ToolExecution.render(te, ctx(width))
     lines
   end
 

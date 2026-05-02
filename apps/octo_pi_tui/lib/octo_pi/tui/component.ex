@@ -15,6 +15,7 @@ defmodule OctoPi.TUI.Component do
 
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM
 
   @type t :: struct()
 
@@ -24,7 +25,7 @@ defmodule OctoPi.TUI.Component do
   @callback update(t(), term()) :: t()
   @callback finalize(t(), term()) :: t()
 
-  @callback render(t(), ctx :: RenderContext.t()) :: {t(), [String.t()], frame_ms()}
+  @callback render(t(), ctx :: RenderContext.t()) :: {t(), VDOM.t(), frame_ms()}
 
   @callback handle_key(t(), key :: Key.t()) :: t() | {t(), [term()]}
 

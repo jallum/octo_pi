@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
   alias OctoPi.TUI.Components.Box
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   @preview_lines 20
 
@@ -93,7 +94,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
       )
 
     box = Enum.reduce([header | content], box, &Box.add_child(&2, &1))
-    {be, ["" | Box.render(box, width)], nil}
+    {be, %VDOM.VLines{lines: ["" | Box.render(box, width)]}, nil}
   end
 
   defp build_content(be, theme, color_key) do

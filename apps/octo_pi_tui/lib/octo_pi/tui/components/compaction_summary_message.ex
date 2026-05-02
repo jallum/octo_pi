@@ -20,6 +20,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   @expand_action "app.tools.expand"
 
@@ -42,7 +43,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
 
   @impl true
   def render(%__MODULE__{} = comp, %RenderContext{theme: theme, width: width}),
-    do: {comp, do_render(comp, theme, width), nil}
+    do: {comp, %VDOM.VLines{lines: do_render(comp, theme, width)}, nil}
 
   @impl true
   def handle_key(%__MODULE__{} = comp, key) do

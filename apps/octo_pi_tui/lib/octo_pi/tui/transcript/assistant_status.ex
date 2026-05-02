@@ -13,6 +13,7 @@ defmodule OctoPi.TUI.Transcript.AssistantStatus do
 
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   defstruct stop_reason: nil,
             error_message: nil,
@@ -25,7 +26,8 @@ defmodule OctoPi.TUI.Transcript.AssistantStatus do
         }
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{theme: theme}), do: {self, status_lines(self, theme), nil}
+  def render(%__MODULE__{} = self, %RenderContext{theme: theme}),
+    do: {self, %VDOM.VLines{lines: status_lines(self, theme)}, nil}
 
   defp status_lines(%__MODULE__{stop_reason: nil}, _theme), do: []
   defp status_lines(%__MODULE__{has_tool_calls?: true}, _theme), do: []

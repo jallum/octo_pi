@@ -9,6 +9,7 @@ defmodule OctoPi.TUI.Components.Input do
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi
 
   @page_size 10
@@ -114,6 +115,10 @@ defmodule OctoPi.TUI.Components.Input do
       [top | visible] ++ [bottom]
     end
   end
+
+  @doc "Render the input as a `%VLines{}` VNode."
+  @spec render_node(t(), pos_integer()) :: VDOM.VLines.t()
+  def render_node(%__MODULE__{} = input, width), do: %VDOM.VLines{lines: render(input, width)}
 
   @doc "Cursor position within the rendered output as `{row, col}` (0-indexed, display-width columns). Row includes the top border line."
   @spec cursor_rc(t(), pos_integer()) :: {non_neg_integer(), non_neg_integer()}

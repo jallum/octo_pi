@@ -64,8 +64,9 @@ defmodule OctoPi.TUI.RenderTelemetry do
       [:octo_pi_tui, :transcript, :render],
       meta,
       fn ->
-        {lines, _extra} = result = fun.()
-        {result, Map.put(meta, :line_count, length(lines))}
+        {first, _extra} = result = fun.()
+        line_count = if is_list(first), do: length(first), else: 0
+        {result, Map.put(meta, :line_count, line_count)}
       end
     )
   end

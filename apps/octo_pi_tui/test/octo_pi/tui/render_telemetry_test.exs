@@ -51,7 +51,7 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
       ctx = %RenderContext{theme: @theme, width: 80}
 
       {_block, lines, _frame_ms} = TextBlock.render(block, ctx)
-      assert is_list(lines)
+      assert %OctoPi.TUI.VDOM.VLines{} = lines
 
       assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, start_meta}
       assert start_meta.width == 80

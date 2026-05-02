@@ -24,12 +24,13 @@ defmodule OctoPi.TUI.Transcript do
   """
 
   alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM
 
   @type id :: term()
   @type t :: %__MODULE__{
           order: [id()],
           data: %{id() => struct()},
-          cache: %{id() => [String.t()]},
+          cache: %{id() => VDOM.t()},
           dirty: term(),
           wake_at: %{id() => integer()}
         }
@@ -127,11 +128,10 @@ defmodule OctoPi.TUI.Transcript do
   `mod.render/2` on slots that are dirty or whose wake_at has passed,
   reuses `cache` for the rest.
 
-  Returns ordered `[{entry, lines}]` (oldest-first) so callers can
-  post-process at slot boundaries (for OSC welding, etc.). Plain
-  callers can flatten via `lines_only/1`.
+  Returns ordered `[{entry, vnode}]` (oldest-first). Callers can
+  compose results into a VFlow via `as_vflow/1`.
   """
-  @spec render(t(), RenderContext.t()) :: {[{struct(), [String.t()]}], t()}
+  @spec render(t(), RenderContext.t()) :: {[{struct(), VDOM.t()}], t()}
   def render(%__MODULE__{} = t, %RenderContext{} = ctx) do
     now = System.monotonic_time(:millisecond)
 
@@ -146,9 +146,9 @@ defmodule OctoPi.TUI.Transcript do
     {Enum.reverse(slots_rev), t}
   end
 
-  @doc "Flatten `render/2`'s slot list into a single line list."
-  @spec lines_only([{struct(), [String.t()]}]) :: [String.t()]
-  def lines_only(slots), do: Enum.flat_map(slots, fn {_entry, lines} -> lines end)
+  @doc "Compose `render/2`'s slot list into a single `%VFlow{}` node."
+  @spec as_vflow([{struct(), VDOM.t()}]) :: VDOM.VFlow.t()
+  def as_vflow(slots), do: %VDOM.VFlow{children: Enum.map(slots, fn {_, vnode} -> vnode end)}
 
   # ── internals ──────────────────────────────────────────────────
 
@@ -172,13 +172,13 @@ defmodule OctoPi.TUI.Transcript do
 
   defp do_render(id, d_acc, c_acc, w_acc, s_rev, ctx, now) do
     %mod{} = entry = Map.fetch!(d_acc, id)
-    {entry2, lines, frame_ms} = mod.render(entry, ctx)
+    {entry2, vnode, frame_ms} = mod.render(entry, ctx)
 
     {
       Map.put(d_acc, id, entry2),
-      Map.put(c_acc, id, lines),
+      Map.put(c_acc, id, vnode),
       update_wake(w_acc, id, frame_ms, now),
-      [{entry2, lines} | s_rev]
+      [{entry2, vnode} | s_rev]
     }
   end
 

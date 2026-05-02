@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.Components.UserMessage do
   alias OctoPi.TUI.Components.Markdown
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   @osc133_zone_start "\e]133;A\a"
   @osc133_zone_end "\e]133;B\a"
@@ -19,7 +20,7 @@ defmodule OctoPi.TUI.Components.UserMessage do
   def new(text), do: %__MODULE__{text: text}
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, build_lines(self, ctx), nil}
+  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, %VDOM.VLines{lines: build_lines(self, ctx)}, nil}
 
   defp build_lines(%__MODULE__{text: text}, _ctx) when text in ["", nil], do: []
 

@@ -14,6 +14,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
 
   alias OctoPi.TUI.Components.Markdown.Render, as: MdRender
   alias OctoPi.TUI.RenderContext
+  alias OctoPi.TUI.VDOM
 
   defstruct snapshot: "", md_render: nil
 
@@ -63,6 +64,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
 
     :telemetry.span([:octo_pi_tui, :markdown, :render], start_meta, fn ->
       {self, lines, frame_ms} = fun.()
+      vnode = %VDOM.VLines{lines: lines}
 
       stop_meta =
         Map.merge(start_meta, %{
@@ -70,7 +72,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
           text_bytes: byte_size(self.snapshot)
         })
 
-      {{self, lines, frame_ms}, stop_meta}
+      {{self, vnode, frame_ms}, stop_meta}
     end)
   end
 end

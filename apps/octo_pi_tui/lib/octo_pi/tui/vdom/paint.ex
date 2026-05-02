@@ -12,9 +12,10 @@ defmodule OctoPi.TUI.VDOM.Paint do
     - VMemo cache hits splice iodata and apply cursor offset.
   """
 
+  import OctoPi.TUI.VDOM, only: [is_vnode: 1]
+
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.VDOM.LineBuf
-  import VDOM, only: [is_vnode: 1]
 
   require Logger
 
@@ -29,7 +30,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
   end
 
   def paint(%VDOM.VFlow{children: children}, buf, ctx) do
-    paint_kids(children, buf, ctx) |> maybe_flush_line()
+    children |> paint_kids(buf, ctx) |> maybe_flush_line()
   end
 
   def paint(%VDOM.VRow{children: children}, buf, ctx) do
@@ -38,11 +39,11 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
   def paint(%VDOM.VBox{border?: border, padding_x: px, padding_y: py, children: children}, buf, ctx) do
     width = ctx.width
-    border_line = if border, do: String.duplicate("─", max(1, width)), else: nil
+    border_line = if border, do: String.duplicate("─", max(1, width))
 
     buf =
       if border do
-        LineBuf.push(buf, "┌" <> border_line <> "┐") |> LineBuf.flush_line()
+        buf |> LineBuf.push("┌" <> border_line <> "┐") |> LineBuf.flush_line()
       else
         buf
       end
@@ -54,7 +55,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
     buf = pad_vertical(buf, py, width, border)
 
     if border do
-      LineBuf.push(buf, "└" <> border_line <> "┘") |> LineBuf.flush_line()
+      buf |> LineBuf.push("└" <> border_line <> "┘") |> LineBuf.flush_line()
     else
       buf
     end
@@ -83,7 +84,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
     if before == after_count do
       # Empty zone: emit all three markers on a single line, then flush.
-      LineBuf.push(buf, open_full) |> LineBuf.push(close_full) |> LineBuf.flush_line()
+      buf |> LineBuf.push(open_full) |> LineBuf.push(close_full) |> LineBuf.flush_line()
     else
       # Zone had content: wrap via iodata manipulation.
       # Prepend open to first line of emitted block, append close to last line.
@@ -95,16 +96,14 @@ defmodule OctoPi.TUI.VDOM.Paint do
   def paint(%VDOM.VMemo{key: key, thunk: thunk, cell: cell}, _buf, ctx) do
     # Read the reconciler cell; opaque to paint.
     # The cell stores memo data OR returns a miss signal.
-    case read_memo_cell(cell, key) do
-      # {:hit, ...} clause suppressed until memo cell is wired (d06.10+);
-      # read_memo_cell/2 currently always returns {:miss, nil}.
-      {:miss, cell2} ->
-        # Evaluate thunk and store result in cell.
-        result = thunk.()
-        {iodata, width, cursor_offset, painted} = paint_with_capture(result, ctx)
-        write_memo_cell(cell2, key, {iodata, width, cursor_offset})
-        painted
-    end
+    # {:hit, ...} clause suppressed until memo cell is wired (d06.10+);
+    # read_memo_cell/2 currently always returns {:miss, nil}.
+    {:miss, cell2} = read_memo_cell(cell, key)
+    # Evaluate thunk and store result in cell.
+    result = thunk.()
+    {iodata, width, cursor_offset, painted} = paint_with_capture(result, ctx)
+    write_memo_cell(cell2, key, {iodata, width, cursor_offset})
+    painted
   end
 
   def paint(%VDOM.VHole{slot_id: _slot_id}, buf, _ctx) do
@@ -168,25 +167,24 @@ defmodule OctoPi.TUI.VDOM.Paint do
   defp maybe_flush_line(buf), do: LineBuf.flush_line(buf)
 
   defp paint_lines_enum([], buf), do: buf
-  defp paint_lines_enum([line], buf), do: LineBuf.push(buf, line)
 
   defp paint_lines_enum([line | rest], buf) do
-    paint_lines_enum(rest, LineBuf.push(buf, line) |> LineBuf.flush_line())
+    paint_lines_enum(rest, buf |> LineBuf.push(line) |> LineBuf.flush_line())
   end
 
   defp paint_split_lines(buf, first, [last]) do
-    LineBuf.push(buf, first) |> LineBuf.flush_line() |> LineBuf.push(last)
+    buf |> LineBuf.push(first) |> LineBuf.flush_line() |> LineBuf.push(last)
   end
 
   defp paint_split_lines(buf, first, [second | rest]) do
-    paint_split_lines(LineBuf.push(buf, first) |> LineBuf.flush_line(), second, rest)
+    buf |> LineBuf.push(first) |> LineBuf.flush_line() |> paint_split_lines(second, rest)
   end
 
   defp pad_vertical(buf, 0, _width, _border), do: buf
 
   defp pad_vertical(buf, py, width, border) do
     line = if border, do: String.duplicate(" ", max(2, width - 2)), else: String.duplicate(" ", width)
-    Enum.reduce(1..py, buf, fn _, acc -> LineBuf.push(acc, line) |> LineBuf.flush_line() end)
+    Enum.reduce(1..py, buf, fn _, acc -> acc |> LineBuf.push(line) |> LineBuf.flush_line() end)
   end
 
   defp pad_horizontal_open(buf, 0, _border), do: buf
@@ -202,16 +200,16 @@ defmodule OctoPi.TUI.VDOM.Paint do
   end
 
   defp pad_horizontal_close(buf, 0, border) do
-    if border, do: LineBuf.push(buf, "│") |> LineBuf.flush_line(), else: LineBuf.flush_line(buf)
+    if border, do: buf |> LineBuf.push("│") |> LineBuf.flush_line(), else: LineBuf.flush_line(buf)
   end
 
   defp pad_horizontal_close(buf, px, border) do
     pad = String.duplicate(" ", px)
 
     if border do
-      LineBuf.push(buf, pad <> "│") |> LineBuf.flush_line()
+      buf |> LineBuf.push(pad <> "│") |> LineBuf.flush_line()
     else
-      LineBuf.push(buf, pad) |> LineBuf.flush_line()
+      buf |> LineBuf.push(pad) |> LineBuf.flush_line()
     end
   end
 
@@ -238,7 +236,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
     {iolist, cursor} = LineBuf.finalize(buf2)
 
     width = if cursor, do: elem(cursor, 1), else: 0
-    offset = if cursor, do: {buf2.line_count, width}, else: nil
+    offset = if cursor, do: {buf2.line_count, width}
 
     {iolist, width, offset, buf2}
   end

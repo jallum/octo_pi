@@ -8,6 +8,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
+  alias OctoPi.TUI.VDOM
 
   @type render_fn :: (ToolRender.Context.t() -> [String.t()])
   @type status :: :pending | :success | :error
@@ -78,7 +79,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
         custom_fn -> render_custom(te, custom_fn, theme, width)
       end
 
-    {te, lines, nil}
+    {te, %VDOM.VLines{lines: lines}, nil}
   end
 
   defp custom_render_fn(%{status: :pending, render_call: f}) when is_function(f), do: f

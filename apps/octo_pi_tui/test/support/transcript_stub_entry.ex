@@ -7,11 +7,13 @@ defmodule OctoPi.TUI.TranscriptStubStatic do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.VDOM
+
   defstruct [:snapshot]
 
   @impl true
   def render(%__MODULE__{snapshot: s} = self, ctx) do
-    {self, ["[#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"], nil}
+    {self, %VDOM.VLines{lines: ["[#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}, nil}
   end
 end
 
@@ -23,6 +25,8 @@ defmodule OctoPi.TUI.TranscriptStubStreaming do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.VDOM
+
   defstruct snapshot: "", finalized?: false
 
   @impl true
@@ -33,7 +37,7 @@ defmodule OctoPi.TUI.TranscriptStubStreaming do
 
   @impl true
   def render(%__MODULE__{snapshot: s} = self, ctx) do
-    {self, ["[stream:#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"], nil}
+    {self, %VDOM.VLines{lines: ["[stream:#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}, nil}
   end
 end
 
@@ -46,10 +50,12 @@ defmodule OctoPi.TUI.TranscriptStubAnimated do
 
   @behaviour OctoPi.TUI.Component
 
+  alias OctoPi.TUI.VDOM
+
   defstruct frame: 0, cadence: 50
 
   @impl true
   def render(%__MODULE__{frame: f, cadence: ms} = self, _ctx) do
-    {%{self | frame: f + 1}, ["frame=#{f}"], ms}
+    {%{self | frame: f + 1}, %VDOM.VLines{lines: ["frame=#{f}"]}, ms}
   end
 end
