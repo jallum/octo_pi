@@ -9,6 +9,7 @@ defmodule OctoPi.Coder.CLI do
 
   alias OctoPi.AI.Model
   alias OctoPi.AI.ModelRegistry
+  alias OctoPi.Agent
   alias OctoPi.Coder.Modes.Print
   alias OctoPi.Coder.Modes.Rpc
   alias OctoPi.Coder.PromptTemplates
@@ -233,7 +234,7 @@ defmodule OctoPi.Coder.CLI do
   end
 
   @doc false
-  @spec response_for(String.t(), pid()) :: map()
+  @spec response_for(String.t(), OctoPi.Agent.t()) :: map()
   def response_for(line, session) do
     case Rpc.parse_line(line) do
       {:ok, req} -> Rpc.handle_request(session, req)

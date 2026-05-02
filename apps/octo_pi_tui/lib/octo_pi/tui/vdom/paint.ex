@@ -16,11 +16,12 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.VDOM.LineBuf
+  alias OctoPi.TUI.RenderContext
 
   require Logger
 
   @doc "Paint a single VNode onto a LineBuf."
-  @spec paint(VDOM.t(), LineBuf.t(), RenderCtx.t()) :: LineBuf.t()
+  @spec paint(VDOM.t(), LineBuf.t(), RenderContext.t()) :: LineBuf.t()
   def paint(%VDOM.VText{text: text, width: _width}, buf, _ctx) do
     LineBuf.push(buf, text)
   end
@@ -102,7 +103,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
 
   # paint_kids recurses into children that are allowed to emit newlines.
   # Children is iodata: scalars, lists, or VNodes.
-  @spec paint_kids(iodata(), LineBuf.t(), RenderCtx.t()) :: LineBuf.t()
+  @spec paint_kids(iodata(), LineBuf.t(), RenderContext.t()) :: LineBuf.t()
   defp paint_kids(children, buf, ctx) when is_list(children) do
     # Fold over list elements without concatenating.
     Enum.reduce(children, buf, fn child, acc -> paint_kids(child, acc, ctx) end)
@@ -126,7 +127,7 @@ defmodule OctoPi.TUI.VDOM.Paint do
   end
 
   # paint_inline_kids is for VRow: children are concatenated on the same line.
-  @spec paint_inline_kids(iodata(), LineBuf.t(), RenderCtx.t()) :: LineBuf.t()
+  @spec paint_inline_kids(iodata(), LineBuf.t(), RenderContext.t()) :: LineBuf.t()
   defp paint_inline_kids(children, buf, ctx) when is_list(children) do
     Enum.reduce(children, buf, fn child, acc -> paint_inline_kids(child, acc, ctx) end)
   end

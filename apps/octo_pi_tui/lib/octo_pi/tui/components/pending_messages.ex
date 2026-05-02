@@ -3,6 +3,7 @@ defmodule OctoPi.TUI.Components.PendingMessages do
 
   alias OctoPi.TUI.Components.Text
   alias OctoPi.TUI.Keybindings
+  alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.VDOM
   alias OctoPi.TUI.WrapAnsi

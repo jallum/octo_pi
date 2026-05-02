@@ -147,7 +147,7 @@ defmodule OctoPi.TUI.UI.State do
   @spec handle_event(t(), term()) :: t()
   def handle_event(%__MODULE__{} = state, _event), do: state
 
-  @spec paint(t(), RenderContext.t()) :: {t(), iodata(), nil | {non_neg_integer(), non_neg_integer()}}
+  @spec paint(t(), RenderContext.t()) :: {t(), iodata(), binary()}
   def paint(%__MODULE__{root_component: component} = state, render_ctx) do
     now = System.monotonic_time(:millisecond)
 
@@ -189,7 +189,7 @@ defmodule OctoPi.TUI.UI.State do
     "\e[?25h#{style_seq}\e[#{row + 1};#{col + 1}H"
   end
 
-  @spec use_state(t(), cell_id(), term() | (-> term())) :: {{term(), (term() -> t())}, t()}
+  @spec use_state(t(), cell_id(), term() | (-> term())) :: {{term(), (t(), term() -> t())}, t()}
   def use_state(%__MODULE__{hook_cells: cells, gen: gen} = state, id, init) do
     case cells do
       %{^id => %StateCell{value: value}} ->

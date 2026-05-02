@@ -47,7 +47,7 @@ defmodule OctoPi.TUI.Compat do
   end
 
   @doc "Wrap a legacy component (old transcript contract) as a %VLines leaf."
-  @spec wrap_transcript_contract(module(), Component.t(), RenderContext.t()) :: VDOM.VLines.t()
+  @spec wrap_transcript_contract(module(), Component.t(), RenderContext.t()) :: {VDOM.VLines.t(), Component.t()}
   def wrap_transcript_contract(module, state, ctx) do
     case module.render(state, ctx) do
       {state2, lines, _ignored} when is_list(lines) ->
