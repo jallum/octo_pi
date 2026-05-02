@@ -5,6 +5,7 @@
     "opi-5vi",
     "opi-ewi",
     "opi-fq0",
+    "opi-i97",
     "opi-rv3"
   ],
   "created": "2026-05-02T00:45:11Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "Component contract migration: render/2 returns VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:50Z"
+  "updated_at": "2026-05-02T00:46:51Z"
 }

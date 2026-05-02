@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-1da",
     "opi-rv3"
   ],
   "blocks": [],
@@ -12,5 +13,5 @@
   "status": "open",
   "title": "UserMessage → %VZone{type: :prompt} — delete wrap_osc133/1",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:50Z"
+  "updated_at": "2026-05-02T00:46:51Z"
 }
