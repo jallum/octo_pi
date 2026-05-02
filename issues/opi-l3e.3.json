@@ -1,8 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
-    "opi-l3e.2",
-    "opi-l3e.4"
+    "opi-l3e.2"
   ],
   "blocks": [],
   "created": "2026-05-02T15:22:52Z",
@@ -14,5 +13,5 @@
   "status": "open",
   "title": "Update Interactive.ex to use new unified Input API",
   "type": "task",
-  "updated_at": "2026-05-02T15:26:04Z"
+  "updated_at": "2026-05-02T15:26:13Z"
 }
