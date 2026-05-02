@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T00:45:54Z",
+  "description": "After T0 UserMessage returns {self, %VLines{lines: lines}, nil}. After T4, it can return a proper %VZone{} tree with no internal painting.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/user_message.ex\n\nNew render/2:\n  def render(%__MODULE__{} = self, %RenderContext{} = ctx) do\n    {self, build_vnode(self, ctx), nil}\n  end\n\n  defp build_vnode(%__MODULE__{text: t}, _ctx) when t in [\"\", nil],\n    do: %VDOM.VFlow{children: []}\n\n  defp build_vnode(%__MODULE__{text: text}, %RenderContext{theme: theme, width: width}) do\n    if String.trim(text) == \"\" do\n      %VDOM.VFlow{children: []}\n    else\n      md       = Markdown.new(text, theme, padding_x: 1)\n      md_lines = Markdown.render(md, width)\n      bg_fn    = fn l -\u003e Theme.bg(theme, :user_message_bg, pad_to_width(l, width)) end\n      styled   = [bg_fn.(\"\") | Enum.map(md_lines, bg_fn)] ++ [bg_fn.(\"\")]\n      %VDOM.VZone{type: :prompt, id: \"user\",\n                  children: %VDOM.VLines{lines: styled}}\n    end\n  end\n\nDelete from user_message.ex:\n- @osc133_zone_start, @osc133_zone_end, @osc133_zone_final (lines 10–12)\n- wrap_osc133/1 (lines 57–65)\n\nTests: Empty text → empty VFlow. Non-empty → VZone wrapping VLines. Paint and verify OSC 133 prompt markers appear on first/last line. No raw \\e]133; literals remain in the file.",
+  "id": "opi-i97",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "UserMessage → %VZone{type: :prompt} — delete wrap_osc133/1",
+  "type": "task",
+  "updated_at": "2026-05-02T00:45:54Z"
+}
