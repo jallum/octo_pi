@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-l3e.2"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-l3e",
   "priority": 1,
-  "status": "open",
+  "status": "in_progress",
   "title": "Update Interactive.ex to use new unified Input API",
   "type": "Refactor Input to own dropdown state and composition",
-  "updated_at": "2026-05-02T15:26:53Z"
+  "updated_at": "2026-05-02T15:32:08Z"
 }
