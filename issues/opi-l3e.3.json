@@ -14,6 +14,6 @@
   "priority": 1,
   "status": "open",
   "title": "Update Interactive.ex to use new unified Input API",
-  "type": "task",
-  "updated_at": "2026-05-02T15:26:17Z"
+  "type": "Refactor Input to own dropdown state and composition",
+  "updated_at": "2026-05-02T15:26:53Z"
 }
