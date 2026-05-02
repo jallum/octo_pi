@@ -751,8 +751,7 @@ defmodule OctoPi.TUI.Interactive do
       Enum.reject(
         [
           loader_deadline_ms(state),
-          streaming_tick_remaining_ms(state, now),
-          transcript_deadline_ms(state, now)
+          streaming_tick_remaining_ms(state, now)
         ],
         &is_nil/1
       )
@@ -768,15 +767,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp streaming_tick_remaining_ms(%{streaming_tick_at: nil}, _now), do: nil
   defp streaming_tick_remaining_ms(%{streaming_tick_at: at}, now), do: max(0, at - now)
-
-  defp transcript_deadline_ms(%{transcript: %Transcript{} = t}, now) do
-    case Transcript.next_deadline(t) do
-      :infinity -> nil
-      deadline -> max(0, deadline - now)
-    end
-  end
-
-  defp transcript_deadline_ms(_state, _now), do: nil
 
   defp put_dialog_from(%{dialog: {type, nil, a, b}} = state, from), do: %{state | dialog: {type, from, a, b}}
 
@@ -1976,14 +1966,8 @@ defmodule OctoPi.TUI.Interactive do
       ) do
     ctx = render_ctx(state)
 
-    {transcript_vnode, transcript2} =
-      RenderTelemetry.with_transcript_render(
-        %{
-          msg_count: length(transcript.order),
-          streaming?: state.current_msg_id != nil
-        },
-        fn -> render_transcript(transcript, ctx) end
-      )
+    {slots, transcript2} = Transcript.render(transcript, ctx)
+    transcript_vnode = Transcript.as_vflow(slots)
 
     state = %{state | transcript: transcript2}
 
@@ -2449,12 +2433,4 @@ defmodule OctoPi.TUI.Interactive do
   defp section_header(theme, name), do: Theme.fg(theme, :md_heading, "[#{name}]")
 
   defp dim(text), do: "\e[2m#{text}\e[22m"
-
-  defp render_transcript(%Transcript{} = transcript, %RenderContext{theme: nil}),
-    do: {%VDOM.VFlow{children: []}, transcript}
-
-  defp render_transcript(%Transcript{} = transcript, %RenderContext{} = ctx) do
-    {slots, transcript2} = Transcript.render(transcript, ctx)
-    {Transcript.as_vflow(slots), transcript2}
-  end
 end

@@ -16,7 +16,7 @@ defmodule OctoPi.TUI.Components.UserMessage do
   def new(text), do: %__MODULE__{text: text}
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, build_vnode(self, ctx), nil}
+  def render(%__MODULE__{} = self, %RenderContext{} = ctx), do: {self, build_vnode(self, ctx)}
 
   defp build_vnode(%__MODULE__{text: t}, _ctx) when t in ["", nil], do: %VDOM.VFlow{children: []}
 

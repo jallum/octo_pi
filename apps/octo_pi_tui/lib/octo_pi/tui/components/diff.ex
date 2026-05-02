@@ -13,7 +13,7 @@ defmodule OctoPi.TUI.Components.Diff do
 
   @impl true
   def render(%__MODULE__{diff_text: diff_text} = self, %RenderContext{theme: theme}),
-    do: {self, %VDOM.VLines{lines: render_diff(diff_text, theme)}, nil}
+    do: {self, %VDOM.VLines{lines: render_diff(diff_text, theme)}}
 
   @spec render_diff(String.t(), Theme.t()) :: [String.t()]
   def render_diff("", _theme), do: []

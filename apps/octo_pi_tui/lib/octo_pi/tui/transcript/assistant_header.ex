@@ -27,5 +27,5 @@ defmodule OctoPi.TUI.Transcript.AssistantHeader do
   def finalize(%__MODULE__{} = self, _), do: self
 
   @impl true
-  def render(%__MODULE__{} = self, %RenderContext{}), do: {self, %VDOM.VLines{lines: []}, nil}
+  def render(%__MODULE__{} = self, %RenderContext{}), do: {self, %VDOM.VLines{lines: []}}
 end

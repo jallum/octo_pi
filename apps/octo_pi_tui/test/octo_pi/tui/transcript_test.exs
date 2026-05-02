@@ -4,7 +4,6 @@ defmodule OctoPi.TUI.TranscriptTest do
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.Theme
   alias OctoPi.TUI.Transcript
-  alias OctoPi.TUI.TranscriptStubAnimated, as: Anim
   alias OctoPi.TUI.TranscriptStubStatic, as: Static
   alias OctoPi.TUI.TranscriptStubStreaming, as: Stream
 
@@ -32,7 +31,6 @@ defmodule OctoPi.TUI.TranscriptTest do
       assert t.data == %{}
       assert t.cache == %{}
       assert t.dirty == MapSet.new()
-      assert t.wake_at == %{}
     end
 
     test "newest entries land at head; render emits oldest-first" do
@@ -80,16 +78,17 @@ defmodule OctoPi.TUI.TranscriptTest do
     end
 
     test "render threads the updated entry struct back into data" do
-      t = Transcript.append(Transcript.new(), :a, %Anim{frame: 0, cadence: 100})
+      t =
+        Transcript.new()
+        |> Transcript.append(:a, %Stream{snapshot: ""})
+        |> Transcript.update(:a, "v1")
 
       {_, t1} = Transcript.render(t, ctx())
-      assert t1.data[:a].frame == 1
+      assert t1.data[:a].snapshot == "v1"
 
-      # Force re-render by jumping past the wake_at deadline:
-      # we can simulate by clearing the wake_at and marking dirty.
-      t1 = %{t1 | dirty: MapSet.new([:a])}
+      t1 = Transcript.update(t1, :a, "v2")
       {_, t2} = Transcript.render(t1, ctx())
-      assert t2.data[:a].frame == 2
+      assert t2.data[:a].snapshot == "v2"
     end
   end
 
@@ -133,40 +132,6 @@ defmodule OctoPi.TUI.TranscriptTest do
 
       t = Transcript.invalidate(t)
       assert t.dirty == MapSet.new([:a, :b])
-    end
-  end
-
-  describe "wake_at + next_deadline/1" do
-    test "static entries don't populate wake_at" do
-      t = Transcript.append(Transcript.new(), :a, %Static{snapshot: "x"})
-      {_, t} = Transcript.render(t, ctx())
-      assert t.wake_at == %{}
-      assert Transcript.next_deadline(t) == :infinity
-    end
-
-    test "animated entry sets wake_at; next_deadline is the earliest" do
-      t =
-        Transcript.new()
-        |> Transcript.append(:slow, %Anim{cadence: 1000})
-        |> Transcript.append(:fast, %Anim{cadence: 50})
-
-      {_, t} = Transcript.render(t, ctx())
-
-      now = System.monotonic_time(:millisecond)
-      assert_in_delta t.wake_at[:slow], now + 1000, 100
-      assert_in_delta t.wake_at[:fast], now + 50, 100
-      assert_in_delta Transcript.next_deadline(t), now + 50, 100
-    end
-
-    test "static return after animated render clears the wake_at entry" do
-      t = Transcript.append(Transcript.new(), :a, %Anim{cadence: 100})
-      {_, t} = Transcript.render(t, ctx())
-      assert Map.has_key?(t.wake_at, :a)
-
-      # Simulate the entry going static: replace it with a static struct.
-      t = Transcript.invalidate(%{t | data: Map.put(t.data, :a, %Static{snapshot: "static"})})
-      {_, t} = Transcript.render(t, ctx())
-      refute Map.has_key?(t.wake_at, :a)
     end
   end
 

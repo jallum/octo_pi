@@ -25,8 +25,6 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
     events = [
       [:octo_pi_tui, :markdown, :render, :start],
       [:octo_pi_tui, :markdown, :render, :stop],
-      [:octo_pi_tui, :transcript, :render, :start],
-      [:octo_pi_tui, :transcript, :render, :stop],
       [:octo_pi_tui, :interactive, :handle_info, :start],
       [:octo_pi_tui, :interactive, :handle_info, :stop],
       [:octo_pi_tui, :interactive, :mailbox],
@@ -50,7 +48,7 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
       block = %TextBlock{snapshot: "# Hello\n\nWorld."}
       ctx = %RenderContext{theme: @theme, width: 80}
 
-      {_block, lines, _frame_ms} = TextBlock.render(block, ctx)
+      {_block, lines} = TextBlock.render(block, ctx)
       assert %OctoPi.TUI.VDOM.VLines{} = lines
 
       assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, start_meta}
@@ -72,25 +70,6 @@ defmodule OctoPi.TUI.RenderTelemetryTest do
       assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :start], _, _}
       assert_received {:telemetry, [:octo_pi_tui, :markdown, :render, :stop], _, stop_meta}
       assert stop_meta.text_bytes == 0
-    end
-  end
-
-  describe "RenderTelemetry.with_transcript_render/3" do
-    test "fires start/stop with msg_count, streaming?, line_count" do
-      result =
-        RenderTelemetry.with_transcript_render(%{msg_count: 3, streaming?: true}, fn ->
-          {["one", "two", "three"], :extra}
-        end)
-
-      assert result == {["one", "two", "three"], :extra}
-
-      assert_received {:telemetry, [:octo_pi_tui, :transcript, :render, :start], _, start_meta}
-      assert start_meta.msg_count == 3
-      assert start_meta.streaming? == true
-
-      assert_received {:telemetry, [:octo_pi_tui, :transcript, :render, :stop], stop_meas, stop_meta}
-      assert is_integer(stop_meas.duration)
-      assert stop_meta.line_count == 3
     end
   end
 

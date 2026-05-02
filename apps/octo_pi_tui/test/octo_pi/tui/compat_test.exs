@@ -15,7 +15,7 @@ defmodule OctoPi.TUI.CompatTest.LegacyText do
     [String.pad_trailing(text, width)]
   end
 
-  # Transcript contract: render(state, ctx) :: {state, lines, frame_ms}
+  # Old transcript contract (3-tuple, handled by wrap_transcript_contract):
   def render(%__MODULE__{text: text} = state, %RenderContext{width: width}) do
     {state, [String.pad_trailing(text, width)], nil}
   end

@@ -13,7 +13,7 @@ defmodule OctoPi.TUI.TranscriptStubStatic do
 
   @impl true
   def render(%__MODULE__{snapshot: s} = self, ctx) do
-    {self, %VDOM.VLines{lines: ["[#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}, nil}
+    {self, %VDOM.VLines{lines: ["[#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}}
   end
 end
 
@@ -37,25 +37,6 @@ defmodule OctoPi.TUI.TranscriptStubStreaming do
 
   @impl true
   def render(%__MODULE__{snapshot: s} = self, ctx) do
-    {self, %VDOM.VLines{lines: ["[stream:#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}, nil}
-  end
-end
-
-defmodule OctoPi.TUI.TranscriptStubAnimated do
-  @moduledoc """
-  Animated test entry. Returns a `frame_ms` cadence and increments
-  its frame counter on every render. The `:cadence` field controls
-  the requested frame_ms.
-  """
-
-  @behaviour OctoPi.TUI.Component
-
-  alias OctoPi.TUI.VDOM
-
-  defstruct frame: 0, cadence: 50
-
-  @impl true
-  def render(%__MODULE__{frame: f, cadence: ms} = self, _ctx) do
-    {%{self | frame: f + 1}, %VDOM.VLines{lines: ["frame=#{f}"]}, ms}
+    {self, %VDOM.VLines{lines: ["[stream:#{inspect(s)}|#{inspect(ctx.theme.name)}|w=#{ctx.width}]"]}}
   end
 end

@@ -24,15 +24,14 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
   end
 
   defp render_lines(msg, ctx) do
-    {_, vnode, _} = UserMessage.render(msg, ctx)
+    {_, vnode} = UserMessage.render(msg, ctx)
     paint_lines(vnode, ctx.width)
   end
 
   describe "render/2" do
     test "renders text content" do
       msg = UserMessage.new("hello world")
-      {_, _vnode, frame_ms} = UserMessage.render(msg, ctx())
-      assert frame_ms == nil
+      {_, _vnode} = UserMessage.render(msg, ctx())
       lines = render_lines(msg, ctx())
       stripped = Enum.map(lines, &strip_ansi/1)
       assert Enum.any?(stripped, &(&1 =~ "hello world"))
@@ -61,7 +60,7 @@ defmodule OctoPi.TUI.Components.UserMessageTest do
 
     test "empty text returns empty VFlow" do
       msg = UserMessage.new("")
-      assert {%UserMessage{}, %VDOM.VFlow{children: []}, nil} = UserMessage.render(msg, ctx())
+      assert {%UserMessage{}, %VDOM.VFlow{children: []}} = UserMessage.render(msg, ctx())
     end
 
     test "includes padding" do

@@ -3,7 +3,7 @@ defmodule OctoPi.TUI.Compat do
   Adapter wrapping legacy Component.render/2 calls as %VLines{} leaves.
 
   The adapter bridges the old contract (Component.render(state, width) :: [binary()])
-  and the transcript contract (Component.render(state, ctx) :: {state, lines, frame_ms})
+  and the old transcript contract (Component.render(state, ctx) :: {state, lines, nil})
   so existing components paint identically while migrations are in flight.
 
   Feature flag: :octo_pi_tui_vdom? — default false in config/config.exs.
@@ -46,18 +46,17 @@ defmodule OctoPi.TUI.Compat do
     %VDOM.VLines{lines: lines}
   end
 
-  @doc "Wrap a legacy component (transcript contract) as a %VLines leaf."
+  @doc "Wrap a legacy component (old transcript contract) as a %VLines leaf."
   @spec wrap_transcript_contract(module(), Component.t(), RenderContext.t()) :: VDOM.VLines.t()
   def wrap_transcript_contract(module, state, ctx) do
-    # Call the transcript contract: module.render(state, ctx) -> {state, [lines], frame_ms}
     case module.render(state, ctx) do
-      {state2, lines, _frame_ms} when is_list(lines) ->
+      {state2, lines, _ignored} when is_list(lines) ->
         ensure_string_lines(lines)
         {%VDOM.VLines{lines: lines}, state2}
 
       other ->
         raise ArgumentError,
-              "Compat.wrap_transcript_contract: expected {state, [binary()], frame_ms} from #{module}.render/2, got #{inspect(other)}"
+              "Compat.wrap_transcript_contract: expected {state, [binary()], _} from #{module}.render/2, got #{inspect(other)}"
     end
   end
 

@@ -94,7 +94,7 @@ defmodule OctoPi.TUI.Components.BashExecution do
       )
 
     box = Enum.reduce([header | content], box, &Box.add_child(&2, &1))
-    {be, %VDOM.VLines{lines: ["" | Box.render(box, width)]}, nil}
+    {be, %VDOM.VLines{lines: ["" | Box.render(box, width)]}}
   end
 
   defp build_content(be, theme, color_key) do

@@ -44,7 +44,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
         %RenderContext{theme: t, width: w} = ctx
       )
       when not is_nil(t) and is_integer(w) do
-    instrument(ctx, fn -> {self, MdRender.to_lines(md), nil} end)
+    instrument(ctx, fn -> {self, MdRender.to_lines(md)} end)
   end
 
   # Cold path: no cache or ctx differs — (re)build from snapshot.
@@ -55,7 +55,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
         |> MdRender.new(ctx.width, padding_x: ctx.padding_x)
         |> MdRender.put(s)
 
-      {%{self | md_render: md}, MdRender.to_lines(md), nil}
+      {%{self | md_render: md}, MdRender.to_lines(md)}
     end)
   end
 
@@ -63,7 +63,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
     start_meta = %{width: ctx.width}
 
     :telemetry.span([:octo_pi_tui, :markdown, :render], start_meta, fn ->
-      {self, lines, frame_ms} = fun.()
+      {self, lines} = fun.()
       vnode = %VDOM.VLines{lines: lines}
 
       stop_meta =
@@ -72,7 +72,7 @@ defmodule OctoPi.TUI.Components.AssistantMessage.TextBlock do
           text_bytes: byte_size(self.snapshot)
         })
 
-      {{self, vnode, frame_ms}, stop_meta}
+      {{self, vnode}, stop_meta}
     end)
   end
 end

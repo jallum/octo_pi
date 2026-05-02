@@ -19,13 +19,11 @@ defmodule OctoPi.TUI.Component do
 
   @type t :: struct()
 
-  @type frame_ms :: non_neg_integer() | nil
-
   @callback invalidate(t()) :: t()
   @callback update(t(), term()) :: t()
   @callback finalize(t(), term()) :: t()
 
-  @callback render(t(), ctx :: RenderContext.t()) :: {t(), VDOM.t(), frame_ms()}
+  @callback render(t(), ctx :: RenderContext.t()) :: {t(), VDOM.t()}
 
   @callback handle_key(t(), key :: Key.t()) :: t() | {t(), [term()]}
 

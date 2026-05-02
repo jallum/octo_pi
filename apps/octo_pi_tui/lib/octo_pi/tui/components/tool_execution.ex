@@ -79,7 +79,7 @@ defmodule OctoPi.TUI.Components.ToolExecution do
         custom_fn -> render_custom(te, custom_fn, theme, width)
       end
 
-    {te, %VDOM.VLines{lines: lines}, nil}
+    {te, %VDOM.VLines{lines: lines}}
   end
 
   defp custom_render_fn(%{status: :pending, render_call: f}) when is_function(f), do: f

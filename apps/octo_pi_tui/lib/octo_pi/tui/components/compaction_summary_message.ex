@@ -43,7 +43,7 @@ defmodule OctoPi.TUI.Components.CompactionSummaryMessage do
 
   @impl true
   def render(%__MODULE__{} = comp, %RenderContext{theme: theme, width: width}),
-    do: {comp, %VDOM.VLines{lines: do_render(comp, theme, width)}, nil}
+    do: {comp, %VDOM.VLines{lines: do_render(comp, theme, width)}}
 
   @impl true
   def handle_key(%__MODULE__{} = comp, key) do
