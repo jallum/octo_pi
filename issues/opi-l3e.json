@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-02T15:22:37Z",
@@ -7,8 +7,8 @@
   "id": "opi-l3e",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Refactor Input into a proper container component",
   "type": "epic",
-  "updated_at": "2026-05-02T15:26:43Z"
+  "updated_at": "2026-05-02T15:28:02Z"
 }
