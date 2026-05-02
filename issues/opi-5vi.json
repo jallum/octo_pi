@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-1da"
+  ],
   "blocks": [],
   "created": "2026-05-02T00:45:28Z",
   "description": "New component file. Replaces render_notification/2 in interactive.ex.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/notification.ex\n\nSpec: render(String.t() | nil, RenderContext.t()) :: VDOM.t()\n- nil → %VDOM.VFlow{children: []}\n- text, ctx → %VDOM.VText{text: Theme.fg(ctx.theme, :dim, text)}\n\nDelete from interactive.ex: render_notification/2\n\nTests: nil → empty VFlow. Text → VText with dim styling. Paint and verify output matches previous.",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "Notification component — VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:45:28Z"
+  "updated_at": "2026-05-02T00:46:49Z"
 }
