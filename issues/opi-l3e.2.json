@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T15:22:48Z",
+  "description": "",
+  "id": "opi-l3e.2",
+  "labels": [],
+  "parent": "opi-l3e",
+  "priority": 1,
+  "status": "open",
+  "title": "Extract Input.Dropdown sub-module",
+  "type": "task",
+  "updated_at": "2026-05-02T15:22:48Z"
+}
