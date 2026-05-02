@@ -1943,11 +1943,9 @@ defmodule OctoPi.TUI.Interactive do
     state = %{state | transcript: transcript2}
 
     pending_lines =
-      render_pending_messages(
-        state.pending_steering,
-        state.pending_follow_up,
-        get_keybindings(state),
-        width
+      Components.PendingMessages.render(
+        %{pending_steering: state.pending_steering, pending_follow_up: state.pending_follow_up, keybindings: get_keybindings(state)},
+        ctx
       )
 
     footer_vnode = %VDOM.VLines{
@@ -1979,7 +1977,7 @@ defmodule OctoPi.TUI.Interactive do
           nil -> %VDOM.VLines{lines: []}
           %Components.Loader{} -> elem(Components.Loader.render(loader, ctx), 1)
         end,
-        %VDOM.VLines{lines: pending_lines},
+        pending_lines,
         input_vnode,
         dropdown_vnode,
         notif_vnode,
@@ -2088,28 +2086,6 @@ defmodule OctoPi.TUI.Interactive do
 
   defp render_notification(text, width) do
     [%TruncatedText{text: dim(text)}] |> Container.new() |> Container.render(width)
-  end
-
-  # opi-tze.3: pending-messages indicator. Mirrors upstream
-  # interactive-mode.ts's pendingMessagesContainer
-  # (`updatePendingMessagesDisplay/0`, L3530-3548). One dim line per
-  # queued steering / follow-up message in FIFO order, plus a hint
-  # line showing the keybinding for the dequeue overlay.
-  defp render_pending_messages([], [], _kb, _width), do: []
-
-  defp render_pending_messages(steering, follow_up, kb, width) do
-    steering_lines = Enum.map(steering, fn t -> %TruncatedText{text: dim("Steering: " <> t)} end)
-    follow_up_lines = Enum.map(follow_up, fn t -> %TruncatedText{text: dim("Follow-up: " <> t)} end)
-
-    hint_text =
-      case Keybindings.get_keys(kb, "app.message.dequeue") do
-        [key | _] -> dim("↳ #{key} to edit all queued messages")
-        [] -> dim("↳ to edit all queued messages")
-      end
-
-    (steering_lines ++ follow_up_lines ++ [%TruncatedText{text: hint_text}])
-    |> Container.new()
-    |> Container.render(width)
   end
 
   # Extract a plain string from a queued message struct. Post-

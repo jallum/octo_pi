@@ -23,7 +23,7 @@ defmodule OctoPi.TUI.Component do
   @callback update(t(), term()) :: t()
   @callback finalize(t(), term()) :: t()
 
-  @callback render(t(), ctx :: RenderContext.t()) :: {t(), VDOM.t()}
+  @callback render(struct(), ctx :: RenderContext.t()) :: {t(), VDOM.t()}
 
   @callback handle_key(t(), key :: Key.t()) :: t() | {t(), [term()]}
 
