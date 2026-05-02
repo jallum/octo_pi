@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-1da"
+  ],
   "blocks": [],
   "created": "2026-05-02T00:45:28Z",
   "description": "New component file. Replaces render_pending_messages/4 in interactive.ex. Also delete dim/1 from interactive.ex after verifying no remaining callers.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/pending_messages.ex\n\nSpec: render([String.t()], [String.t()], kb(), RenderContext.t()) :: VDOM.t()\n- [], [], _kb, _ctx → %VDOM.VFlow{children: []}\n- steering, follow_up, kb, ctx → %VFlow{children: steering items ++ follow_up items ++ hint VText}\n\nAll items: %VDOM.VText{text: Theme.fg(ctx.theme, :dim, text)}\n\nNo Theme.dim/1 — use Theme.fg(theme, :dim, text).\n\nDelete from interactive.ex: render_pending_messages/4, dim/1 (verify no callers first)\n\nTests: [], [] → empty VFlow. Mixed items. Hint with/without keybinding. Paint and verify output.",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "PendingMessages component + delete dim/1",
   "type": "task",
-  "updated_at": "2026-05-02T00:45:28Z"
+  "updated_at": "2026-05-02T00:46:49Z"
 }
