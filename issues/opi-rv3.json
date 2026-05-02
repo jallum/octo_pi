@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-02T00:45:41Z",
+  "description": "wrap_zone/4 at paint.ex:218 is a no-op stub with a FIXME. Until it's implemented, all %VZone{} nodes emit no OSC 133 markers. T5 and T6 depend on this ticket.\n\nLineBuf.iolist_rev layout: flush_line/1 prepends [line_iodata, \"\\n\" | existing]. After painting N lines, iolist_rev[0] = last flushed line data, iolist_rev[1] = \"\\n\", iolist_rev[2] = second-to-last, etc. First emitted line is at index 2*(N-1).\n\nReplace the stub with:\n  defp wrap_zone(buf, open, close, n) do\n    first_idx = 2 * (n - 1)\n    iolist_rev =\n      buf.iolist_rev\n      |\u003e List.update_at(0,         fn l -\u003e [close | List.wrap(l)] end)\n      |\u003e List.update_at(first_idx, fn l -\u003e [open  | List.wrap(l)] end)\n    %{buf | iolist_rev: iolist_rev}\n  end\n\nOSC 133 format unification: existing weld code uses BEL terminator (\\e]133;A\\a). The VZone paint clause at paint.ex:63 currently builds \\e\\-terminated sequences with type/id attrs. Update the paint clause to use BEL format: open = \"\\e]133;A\\a\", close = \"\\e]133;B\\a\\e]133;C\\a\". The type and id fields stay on the struct for future use.\n\nTests: Single-line zone: markers on that line. Multi-line zone: open prepended to first line, close appended to last. Empty zone: both markers on one flushed line. Nested zones: no interference.",
+  "id": "opi-rv3",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "Implement wrap_zone/4 in paint.ex",
+  "type": "task",
+  "updated_at": "2026-05-02T00:45:41Z"
+}
