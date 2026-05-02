@@ -2,6 +2,7 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [
+    "opi-44y",
     "opi-5vi",
     "opi-ewi",
     "opi-fq0",
@@ -17,5 +18,5 @@
   "status": "open",
   "title": "Component contract migration: render/2 returns VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:51Z"
+  "updated_at": "2026-05-02T00:46:52Z"
 }
