@@ -1812,7 +1812,7 @@ defmodule OctoPi.TUI.Interactive do
   defp drain_block_deltas(state) do
     receive do
       {:octo_pi_agent_event, %ev{}} = msg
-      when ev in [Event.MessageBlockDelta, Event.MessageBlockEnd] ->
+      when ev in [Event.MessageBlockStart, Event.MessageBlockDelta, Event.MessageBlockEnd] ->
         drain_block_deltas(handle_event(state, msg))
     after
       0 -> state

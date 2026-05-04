@@ -142,8 +142,23 @@ defmodule OctoPi.Coder.CLI do
   end
 
   defp setup_telemetry(%{log_telemetry: path, no_telemetry: excluded}) do
-    if path, do: FileBackend.install(path)
+    if path do
+      FileBackend.install(path)
+      # Prevent the default console Logger handler from duplicating
+      # telemetry events to stdout (FileBackend already writes them to the log file).
+      silence_console_for_telemetry()
+    end
+
     Enum.each(excluded, &OctoPi.Tracer.detach/1)
+  end
+
+  # Remove the :default Logger handler so telemetry events (which carry
+  # domain: [:octo_pi_tracer]) don't get printed to stdout by the
+  # default Logger handler alongside FileBackend's file output.
+  # Unlike silence_console_for_tui/0, we keep the handler so non-telemetry
+  # application logs still appear on stderr.
+  defp silence_console_for_telemetry do
+    :logger.remove_handler(:default)
   end
 
   @doc false
@@ -164,6 +179,7 @@ defmodule OctoPi.Coder.CLI do
 
         if opts.log_telemetry do
           OctoPi.Tracer.attach_all()
+          silence_console_for_telemetry()
           Enum.each(opts.no_telemetry, &OctoPi.Tracer.detach/1)
         end
 
