@@ -1,17 +1,16 @@
 {
-  "assignee": "Jason Allum",
+  "assignee": "",
   "blocked_by": [],
   "blocks": [
     "opi-ce3.2"
   ],
-  "closed_at": "2026-05-05T21:30:15Z",
   "created": "2026-05-05T21:19:12Z",
   "description": "The /tree overlay header was added but is missing bold styling, indentation, and the full structural framing (DynamicBorder + Spacer lines) that upstream wraps the header in.\n\n**IMPLEMENTED (Elixir):**\n`render/2` returns plain string `\"Session Tree\"` as the first line — no bold, no indent.\n\n**EXPECTED (Node.js `TreeSelectorComponent` constructor):**\n```\nSpacer(1)                          ← one blank line\nDynamicBorder                      ← theme.fg(\"border\", \"─\".repeat(width))\nText(theme.bold(\"  Session Tree\")) ← bold, 2-space indent, 1-line top margin\nTruncatedText(theme.fg(\"muted\", \"  ↑/↓: move...\"))  ← see opi-ce3.2\nSearchLine                         ← see opi-ce3.3\nDynamicBorder                      ← theme.fg(\"border\", \"─\".repeat(width))\nSpacer(1)                          ← one blank line\n[tree entries]                     ← see TreeList.render\nSpacer(1)                          ← one blank line\nDynamicBorder                      ← theme.fg(\"border\", \"─\".repeat(width))\n```\n\n**Gaps:**\n1. Header string is plain — should be `Theme.bold(\"  Session Tree\")` (bold + 2-space indent)\n2. No `DynamicBorder` (horizontal rule) above/below the header block or at the bottom of the overlay\n3. No `Spacer` blank lines before the first border or after the last border\n4. All structural chrome (borders, spacers) is missing from `TreeSelector.render/2`\n\n**Where to fix:**\n`apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex` — `render/2` should emit border + spacer lines matching the upstream structure. `DynamicBorder` equivalent is `Theme.fg(theme, :border, String.duplicate(\"─\", width))`.",
   "id": "opi-ce3.1",
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "closed",
+  "status": "open",
   "title": "opi-277.1: /tree missing header title",
   "type": "task",
   "updated_at": "2026-05-05T23:27:35Z"
