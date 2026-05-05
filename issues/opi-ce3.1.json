@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-ce3.2"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "opi-277.1: /tree missing header title",
   "type": "task",
-  "updated_at": "2026-05-05T21:19:38Z"
+  "updated_at": "2026-05-05T21:28:57Z"
 }
