@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:49:35Z",
+  "description": "## Summary\nPort the `/share` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/share` exports the current session as an HTML file and publishes it as a GitHub Gist, returning a shareable URL.\n\nBehavior details:\n1. Guard: requires the `gh` CLI to be installed and authenticated; if not available, shows an error\n2. The editor input area is replaced by a bordered loader:\n   ```\n   ─────────────────────────────────\n     Creating gist...\n   ─────────────────────────────────\n   ```\n   Uses `BorderedLoader` component (spinner + muted label).\n3. On success, loader is dismissed and two-line status is shown:\n   ```\n   Share URL: https://gist.github.com/...\n   Gist: https://gist.github.com/...\n   ```\n4. On failure (gh not found, auth error, network error), shows an error message\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4921 `handleShareCommand()`\n- HTML export logic: search `exportHtml` or `createGist` in `tmp/pi-mono/packages/coding-agent/src/`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"share\"`\n\n## What to Implement in Elixir\n1. Add `\"share\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/share` dispatch clause\n3. Implement handler: check for `gh` CLI availability, show bordered loading overlay during upload, call `gh gist create` with exported HTML, show success or error status\n4. The HTML export function needs to be identified and ported or approximated",
+  "id": "opi-276.7.12",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /share command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:49:35Z"
+}
