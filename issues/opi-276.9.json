@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:32:09Z",
+  "description": "",
+  "id": "opi-276.9",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-9: (openrouter) prefix in status bar vs no prefix in Node.js",
+  "type": "task",
+  "updated_at": "2026-05-05T09:32:09Z"
+}
