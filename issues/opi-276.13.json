@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T11:44:05Z",
   "created": "2026-05-05T09:35:31Z",
   "description": "The ctrl+o functionality could not be tested in tmux as the ctrl+o (Shift+O, ASCII 0x0F) key combination is intercepted by tmux's own key handling before reaching the terminal application.\n\nOBSERVED:\n- tmux capture shows the literal text 'co' being entered when ctrl+o is attempted\n- The ctrl+o functionality cannot be tested via tmux send-keys\n\nWORKAROUND:\nThis functionality should be tested in a direct terminal (not via tmux) to verify the overlay menu appears correctly with loaded resources.\n\nEXPECTED BEHAVIOR (from Node.js documentation):\n- Press ctrl+o shows an overlay with 'full startup help and loaded resources'\n- Should display the same information as the initial startup banner in a dismissable overlay",
   "id": "opi-276.13",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "TUI-13: ctrl+o overlay functionality cannot be tested in tmux",
   "type": "task",
-  "updated_at": "2026-05-05T09:35:37Z"
+  "updated_at": "2026-05-05T11:44:05Z"
 }
