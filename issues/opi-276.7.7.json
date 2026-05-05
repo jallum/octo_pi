@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:48:49Z",
+  "description": "## Summary\nPort the `/resume` command, which is missing from octo_pi's autocomplete and command dispatcher. The existing `/sessions` command may be a partial attempt at this; its relationship should be resolved.\n\n## Observed Upstream Behavior\n`/resume` opens a full `SessionSelectorComponent` overlay for browsing and resuming a previous session.\n\nUI elements visible in the overlay:\n```\n─────────────────────────────────────\n  Sessions\n\n  [search input]\n  \n  \u003e session-name-1   12 msgs  2h ago     ← selected (accent color, → prefix)\n    session-name-2    5 msgs  1d ago\n    session-name-3   31 msgs  3d ago\n  (1/47)\n─────────────────────────────────────\n  scope: local  sort: modified  [ctrl+n: named only]\n```\n\nKeyboard actions (with on-screen cues):\n- **↑/↓**: move selection; entry highlight follows cursor\n- **Enter**: load and resume the selected session\n- **Tab**: toggle scope (local ↔ global); label updates in status line\n- **Ctrl+S**: cycle sort order (modified / created / name); label updates\n- **Ctrl+N**: toggle named-only filter; `[ctrl+n: named only]` hint in status\n- **Ctrl+D**: delete selected session (shows confirmation prompt before deleting)\n- **Ctrl+P**: toggle showing full file path vs. session name in the list\n- **Type**: filters list by session name (fuzzy search)\n- **Escape**: dismiss without changing session\n\nCount badge: `(selectedIndex+1 / totalFiltered)` left-aligned in muted color.\n\n## Source References\n- Component: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/components/session-selector.ts`\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4293 `showSessionSelector()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"resume\"`\n\n## What to Implement in Elixir\n1. Add `\"resume\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/resume` dispatch clause\n3. Port `SessionSelectorComponent`: search input, scope/sort/filter controls, delete-with-confirm, full path toggle, fuzzy list with count badge\n4. On Enter: load selected session file and update all app state accordingly\n5. Resolve relationship with existing `/sessions` command — upstream has no `/sessions`; `/session` (singular) shows current session info; `/resume` is the session picker",
+  "id": "opi-276.7.7",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /resume command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:48:49Z"
+}
