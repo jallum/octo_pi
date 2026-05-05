@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-umz.4"
+  ],
   "blocks": [
     "opi-umz.1"
   ],
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "opi-277.3: /tree missing search input field",
   "type": "task",
-  "updated_at": "2026-05-05T21:18:41Z"
+  "updated_at": "2026-05-05T21:18:45Z"
 }
