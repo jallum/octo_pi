@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:48:20Z",
+  "description": "## Summary\nPort the `/name` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/name \u003clabel\u003e` sets a human-readable name for the current session. `/name` with no argument shows the current name or a usage warning.\n\nBehavior details:\n- `/name my-feature` → strips the `/name ` prefix, calls `setSessionName()`, then shows status: `dim(\"Session name set: my-feature\")`\n- `/name` with no argument → if session already has a name, shows it; otherwise shows usage hint\n- After naming, the footer's working-directory line updates to show `~ • my-feature` (or the full path with the name appended after `•`)\n- The name persists in the session JSON file\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 5030 `handleNameCommand()`\n- Footer pwd rendering: same file, search for `sessionName` usage in `renderFooter()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"name\"`\n\n## What to Implement in Elixir\n1. Add `\"name\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/name` dispatch clause; parse inline argument (text after `/name `)\n3. Implement handler: no-arg → show current name or usage; with-arg → persist name, show dim confirmation\n4. Update footer `pwd` rendering to append `• \u003cname\u003e` when a session name is set",
+  "id": "opi-276.7.4",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /name command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:48:20Z"
+}
