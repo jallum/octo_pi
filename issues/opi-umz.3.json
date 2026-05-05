@@ -1,9 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [
-    "opi-umz.1"
-  ],
+  "blocks": [],
   "created": "2026-05-05T21:17:02Z",
   "description": "The /tree overlay should have a search input field labeled \"Type to search:\" that filters tree entries as the user types.\n\n**OBSERVED (Elixir):**\n- No search input field exists\n\n**EXPECTED (Node.js):**\nAfter the hints row, there's a \"Type to search:\" label/text input that filters entries in real-time as the user types.\n\n**Where to fix:**\n- TreeSelector component needs a filter_text field and typing handling\n- handle_key/2 needs to intercept character keys and build a filter\n- render/2 needs to show the search prompt and current filter text\n- Look at SessionSelector's filter functionality for reference implementation\n- This ticket is blocked by opi-umz.1 (header must come first)",
   "id": "opi-umz.3",
