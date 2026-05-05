@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:33:11Z",
+  "description": "",
+  "id": "opi-276.10",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-10: 'make: Nothing to be done' build message leaks into TUI",
+  "type": "task",
+  "updated_at": "2026-05-05T09:33:11Z"
+}
