@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:48:34Z",
+  "description": "## Summary\nPort the `/new` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/new` starts a fresh session, identical in effect to pressing Ctrl+C twice in the editor.\n\nBehavior details:\n- Dispatches to `handleClearCommand()` — same handler as double Ctrl+C\n- Calls `runtimeHost.newSession()` to create and switch to a new session file\n- Clears the transcript display\n- Shows status: `accent(\"✓ New session started\")`\n- Any in-progress streaming is interrupted before clearing\n\nOn-screen cue: green checkmark confirmation line in the transcript area.\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 5252 `handleClearCommand()`\n- Dispatch: same file, search for `\"new\"` in the slash-command router\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"new\"`\n\n## What to Implement in Elixir\n1. Add `\"new\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/new` dispatch clause that calls the same handler as the double-Ctrl+C clear path\n3. Show `accent(\"✓ New session started\")` status after the new session is initialized",
+  "id": "opi-276.7.6",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /new command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:48:34Z"
+}
