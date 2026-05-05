@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:17:02Z",
+  "description": "",
+  "id": "opi-umz.3",
+  "labels": [],
+  "parent": "opi-umz",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.3: /tree missing search input field",
+  "type": "task",
+  "updated_at": "2026-05-05T21:17:02Z"
+}
