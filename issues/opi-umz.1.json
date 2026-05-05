@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:16:53Z",
+  "description": "",
+  "id": "opi-umz.1",
+  "labels": [],
+  "parent": "opi-umz",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.1: /tree missing header title 'Session Tree'",
+  "type": "task",
+  "updated_at": "2026-05-05T21:16:53Z"
+}
