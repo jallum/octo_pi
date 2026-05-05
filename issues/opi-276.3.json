@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T10:17:50Z",
   "created": "2026-05-05T09:30:42Z",
   "description": "When the model is reasoning/thinking, the Node.js version displays a 'Thinking...' indicator. This is completely missing in the Elixir version.\n\nOBSERVED (Elixir - left):\nNo 'Thinking...' indicator appears during model reasoning\n\nEXPECTED (Node.js - right):\nWhen model is processing, shows 'Thinking...' as a visual indicator before the model's response\n\nThis is important for UX so users know the model is actively reasoning, not frozen.",
   "id": "opi-276.3",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "TUI-1: Missing 'Thinking...' indicator for model reasoning",
   "type": "task",
-  "updated_at": "2026-05-05T10:15:08Z"
+  "updated_at": "2026-05-05T10:17:50Z"
 }
