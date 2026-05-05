@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:49:18Z",
+  "description": "## Summary\nPort the `/logout` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/logout` opens an `OAuthSelectorComponent` overlay listing all configured auth providers so the user can select one to deauthorize.\n\nUI elements visible in the overlay:\n```\n─────────────────────────────────────\n  Select provider to logout:\n\n  [search input]\n\n  \u003e Anthropic (Claude)  ✓ configured    ← selected (accent, → prefix)\n    OpenAI              • unconfigured\n    OpenRouter          ✓ env: OPENROUTER_API_KEY\n\n─────────────────────────────────────\n```\n\nStatus indicators per provider:\n- `success(\" ✓ configured\")` — credential stored and matches expected type\n- `muted(\" • \") + warning(label)` — credential stored but wrong type (e.g., subscription when API key expected)\n- `muted(\" • unconfigured\")` — no credential\n- `success(\" ✓ env: ${label}\")` — sourced from environment variable\n- `success(\" ✓ runtime API key\")`\n- `success(\" ✓ custom API key\")`\n- `success(\" ✓ key in models.json\")`\n- `success(\" ✓ command in models.json\")`\n\nKeyboard actions:\n- **↑/↓**: move selection\n- **Enter**: logout the selected provider (remove stored credential), dismiss overlay\n- **Type**: fuzzy-filter provider list; search input is focused\n- **Escape**: cancel without logging out\n\nHeader uses `bold+accent` styling.\n\n## Source References\n- Component: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/components/oauth-selector.ts`\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4475 `showOAuthSelector(\"logout\")`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"logout\"`\n\n## What to Implement in Elixir\n1. Add `\"logout\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/logout` dispatch clause\n3. Port `OAuthSelectorComponent` in logout mode: bold+accent title, search input, provider list with per-provider status indicators using correct color tokens\n4. On Enter: remove stored credential for selected provider, dismiss overlay\n5. Escape cancels",
+  "id": "opi-276.7.10",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /logout command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:49:18Z"
+}
