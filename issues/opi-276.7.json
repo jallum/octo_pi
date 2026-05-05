@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T11:29:58Z",
   "created": "2026-05-05T09:31:52Z",
   "description": "The / command menu is significantly different/limited in the Elixir version.\n\nOBSERVED (Elixir - left):\n→ /clear      Clear the conversation\n  /compact    Compact conversation context\n  /config     Show current configuration\n  /cost       Show token usage and costs\n  /help       Show available commands and key bindings\n  (1/10)\n\nOnly 5 commands shown, with pagination indicating 10 total.\n\nEXPECTED (Node.js - right):\n→ settings             Open settings menu\n  model                Select model (opens selector UI)\n  scoped-models        Enable/disable models for Ctrl+P cycli\n  export               Export session (HTML default, or speci\n  import               Import and resume a session from a JSO\n  (1/23)\n\nMany more commands including: settings, model, scoped-models, export, import, and likely 18+ more.\n\nThe Elixir version is missing most commands including: settings, model, scoped-models, export, import, and many others.\n\nThis suggests the command system is incomplete or the menu is showing a filtered subset.",
   "id": "opi-276.7",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "TUI-7: / command menu has different/limited commands",
   "type": "task",
-  "updated_at": "2026-05-05T09:31:59Z"
+  "updated_at": "2026-05-05T11:29:58Z"
 }
