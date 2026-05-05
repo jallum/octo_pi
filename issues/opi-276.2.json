@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:30:37Z",
-  "description": "",
+  "description": "The model quality/speed indicator ('medium') is missing from the status bar.\n\nOBSERVED (Elixir - left):\nNo quality indicator shown after model name\n\nEXPECTED (Node.js - right):\n'minimax/minimax-m2.7 • medium' - the '• medium' suffix indicates model quality/speed setting\n\nThe quality indicator (e.g., 'medium', 'fast', 'high') should appear after the model name, separated by ' • '.",
   "id": "opi-276.2",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-3: Missing model quality/speed indicator ('medium') in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T09:30:37Z"
+  "updated_at": "2026-05-05T09:31:30Z"
 }
