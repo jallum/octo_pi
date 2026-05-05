@@ -4,7 +4,7 @@
   "blocks": [],
   "closed_at": "2026-05-05T10:13:18Z",
   "created": "2026-05-05T09:30:31Z",
-  "description": "The status bar in the Elixir implementation is missing cost/token information that appears in the Node.js version.\n\nOBSERVED (Elixir - left):\n~/Workspace/octo_pi (main)\nR7.1k ↓781 ↑1.6k 1.5%/197k (auto)  (openrouter) minimax/minimax\n\nEXPECTED (Node.js - right):\n~/Workspace/octo_pi (main)\n↑5.4k ↓599 R8.9k $0.003 1.8%/197k (auto)  minimax/minimax-m2.7\n\nDifferences:\n1. Elixir shows 'R7.1k' (Received?), Node.js shows '↑5.4k' (clearly an up arrow)\n2. Elixir shows '↓781', Node.js shows '↓599' - both have down arrow\n3. Elixir shows no cost (/bin/zsh.00), Node.js shows '$0.003'\n4. Elixir shows '(openrouter)' prefix, Node.js does not\n5. Elixir shows model as 'minimax/minimax-m2.7' without quality indicator, Node.js shows 'minimax/minimax-m2.7 • medium' with quality indicator\n\nThe cost display and token counts should be implemented.",
+  "description": "The status bar in the Elixir implementation is missing cost/token information that appears in the Node.js version.\n\n**ORIGINAL OBSERVED (Elixir):**\n```\nR7.1k ↓781 ↑1.6k 1.5%/197k (auto)  (openrouter) minimax/minimax\n```\n\n**EXPECTED (Node.js):**\n```\n↑5.4k ↓599 R8.9k $0.003 1.8%/197k (auto)  minimax/minimax-m2.7\n```\n\n**Status of each gap:**\n\n1. ✅ **Token order fixed** — commit `opi-276.1`: tokens now emit in `↑ ↓ R W` order matching upstream.\n\n2. ❌ **Cost display still missing** — `$0.003` never appears. Root cause:\n   - `apps/octo_pi_ai_openai/lib/octo_pi/ai/providers/openai/decoder.ex` `apply_usage/2` sets `input`, `output`, `cache_read`, `cache_write`, `total_tokens` but never populates `usage.cost`.\n   - `apps/octo_pi_ai/lib/octo_pi/ai/model/cost.ex` and `apps/octo_pi_ai/lib/octo_pi/ai/model.ex` have the per-million pricing struct `%Model.Cost{}` but no `calculate_cost/2` function exists.\n   - Upstream equivalent: `tmp/pi-mono/packages/ai/src/models.ts` `calculateCost/2` multiplies token counts by `model.cost.input / 1_000_000`, etc.\n\n   **Fix needed:**\n   - Add `calculate_cost(model, usage)` to `OctoPi.AI.Model` (or `OctoPi.AI.Usage`) mirroring upstream\n   - Call it at the end of `apply_usage/2` in the decoder (requires passing the model — may need to be threaded from the producer call site)\n   - OR compute it lazily in the TUI footer from the model's pricing and the accumulated token counts\n\n3. ✅ `(openrouter)` prefix removed — covered by opi-276.9 (separate ticket)\n\n4. ✅ Model quality/speed indicator — covered by opi-276.2 (separate ticket)\n\n**Verification:**\nCompare the footer of both apps in `tmux pi-comparison` after sending a message. Upstream shows `$0.00x`; Elixir shows nothing (cost hidden because it is 0).",
   "id": "opi-276.1",
   "labels": [],
   "parent": "opi-276",
@@ -12,5 +12,5 @@
   "status": "closed",
   "title": "TUI-2: Missing cost/token display in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T10:13:18Z"
+  "updated_at": "2026-05-05T23:17:32Z"
 }
