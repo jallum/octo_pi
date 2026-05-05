@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:30:42Z",
+  "description": "",
+  "id": "opi-276.3",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-1: Missing 'Thinking...' indicator for model reasoning",
+  "type": "task",
+  "updated_at": "2026-05-05T09:30:42Z"
+}
