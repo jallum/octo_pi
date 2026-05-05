@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:32:01Z",
+  "description": "",
+  "id": "opi-276.8",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-8: Different startup banner format and version display",
+  "type": "task",
+  "updated_at": "2026-05-05T09:32:01Z"
+}
