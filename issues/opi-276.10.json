@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T11:23:27Z",
   "created": "2026-05-05T09:33:11Z",
   "description": "When starting the TUI, a build system message 'make: Nothing to be done for `all`.' leaks into the output.\n\nOBSERVED:\n==\u003e octo_pi_tui_terminal\nmake: Nothing to be done for `all`.\n\n octo_pi v0.1.0\n\nEXPECTED:\nThe TUI should start cleanly without any build system messages. Only the application banner and hints should appear.",
   "id": "opi-276.10",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "TUI-10: 'make: Nothing to be done' build message leaks into TUI",
   "type": "task",
-  "updated_at": "2026-05-05T09:33:15Z"
+  "updated_at": "2026-05-05T11:23:27Z"
 }
