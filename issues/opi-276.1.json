@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:30:31Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "TUI-2: Missing cost/token display in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T09:31:27Z"
+  "updated_at": "2026-05-05T10:01:34Z"
 }
