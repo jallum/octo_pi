@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:49:08Z",
+  "description": "## Summary\nPort the `/clone` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/clone` silently forks the current session at the current leaf node (no interactive UI).\n\nBehavior details:\n- No overlay or picker is shown\n- Calls `fork(leafId, { position: \"at\" })` — branches at the exact current position\n- Shows transient status: `showStatus(\"Cloned to new session\")`\n- Guard: if the session has no messages yet, shows warning `\"Nothing to clone yet\"`\n- Contrast with `/fork`: clone branches at current position without prompting; fork prompts for a specific prior user message\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4142 `handleCloneCommand()`\n- Fork logic: `fork()` in same file; `runtimeHost.fork()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"clone\"`\n\n## What to Implement in Elixir\n1. Add `\"clone\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/clone` dispatch clause\n3. Implement handler: guard for empty session (`\"Nothing to clone yet\"`), then fork at current leaf, show `\"Cloned to new session\"` status",
+  "id": "opi-276.7.9",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /clone command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:49:08Z"
+}
