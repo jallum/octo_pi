@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:45:03Z",
+  "description": "Implement the `/changelog` slash command, which renders all changelog entries as formatted Markdown in the chat transcript.\n\n**On-screen result (observed in upstream `tmux pi-comparison` right pane):**\n```\n─────────────────────────────────────────\n  What's New\n\n  ## [0.73.0] ...\n  ### Added\n  ...\n─────────────────────────────────────────\n```\nLayout: `Spacer(1)` → `DynamicBorder` → `Text(bold+accent \"What's New\", 1, 0)` → `Spacer(1)` → `Markdown(content, 1, 1)` → `DynamicBorder`. Markdown is rendered with 1-space left and right indent.\n\n**Upstream source:** `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` `handleChangelogCommand()` (~line 5085):\n1. Reads changelog via `parseChangelog(getChangelogPath())`\n2. Reverses entries so newest appears first, joins with `\"\\n\\n\"`\n3. Falls back to `\"No changelog entries found.\"` when empty\n4. Calls `this.chatContainer.addChild(new Markdown(changelogMarkdown, 1, 1, this.getMarkdownThemeWithSettings()))`\n\n**What to implement in Elixir:**\n- `dispatch_slash_command(\"changelog\", state)` in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`\n  - Read CHANGELOG.md (embed at compile time or read from `Application.app_dir/2`)\n  - Append a transcript message containing the Markdown-rendered content\n- Add `%SlashCommand{name: \"changelog\", description: \"Show changelog entries\"}` to `builtin_commands/0` in `apps/octo_pi_tui/lib/octo_pi/tui/autocomplete.ex`",
+  "id": "opi-276.7.1",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /changelog command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:45:03Z"
+}
