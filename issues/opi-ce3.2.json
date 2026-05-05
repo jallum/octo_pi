@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:19:21Z",
+  "description": "",
+  "id": "opi-ce3.2",
+  "labels": [],
+  "parent": "opi-ce3",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.2: /tree missing navigation hints",
+  "type": "task",
+  "updated_at": "2026-05-05T21:19:21Z"
+}
