@@ -1,16 +1,15 @@
 {
-  "assignee": "Jason Allum",
+  "assignee": "",
   "blocked_by": [],
   "blocks": [],
-  "closed_at": "2026-05-05T10:15:01Z",
   "created": "2026-05-05T09:30:37Z",
   "description": "The model thinking-level indicator was added to the footer, but two parity gaps remain compared to the Node.js upstream.\n\n**IMPLEMENTED (Elixir) — status bar right-side:**\n```\nminimax/minimax-m2.7 · off\n```\n\n**EXPECTED (Node.js upstream) — status bar right-side:**\n```\nminimax/minimax-m2.7 • thinking off\n```\n\n**Gaps:**\n\n1. **Wrong separator character**: Elixir uses `·` (U+00B7 MIDDLE DOT) but upstream uses `•` (U+2022 BULLET).\n   - Fix in `apps/octo_pi_tui/lib/octo_pi/tui/components/footer.ex`, `model_part/1`\n\n2. **\"thinking off\" label vs \"off\"**: When the thinking level is `:off`, upstream shows the word `\"thinking off\"` not just `\"off\"`. All other levels (low / medium / high) are shown verbatim.\n   - Upstream reference: `footer.ts` line ~162: `thinkingLevel === \"off\" ? \\`${modelName} • thinking off\\` : \\`${modelName} • ${thinkingLevel}\\``\n   - Fix in `apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`, `thinking_level_label/1`: return `\"thinking off\"` for `:off` atom\n\n**Verification:**\nCompare the bottom-right of both TUIs in `tmux pi-comparison` with a reasoning-capable model (`-m openrouter/minimax/minimax-m2.7`).",
   "id": "opi-276.2",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "closed",
+  "status": "open",
   "title": "TUI-3: Missing model quality/speed indicator ('medium') in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T23:15:20Z"
+  "updated_at": "2026-05-05T23:15:22Z"
 }
