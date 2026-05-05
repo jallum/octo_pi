@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T23:52:50Z",
   "created": "2026-05-05T09:30:31Z",
   "description": "The token order in the footer was fixed (↑ ↓ R W), but the `$cost` value is never shown because cost is never calculated.\n\n**CURRENT STATE (Elixir footer):**\n```\n↑1.8k ↓106 1.0%/197k (auto)\n```\nNo cost. `footer.cost` is always `0.0`, so `maybe_add_section(parts, cost \u003e 0, ...)` never adds it.\n\n**EXPECTED (Node.js footer):**\n```\n↑5.4k ↓599 $0.003 1.3%/197k (auto)\n```\nWhere `$0.003` is `$#{totalCost.toFixed(3)}` — three decimal places, variable per-call.\n\n**Why cost is always 0 in Elixir:**\n`apps/octo_pi_ai_openai/lib/octo_pi/ai/providers/openai/decoder.ex` `apply_usage/2` sets `input`, `output`, `cache_read`, `cache_write`, `total_tokens` but never touches `usage.cost`. The `%OctoPi.AI.Usage.Cost{}` struct stays at all-zeros.\n\n**Upstream calculation (`tmp/pi-mono/packages/ai/src/models.ts` `calculateCost/2`):**\n```typescript\nusage.cost.input     = (model.cost.input     / 1_000_000) * usage.input;\nusage.cost.output    = (model.cost.output    / 1_000_000) * usage.output;\nusage.cost.cacheRead = (model.cost.cacheRead / 1_000_000) * usage.cacheRead;\nusage.cost.cacheWrite= (model.cost.cacheWrite/ 1_000_000) * usage.cacheWrite;\nusage.cost.total     = sum of the four above;\n```\n`model.cost.{input,output,cacheRead,cacheWrite}` are per-million-token rates in dollars.\n\n**Upstream display:**\n- Shown only when `totalCost \u003e 0 || usingSubscription`\n- Format: `$${totalCost.toFixed(3)}` — three decimal places\n- When using OAuth subscription and cost is 0: shows `\"$0.000 (sub)\"` (the `(sub)` suffix is for Claude Code OAuth, not applicable here)\n\n**Fix needed:**\n1. Add `calculate_cost(model, usage)` to `OctoPi.AI.Model` mirroring upstream\n2. Call it at end of `apply_usage/2` in the decoder (model must be threaded in from the producer call site)\n3. The Elixir `%Model.Cost{}` struct already has `input`, `output`, `cache_read`, `cache_write` fields for the per-million rates — wire them up\n\n**Elixir footer format:**\n`\"$#{:erlang.float_to_binary(cost, decimals: 3)}\"` — already correct format, just needs non-zero cost data flowing in.",
   "id": "opi-276.1",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "TUI-2: Missing cost/token display in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T23:50:57Z"
+  "updated_at": "2026-05-05T23:52:50Z"
 }
