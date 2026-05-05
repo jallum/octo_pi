@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T10:18:25Z",
   "created": "2026-05-05T09:30:47Z",
   "description": "The startup hint 'Press ctrl+o to show full startup help and loaded resources' is missing.\n\nOBSERVED (Elixir - left):\nNo such hint shown after startup\n\nEXPECTED (Node.js - right):\n'Press ctrl+o to show full startup help and loaded resources.'\n'Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.'\n\nThis hint should appear after the initial startup message, before the first prompt.",
   "id": "opi-276.4",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "TUI-4: Missing 'Press ctrl+o to show full startup help' hint",
   "type": "task",
-  "updated_at": "2026-05-05T10:17:57Z"
+  "updated_at": "2026-05-05T10:18:25Z"
 }
