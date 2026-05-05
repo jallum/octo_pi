@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:31:47Z",
+  "description": "",
+  "id": "opi-276.6",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-6: Missing '!' bash command hint in startup",
+  "type": "task",
+  "updated_at": "2026-05-05T09:31:47Z"
+}
