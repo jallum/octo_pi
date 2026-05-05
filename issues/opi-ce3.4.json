@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:19:29Z",
+  "description": "",
+  "id": "opi-ce3.4",
+  "labels": [],
+  "parent": "opi-ce3",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.4: /tree missing entry count",
+  "type": "task",
+  "updated_at": "2026-05-05T21:19:29Z"
+}
