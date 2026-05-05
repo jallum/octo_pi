@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T21:33:42Z",
   "created": "2026-05-05T21:19:29Z",
   "description": "",
   "id": "opi-ce3.4",
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "opi-277.4: /tree missing entry count",
   "type": "task",
-  "updated_at": "2026-05-05T21:32:34Z"
+  "updated_at": "2026-05-05T21:33:42Z"
 }
