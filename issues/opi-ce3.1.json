@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:19:12Z",
+  "description": "",
+  "id": "opi-ce3.1",
+  "labels": [],
+  "parent": "opi-ce3",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.1: /tree missing header title",
+  "type": "task",
+  "updated_at": "2026-05-05T21:19:12Z"
+}
