@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T21:16:58Z",
+  "description": "",
+  "id": "opi-umz.2",
+  "labels": [],
+  "parent": "opi-umz",
+  "priority": 2,
+  "status": "open",
+  "title": "opi-277.2: /tree missing navigation hints row",
+  "type": "task",
+  "updated_at": "2026-05-05T21:16:58Z"
+}
