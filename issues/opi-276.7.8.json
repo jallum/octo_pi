@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:49:00Z",
+  "description": "## Summary\nPort the `/fork` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/fork` opens a `UserMessageSelectorComponent` overlay that lets the user pick a prior user message as a branch point; a new session is forked from that message.\n\nUI elements visible in the overlay:\n```\n─────────────────────────────────────\n  Fork from Message\n\n  \u003e What is the capital of France?    ← selected (accent, → prefix)\n    How do I sort a list in Python?\n    Explain monads\n\n  Message 1 of 3\n─────────────────────────────────────\n```\n\nKeyboard actions:\n- **↑/↓**: move selection; selected entry highlighted in accent color with `→` prefix\n- **Enter**: fork — creates a new session branched at the selected user message, shows `accent(\"Forked to new session\")` status\n- **Escape**: cancel without forking\n\nMetadata line below the list: `muted(\"  Message N of M\")` where N is the 1-based cursor position and M is total user message count.\n\n## Source References\n- Component: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/components/user-message-selector.ts` (if it exists) or inline in `interactive-mode.ts`\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4101 `showUserMessageSelector()`\n- Fork logic: search `fork(` in the same file; also `runtimeHost.fork()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"fork\"`\n\n## What to Implement in Elixir\n1. Add `\"fork\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/fork` dispatch clause\n3. Port `UserMessageSelectorComponent`: bold+accent header \"Fork from Message\", user-message list with cursor, muted metadata line\n4. On Enter: call fork logic branching at the selected message index, show accent confirmation status\n5. Escape cancels",
+  "id": "opi-276.7.8",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /fork command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:49:00Z"
+}
