@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:30:37Z",
+  "description": "",
+  "id": "opi-276.2",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-3: Missing model quality/speed indicator ('medium') in status bar",
+  "type": "task",
+  "updated_at": "2026-05-05T09:30:37Z"
+}
