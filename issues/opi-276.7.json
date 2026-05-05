@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:31:52Z",
+  "description": "",
+  "id": "opi-276.7",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-7: / command menu has different/limited commands",
+  "type": "task",
+  "updated_at": "2026-05-05T09:31:52Z"
+}
