@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:30:09Z",
+  "description": "",
+  "id": "opi-276",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Port pi-coding-agent to Elixir: UI/UX parity with Node.js reference implementation",
+  "type": "task",
+  "updated_at": "2026-05-05T09:30:09Z"
+}
