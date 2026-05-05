@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:33:22Z",
+  "description": "",
+  "id": "opi-276.12",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-12: Arrow characters (↑↓) not rendering properly in status bar",
+  "type": "task",
+  "updated_at": "2026-05-05T09:33:22Z"
+}
