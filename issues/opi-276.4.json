@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:30:47Z",
+  "description": "",
+  "id": "opi-276.4",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-4: Missing 'Press ctrl+o to show full startup help' hint",
+  "type": "task",
+  "updated_at": "2026-05-05T09:30:47Z"
+}
