@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:33:17Z",
-  "description": "",
+  "description": "The Node.js version shows a warning about tmux extended-keys-format when it detects an incompatible setting.\n\nOBSERVED (Elixir - left):\nNo such warning appears\n\nEXPECTED (Node.js - right):\n Warning: tmux extended-keys-format is xterm. Pi works best with csi-u. Add  to ~/.tmux.conf and restart tmux.\n\nThis warning helps users configure their tmux properly for the best experience.",
   "id": "opi-276.11",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-11: Missing warning about tmux extended-keys-format",
   "type": "task",
-  "updated_at": "2026-05-05T09:33:17Z"
+  "updated_at": "2026-05-05T09:33:20Z"
 }
