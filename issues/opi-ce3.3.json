@@ -1,16 +1,15 @@
 {
-  "assignee": "Jason Allum",
+  "assignee": "",
   "blocked_by": [],
   "blocks": [],
-  "closed_at": "2026-05-05T21:32:29Z",
   "created": "2026-05-05T21:19:25Z",
   "description": "The /tree overlay should show a live search input that filters tree entries as the user types. A static \"Type to search:\" label was added, but there is no actual search functionality.\n\n**IMPLEMENTED (Elixir):**\nThe third line of the overlay renders the static string `\"Type to search:\"`. No keystrokes are captured for search; the displayed text never changes.\n\n**EXPECTED (Node.js upstream):**\n- A `SearchLine` component wraps the `TreeList`\n- When the user types printable characters, they are appended to a `searchQuery` string\n- The `TreeList` re-filters `filteredNodes` on every keystroke using a case-insensitive, multi-token substring match\n- The search line renders as `\"  Type to search: \u003cquery\u003e\"` when text is present, or `\"  Type to search:\"` when empty\n- Backspace removes the last character from `searchQuery`\n- Pressing Escape or Enter while the search query is non-empty clears the query\n\n**Gaps:**\n1. No `search_query` field on `TreeSelector` state\n2. `handle_key/2` does not capture printable characters to append to the query\n3. `handle_key/2` does not handle backspace to trim the query\n4. `render/2` always shows the static label regardless of any typed text\n5. `Tree.filter/3` or a pre-filter step needs to apply the search tokens against entry display text\n\n**Where to fix:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex`: add `search_query` field, update `handle_key/2` to capture/clear query, update `render/2` to show the live query, add search filtering before the mode filter in `set_filter/2`\n- Reference: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/components/tree-selector.ts`, classes `SearchLine` and the `handleInput` method of `TreeList`\n\n**Verification:**\nOpen `/tree` in both apps (`tmux pi-comparison`). Type a few characters in the Elixir TUI — the filter list should narrow. In upstream it does; in Elixir it currently does not.",
   "id": "opi-ce3.3",
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "closed",
+  "status": "open",
   "title": "opi-277.3: /tree missing search field",
   "type": "task",
-  "updated_at": "2026-05-05T23:14:51Z"
+  "updated_at": "2026-05-05T23:14:54Z"
 }
