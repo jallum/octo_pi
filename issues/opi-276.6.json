@@ -2,14 +2,15 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T11:12:49Z",
   "created": "2026-05-05T09:31:47Z",
   "description": "The startup hint mentions ctrl+o for 'more' but doesn't mention the '!' for bash commands.\n\nOBSERVED (Elixir - left):\n'escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more'\n\nEXPECTED (Node.js - right):\n'escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more'\n\nThe '! bash' hint should be added between '/ commands' and 'ctrl+o more'.",
   "id": "opi-276.6",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "TUI-6: Missing '!' bash command hint in startup",
   "type": "task",
-  "updated_at": "2026-05-05T09:31:50Z"
+  "updated_at": "2026-05-05T11:12:49Z"
 }
