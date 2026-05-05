@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:33:22Z",
-  "description": "",
+  "description": "The up arrow (↑) character is not rendering properly in the status bar. It appears as 'R' instead of '↑' in some contexts.\n\nOBSERVED (Elixir - left):\nR12k ↓1.1k ↑2.4k\n\nEXPECTED (Node.js - right):\n↑9.6k ↓811 R12k\n\nIssues:\n1. The up arrow ↑ appears as 'R' in the Elixir version (e.g., 'R12k' instead of '↑12k' or similar)\n2. The down arrow ↓ appears to render correctly\n3. The order/placement of token counts differs\n\nThe arrow characters should render correctly, and the format should match: ↑[value] ↓[value] R[value] or similar.",
   "id": "opi-276.12",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-12: Arrow characters (↑↓) not rendering properly in status bar",
   "type": "task",
-  "updated_at": "2026-05-05T09:33:22Z"
+  "updated_at": "2026-05-05T09:33:27Z"
 }
