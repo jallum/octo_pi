@@ -1,16 +1,15 @@
 {
-  "assignee": "Jason Allum",
+  "assignee": "",
   "blocked_by": [],
   "blocks": [],
-  "closed_at": "2026-05-05T21:33:42Z",
   "created": "2026-05-05T21:19:29Z",
   "description": "The /tree overlay should show a count badge at the bottom of the visible entries indicating the user's position in the list. A badge was added but it uses the wrong format and is positioned incorrectly.\n\n**IMPLEMENTED (Elixir):**\n```\n(filtered_count/total_count)\n```\nAppended as a right-aligned line via `String.pad_leading/3` after the tree entries. `filtered_count` = number of visible filtered nodes; `total_count` = number of all flat nodes.\n\n**EXPECTED (Node.js upstream):**\n```\n  (selectedIndex + 1 / filteredNodes.length)\n```\nAppended as the last item inside the tree entry list (left-aligned with 2-space indent, styled muted). The numerator is the 1-based **cursor position** among visible entries, not the total visible count.\n\n**Gaps:**\n1. Numerator is wrong: should be `selected_index + 1` (cursor position, 1-based), not `filtered_count`\n2. Denominator is wrong: should be `length(filtered_nodes)` (visible after mode filter), not `length(flat_nodes)` (all nodes)\n3. Positioning is wrong: upstream appends the badge inside `render/2` of `TreeList` as an ordinary line (not a separate right-padded line)\n4. Styling is wrong: upstream applies `theme.fg(\"muted\", ...)` with a 2-space indent; our version has no style and is right-aligned via padding\n5. Status labels are missing: upstream appends `getStatusLabels()` to the badge line (e.g. filter mode indicator)\n\n**Where to fix:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex` in `render/2`\n- Change `count_line` from `String.pad_leading(\"(#{filtered_count}/#{total_count})\", width, \" \")` to a muted left-aligned `\"  (#{state.selected_index + 1}/#{length(state.filtered_nodes)})\"` appended after tree entries\n\n**Verification:**\nOpen `/tree` in both apps (`tmux pi-comparison`). Navigate with ↑/↓ — in upstream the numerator changes to reflect current cursor position; in Elixir it always shows visible/total.",
   "id": "opi-ce3.4",
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "closed",
+  "status": "open",
   "title": "opi-277.4: /tree missing entry count",
   "type": "task",
-  "updated_at": "2026-05-05T23:15:07Z"
+  "updated_at": "2026-05-05T23:15:09Z"
 }
