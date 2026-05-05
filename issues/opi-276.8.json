@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:32:01Z",
-  "description": "",
+  "description": "The startup banner format and version display differ between implementations.\n\nOBSERVED (Elixir - left):\n==\u003e octo_pi_tui_terminal\nmake: Nothing to be done for `all`.\n\n octo_pi v0.1.0\n escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ? more\n\nNote: Shows 'octo_pi v0.1.0' (project name), and there's a build message 'make: Nothing to be done for `all`.'\n\nEXPECTED (Node.js - right):\n pi v0.73.0\n escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more\n Press ctrl+o to show full startup help and loaded resources.\n\nNote: Shows 'pi v0.73.0' (generic name), no build messages, cleaner separation.\n\nIssues:\n1. The 'make: Nothing to be done for `all`.' message should not appear in the TUI output\n2. Version is 'octo_pi v0.1.0' vs 'pi v0.73.0' - different naming and versioning scheme\n3. The project should probably show 'pi' not 'octo_pi' to match the Node.js branding",
   "id": "opi-276.8",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-8: Different startup banner format and version display",
   "type": "task",
-  "updated_at": "2026-05-05T09:32:01Z"
+  "updated_at": "2026-05-05T09:32:06Z"
 }
