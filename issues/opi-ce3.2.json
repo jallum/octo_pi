@@ -6,7 +6,7 @@
   "blocks": [],
   "closed_at": "2026-05-05T21:31:15Z",
   "created": "2026-05-05T21:19:21Z",
-  "description": "",
+  "description": "The /tree overlay should display navigation hint text below the header. A basic hints line was added, but it is incomplete relative to upstream.\n\n**IMPLEMENTED (Elixir):**\n```\n↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch\n```\n\n**EXPECTED (Node.js upstream):**\n```\n↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch. ctrl+e: label. ctrl+d/ctrl+t/ctrl+u/ctrl+l/ctrl+a: filters (ctrl+o/shift+ctrl+o cycle). ctrl+shift+t: label time\n```\n(exact keys come from keybinding config; the placeholders in the upstream are `keyText(...)` substitutions)\n\n**Gaps:**\n1. Missing filter key hints: `ctrl+d/ctrl+t/ctrl+u/ctrl+l/ctrl+a: filters (ctrl+o/shift+ctrl+o cycle)`\n2. Missing label edit key hint: `ctrl+e: label`\n3. Missing label timestamp toggle key hint: `ctrl+shift+t: label time`\n\n**Where to fix:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex` in `render/2`\n- Expand the static hints string to include filter mode keys (read them from `Keybindings` via `keyText` helper analogous to upstream's `keyText(...)`)\n\n**Verification:**\nRun both apps in `tmux pi-comparison` and open `/tree` in each. Compare the second row of the overlay.",
   "id": "opi-ce3.2",
   "labels": [],
   "parent": "opi-ce3",
@@ -14,5 +14,5 @@
   "status": "closed",
   "title": "opi-277.2: /tree missing navigation hints",
   "type": "task",
-  "updated_at": "2026-05-05T21:31:15Z"
+  "updated_at": "2026-05-05T23:14:36Z"
 }
