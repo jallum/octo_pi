@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:31:39Z",
+  "description": "",
+  "id": "opi-276.5",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-5: Missing Extensions section in startup banner",
+  "type": "task",
+  "updated_at": "2026-05-05T09:31:39Z"
+}
