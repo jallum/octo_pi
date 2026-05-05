@@ -3,12 +3,12 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T21:19:08Z",
-  "description": "",
+  "description": "Compare the Elixir TUI implementation (bin/pi) with the Node.js reference (pi-coding-agent) side-by-side to identify UI/UX differences in the /tree command and create parity tickets.\n\n## Background\nThe /tree command in Node.js shows a rich overlay with:\n- \"Session Tree\" header title\n- Navigation hints (↑/↓: move, ←/→: page, etc.)\n- \"Type to search:\" filter input\n- Tree entries with selection marker (›)\n- Entry count badge (e.g., \"(2/3)\")\n\nThe Elixir implementation currently only shows the tree entries without these UI elements.\n\n## Sub-tickets\n- opi-ce3.1: Add \"Session Tree\" header title\n- opi-ce3.2: Add navigation hints row\n- opi-ce3.3: Add search/filter input field\n- opi-ce3.4: Add entry count badge\n\n## Files involved\n- apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex\n- apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n- apps/octo_pi_tui/lib/octo_pi/tui/overlay.ex\n\n## Verification\nRun both TUIs in tmux side-by-side and compare /tree output:\n- Node.js: ./bin/pi or npx @mariozechner/pi-coding-agent\n- Elixir: ./bin/pi in this repo",
   "id": "opi-ce3",
   "labels": [],
   "priority": 2,
   "status": "open",
   "title": "opi-277: /tree command UI parity with Node.js",
   "type": "task",
-  "updated_at": "2026-05-05T21:19:08Z"
+  "updated_at": "2026-05-05T21:19:44Z"
 }
