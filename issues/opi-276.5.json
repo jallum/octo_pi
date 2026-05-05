@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:31:39Z",
-  "description": "",
+  "description": "The Node.js version shows an [Extensions] section in the startup banner, listing active extensions like '@ollama/pi-web-search'. The Elixir version does not show this section.\n\nOBSERVED (Elixir - left):\n[Context]\n  CLAUDE.md\n\n[Skills]\n  deep-research, work\n\n(No Extensions section)\n\nEXPECTED (Node.js - right):\n[Context]\n  CLAUDE.md\n\n[Skills]\n  deep-research, work\n\n[Extensions]\n  @ollama/pi-web-search\n\nThe Extensions section should appear between [Skills] and the horizontal rule, listing any active extensions.",
   "id": "opi-276.5",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-5: Missing Extensions section in startup banner",
   "type": "task",
-  "updated_at": "2026-05-05T09:31:39Z"
+  "updated_at": "2026-05-05T09:31:43Z"
 }
