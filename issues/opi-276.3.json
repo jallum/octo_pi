@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:30:42Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "TUI-1: Missing 'Thinking...' indicator for model reasoning",
   "type": "task",
-  "updated_at": "2026-05-05T09:31:33Z"
+  "updated_at": "2026-05-05T10:15:08Z"
 }
