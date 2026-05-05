@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T23:48:00Z",
+  "description": "## Summary\nPort the `/hotkeys` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\nRunning `/hotkeys` in the upstream pi renders a full-screen overlay titled **\"Keyboard Shortcuts\"** containing three Markdown tables:\n\n1. **Navigation** — cursor movement, history traversal, session tree\n2. **Editing** — text manipulation, undo/redo, kill-ring\n3. **Other** — model select, tool toggle, interrupt, etc.\n\nAn optional fourth **Extensions** section appears when custom keybindings are registered.\n\nAll key values are resolved at render time via `keyText(binding)` — they reflect the user's actual configured keys, not hardcoded strings. Example rendered lines:\n```\n| Action              | Key       |\n|---------------------|-----------|\n| Move up             | ↑         |\n| Move down           | ↓         |\n| Open tree           | Ctrl+O    |\n```\n\nThe overlay uses the same border+spacer chrome as /changelog:\n```\nSpacer(1)\nDynamicBorder\nText(bold+accent(\"  Keyboard Shortcuts\"), 1, 0)\nSpacer(1)\nMarkdown(content, 1, 1)\nDynamicBorder\n```\nPress Escape to dismiss.\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 5137 `handleHotkeysCommand()`\n- Key resolution: `tmp/pi-mono/packages/coding-agent/src/core/keybindings.ts` — `getEditorKeyDisplay()` / `getAppKeyDisplay()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"hotkeys\"`\n\n## What to Implement in Elixir\n1. Add `\"hotkeys\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/hotkeys` dispatch clause in `interactive.ex` (or its command router)\n3. Implement handler that builds a Markdown string from the app's configured keybindings grouped into Navigation / Editing / Other sections\n4. Render as: border-framed overlay with bold+accent title \"Keyboard Shortcuts\" above the Markdown block\n5. Pressing Escape should dismiss the overlay",
+  "id": "opi-276.7.2",
+  "labels": [],
+  "parent": "opi-276.7",
+  "priority": 2,
+  "status": "open",
+  "title": "Port /hotkeys command",
+  "type": "task",
+  "updated_at": "2026-05-05T23:48:00Z"
+}
