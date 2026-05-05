@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-05T09:33:17Z",
+  "description": "",
+  "id": "opi-276.11",
+  "labels": [],
+  "parent": "opi-276",
+  "priority": 2,
+  "status": "open",
+  "title": "TUI-11: Missing warning about tmux extended-keys-format",
+  "type": "task",
+  "updated_at": "2026-05-05T09:33:17Z"
+}
