@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-05T21:32:29Z",
   "created": "2026-05-05T21:19:25Z",
   "description": "",
   "id": "opi-ce3.3",
   "labels": [],
   "parent": "opi-ce3",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "opi-277.3: /tree missing search field",
   "type": "task",
-  "updated_at": "2026-05-05T21:31:19Z"
+  "updated_at": "2026-05-05T21:32:29Z"
 }
