@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T21:19:12Z",
-  "description": "",
+  "description": "The /tree command should display a header titled 'Session Tree' when opened.\n\n**OBSERVED (Elixir):**\n- No header is shown when /tree overlay opens\n\n**EXPECTED (Node.js):**\nA header row showing \"Session Tree\" appears at the top of the overlay.\n\n**Where to fix:**\n- The TreeSelector component (apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex) should render a header with \"Session Tree\" title\n- The render/2 function needs to prepend this header to the tree lines\n- Look at how other selectors (ModelSelector, SessionSelector) render their headers for reference\n\n**Verification:**\nRun /tree command in both Elixir and Node.js side-by-side and verify header appears in Node.js but not Elixir",
   "id": "opi-ce3.1",
   "labels": [],
   "parent": "opi-ce3",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "opi-277.1: /tree missing header title",
   "type": "task",
-  "updated_at": "2026-05-05T21:19:12Z"
+  "updated_at": "2026-05-05T21:19:14Z"
 }
