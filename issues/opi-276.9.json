@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-05T09:32:09Z",
-  "description": "",
+  "description": "The provider name '(openrouter)' appears as a prefix in the status bar for the Elixir version but not in the Node.js version.\n\nOBSERVED (Elixir - left):\n...1.5%/197k (auto)  (openrouter) minimax/minimax\n\nEXPECTED (Node.js - right):\n...1.8%/197k (auto)  minimax/minimax-m2.7\n\nThe '(openrouter)' text should not appear in the status bar. The model name should be displayed cleanly without provider prefix.",
   "id": "opi-276.9",
   "labels": [],
   "parent": "opi-276",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "TUI-9: (openrouter) prefix in status bar vs no prefix in Node.js",
   "type": "task",
-  "updated_at": "2026-05-05T09:32:09Z"
+  "updated_at": "2026-05-05T09:32:13Z"
 }
