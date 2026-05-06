@@ -41,6 +41,8 @@ defmodule OctoPi.Coder.SessionManager do
     :version,
     file_entries: [],
     by_id: %{},
+    labels_by_id: %{},
+    label_timestamps_by_id: %{},
     leaf_id: nil,
     migrated?: false
   ]
@@ -54,6 +56,8 @@ defmodule OctoPi.Coder.SessionManager do
           version: integer(),
           file_entries: [Header.t() | entry()],
           by_id: %{optional(String.t()) => entry()},
+          labels_by_id: %{optional(String.t()) => String.t()},
+          label_timestamps_by_id: %{optional(String.t()) => String.t()},
           leaf_id: String.t() | nil,
           migrated?: boolean()
         }
@@ -123,7 +127,7 @@ defmodule OctoPi.Coder.SessionManager do
     source_version = header.version || 1
     body_v2 = ensure_ids(body, source_version)
     body_v3 = ensure_v3_roles(body_v2, source_version)
-    {by_id, leaf_id} = index(body_v3)
+    {by_id, labels_by_id, label_timestamps_by_id, leaf_id} = index(body_v3)
     migrated? = source_version < @current_version
     final_version = if migrated?, do: @current_version, else: source_version
     final_header = %{header | version: final_version}
@@ -137,6 +141,8 @@ defmodule OctoPi.Coder.SessionManager do
        version: final_version,
        file_entries: [final_header | body_v3],
        by_id: by_id,
+       labels_by_id: labels_by_id,
+       label_timestamps_by_id: label_timestamps_by_id,
        leaf_id: leaf_id,
        migrated?: migrated?
      }}
@@ -605,14 +611,64 @@ defmodule OctoPi.Coder.SessionManager do
   defp entry_id(%Entry.Passthrough{raw: raw}), do: raw["id"]
   defp entry_id(entry), do: Map.get(entry, :id)
 
+  # ------- label API -------
+
+  @doc """
+  Get the current label for an entry, or `nil` if none.
+  Mirrors `getLabel()` in session-manager.ts:997.
+  """
+  @spec get_label(t(), String.t()) :: String.t() | nil
+  def get_label(%__MODULE__{labels_by_id: m}, id), do: Map.get(m, id)
+
+  @doc """
+  Append a label change entry. Pass `nil` to clear a label.
+  Raises if `target_id` is not a known entry.
+  Mirrors `appendLabelChange()` in session-manager.ts:1006-1031.
+  """
+  @spec append_label_change(t(), String.t(), String.t() | nil) :: {t(), Entry.Label.t()}
+  def append_label_change(%__MODULE__{} = sm, target_id, label) do
+    unless Map.has_key?(sm.by_id, target_id) do
+      raise "Entry #{target_id} not found"
+    end
+
+    entry = %Entry.Label{id: nil, timestamp: nil, target_id: target_id, label: label}
+    {sm, materialized} = add_entry(sm, entry)
+
+    {labels, timestamps} =
+      if label do
+        {Map.put(sm.labels_by_id, target_id, label),
+         Map.put(sm.label_timestamps_by_id, target_id, materialized.timestamp)}
+      else
+        {Map.delete(sm.labels_by_id, target_id),
+         Map.delete(sm.label_timestamps_by_id, target_id)}
+      end
+
+    {%{sm | labels_by_id: labels, label_timestamps_by_id: timestamps}, materialized}
+  end
+
   # ------- index -------
 
   defp index(body) do
-    Enum.reduce(body, {%{}, nil}, fn entry, {map, _last} ->
+    Enum.reduce(body, {%{}, %{}, %{}, nil}, fn entry, {by_id, labels, timestamps, _last} ->
       case entry_id(entry) do
-        nil -> {map, nil}
-        id -> {Map.put(map, id, entry), id}
+        nil ->
+          {by_id, labels, timestamps, nil}
+
+        id ->
+          {labels, timestamps} = maybe_index_label(entry, labels, timestamps)
+          {Map.put(by_id, id, entry), labels, timestamps, id}
       end
     end)
   end
+
+  defp maybe_index_label(%Entry.Label{target_id: tid, label: label, timestamp: ts}, labels, timestamps)
+       when is_binary(label) do
+    {Map.put(labels, tid, label), Map.put(timestamps, tid, ts)}
+  end
+
+  defp maybe_index_label(%Entry.Label{target_id: tid}, labels, timestamps) do
+    {Map.delete(labels, tid), Map.delete(timestamps, tid)}
+  end
+
+  defp maybe_index_label(_entry, labels, timestamps), do: {labels, timestamps}
 end
