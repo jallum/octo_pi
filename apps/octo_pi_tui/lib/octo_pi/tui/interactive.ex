@@ -1854,8 +1854,14 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp dispatch_slash_command("tree", _args, state) do
-entries = Coder.get_entries(state.session)
-ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
+    roots = Coder.get_tree(state.session)
+
+    ts =
+      TreeSelector.new_from_tree(roots,
+        leaf_id: state.current_msg_id,
+        max_visible_lines: max(5, div(state.height, 2))
+      )
+
     focus(%{state | tree_selector: ts}, {:dialog, :tree_selector})
   end
 

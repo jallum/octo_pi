@@ -35,6 +35,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   alias OctoPi.Coder.Components.TreeSelector, as: Tree
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.TreeNode
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
 
@@ -87,6 +88,38 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
     %__MODULE__{
       entries: entries,
+      leaf_id: leaf_id,
+      keybindings: kb,
+      filter_mode: filter,
+      selected_index: idx,
+      flat_nodes: flat,
+      filtered_nodes: filtered,
+      max_visible_lines: max_lines
+    }
+  end
+
+  @doc """
+  Build a `TreeSelector` from a pre-built forest of `TreeNode` structs
+  (e.g. from `Coder.get_tree/1`). Labels are already resolved on the
+  nodes — no `build_tree/1` call needed.
+
+  Accepts the same options as `new/2` except `:initial_filter` is not
+  yet supported (defaults to `:default`).
+  """
+  @spec new_from_tree([TreeNode.t()], keyword()) :: t()
+  def new_from_tree(roots, opts \\ []) do
+    leaf_id = Keyword.get(opts, :leaf_id)
+    filter = Keyword.get(opts, :initial_filter, :default)
+    initial_id = Keyword.get(opts, :initial_selected_id, leaf_id)
+    kb = Keyword.get(opts, :keybindings, Keybindings.new())
+    max_lines = Keyword.get(opts, :max_visible_lines, 20)
+
+    flat = Tree.flatten(roots, leaf_id)
+    filtered = Tree.filter(flat, filter, leaf_id)
+    idx = find_nearest_visible_index(filtered, flat, initial_id)
+
+    %__MODULE__{
+      entries: [],
       leaf_id: leaf_id,
       keybindings: kb,
       filter_mode: filter,
