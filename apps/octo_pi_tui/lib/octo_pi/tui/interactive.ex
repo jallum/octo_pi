@@ -2590,12 +2590,33 @@ defmodule OctoPi.TUI.Interactive do
       {_new_ts, [:cancel]} ->
         unfocus(%{state | tree_selector: nil})
 
-      {_new_ts, [{:select, _entry_id}]} ->
+      {_new_ts, [{:select, entry_id}]} ->
         sp = SummarizePrompt.new()
-        focus(%{state | tree_selector: nil, summarize_prompt: sp}, {:dialog, :summarize_prompt})
+        state = %{state | tree_selector: nil, summarize_prompt: sp, dialog: {:tree_navigate, entry_id}}
+        focus(state, {:dialog, :summarize_prompt})
 
       result ->
         apply_component_result(state, :tree_selector, result)
+    end
+  end
+
+  defp handle_summarize_prompt_key(
+         %{summarize_prompt: sp, dialog: {:tree_navigate, entry_id}} = state,
+         key
+       ) do
+    case SummarizePrompt.handle_key(sp, key) do
+      {_sp, [:cancel]} ->
+        unfocus(%{state | summarize_prompt: nil, dialog: nil})
+
+      {_sp, [{:result, choice}]} ->
+        state = unfocus(%{state | summarize_prompt: nil, dialog: nil})
+        do_tree_navigate(state, entry_id, choice)
+
+      {_sp, [:awaiting_custom_instructions]} ->
+        unfocus(%{state | summarize_prompt: nil, editor_pending: true})
+
+      result ->
+        apply_component_result(state, :summarize_prompt, result)
     end
   end
 
@@ -2607,6 +2628,21 @@ defmodule OctoPi.TUI.Interactive do
       result -> apply_component_result(state, :summarize_prompt, result)
     end
   end
+
+  defp do_tree_navigate(%{session: session, model: model} = state, entry_id, choice)
+       when not is_nil(session) do
+    opts = [target_id: entry_id, user_wants_summary: choice, model: model]
+
+    case Coder.navigate_tree(session, opts) do
+      {:ok, _summary} -> %{state | notification: "Navigated to selected point", current_msg_id: nil}
+      {:error, :no_model} -> %{state | notification: "Navigation failed: no model"}
+      {:error, :not_found} -> %{state | notification: "Navigation failed: entry not found"}
+      {:error, reason} -> %{state | notification: "Navigation failed: #{inspect(reason)}"}
+      {:cancel, _} -> state
+    end
+  end
+
+  defp do_tree_navigate(state, _entry_id, _choice), do: state
 
   defp handle_select_list_key(%{select_list: sl} = state, key) do
     case SelectList.handle_key(sl, key) do
