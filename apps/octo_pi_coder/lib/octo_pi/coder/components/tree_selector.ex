@@ -230,9 +230,10 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     ansi = Keyword.get(opts, :ansi, false)
 
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
+    tool_call_map = build_tool_call_map(flat_nodes)
 
     Enum.map(flat_nodes, fn flat_node ->
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi)
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map)
     end)
   end
 
@@ -240,8 +241,8 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 5}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 6}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map) do
     entry = flat_node.node.entry
     is_selected = selected_id != nil and entry.id == selected_id
     cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
@@ -251,7 +252,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
     path_marker = if MapSet.member?(active_path_ids, entry.id), do: ansi_fg("• ", :accent, ansi), else: ""
     label_str = if flat_node.node.label, do: ansi_fg("[#{flat_node.node.label}] ", :warning, ansi), else: ""
-    content = entry_display_text(flat_node.node, is_selected, ansi)
+    content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map)
     line = cursor <> ansi_fg(prefix, :dim, ansi) <> path_marker <> label_str <> content
     if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
@@ -293,55 +294,79 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp prefix_char(_gutter, _connector, _level, _cp, _pos, _last), do: " "
 
-  defp entry_display_text(node, is_selected, ansi) do
-    result = entry_content(node, ansi)
+  defp entry_display_text(node, is_selected, ansi, tool_call_map) do
+    result = entry_content(node, ansi, tool_call_map)
     if is_selected and ansi, do: IO.ANSI.bright() <> result <> IO.ANSI.reset(), else: result
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi, _tcm) do
     ansi_fg("user: ", :accent, ansi) <> extract_content_text(msg["content"])
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi, _tcm) do
     text = extract_content_text(msg["content"])
     stop = msg["stopReason"] || msg["stop_reason"]
     assistant_content(text, stop, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi) do
-    tool_name = msg["toolName"] || msg["tool_name"] || "tool"
-    ansi_fg("[#{tool_name}]", :muted, ansi)
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi, tcm) do
+    tool_call_id = msg["toolCallId"] || msg["tool_call_id"]
+    text =
+      case tool_call_id && Map.get(tcm, tool_call_id) do
+        %{name: name, arguments: args} -> format_tool_call(name, args)
+        _ -> "[#{msg["toolName"] || msg["tool_name"] || "tool"}]"
+      end
+    ansi_fg(text, :muted, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi, _tcm) do
     ansi_fg("[bash]: #{normalize_text(msg["command"] || "")}", :dim, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}, ansi),
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}, ansi, _tcm),
     do: ansi_fg("[#{role}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.ModelChange{model_id: id}}, ansi),
+  defp entry_content(%TreeNode{entry: %Entry.ModelChange{model_id: id}}, ansi, _tcm),
     do: ansi_fg("[model: #{id}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}, ansi),
+  defp entry_content(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}, ansi, _tcm),
     do: ansi_fg("[thinking: #{lvl}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.Compaction{tokens_before: tokens}}, ansi) do
+  defp entry_content(%TreeNode{entry: %Entry.Compaction{tokens_before: tokens}}, ansi, _tcm) do
     k = if is_integer(tokens), do: round(tokens / 1000), else: 0
     ansi_fg("[compaction: #{k}k tokens]", :border_accent, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi) do
+  defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi, _tcm) do
     ansi_fg("[branch summary]: ", :warning, ansi) <> normalize_text(String.slice(s || "", 0, 40))
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Label{label: label}}, ansi),
+  defp entry_content(%TreeNode{entry: %Entry.Label{label: label}}, ansi, _tcm),
     do: ansi_fg("label: #{label}", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi),
-    do: ansi_fg("session info", :dim, ansi)
+  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{name: name}}, ansi, _tcm) when is_binary(name),
+    do: ansi_fg("[title: #{name}]", :dim, ansi)
 
-  defp entry_content(_node, _ansi), do: "[entry]"
+  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi, _tcm),
+    do: ansi_fg("[title: (empty)]", :dim, ansi)
+
+  defp entry_content(%TreeNode{entry: %Entry.CustomMessage{custom_type: type, content: content}}, ansi, _tcm) do
+    text =
+      case content do
+        s when is_binary(s) -> s
+        blocks when is_list(blocks) ->
+          blocks
+          |> Enum.flat_map(fn
+            %{"type" => "text", "text" => t} when is_binary(t) -> [t]
+            _ -> []
+          end)
+          |> Enum.join("")
+        _ -> ""
+      end
+    ansi_fg("[#{type}]: ", :custom_label, ansi) <> normalize_text(text)
+  end
+
+  defp entry_content(_node, _ansi, _tcm), do: "[entry]"
 
   defp assistant_content("", "aborted", ansi),
     do: ansi_fg("assistant: ", :success, ansi) <> ansi_fg("(aborted)", :muted, ansi)
@@ -360,7 +385,60 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp ansi_fg(text, :warning, true), do: IO.ANSI.yellow() <> text <> IO.ANSI.reset()
   defp ansi_fg(text, :muted, true), do: IO.ANSI.faint() <> text <> IO.ANSI.reset()
   defp ansi_fg(text, :border_accent, true), do: IO.ANSI.cyan() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :custom_label, true), do: IO.ANSI.magenta() <> text <> IO.ANSI.reset()
   defp ansi_fg(text, _role, true), do: text
+
+  defp build_tool_call_map(flat_nodes) do
+    Enum.reduce(flat_nodes, %{}, fn %FlatNode{node: %TreeNode{entry: entry}}, acc ->
+      case entry do
+        %Entry.Message{message: %{"role" => "assistant", "content" => content}} when is_list(content) ->
+          Enum.reduce(content, acc, fn
+            %{"type" => "toolCall", "id" => id, "name" => name, "arguments" => args}, a ->
+              Map.put(a, id, %{name: name, arguments: args || %{}})
+            _, a -> a
+          end)
+        _ -> acc
+      end
+    end)
+  end
+
+  defp format_tool_call(name, args) do
+    home = System.get_env("HOME") || ""
+    shorten = fn p ->
+      s = to_string(p)
+      if home != "" and String.starts_with?(s, home), do: "~" <> String.slice(s, String.length(home)..-1//1), else: s
+    end
+    case name do
+      "read" ->
+        path = shorten.(args["path"] || args["file_path"] || "")
+        offset = args["offset"]
+        limit = args["limit"]
+        display =
+          if offset || limit do
+            start = offset || 1
+            finish = if limit, do: "-#{start + limit - 1}", else: ""
+            "#{path}:#{start}#{finish}"
+          else
+            path
+          end
+        "[read: #{display}]"
+      "write" -> "[write: #{shorten.(args["path"] || args["file_path"] || "")}]"
+      "edit"  -> "[edit: #{shorten.(args["path"] || args["file_path"] || "")}]"
+      "bash"  ->
+        raw = to_string(args["command"] || "")
+        cmd = raw |> String.replace(~r/[\n\t]/, " ") |> String.trim() |> String.slice(0, 50)
+        "[bash: #{cmd}#{if String.length(raw) > 50, do: "...", else: ""}]"
+      "grep" ->
+        "[grep: /#{args["pattern"] || ""}/ in #{shorten.(args["path"] || ".")}]"
+      "find" ->
+        "[find: #{args["pattern"] || ""} in #{shorten.(args["path"] || ".")}]"
+      "ls" ->
+        "[ls: #{shorten.(args["path"] || ".")}]"
+      _ ->
+        args_str = Jason.encode!(args)
+        "[#{name}: #{String.slice(args_str, 0, 40)}#{if String.length(args_str) > 40, do: "...", else: ""}]"
+    end
+  end
 
   defp extract_content_text(nil), do: ""
   defp extract_content_text(s) when is_binary(s), do: normalize_text(s)

@@ -541,6 +541,119 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
     end
   end
 
+  describe "render_lines/2 — entry content formats" do
+    test "toolResult with matching tool call shows formatted tool call" do
+      # Assistant message has a toolCall block; toolResult references it by id
+      asst = %Entry.Message{
+        id: "a1",
+        parent_id: nil,
+        timestamp: "2026-04-27T00:00:00Z",
+        message: %{
+          "role" => "assistant",
+          "content" => [%{"type" => "toolCall", "id" => "tc-1", "name" => "read", "arguments" => %{"path" => "/home/user/foo.txt"}}],
+          "stopReason" => "toolUse",
+          "usage" => %{"input" => 0, "output" => 0, "cacheRead" => 0, "cacheWrite" => 0, "totalTokens" => 0}
+        }
+      }
+      result_entry = %Entry.Message{
+        id: "r1",
+        parent_id: "a1",
+        timestamp: "2026-04-27T00:00:00Z",
+        message: %{"role" => "toolResult", "toolCallId" => "tc-1", "toolName" => "read", "content" => "ok"}
+      }
+
+      flat =
+        [asst, result_entry]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      result_line = Enum.find(lines, &(&1 =~ "read"))
+      assert result_line =~ "[read:"
+    end
+
+    test "toolResult without matching tool call falls back to tool name" do
+      result_entry = %Entry.Message{
+        id: "r1",
+        parent_id: nil,
+        timestamp: "2026-04-27T00:00:00Z",
+        message: %{"role" => "toolResult", "toolCallId" => "unknown-id", "toolName" => "bash", "content" => "ok"}
+      }
+
+      flat =
+        [result_entry]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      assert hd(lines) =~ "[bash]"
+    end
+
+    test "compaction shows tokensBefore in Nk format" do
+      comp = %Entry.Compaction{
+        id: "c1",
+        parent_id: nil,
+        timestamp: "2026-04-27T00:00:00Z",
+        summary: "long summary text",
+        first_kept_entry_id: nil,
+        tokens_before: 42_500
+      }
+
+      flat =
+        [comp]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      assert hd(lines) =~ "[compaction: 43k tokens]"
+    end
+
+    test "session_info with name shows [title: name]" do
+      info = %Entry.SessionInfo{id: "s1", parent_id: nil, timestamp: "t", name: "My Project"}
+
+      flat =
+        [info]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      assert hd(lines) =~ "[title: My Project]"
+    end
+
+    test "session_info with nil name shows [title: (empty)]" do
+      info = %Entry.SessionInfo{id: "s1", parent_id: nil, timestamp: "t", name: nil}
+
+      flat =
+        [info]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      assert hd(lines) =~ "[title: (empty)]"
+    end
+
+    test "custom_message shows customType prefix and content" do
+      msg = %Entry.CustomMessage{
+        id: "cm1",
+        parent_id: nil,
+        timestamp: "t",
+        custom_type: "preset",
+        content: "some preset text",
+        display: "preset",
+        details: nil
+      }
+
+      flat =
+        [msg]
+        |> TreeSelector.build_tree()
+        |> TreeSelector.flatten()
+
+      lines = TreeSelector.render_lines(flat)
+      assert hd(lines) =~ "[preset]:"
+      assert hd(lines) =~ "some preset text"
+    end
+  end
+
   describe "render_lines/2 — cursor marker" do
     test "selected node gets › prefix" do
       flat = build_branching_flat()
