@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T15:00:29Z",
   "created": "2026-05-06T12:05:18Z",
   "description": "Four entry types render incorrectly compared to upstream.\n\n## 1. toolResult — format from toolCallMap\n\nElixir (entry_display_text in coder/components/tree_selector.ex):\nShows: `[read]`, `[bash]` — just the tool name.\n\nUpstream builds a toolCallMap during flattenTree by scanning assistant message content for toolCall blocks.\nWhen rendering a toolResult, it looks up the call by toolCallId and uses formatToolCall(name, args):\n- read  → [read: ~/path/to/file] (with optional :offset-limit range)\n- write → [write: ~/path]\n- edit  → [edit: ~/path]\n- bash  → [bash: command...] (first 50 chars)\n- grep  → [grep: /pattern/ in ~/path]\n- find  → [find: pattern in ~/path]\n- ls    → [ls: ~/path]\n- other → [name: {jsonArgs...}]\nPaths are shortened: home dir replaced with ~.\n\nFix: Build a tool_call_map during flatten/2 in OctoPi.Coder.Components.TreeSelector (scan assistant\nmessage content blocks for type \"toolCall\" entries). Pass it to render_lines/2 via opts or embed\nin FlatNode. Upstream refs: flattenTree() lines 118-220, formatToolCall() lines 820-880 in\ntree-selector.ts.\n\n## 2. Compaction — use tokensBefore\n\nElixir: \"compaction: #{summary truncated to 40}\"\nUpstream: theme.fg(\"borderAccent\", \"[compaction: #{round(tokensBefore/1000)}k tokens]\")\n\nFormat: [compaction: Nk tokens], styled borderAccent, using tokensBefore not summary.\nEntry.Compaction already has :tokens_before. Fix: use round(tokens_before / 1000).\n\n## 3. session_info — show title name\n\nElixir: \"session info\" (no name)\nUpstream: \"[title: name]\" or \"[title: empty(italic)]\" using theme.fg(\"dim\") + theme.italic for empty.\n\nCheck Entry.SessionInfo for :name field. Format: [title: name] or [title: (empty)].\n\n## 4. CustomMessage — missing renderer\n\nElixir: falls through to catch-all \"[entry]\" — no entry_display_text clause for Entry.CustomMessage.\nUpstream: theme.fg(\"customMessageLabel\", \"[#{customType}]: \") + normalize(content)\n\nEntry.CustomMessage has :custom_type and :content (String.t | [map()]). Add matching clause.\n\n## Where to fix\napps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex — entry_display_text/1 and flatten/2.\n\n## Upstream references\n- getEntryDisplayText() lines 690-790 in tree-selector.ts\n- formatToolCall() lines 820-880 in tree-selector.ts\n- flattenTree() lines 118-220 (toolCallMap population) in tree-selector.ts\n\n## Verification\nOpen /tree with sessions containing tool calls, compaction entries, session name, and custom message\nentries. Confirm each type renders with the correct format and colors.",
   "id": "opi-iu9.2",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "/tree entry content format deviations (toolResult, Compaction, session_info, CustomMessage)",
   "type": "task",
-  "updated_at": "2026-05-06T14:56:57Z"
+  "updated_at": "2026-05-06T15:00:29Z"
 }
