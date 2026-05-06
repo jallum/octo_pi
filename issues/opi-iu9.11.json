@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-iu9.10"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "SessionStore + Coder: get_tree/1 and set_label/3 delegation",
   "type": "task",
-  "updated_at": "2026-05-06T13:14:18Z"
+  "updated_at": "2026-05-06T14:48:08Z"
 }
