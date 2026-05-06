@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-06T13:13:42Z",
+  "description": "Add get_tree/1 to SessionManager. It builds the full session tree as a list of root\nOctoPi.Coder.Session.TreeNode structs, resolving labels from the label maps built in opi-iu9.9.\n\n## Spec\n\n```elixir\n@spec get_tree(t()) :: [TreeNode.t()]\ndef get_tree(%__MODULE__{} = sm)\n```\n\n## Algorithm\n\nMirror getTree() lines 1075-1115 in session-manager.ts:\n\n1. Call get_entries(sm) to get all body entries (excluding header).\n2. For each entry, create:\n   %TreeNode{\n     entry: entry,\n     children: [],\n     label: Map.get(sm.labels_by_id, entry.id),\n     label_timestamp: Map.get(sm.label_timestamps_by_id, entry.id)\n   }\n3. Build the tree by parent_id linking (same as existing build_tree/1 in the component,\n   which is a known-good implementation to copy from). Orphans become roots.\n4. Sort children by timestamp ascending (oldest first, newest at bottom).\n   Mirrors the sort in getTree() lines 1107-1112.\n\n## Notes\n\n- This function depends on TreeNode being in OctoPi.Coder.Session.TreeNode (opi-iu9.8) and\n  on labels_by_id being present (opi-iu9.9).\n- The existing Tree.build_tree/1 in the component layer does not resolve labels and does\n  not sort children by timestamp. It can remain as-is for tests that do not need labels;\n  the TUI layer will switch to calling get_tree/1 via the Coder interface (opi-iu9.11).\n\n## Files\napps/octo_pi_coder/lib/octo_pi/coder/session_manager.ex\n\n## Tests\n- get_tree/1 on an empty session returns [].\n- get_tree/1 on a linear session returns a single root chain.\n- get_tree/1 on a branched session returns multiple children at branch points.\n- Labels are present on nodes where the label map has an entry; nil elsewhere.\n- Children are sorted by timestamp (oldest first).\nPort relevant cases from tmp/pi-mono/packages/coding-agent/test/session-manager/labels.test.ts\nand test/session-manager/tree-traversal.test.ts.\n\n## Upstream reference\ngetTree() lines 1075-1115 in session-manager.ts",
+  "id": "opi-iu9.10",
+  "labels": [],
+  "parent": "opi-iu9",
+  "priority": 2,
+  "status": "open",
+  "title": "SessionManager.get_tree/1: build SessionTreeNode forest with resolved labels",
+  "type": "task",
+  "updated_at": "2026-05-06T13:13:42Z"
+}
