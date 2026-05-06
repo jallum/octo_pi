@@ -4,14 +4,15 @@
   "blocks": [
     "opi-iu9.15"
   ],
+  "closed_at": "2026-05-06T16:16:48Z",
   "created": "2026-05-06T15:52:23Z",
   "description": "The /tree overlay renders as a narrow panel widget squeezed between status bar columns rather than a full-width dialog that replaces the main content area.\n\n## Upstream behavior\n\nUpstream renders a full-width takeover:\n- Tree completely replaces the main content area (chat messages hidden)\n- Bordered top and bottom with `─── Session Tree ───` dashed lines\n- Full terminal width used for the tree list\n\n## Current behavior\n\nOur /tree renders in the lower-right panel with the chat content still visible above it. The tree is constrained to a narrow column because the renderer mounts it as a panel widget (via `focus(%{state | tree_selector: ts}, {:dialog, :tree_selector})`) rather than as a full-screen overlay.\n\n## Where to fix\n\n`apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex`:\n- The dialog render path for `:tree_selector` needs to render the tree at full terminal width/height, hiding the main content area\n- Likely needs a dedicated render branch in the renderer that gives the tree the full screen dimensions\n\n## Verification\n\nOpen /tree and confirm chat messages are no longer visible; tree fills the full terminal width.",
   "id": "opi-iu9.13",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "/tree overlay: full-width dialog takeover instead of panel widget",
   "type": "task",
-  "updated_at": "2026-05-06T16:13:32Z"
+  "updated_at": "2026-05-06T16:16:48Z"
 }
