@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T15:01:51Z",
   "created": "2026-05-06T12:06:33Z",
   "description": "Tree entries are all rendered; upstream only shows a window of maxVisibleLines centered on the selected entry.\n\n## Current Elixir behavior\n\nOctoPi.TUI.Components.TreeSelector.render/2 calls:\n  Tree.render_lines(state.filtered_nodes, leaf_id: ..., selected_id: ...)\nwhich renders ALL filtered_nodes unconditionally. On large sessions this could produce hundreds of\nlines, overflowing the overlay.\n\nmaxVisibleLines defaults to 20 and is not wired to terminal height.\nIn interactive.ex dispatch_slash_command(\"tree\"), TreeSelector.new is called without max_visible_lines:.\nThe terminal height (state.height) is available but not passed.\n\n## Expected upstream behavior (TreeList.render())\n\n```typescript\nconst startIndex = Math.max(\n  0,\n  Math.min(\n    this.selectedIndex - Math.floor(this.maxVisibleLines / 2),\n    this.filteredNodes.length - this.maxVisibleLines,\n  ),\n);\nconst endIndex = Math.min(startIndex + this.maxVisibleLines, this.filteredNodes.length);\n// render only filteredNodes[startIndex..endIndex]\n```\n\nThe window is centered on selectedIndex: the selection is kept at the midpoint of the visible area.\nWhen selectedIndex is near the start or end, the window clamps to the boundary.\n\n### maxVisibleLines from terminal height\n```typescript\nconst maxVisibleLines = Math.max(5, Math.floor(terminalHeight / 2));\n```\nUpstream passes terminalHeight (the terminal row count) to TreeSelectorComponent.\n\n## Elixir gaps\n\n1. render/2 renders all filtered_nodes; needs to slice to startIndex..endIndex\n2. TreeSelector.new in interactive.ex does not receive max_visible_lines from state.height\n3. max_visible_lines is hardcoded to 20 in the struct default\n\n## Where to fix\n\napps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex:\n- render/2: compute startIndex/endIndex from selected_index and max_visible_lines; slice\n  filtered_nodes before passing to Tree.render_lines/2\n\napps/octo_pi_tui/lib/octo_pi/tui/interactive.ex:\n- dispatch_slash_command(\"tree\"): pass max_visible_lines: max(5, div(state.height, 2))\n  to TreeSelector.new\n\n## Verification\nRun /tree in a session with many entries (\u003e20). Confirm only ~N/2 rows are visible (N = terminal\nheight), and that navigating up/down scrolls the window so the selection stays centered.\nAlso confirm max_visible_lines page-up/page-down still jumps the correct distance.",
   "id": "opi-iu9.6",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "/tree windowed display: render only maxVisibleLines around selected index",
   "type": "task",
-  "updated_at": "2026-05-06T15:00:29Z"
+  "updated_at": "2026-05-06T15:01:51Z"
 }
