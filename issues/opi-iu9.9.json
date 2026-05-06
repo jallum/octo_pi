@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-06T13:13:29Z",
+  "description": "SessionManager silently ignores Entry.Label entries in the JSONL file. The label maps are\nnever built, so labels set in previous sessions are lost on reload. Add the label index and\nthe read/write API.\n\n## Gaps\n\n### Struct (session_manager.ex lines 36-46)\nMissing two fields:\n  labels_by_id: %{},           # target_id =\u003e label string\n  label_timestamps_by_id: %{}  # target_id =\u003e ISO-8601 timestamp\n\n### index/1 (lines 610-617)\nCurrently: just maps id =\u003e entry for every body entry, ignores entry type.\nRequired: when entry is %Entry.Label{}, also update the label maps:\n  - entry.label non-nil  → put(labels_by_id, entry.target_id, entry.label)\n                           put(label_timestamps_by_id, entry.target_id, entry.timestamp)\n  - entry.label nil      → delete(labels_by_id, entry.target_id)\n                           delete(label_timestamps_by_id, entry.target_id)\n\nMirrors upstream _buildIndex() lines 756-769 in session-manager.ts.\n\n### get_label/2 (new)\n```elixir\n@spec get_label(t(), String.t()) :: String.t() | nil\ndef get_label(%__MODULE__{labels_by_id: m}, id), do: Map.get(m, id)\n```\nMirrors getLabel() line 997 in session-manager.ts.\n\n### append_label_change/3 (new)\n```elixir\n@spec append_label_change(t(), String.t(), String.t() | nil) :: {t(), Entry.Label.t()}\ndef append_label_change(%__MODULE__{} = sm, target_id, label)\n```\n- Raise if target_id not in by_id (mirrors upstream throw)\n- Build %Entry.Label{target_id: target_id, label: label} and call add_entry/2\n- Update labels_by_id / label_timestamps_by_id based on label nil-ness\n- Return {updated_sm, materialized_entry}\n\nMirrors appendLabelChange() lines 1006-1031 in session-manager.ts.\n\nNote: add_entry/2 already sets :id, :parent_id, :timestamp and updates by_id + leaf_id.\nappend_label_change/3 only needs to additionally maintain the label maps.\n\n## Files\napps/octo_pi_coder/lib/octo_pi/coder/session_manager.ex\n\n## Tests\nPort tests from tmp/pi-mono/packages/coding-agent/test/session-manager/labels.test.ts.\nCover: label set, label update, label clear (nil), reload from file preserves labels,\nlabel on unknown id raises.\n\n## Upstream references\n- _buildIndex() lines 743-770 in session-manager.ts\n- getLabel() line 997 in session-manager.ts\n- appendLabelChange() lines 1006-1031 in session-manager.ts\n\n## Verification\nLoad a session file that contains Entry.Label entries; confirm get_label/2 returns the\nresolved value. append_label_change/3 round-trip: set a label, reload the file, confirm\nthe label is still present.",
+  "id": "opi-iu9.9",
+  "labels": [],
+  "parent": "opi-iu9",
+  "priority": 2,
+  "status": "open",
+  "title": "SessionManager: label maps, get_label/2, append_label_change/3",
+  "type": "task",
+  "updated_at": "2026-05-06T13:13:29Z"
+}
