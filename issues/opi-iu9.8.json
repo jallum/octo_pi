@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [
     "opi-iu9.10"
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Move TreeNode to OctoPi.Coder.Session.TreeNode",
   "type": "task",
-  "updated_at": "2026-05-06T13:14:17Z"
+  "updated_at": "2026-05-06T14:37:47Z"
 }
