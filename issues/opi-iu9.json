@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-06T12:04:23Z",
@@ -7,8 +7,8 @@
   "id": "opi-iu9",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "/tree full feature parity: Part II (rendering, interaction, and feature gaps)",
   "type": "epic",
-  "updated_at": "2026-05-06T12:04:23Z"
+  "updated_at": "2026-05-06T14:37:34Z"
 }
