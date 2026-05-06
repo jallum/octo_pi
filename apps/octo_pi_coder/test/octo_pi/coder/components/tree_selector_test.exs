@@ -810,4 +810,67 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
       refute u2_line =~ "⊞"
     end
   end
+
+  # ── render_lines/2 — width truncation ────────────────────────────────────
+
+  describe "render_lines/2 — width truncation" do
+    test "entries are single lines when width: opt is given" do
+      entries = [
+        user_entry("u1", nil, "hello world, this is a very long message that would normally wrap across multiple terminal lines"),
+        assistant_entry("a1", "u1", "this is also a very long assistant response that would wrap without truncation")
+      ]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      lines = TreeSelector.render_lines(flat, width: 40)
+      assert length(lines) == 2
+      Enum.each(lines, fn line -> assert String.length(line) <= 40 end)
+    end
+
+    test "emoji are counted as 2-column wide when truncating" do
+      # "user: " (6) + "🍎🍊🍌" (6 display cols) = 12 cols; with width: 15
+      # the 3 emoji use 6 cols, leaving 3 cols for text (15 - 6 prefix - 1 ellipsis = 8)
+      entries = [user_entry("u1", nil, "🍎🍊🍌 hello world this is a long message")]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      [line] = TreeSelector.render_lines(flat, width: 20)
+      # Line must not be wider than 20 display cols
+      display_width = line |> String.graphemes() |> Enum.reduce(0, fn g, acc ->
+        cp = g |> :unicode.characters_to_list() |> hd()
+        acc + if cp >= 0x10000, do: 2, else: 1
+      end)
+      assert display_width <= 20
+      assert String.ends_with?(line, "…")
+    end
+
+    test "truncated lines end with ellipsis" do
+      entries = [user_entry("u1", nil, String.duplicate("a", 200))]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      [line] = TreeSelector.render_lines(flat, width: 30)
+      assert String.ends_with?(line, "…")
+      assert String.length(line) == 30
+    end
+
+    test "short content is not truncated" do
+      entries = [user_entry("u1", nil, "hi")]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      [line] = TreeSelector.render_lines(flat, width: 80)
+      refute String.ends_with?(line, "…")
+      assert line =~ "hi"
+    end
+
+    test "newlines in content are collapsed to spaces" do
+      entries = [user_entry("u1", nil, "line one\nline two\nline three")]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      [line] = TreeSelector.render_lines(flat, width: 80)
+      refute line =~ "\n"
+      assert line =~ "line one line two line three"
+    end
+
+    test "no truncation when width opt is not given" do
+      long_text = String.duplicate("a", 200)
+      entries = [user_entry("u1", nil, long_text)]
+      flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
+      [line] = TreeSelector.render_lines(flat)
+      refute String.ends_with?(line, "…")
+      assert String.length(line) > 200
+    end
+  end
 end

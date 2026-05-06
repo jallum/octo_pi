@@ -264,6 +264,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     ansi = Keyword.get(opts, :ansi, false)
     show_label_timestamps = Keyword.get(opts, :show_label_timestamps, false)
     folded_ids = Keyword.get(opts, :folded_ids, MapSet.new())
+    width = Keyword.get(opts, :width)
 
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
     tool_call_map = build_tool_call_map(flat_nodes)
@@ -271,7 +272,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
     Enum.map(flat_nodes, fn flat_node ->
       fold_marker = Map.get(fold_marker_map, flat_node.node.entry.id)
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker)
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker, width)
     end)
   end
 
@@ -279,25 +280,42 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 8}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 9}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker, width) do
     entry = flat_node.node.entry
     is_selected = selected_id != nil and entry.id == selected_id
+    cursor_plain = if is_selected, do: "› ", else: "  "
     cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
+
     display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
     connector = node_connector(flat_node)
     connector_position = if connector == "", do: -1, else: display_indent - 1
     prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last, fold_marker)
-    root_fold_marker = if not flat_node.show_connector and fold_marker == :folded, do: ansi_fg("⊞ ", :accent, ansi), else: ""
-    path_marker = if MapSet.member?(active_path_ids, entry.id), do: ansi_fg("• ", :accent, ansi), else: ""
-    label_str = if flat_node.node.label, do: ansi_fg("[#{flat_node.node.label}] ", :warning, ansi), else: ""
-    label_ts_str =
+
+    root_fold_plain = if not flat_node.show_connector and fold_marker == :folded, do: "⊞ ", else: ""
+    root_fold_marker = ansi_fg(root_fold_plain, :accent, ansi)
+
+    path_plain = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
+    path_marker = ansi_fg(path_plain, :accent, ansi)
+
+    label_plain = if flat_node.node.label, do: "[#{flat_node.node.label}] ", else: ""
+    label_str = ansi_fg(label_plain, :warning, ansi)
+
+    label_ts_plain =
       if show_label_timestamps and not is_nil(flat_node.node.label) and not is_nil(flat_node.node.label_timestamp) do
-        ansi_fg(format_label_timestamp(flat_node.node.label_timestamp) <> " ", :muted, ansi)
+        format_label_timestamp(flat_node.node.label_timestamp) <> " "
       else
         ""
       end
-    content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map)
+    label_ts_str = ansi_fg(label_ts_plain, :muted, ansi)
+
+    content_avail =
+      if width do
+        fixed_vw = String.length(cursor_plain) + String.length(prefix) + String.length(root_fold_plain) + String.length(path_plain) + String.length(label_plain) + String.length(label_ts_plain)
+        max(0, width - fixed_vw)
+      end
+
+    content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map, content_avail)
     line = cursor <> ansi_fg(prefix, :dim, ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
     if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
@@ -371,64 +389,70 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     end)
   end
 
-  defp entry_display_text(node, is_selected, ansi, tool_call_map) do
-    result = entry_content(node, ansi, tool_call_map)
+  defp entry_display_text(node, is_selected, ansi, tool_call_map, content_avail) do
+    result = entry_content(node, ansi, tool_call_map, content_avail)
     if is_selected and ansi, do: IO.ANSI.bright() <> result <> IO.ANSI.reset(), else: result
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi, _tcm) do
-    ansi_fg("user: ", :accent, ansi) <> extract_content_text(msg["content"])
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi, _tcm, content_avail) do
+    role = "user: "
+    text = extract_content_text(msg["content"]) |> truncate_content(avail(content_avail, String.length(role)))
+    ansi_fg(role, :accent, ansi) <> text
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi, _tcm) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi, _tcm, content_avail) do
     text = extract_content_text(msg["content"])
     stop = msg["stopReason"] || msg["stop_reason"]
-    assistant_content(text, stop, ansi)
+    assistant_content(text, stop, ansi, content_avail)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi, tcm) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi, tcm, content_avail) do
     tool_call_id = msg["toolCallId"] || msg["tool_call_id"]
     text =
       case tool_call_id && Map.get(tcm, tool_call_id) do
         %{name: name, arguments: args} -> format_tool_call(name, args)
         _ -> "[#{msg["toolName"] || msg["tool_name"] || "tool"}]"
       end
-    ansi_fg(text, :muted, ansi)
+    ansi_fg(truncate_content(text, content_avail), :muted, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi, _tcm) do
-    ansi_fg("[bash]: #{normalize_text(msg["command"] || "")}", :dim, ansi)
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi, _tcm, content_avail) do
+    text = "[bash]: #{normalize_text(msg["command"] || "")}" |> truncate_content(content_avail)
+    ansi_fg(text, :dim, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}, ansi, _tcm),
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}, ansi, _tcm, _content_avail),
     do: ansi_fg("[#{role}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.ModelChange{model_id: id}}, ansi, _tcm),
+  defp entry_content(%TreeNode{entry: %Entry.ModelChange{model_id: id}}, ansi, _tcm, _content_avail),
     do: ansi_fg("[model: #{id}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}, ansi, _tcm),
+  defp entry_content(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}, ansi, _tcm, _content_avail),
     do: ansi_fg("[thinking: #{lvl}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.Compaction{tokens_before: tokens}}, ansi, _tcm) do
+  defp entry_content(%TreeNode{entry: %Entry.Compaction{tokens_before: tokens}}, ansi, _tcm, _content_avail) do
     k = if is_integer(tokens), do: round(tokens / 1000), else: 0
     ansi_fg("[compaction: #{k}k tokens]", :border_accent, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi, _tcm) do
-    ansi_fg("[branch summary]: ", :warning, ansi) <> normalize_text(String.slice(s || "", 0, 40))
+  defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi, _tcm, content_avail) do
+    role = "[branch summary]: "
+    text = normalize_text(String.slice(s || "", 0, 40)) |> truncate_content(avail(content_avail, String.length(role)))
+    ansi_fg(role, :warning, ansi) <> text
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Label{label: label}}, ansi, _tcm),
+  defp entry_content(%TreeNode{entry: %Entry.Label{label: label}}, ansi, _tcm, _content_avail),
     do: ansi_fg("label: #{label}", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{name: name}}, ansi, _tcm) when is_binary(name),
+  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{name: name}}, ansi, _tcm, _content_avail) when is_binary(name),
     do: ansi_fg("[title: #{name}]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi, _tcm),
+  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi, _tcm, _content_avail),
     do: ansi_fg("[title: (empty)]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.CustomMessage{custom_type: type, content: content}}, ansi, _tcm) do
-    text =
+  defp entry_content(%TreeNode{entry: %Entry.CustomMessage{custom_type: type, content: content}}, ansi, _tcm, content_avail) do
+    role = "[#{type}]: "
+    raw =
       case content do
         s when is_binary(s) -> s
         blocks when is_list(blocks) ->
@@ -440,19 +464,69 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           |> Enum.join("")
         _ -> ""
       end
-    ansi_fg("[#{type}]: ", :custom_label, ansi) <> normalize_text(text)
+    text = normalize_text(raw) |> truncate_content(avail(content_avail, String.length(role)))
+    ansi_fg(role, :custom_label, ansi) <> text
   end
 
-  defp entry_content(_node, _ansi, _tcm), do: "[entry]"
+  defp entry_content(_node, _ansi, _tcm, _content_avail), do: "[entry]"
 
-  defp assistant_content("", "aborted", ansi),
+  defp assistant_content("", "aborted", ansi, _content_avail),
     do: ansi_fg("assistant: ", :success, ansi) <> ansi_fg("(aborted)", :muted, ansi)
 
-  defp assistant_content("", _stop, ansi),
+  defp assistant_content("", _stop, ansi, _content_avail),
     do: ansi_fg("assistant: ", :success, ansi) <> ansi_fg("(no content)", :muted, ansi)
 
-  defp assistant_content(text, _stop, ansi),
-    do: ansi_fg("assistant: ", :success, ansi) <> text
+  defp assistant_content(text, _stop, ansi, content_avail) do
+    role = "assistant: "
+    truncated = truncate_content(text, avail(content_avail, String.length(role)))
+    ansi_fg(role, :success, ansi) <> truncated
+  end
+
+  defp avail(nil, _role_len), do: nil
+  defp avail(content_avail, role_len), do: max(0, content_avail - role_len)
+
+  defp truncate_content(text, nil), do: text
+  defp truncate_content(_text, max_width) when max_width <= 0, do: ""
+  defp truncate_content(text, max_width) do
+    text = text |> String.replace(~r/\s+/, " ") |> String.trim()
+    if display_width(text) <= max_width do
+      text
+    else
+      # Walk grapheme-by-grapheme keeping display-column budget (leave 1 col for "…")
+      graphemes = String.graphemes(text)
+      {kept, _} =
+        Enum.reduce_while(graphemes, {[], 0}, fn g, {acc, w} ->
+          gw = grapheme_display_width(g)
+          if w + gw <= max_width - 1, do: {:cont, {[g | acc], w + gw}}, else: {:halt, {acc, w}}
+        end)
+      Enum.reverse(kept) |> Enum.join() |> Kernel.<>("…")
+    end
+  end
+
+  # Display column width of a single grapheme cluster using East Asian Width heuristic.
+  # Covers Hangul, CJK, fullwidth forms, and emoji (supplementary plane).
+  # Symbols/punctuation in U+1100–U+2E7F (bullets, box-drawing, etc.) are narrow (1).
+  defp grapheme_display_width(<<cp::utf8, _::binary>>) do
+    cond do
+      cp < 0x1100 -> 1
+      cp <= 0x115F -> 2   # Hangul Jamo
+      cp < 0x2E80 -> 1   # Misc punctuation, symbols (narrow)
+      cp <= 0x9FFF -> 2   # CJK Radicals, CJK Unified Ideographs
+      cp < 0xAC00 -> 1
+      cp <= 0xD7FF -> 2   # Hangul Syllables
+      cp < 0xF900 -> 1
+      cp <= 0xFAFF -> 2   # CJK Compatibility
+      cp < 0xFF01 -> 1
+      cp <= 0xFF60 -> 2   # Fullwidth Latin/Katakana
+      cp < 0x10000 -> 1
+      true -> 2           # Supplementary: emoji, etc.
+    end
+  end
+  defp grapheme_display_width(_), do: 1
+
+  defp display_width(text) do
+    text |> String.graphemes() |> Enum.reduce(0, &(grapheme_display_width(&1) + &2))
+  end
 
   defp ansi_fg(text, _role, false), do: text
   defp ansi_fg("", _role, _ansi), do: ""

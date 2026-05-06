@@ -182,7 +182,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       selected_id: selected_id(state),
       ansi: true,
       show_label_timestamps: state.show_label_timestamps,
-      folded_ids: state.folded_nodes
+      folded_ids: state.folded_nodes,
+      width: width
     )
 
     status_suffix = if state.show_label_timestamps, do: " [+label time]", else: ""
