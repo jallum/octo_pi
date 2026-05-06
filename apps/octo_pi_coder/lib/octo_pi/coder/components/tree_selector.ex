@@ -10,8 +10,8 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   ## Data structures
 
-    * `TreeNode` — entry with its children (built from flat entry list via
-      `build_tree/1`)
+    * `OctoPi.Coder.Session.TreeNode` — entry with its children (built from
+      a flat entry list via `build_tree/1`)
     * `GutterInfo` — ancestor-branch connector state (`│` or space)
     * `FlatNode` — one entry in the flattened walk, carrying computed
       indent / connector / gutter metadata
@@ -49,21 +49,9 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   """
 
   alias OctoPi.Coder.Session.Entry
+  alias OctoPi.Coder.Session.TreeNode
 
   # ── data structures ──────────────────────────────────────────────────────
-
-  defmodule TreeNode do
-    @moduledoc false
-    @enforce_keys [:entry, :children]
-    defstruct [:entry, :children, :label, :label_timestamp]
-
-    @type t :: %__MODULE__{
-            entry: Entry.t(),
-            children: [t()],
-            label: String.t() | nil,
-            label_timestamp: String.t() | nil
-          }
-  end
 
   defmodule GutterInfo do
     @moduledoc false
@@ -79,7 +67,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     defstruct [:node, :indent, :show_connector, :is_last, :gutters, :is_virtual_root_child]
 
     @type t :: %__MODULE__{
-            node: OctoPi.Coder.Components.TreeSelector.TreeNode.t(),
+            node: TreeNode.t(),
             indent: non_neg_integer(),
             show_connector: boolean(),
             is_last: boolean(),
