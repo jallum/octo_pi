@@ -28,6 +28,7 @@ defmodule OctoPi.Coder.SessionManager do
   alias OctoPi.Coder.Session.CompactionSummaryMessage
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.Header
+  alias OctoPi.Coder.Session.TreeNode
   alias OctoPi.Coder.SessionStore
 
   @current_version 3
@@ -645,6 +646,69 @@ defmodule OctoPi.Coder.SessionManager do
 
     {%{sm | labels_by_id: labels, label_timestamps_by_id: timestamps}, materialized}
   end
+
+  # ------- tree -------
+
+  @doc """
+  Build the full session tree as a list of root `TreeNode` structs, with
+  labels resolved from the label maps. Entries without an id are ignored.
+  Orphaned entries (parent not in by_id) are treated as roots. Children
+  are sorted by timestamp ascending (oldest first, newest at bottom).
+
+  Mirrors `getTree()` in session-manager.ts:1075-1115.
+  """
+  @spec get_tree(t()) :: [TreeNode.t()]
+  def get_tree(%__MODULE__{} = sm) do
+    entries = get_entries(sm)
+
+    children_map =
+      Enum.reduce(entries, %{}, fn entry, acc ->
+        id = entry_id(entry)
+
+        if id do
+          parent_id = entry_parent(entry)
+
+          bucket =
+            cond do
+              is_nil(parent_id) -> :root
+              parent_id == id -> :root
+              Map.has_key?(sm.by_id, parent_id) -> parent_id
+              true -> :root
+            end
+
+          Map.update(acc, bucket, [entry], &[entry | &1])
+        else
+          acc
+        end
+      end)
+
+    root_entries = children_map |> Map.get(:root, []) |> sort_by_timestamp()
+    sorted_map = Map.new(children_map, fn {k, v} -> {k, sort_by_timestamp(v)} end)
+
+    Enum.map(root_entries, &build_tree_node(&1, sorted_map, sm.labels_by_id, sm.label_timestamps_by_id))
+  end
+
+  defp build_tree_node(entry, children_map, labels, label_timestamps) do
+    id = entry_id(entry)
+    children =
+      children_map
+      |> Map.get(id, [])
+      |> Enum.map(&build_tree_node(&1, children_map, labels, label_timestamps))
+
+    %TreeNode{
+      entry: entry,
+      children: children,
+      label: Map.get(labels, id),
+      label_timestamp: Map.get(label_timestamps, id)
+    }
+  end
+
+  defp sort_by_timestamp(entries) do
+    Enum.sort_by(entries, &entry_timestamp/1)
+  end
+
+  defp entry_timestamp(%Entry.Passthrough{raw: r}), do: r["timestamp"]
+  defp entry_timestamp(entry), do: Map.get(entry, :timestamp)
 
   # ------- index -------
 
