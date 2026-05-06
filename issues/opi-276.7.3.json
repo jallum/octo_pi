@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T00:14:26Z",
   "created": "2026-05-05T23:48:10Z",
   "description": "## Summary\nPort the `/session` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\nRunning `/session` in the upstream pi renders a read-only info panel for the current session. Fields shown (zero-value cache fields are omitted):\n\n```\n  File:     /home/user/.pi/sessions/abc123.json\n  ID:       abc123\n  Messages: 12 (3 user, 9 assistant)\n  Tokens:   ↑ 4821  ↓ 1203  R 0  W 512\n  Cost:     $0.0041\n```\n\nRendering rules:\n- Labels use `theme.fg(\"dim\", ...)`\n- Values are plain (no color)\n- Cache-read and cache-write token counts are omitted when 0\n- Cost line only appears when total cost \u003e 0\n- Displayed inside the same DynamicBorder+Spacer chrome as other overlays\n- Press Escape to dismiss\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 5050 `handleSessionCommand()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"session\"`\n\n## What to Implement in Elixir\n1. Add `\"session\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/session` dispatch clause\n3. Implement handler that reads current session state (file path, ID, message counts, token usage, cost)\n4. Render as: border-framed overlay with dim labels, omitting zero cache fields and cost when 0\n5. Escape dismisses the overlay\n\n## Note\nocto_pi currently has a `/sessions` command (plural). Upstream has `/session` (singular, shows current session info) and `/resume` (the session picker). Confirm whether `/sessions` should be renamed or deprecated.",
   "id": "opi-276.7.3",
   "labels": [],
   "parent": "opi-276.7",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port /session command",
   "type": "task",
-  "updated_at": "2026-05-06T00:12:19Z"
+  "updated_at": "2026-05-06T00:14:26Z"
 }
