@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-06T15:52:32Z",
+  "description": "The hints line in the /tree overlay is incomplete compared to upstream.\n\n## Current\n\n```\n↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch\n```\n\n## Upstream\n\n```\n↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch. shift+l: label. ctrl+d/ctrl+t/ctrl+u/ctrl+l/ctrl+a: filters (ctrl+o: cycle)\n```\n\n## Missing content\n\n- `shift+l: label` — label editing keybinding hint\n- `ctrl+d/ctrl+t/ctrl+u/ctrl+l/ctrl+a: filters` — direct filter mode keybinding hints\n- `(ctrl+o: cycle)` — filter cycle keybinding hint\n\n## Where to fix\n\n`apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex`, `render/2`:\n- Update the hardcoded hints string in the second line of the render output\n\n## Verification\n\nOpen /tree and confirm the second line shows the full keybinding hints including label and filter shortcuts.",
+  "id": "opi-iu9.14",
+  "labels": [],
+  "parent": "opi-iu9",
+  "priority": 2,
+  "status": "open",
+  "title": "/tree hints line: add label and filter keybinding hints",
+  "type": "task",
+  "updated_at": "2026-05-06T15:52:32Z"
+}
