@@ -381,6 +381,12 @@ defmodule OctoPi.Coder.Loop do
 
   def handle_call(:get_entries, _from, state), do: {:reply, SessionStore.get_entries(state.store_pid), state}
 
+  def handle_call(:get_tree, _from, state), do: {:reply, SessionStore.get_tree(state.store_pid), state}
+
+  def handle_call({:set_label, target_id, label}, _from, state) do
+    {:reply, SessionStore.append_label_change(state.store_pid, target_id, label), state}
+  end
+
   # ---- compact (manual + pre-prompt) --------------------------------------
 
   # Pre-prompt threshold check used by :agent_prompt to decide whether

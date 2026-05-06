@@ -358,6 +358,52 @@ defmodule OctoPi.Coder.SessionStoreTest do
     end
   end
 
+  describe "get_tree/1 and append_label_change/3" do
+    test "get_tree returns empty list for fresh session", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "tree-empty", cwd: tmp, root: tmp)
+      assert SessionStore.get_tree(pid) == []
+      :ok = SessionStore.close(pid)
+    end
+
+    test "get_tree returns nodes with nil labels by default", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "tree-nolabel", cwd: tmp, root: tmp)
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("hello"))
+
+      [root] = SessionStore.get_tree(pid)
+      assert root.entry.id == e1.id
+      assert root.label == nil
+      assert root.label_timestamp == nil
+
+      :ok = SessionStore.close(pid)
+    end
+
+    test "append_label_change sets label visible in get_tree", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "tree-label", cwd: tmp, root: tmp)
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("hello"))
+      :ok = SessionStore.append_label_change(pid, e1.id, "checkpoint")
+
+      [root] = SessionStore.get_tree(pid)
+      assert root.entry.id == e1.id
+      assert root.label == "checkpoint"
+      assert is_binary(root.label_timestamp)
+
+      :ok = SessionStore.close(pid)
+    end
+
+    test "append_label_change persists to file and reloads correctly", %{tmp: tmp} do
+      {:ok, pid} = SessionStore.open(id: "tree-persist", cwd: tmp, root: tmp)
+      {:ok, e1} = SessionStore.append_entry(pid, message_entry("hello"))
+      :ok = SessionStore.append_label_change(pid, e1.id, "important")
+      path = SessionStore.path(pid)
+      :ok = SessionStore.close(pid)
+
+      {:ok, reloaded} = SessionStore.open(path: path)
+      [root] = SessionStore.get_tree(reloaded)
+      assert root.label == "important"
+      :ok = SessionStore.close(reloaded)
+    end
+  end
+
   describe "open/1 with :path (resume)" do
     test "loads an existing session and opens the file in append mode", %{tmp: tmp} do
       {:ok, p1} = SessionStore.open(id: "res", cwd: tmp, root: tmp)

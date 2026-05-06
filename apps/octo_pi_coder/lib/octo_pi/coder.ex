@@ -172,6 +172,14 @@ defmodule OctoPi.Coder do
   @spec get_entries(t()) :: [Entry.t()]
   def get_entries(server), do: GenServer.call(server, :get_entries)
 
+  @doc "Return the full session tree as a list of root TreeNode structs with labels resolved."
+  @spec get_tree(t()) :: [OctoPi.Coder.Session.TreeNode.t()]
+  def get_tree(server), do: GenServer.call(server, :get_tree)
+
+  @doc "Set or clear a label on a session entry."
+  @spec set_label(t(), String.t(), String.t() | nil) :: :ok
+  def set_label(server, target_id, label), do: GenServer.call(server, {:set_label, target_id, label})
+
   # ---- Print mode ----
 
   @doc """

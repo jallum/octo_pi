@@ -107,6 +107,18 @@ defmodule OctoPi.Coder.SessionStore do
   @spec get_entries(t()) :: [Entry.t()]
   def get_entries(pid), do: GenServer.call(pid, :get_entries)
 
+  @doc "Full session tree as a list of root TreeNode structs with labels resolved."
+  @spec get_tree(t()) :: [OctoPi.Coder.Session.TreeNode.t()]
+  def get_tree(pid), do: GenServer.call(pid, :get_tree)
+
+  @doc """
+  Append a label change to the session. Pass `nil` to clear a label.
+  Raises if `target_id` is not a known entry.
+  """
+  @spec append_label_change(t(), String.t(), String.t() | nil) :: :ok
+  def append_label_change(pid, target_id, label),
+    do: GenServer.call(pid, {:append_label_change, target_id, label})
+
   @doc "Walk from current leaf to root; returns root→leaf order. `[]` for empty session."
   @spec get_branch(t()) :: [Entry.t()]
   def get_branch(pid), do: GenServer.call(pid, :get_branch)
@@ -307,6 +319,14 @@ defmodule OctoPi.Coder.SessionStore do
   def handle_call(:get_session_manager, _from, state), do: {:reply, state.sm, state}
 
   def handle_call(:get_entries, _from, state), do: {:reply, SessionManager.get_entries(state.sm), state}
+
+  def handle_call(:get_tree, _from, state), do: {:reply, SessionManager.get_tree(state.sm), state}
+
+  def handle_call({:append_label_change, target_id, label}, _from, state) do
+    {sm, materialized} = SessionManager.append_label_change(state.sm, target_id, label)
+    IO.write(state.io, encode_line(Entry.pairs(materialized)))
+    {:reply, :ok, %{state | sm: sm}}
+  end
 
   def handle_call({:get_entry, id}, _from, state), do: {:reply, SessionManager.get_entry(state.sm, id), state}
 
