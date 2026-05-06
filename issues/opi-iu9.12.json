@@ -4,7 +4,8 @@
     "opi-iu9.11"
   ],
   "blocks": [
-    "opi-iu9.4"
+    "opi-iu9.4",
+    "opi-iu9.5"
   ],
   "created": "2026-05-06T13:14:10Z",
   "description": "Wire the TUI /tree dispatch to call Coder.get_tree/1 instead of Coder.get_entries/1,\nso labels are visible in the tree overlay. Add TreeSelector.new_from_tree/2 to accept\npre-built tree nodes.\n\n## Changes\n\n### apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex\n\nAdd new_from_tree/2:\n```elixir\n@spec new_from_tree([TreeNode.t()], keyword()) :: t()\ndef new_from_tree(roots, opts \\\\ []) do\n  # roots is already [TreeNode.t()] — no build_tree call needed\n  leaf_id = Keyword.get(opts, :leaf_id)\n  ...\n  flat = Tree.flatten(roots, leaf_id)\n  ...\nend\n```\nThis parallels new/2 but skips the build_tree/1 call since roots are already structured.\n\n### apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n\nUpdate dispatch_slash_command(\"tree\") (around line 1856):\n```elixir\ndefp dispatch_slash_command(\"tree\", _args, state) do\n  tree = Coder.get_tree(state.session)   # [TreeNode.t()] with labels resolved\n  ts = TreeSelector.new_from_tree(tree,\n    leaf_id: state.current_msg_id,\n    max_visible_lines: max(5, div(state.height, 2))\n  )\n  focus(%{state | tree_selector: ts}, {:dialog, :tree_selector})\nend\n```\nThe max_visible_lines change also addresses opi-iu9.6 (windowed display height).\n\n### Alias update\nIn tree_selector.ex (TUI), add:\n  alias OctoPi.Coder.Session.TreeNode\n\nThe Tree alias already points to OctoPi.Coder.Components.TreeSelector.\nTree.flatten/2, Tree.filter/3, Tree.render_lines/2 all accept [TreeNode.t()] via FlatNode\nwhich wraps TreeNode — no changes needed there since TreeNode is the same struct.\n\n## Notes\n- new/2 (takes [Entry.t()]) can remain for backward compat with tests that seed raw entries.\n- The max_visible_lines wiring here also satisfies part of opi-iu9.6, but opi-iu9.6 still\n  owns the render/2 windowing logic.\n\n## Files\n- apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex\n- apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n\n## Verification\nOpen /tree after labeling an entry (via a future opi-iu9.4 implementation, or by seeding a\nlabel in the JSONL file). Confirm the label appears on the tree node.",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "/tree wiring: use Coder.get_tree/1; add TreeSelector.new_from_tree/2",
   "type": "task",
-  "updated_at": "2026-05-06T13:14:18Z"
+  "updated_at": "2026-05-06T13:14:19Z"
 }
