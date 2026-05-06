@@ -36,6 +36,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   alias OctoPi.Coder.Components.TreeSelector, as: Tree
   alias OctoPi.Coder.Session.Entry
   alias OctoPi.Coder.Session.TreeNode
+  alias OctoPi.TUI.Components.Input
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
 
@@ -50,7 +51,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
           flat_nodes: [Tree.FlatNode.t()],
           filtered_nodes: [Tree.FlatNode.t()],
           max_visible_lines: pos_integer(),
-          show_label_timestamps: boolean()
+          show_label_timestamps: boolean(),
+          label_input: {String.t(), Input.t()} | nil
         }
 
   defstruct [
@@ -62,7 +64,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     flat_nodes: [],
     filtered_nodes: [],
     max_visible_lines: 20,
-    show_label_timestamps: false
+    show_label_timestamps: false,
+    label_input: nil
   ]
 
   @doc """
@@ -141,6 +144,16 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
+  def render(%__MODULE__{label_input: {_entry_id, input}}, width) do
+    input_lines = Input.render(%{input | width: max(1, width - 2), height: 1}, width - 2)
+
+    [
+      "Session Tree",
+      "↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch",
+      "  Label (empty to remove):"
+    ] ++ Enum.map(input_lines, &("  " <> &1)) ++ ["  enter: save   escape: cancel"]
+  end
+
   def render(%__MODULE__{} = state, width) do
     total = length(state.filtered_nodes)
 
@@ -175,6 +188,28 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     ] ++ [count_line]
   end
 
+  def handle_key(%__MODULE__{label_input: {entry_id, input}} = state, %Key{} = key) do
+    case Input.handle_key(input, key, state.keybindings) do
+      {_new_input, [{:submit, value}]} ->
+        label = value |> String.trim() |> then(fn s -> if s == "", do: nil, else: s end)
+        ts = if label, do: DateTime.to_iso8601(DateTime.utc_now()), else: nil
+        new_state =
+          state
+          |> Map.put(:label_input, nil)
+          |> update_flat_node_label(entry_id, label, ts)
+        {new_state, [{:label_change, entry_id, label}]}
+
+      {_new_input, [:cancel]} ->
+        {%{state | label_input: nil}, []}
+
+      new_input when is_struct(new_input, Input) ->
+        {%{state | label_input: {entry_id, new_input}}, []}
+
+      {new_input, _events} ->
+        {%{state | label_input: {entry_id, new_input}}, []}
+    end
+  end
+
   def handle_key(%__MODULE__{} = state, %Key{} = key) do
     kb = state.keybindings
 
@@ -187,6 +222,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       Keybindings.matches?(kb, key, "tui.select.cancel") -> {state, [:cancel]}
       Keybindings.matches?(kb, key, "app.tree.toggleLabelTimestamp") ->
         {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
+      Keybindings.matches?(kb, key, "app.tree.editLabel") ->
+        open_label_input(state)
       true -> handle_filter_key(state, kb, key)
     end
   end
@@ -199,6 +236,38 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       nil -> {state, []}
       id -> {state, [{:select, id}]}
     end
+  end
+
+  defp open_label_input(state) do
+    case selected_id(state) do
+      nil ->
+        {state, []}
+
+      entry_id ->
+        current_label =
+          case Enum.find(state.flat_nodes, fn fn_node -> fn_node.node.entry.id == entry_id end) do
+            nil -> ""
+            fn_node -> fn_node.node.label || ""
+          end
+
+        input = %Input{value: current_label, cursor: String.length(current_label)}
+        {%{state | label_input: {entry_id, input}}, []}
+    end
+  end
+
+  defp update_flat_node_label(state, entry_id, label, label_timestamp) do
+    patch = fn fn_node ->
+      if fn_node.node.entry.id == entry_id do
+        %{fn_node | node: %{fn_node.node | label: label, label_timestamp: label_timestamp}}
+      else
+        fn_node
+      end
+    end
+
+    %{state |
+      flat_nodes: Enum.map(state.flat_nodes, patch),
+      filtered_nodes: Enum.map(state.filtered_nodes, patch)
+    }
   end
 
   defp handle_filter_key(state, kb, key) do

@@ -349,4 +349,88 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
       assert Enum.any?(data_lines, &(&1 =~ "›"))
     end
   end
+
+  # ── label editing ─────────────────────────────────────────────────────────
+
+  describe "label editing" do
+    setup do
+      entries = [user_entry("u1", nil, "hi"), asst_entry("a1", "u1", "hello")]
+      {:ok, sel: TreeSelector.new(entries, initial_selected_id: "u1")}
+    end
+
+    defp press_shift(state, char) do
+      TreeSelector.handle_key(state, %Key{key: char, modifiers: [:shift]})
+    end
+
+    test "shift+L opens label input mode", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      assert sel1.label_input != nil
+    end
+
+    test "label input is pre-filled with existing label", %{sel: sel} do
+      # Give u1 a label first by patching flat_nodes
+      labeled_sel = put_in(
+        sel.flat_nodes,
+        Enum.map(sel.flat_nodes, fn fn_node ->
+          if fn_node.node.entry.id == "u1",
+            do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
+            else: fn_node
+        end)
+      )
+      labeled_sel = %{labeled_sel | filtered_nodes: Enum.map(labeled_sel.filtered_nodes, fn fn_node ->
+        if fn_node.node.entry.id == "u1",
+          do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
+          else: fn_node
+      end)}
+      {sel1, []} = press_shift(labeled_sel, ?l)
+      {_entry_id, input} = sel1.label_input
+      assert input.value == "my-label"
+    end
+
+    test "render in label input mode shows label prompt and input", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      lines = TreeSelector.render(sel1, 80)
+      assert Enum.any?(lines, &(&1 =~ "Label"))
+      assert Enum.any?(lines, &(&1 =~ "enter"))
+    end
+
+    test "escape in label input mode cancels and returns to tree", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      {sel2, events} = press_named(sel1, :escape)
+      assert sel2.label_input == nil
+      assert events == []
+    end
+
+    test "enter in label input mode emits {:label_change, id, label}", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      {_entry_id, input} = sel1.label_input
+      sel_typed = %{sel1 | label_input: {"u1", %{input | value: "new-label", cursor: 9}}}
+      {sel2, events} = press_named(sel_typed, :enter)
+      assert sel2.label_input == nil
+      assert [{:label_change, "u1", "new-label"}] = events
+    end
+
+    test "enter with empty input emits {:label_change, id, nil}", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      {sel2, events} = press_named(sel1, :enter)
+      assert [{:label_change, "u1", nil}] = events
+      assert sel2.label_input == nil
+    end
+
+    test "label change updates flat_nodes in memory", %{sel: sel} do
+      {sel1, []} = press_shift(sel, ?l)
+      {_entry_id, input} = sel1.label_input
+      sel_typed = %{sel1 | label_input: {"u1", %{input | value: "mem-label", cursor: 9}}}
+      {sel2, _events} = press_named(sel_typed, :enter)
+      fn_node = Enum.find(sel2.flat_nodes, &(&1.node.entry.id == "u1"))
+      assert fn_node.node.label == "mem-label"
+    end
+
+    test "shift+L on empty tree does nothing", %{sel: _sel} do
+      empty = %TreeSelector{keybindings: Keybindings.new(), flat_nodes: [], filtered_nodes: []}
+      {empty2, events} = press_shift(empty, ?l)
+      assert events == []
+      assert empty2.label_input == nil
+    end
+  end
 end
