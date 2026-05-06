@@ -4,14 +4,15 @@
     "opi-iu9.12"
   ],
   "blocks": [],
+  "closed_at": "2026-05-06T15:07:32Z",
   "created": "2026-05-06T12:06:19Z",
   "description": "Pressing shift+T should toggle label timestamps in tree entries. This feature is not implemented in Elixir.\n\n## Upstream behavior (tree-selector.ts TreeList)\n\n### State\n- showLabelTimestamps: boolean (default false)\n\n### Keybinding\n- app.tree.toggleLabelTimestamp (default: shift+t)\n- Toggles showLabelTimestamps; no filter reapplication needed (render only)\n\n### Entry rendering\nWhen showLabelTimestamps is true and a node has both a label and a labelTimestamp, a formatted\ntimestamp is inserted between the label and content:\n```\n  [label] HH:MM content...\n  [label] M/D HH:MM content...       (different day, same year)\n  [label] YY/M/D HH:MM content...    (different year)\n```\nStyled: theme.fg(\"muted\", \"HH:MM \")\n\n### formatLabelTimestamp(timestamp: string): string\nFormats an ISO timestamp relative to now:\n- Same day: \"HH:MM\"\n- Same year, different day: \"M/D HH:MM\"  (1-indexed month, no padding)\n- Different year: \"YY/M/D HH:MM\"  (2-digit year)\n\n### Count line status suffix\nWhen showLabelTimestamps is true, \" [+label time]\" is appended to the (N/N) status label\n(this is handled by getStatusLabels() which is already referenced in opi-ce3.4).\n\n## Elixir gaps\n\n- No show_label_timestamps field in TreeSelector struct\n- No app.tree.toggleLabelTimestamp handler in handle_key/2\n- No label timestamp rendering in render_node/4 (entry lines only show [label])\n- No format_label_timestamp/1 function\n- (N/N) status line does not show [+label time] suffix\n\n## Where to fix\n\napps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex:\n- Add show_label_timestamps: false to struct\n- Add app.tree.toggleLabelTimestamp handler in handle_key/2\n- Pass show_label_timestamps option to Tree.render_lines/2\n\napps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex:\n- Add show_label_timestamps: false option to render_lines/2\n- In render_node/4, emit label_timestamp between label and content when enabled\n- Add format_label_timestamp/1 private function (mirror formatLabelTimestamp in upstream)\n\n## Upstream references\n- toggleLabelTimestamp keybinding handler line 985 in tree-selector.ts\n- Label timestamp rendering in render() lines 667-673 in tree-selector.ts\n- formatLabelTimestamp() lines 793-813 in tree-selector.ts\n- getStatusLabels() with [+label time] lines 565-582 in tree-selector.ts\n\n## Verification\nOpen /tree with at least one labeled entry (use shift+L first if needed). Press shift+T.\nConfirm timestamp appears next to the label: [label] HH:MM content.\nConfirm (N/N) changes to (N/N) [+label time]. Press shift+T again to toggle off.",
   "id": "opi-iu9.5",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "/tree label timestamp toggle: shift+T and formatLabelTimestamp",
   "type": "task",
-  "updated_at": "2026-05-06T15:03:09Z"
+  "updated_at": "2026-05-06T15:07:32Z"
 }
