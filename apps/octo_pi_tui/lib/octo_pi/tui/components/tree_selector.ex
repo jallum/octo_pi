@@ -227,6 +227,13 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp move_cursor(%__MODULE__{filtered_nodes: []} = state, _delta), do: state
 
+  defp move_cursor(%__MODULE__{selected_index: idx, filtered_nodes: nodes} = state, delta)
+       when delta in [-1, 1] do
+    count = length(nodes)
+    new_idx = rem(idx + delta + count, count)
+    %{state | selected_index: new_idx}
+  end
+
   defp move_cursor(%__MODULE__{selected_index: idx, filtered_nodes: nodes} = state, delta) do
     count = length(nodes)
     new_idx = (idx + delta) |> max(0) |> min(count - 1)

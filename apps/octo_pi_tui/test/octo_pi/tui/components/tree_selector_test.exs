@@ -123,17 +123,17 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
       assert sel1.selected_index == 1
     end
 
-    test "up at first entry stays at 0", %{sel: sel} do
+    test "up at first entry wraps to last", %{sel: sel} do
       sel0 = %{sel | selected_index: 0}
       {sel1, []} = press_named(sel0, :up)
-      assert sel1.selected_index == 0
+      assert sel1.selected_index == length(sel.filtered_nodes) - 1
     end
 
-    test "down at last entry stays at last", %{sel: sel} do
+    test "down at last entry wraps to first", %{sel: sel} do
       last = length(sel.filtered_nodes) - 1
       sel_last = %{sel | selected_index: last}
-      {sel_same, []} = press_named(sel_last, :down)
-      assert sel_same.selected_index == last
+      {sel0, []} = press_named(sel_last, :down)
+      assert sel0.selected_index == 0
     end
 
     test "page_down advances by max_visible_lines", %{sel: sel} do
