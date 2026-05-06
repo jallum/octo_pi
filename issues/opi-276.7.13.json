@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T00:05:29Z",
   "created": "2026-05-05T23:49:43Z",
   "description": "## Summary\nPort the `/quit` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/quit` immediately shuts down the application — equivalent to pressing Ctrl+D.\n\nBehavior details:\n- Dispatches directly to `this.shutdown()` with no confirmation prompt\n- Any in-progress streaming is interrupted before shutdown\n- No overlay or status message; the terminal simply returns to the shell\n- Equivalent key: Ctrl+D (already handled) — `/quit` is the command form\n\n## Source References\n- Dispatch: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 2562, search for `\"quit\"` in the slash-command router\n- Shutdown logic: `this.shutdown()` in the same file\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"quit\"`\n\n## What to Implement in Elixir\n1. Add `\"quit\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/quit` dispatch clause that calls the same shutdown path as Ctrl+D\n3. No overlay or confirmation; shutdown is immediate",
   "id": "opi-276.7.13",
   "labels": [],
   "parent": "opi-276.7",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port /quit command",
   "type": "task",
-  "updated_at": "2026-05-06T00:02:50Z"
+  "updated_at": "2026-05-06T00:05:29Z"
 }
