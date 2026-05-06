@@ -42,4 +42,29 @@ defmodule OctoPi.AI.Model do
     cost: %Cost{},
     compat: nil
   ]
+
+  alias OctoPi.AI.Usage
+
+  @doc """
+  Calculates the dollar cost for `usage` given `model`'s per-million-token
+  pricing. Returns an updated `%Usage{}` with `cost` filled in.
+  Mirrors `calculateCost` in `pi-ai/src/models.ts`.
+  """
+  @spec calculate_cost(t(), Usage.t()) :: Usage.t()
+  def calculate_cost(%__MODULE__{cost: pricing}, %Usage{} = usage) do
+    input_cost = pricing.input / 1_000_000 * usage.input
+    output_cost = pricing.output / 1_000_000 * usage.output
+    cache_read_cost = pricing.cache_read / 1_000_000 * usage.cache_read
+    cache_write_cost = pricing.cache_write / 1_000_000 * usage.cache_write
+
+    cost = %Usage.Cost{
+      input: input_cost,
+      output: output_cost,
+      cache_read: cache_read_cost,
+      cache_write: cache_write_cost,
+      total: input_cost + output_cost + cache_read_cost + cache_write_cost
+    }
+
+    %{usage | cost: cost}
+  end
 end

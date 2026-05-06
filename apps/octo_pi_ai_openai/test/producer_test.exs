@@ -171,7 +171,7 @@ defmodule OctoPi.AI.Providers.OpenAI.ProducerTest do
       events = collect_events(pid)
 
       assert [%Event.Start{}, %Event.Error{reason: :error, message: msg}] = events
-      assert msg.error_message =~ "HTTP 529"
+      assert msg.error_message =~ "overloaded"
     end
 
     test "stream ending without finish_reason yields Done with :stop" do

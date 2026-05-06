@@ -294,6 +294,47 @@ defmodule OctoPi.AI.Providers.OpenAI.DecoderTest do
       assert msg.usage.input == 10
       assert msg.usage.output == 5
     end
+
+    test "calculates cost when model has pricing" do
+      priced_model =
+        model()
+        |> Map.put(:cost, %Model.Cost{input: 2.5, output: 10.0, cache_read: 1.25, cache_write: 3.75})
+
+      {_start, state} = Decoder.new(priced_model)
+
+      usage = %{
+        "prompt_tokens" => 1100,
+        "completion_tokens" => 200,
+        "prompt_tokens_details" => %{"cached_tokens" => 100, "cache_write_tokens" => 0},
+        "completion_tokens_details" => %{"reasoning_tokens" => 0}
+      }
+
+      # input = 1100 - 100 = 1000 tokens
+      {_events, state} = feed(state, [chunk(%{"content" => "hi"}, usage: usage)])
+      msg = Decoder.message(state)
+
+      assert_in_delta msg.usage.cost.input, 1000 / 1_000_000 * 2.5, 1.0e-9
+      assert_in_delta msg.usage.cost.output, 200 / 1_000_000 * 10.0, 1.0e-9
+      assert_in_delta msg.usage.cost.cache_read, 100 / 1_000_000 * 1.25, 1.0e-9
+      assert_in_delta msg.usage.cost.cache_write, 0.0, 1.0e-9
+      expected_total = 1000 / 1_000_000 * 2.5 + 200 / 1_000_000 * 10.0 + 100 / 1_000_000 * 1.25
+      assert_in_delta msg.usage.cost.total, expected_total, 1.0e-9
+    end
+
+    test "cost is zero when model has no pricing" do
+      {_start, state} = Decoder.new(model())
+
+      usage = %{
+        "prompt_tokens" => 100,
+        "completion_tokens" => 50,
+        "prompt_tokens_details" => %{"cached_tokens" => 0},
+        "completion_tokens_details" => %{"reasoning_tokens" => 0}
+      }
+
+      {_events, state} = feed(state, [chunk(%{"content" => "hi"}, usage: usage)])
+      msg = Decoder.message(state)
+      assert msg.usage.cost.total == 0.0
+    end
   end
 
   describe "stop reasons" do

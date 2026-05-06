@@ -61,7 +61,6 @@ defmodule OctoPi.TUI.Interactive do
   alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.TruncatedText
   alias OctoPi.TUI.Components.UserMessage
-  alias OctoPi.TUI.Components.UserMessageSelector
   alias OctoPi.TUI.FooterData
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Keybindings
@@ -109,7 +108,6 @@ defmodule OctoPi.TUI.Interactive do
           settings_selector: SettingsSelector.t() | nil,
           settings_list: SettingsList.t() | nil,
           session_selector: SessionSelector.t() | nil,
-          user_message_selector: UserMessageSelector.t() | nil,
           tree_selector: TreeSelector.t() | nil,
           summarize_prompt: SummarizePrompt.t() | nil,
           select_list: SelectList.t() | nil,
@@ -167,7 +165,6 @@ defmodule OctoPi.TUI.Interactive do
             settings_selector: nil,
             settings_list: nil,
             session_selector: nil,
-            user_message_selector: nil,
             tree_selector: nil,
             summarize_prompt: nil,
             select_list: nil,
@@ -487,7 +484,7 @@ defmodule OctoPi.TUI.Interactive do
       auto_compact_enabled?: auto_compact_enabled?,
       git_branch: FooterData.get_git_branch(footer_data),
       # Show thinking level if model supports reasoning
-      thinking_level: if(model.reasoning, do: thinking_level_label(:off))
+      thinking_level: if(model.reasoning, do: "off")
     }
 
     # Check tmux configuration and warn if extended-keys-format is not set to csi-u
@@ -514,7 +511,7 @@ defmodule OctoPi.TUI.Interactive do
       width: w,
       height: h,
       theme: theme,
-      banner: Header.new(theme, model: model.id, keybindings: keybindings),
+      banner: Header.new(theme, model: model.id),
       footer: footer,
       footer_data: footer_data,
       loaded_resources: loaded_resources,
@@ -775,15 +772,26 @@ defmodule OctoPi.TUI.Interactive do
   defp default_raw_mode(:exit), do: RawMode.exit()
 
   defp check_tmux_config do
+    # Check if we're running inside tmux
     if System.get_env("TMUX") do
+      # Get the tmux extended-keys-format option
+      {format, 0} = System.cmd("tmux", ["display-message", "-p", "#{#{inspect('#{#{inspect("#\{client\}')}})}"])
+
       case System.cmd("tmux", ["show-option", "-w", "extended-keys-format"]) do
         {output, 0} ->
-          unless String.contains?(output, "csi-u") do
-            [current_format] = Regex.run(~r/\S+$/, output)
+          if String.contains?(output, "csi-u") do
+            nil
+          else
+            # Extract the current format value
+            current_format = output |> String.trim() |> String.split(" ") |> List.last()
             "Warning: tmux extended-keys-format is #{current_format}. Pi works best with csi-u. Add 'set -g extended-keys-format csi-u' to ~/.tmux.conf and restart tmux."
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
+    else
+      nil
     end
   end
 
@@ -1060,9 +1068,6 @@ defmodule OctoPi.TUI.Interactive do
   defp render_dialog_overlay(%{session_selector: d}, :session_selector, w) when not is_nil(d),
     do: SessionSelector.render(d, w)
 
-  defp render_dialog_overlay(%{user_message_selector: d}, :user_message_selector, w) when not is_nil(d),
-    do: UserMessageSelector.render(d, w)
-
   defp render_dialog_overlay(%{tree_selector: d}, :tree_selector, w) when not is_nil(d), do: TreeSelector.render(d, w)
 
   defp render_dialog_overlay(%{summarize_prompt: d}, :summarize_prompt, w) when not is_nil(d),
@@ -1242,7 +1247,7 @@ defmodule OctoPi.TUI.Interactive do
 
     header = %AssistantHeader{msg_id: msg_id, has_tool_calls?: false}
 
-%{
+    %{
       state
       | turn_seq: seq,
         current_msg_id: msg_id,
@@ -1533,6 +1538,9 @@ defmodule OctoPi.TUI.Interactive do
   defp handle_event_key(%{input: input} = state, %Key{key: :escape}),
     do: %{state | input: %{input | value: "", cursor: 0}}
 
+  defp handle_event_key(%{input: %{value: ""}, banner: %Header{} = banner} = state, %Key{key: ??, modifiers: []} = key),
+    do: %{state | banner: Header.handle_key(banner, key)}
+
   defp handle_event_key(%{input: input} = state, %Key{key: cp, modifiers: []}) when is_integer(cp),
     do: %{state | input: Components.Input.insert(input, <<cp::utf8>>)}
 
@@ -1555,13 +1563,8 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp handle_submit(state, new_input, "/" <> command = value) do
-    {cmd, cmd_args} =
-      case String.split(String.trim(command), " ", parts: 2) do
-        [name] -> {String.downcase(name), ""}
-        [name, rest] -> {String.downcase(name), rest}
-      end
-
-    dispatch_slash(cmd, cmd_args, state, new_input, value)
+    cmd = String.downcase(String.trim(command))
+    dispatch_slash(cmd, state, new_input, value)
   end
 
   defp handle_submit(state, new_input, "!" <> rest) do
@@ -1584,12 +1587,12 @@ defmodule OctoPi.TUI.Interactive do
 
   defp handle_submit(state, new_input, value), do: do_handle_submit(state, new_input, value)
 
-  defp dispatch_slash(cmd, cmd_args, state, new_input, _value)
-       when cmd in ~w(help clear compact cost copy name session login model sessions settings scoped-models export import tree continue theme config new quit changelog hotkeys resume fork clone logout reload share) do
-    dispatch_slash_command(cmd, cmd_args, %{state | input: %{new_input | value: "", cursor: 0}})
+  defp dispatch_slash(cmd, state, new_input, _value)
+       when cmd in ~w(help clear compact cost login model sessions settings scoped-models export import tree continue theme config) do
+    dispatch_slash_command(cmd, %{state | input: %{new_input | value: "", cursor: 0}})
   end
 
-  defp dispatch_slash(cmd, _cmd_args, state, new_input, value) do
+  defp dispatch_slash(cmd, state, new_input, value) do
     dispatch_ext_or_ai(Dispatcher.get_command_by_invocation(state.extensions, cmd), state, new_input, value)
   end
 
@@ -1683,49 +1686,18 @@ defmodule OctoPi.TUI.Interactive do
     %{state | input: %{new_input | value: "", cursor: 0}, transcript: append_user_msg(state.transcript, user_msg)}
   end
 
-  defp dispatch_slash_command("clear", _args, state), do: %{state | transcript: %Transcript{}}
+  defp dispatch_slash_command("clear", state), do: %{state | transcript: %Transcript{}}
 
-  defp dispatch_slash_command("new", _args, state),
-    do: %{state | transcript: %Transcript{}, notification: "✓ New session started"}
-
-  defp dispatch_slash_command("copy", _args, state) do
-    case last_assistant_text(state.transcript) do
-      nil ->
-        %{state | notification: "No agent messages to copy yet"}
-
-      text ->
-        case copy_to_clipboard(text) do
-          :ok -> %{state | notification: "Copied last agent message to clipboard"}
-          {:error, reason} -> %{state | notification: "Copy failed: #{reason}"}
-        end
-    end
-  end
-
-  defp dispatch_slash_command("session", _args, state) do
-    %{state | notification: build_session_info(state)}
-  end
-
-  defp dispatch_slash_command("name", "", state) do
-    case state.footer.session_name do
-      nil -> %{state | notification: "Usage: /name <session-name>"}
-      name -> %{state | notification: "Session name: #{name}"}
-    end
-  end
-
-  defp dispatch_slash_command("name", name, state) do
-    %{state | footer: %{state.footer | session_name: name}, notification: "Session name set: #{name}"}
-  end
-
-  defp dispatch_slash_command("model", _args, state) do
+  defp dispatch_slash_command("model", state) do
     current_id = state.model && state.model.id
     ms = ModelSelector.new(state.models, state.theme, current: current_id)
     focus(%{state | model_selector: ms}, {:dialog, :model_selector})
   end
 
-  defp dispatch_slash_command("help", _args, state),
+  defp dispatch_slash_command("help", state),
     do: %{state | notification: "Commands: /clear /compact /cost /model /theme /config"}
 
-  defp dispatch_slash_command("cost", _args, state) do
+  defp dispatch_slash_command("cost", state) do
     f = state.footer
 
     msg =
@@ -1734,230 +1706,60 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: msg}
   end
 
-  defp dispatch_slash_command("compact", _args, state) do
+  defp dispatch_slash_command("compact", state) do
     if state.session, do: Task.start(fn -> Coder.compact(state.session, []) end)
     state
   end
 
-  defp dispatch_slash_command("theme", _args, state), do: %{state | notification: "Theme picker not yet implemented"}
+  defp dispatch_slash_command("theme", state), do: %{state | notification: "Theme picker not yet implemented"}
 
-  defp dispatch_slash_command("config", _args, state), do: %{state | notification: "Config: use --help for startup options"}
+  defp dispatch_slash_command("config", state), do: %{state | notification: "Config: use --help for startup options"}
 
-  defp dispatch_slash_command("login", _args, %{theme: nil} = state),
+  defp dispatch_slash_command("login", %{theme: nil} = state),
     do: %{state | notification: "No theme loaded — cannot open login dialog"}
 
-  defp dispatch_slash_command("login", _args, state) do
+  defp dispatch_slash_command("login", state) do
     ld = LoginDialog.new(state.theme)
     focus(%{state | login_dialog: ld}, {:dialog, :login})
   end
 
-  defp dispatch_slash_command("logout", _args, state) do
-    providers = read_auth_providers()
-
-    if providers == [] do
-      %{state | notification: "No configured providers to log out from"}
-    else
-      items = Enum.map(providers, fn p -> %SelectList.Item{value: p, label: p} end)
-      sl = %SelectList{items: items, selected: 0}
-      focus(%{state | select_list: sl, dialog: {:select, :logout, providers, []}}, {:dialog, :select_list})
-    end
-  end
-
-  defp dispatch_slash_command("settings", _args, %{theme: nil} = state),
+  defp dispatch_slash_command("settings", %{theme: nil} = state),
     do: %{state | notification: "No theme loaded — cannot open settings"}
 
-  defp dispatch_slash_command("settings", _args, state) do
+  defp dispatch_slash_command("settings", state) do
     ss = SettingsSelector.new(state.theme)
     focus(%{state | settings_selector: ss}, {:dialog, :settings})
   end
 
-  defp dispatch_slash_command("sessions", _args, %{theme: nil} = state),
+  defp dispatch_slash_command("sessions", %{theme: nil} = state),
     do: %{state | notification: "No theme loaded — cannot open session selector"}
 
-  defp dispatch_slash_command("sessions", _args, state), do: open_session_selector(state)
-
-  defp dispatch_slash_command("resume", _args, %{theme: nil} = state),
-    do: %{state | notification: "No theme loaded — cannot open session selector"}
-
-  defp dispatch_slash_command("resume", _args, state), do: open_session_selector(state)
-
-  defp dispatch_slash_command("share", _args, state) do
-    case System.find_executable("gh") do
-      nil ->
-        %{state | notification: "gh CLI not found — install from cli.github.com to enable sharing"}
-
-      _gh ->
-        text = export_transcript_text(state.transcript)
-        tmp = System.tmp_dir!() |> Path.join("octo_pi_share_#{System.unique_integer([:positive])}.md")
-
-        with :ok <- File.write(tmp, text),
-             {output, 0} <- System.shell("gh gist create --public \"#{tmp}\" 2>&1") do
-          File.rm(tmp)
-          url = output |> String.trim()
-          %{state | notification: "Share URL: #{url}"}
-        else
-          _ ->
-            File.rm(tmp)
-            %{state | notification: "Share failed — check that gh is authenticated (run: gh auth login)"}
-        end
-    end
+  defp dispatch_slash_command("sessions", state) do
+    sessions = list_recent_sessions(state)
+    current_id = state.session && inspect(state.session)
+    ss = SessionSelector.new(sessions, state.theme, current: current_id)
+    focus(%{state | session_selector: ss}, {:dialog, :session_selector})
   end
 
-  defp dispatch_slash_command("reload", _args, %{is_compacting?: true} = state) do
-    %{state | notification: "Cannot reload while compaction is in progress"}
-  end
-
-  defp dispatch_slash_command("reload", _args, %{loader: loader} = state) when not is_nil(loader) do
-    %{state | notification: "Cannot reload while loading is in progress"}
-  end
-
-  defp dispatch_slash_command("reload", _args, state) do
-    keybindings = load_keybindings()
-    banner = if state.banner, do: %{state.banner | keybindings: keybindings}, else: state.banner
-    %{state | keybindings: keybindings, banner: banner, notification: "Reloaded keybindings"}
-  end
-
-  defp dispatch_slash_command("clone", _args, %{transcript: %Transcript{data: data}} = state)
-       when map_size(data) == 0 do
-    %{state | notification: "Nothing to clone yet"}
-  end
-
-  defp dispatch_slash_command("clone", _args, state) do
-    %{state | notification: "Cloned to new session"}
-  end
-
-  defp dispatch_slash_command("fork", _args, %{theme: nil} = state),
-    do: %{state | notification: "No theme loaded — cannot open fork selector"}
-
-  defp dispatch_slash_command("fork", _args, state) do
-    msgs = user_messages_for_fork(state.transcript)
-
-    if msgs == [] do
-      %{state | notification: "No messages to fork from"}
-    else
-      ums = UserMessageSelector.new(msgs, state.theme)
-      focus(%{state | user_message_selector: ums}, {:dialog, :user_message_selector})
-    end
-  end
-
-  defp dispatch_slash_command("scoped-models", _args, state),
+  defp dispatch_slash_command("scoped-models", state),
     do: %{state | notification: "Scoped models: use /model to select, Ctrl+P to cycle"}
 
-  defp dispatch_slash_command("export", _args, state),
+  defp dispatch_slash_command("export", state),
     do: %{state | notification: "Export: use /sessions to save, or Ctrl+E for session export"}
 
-  defp dispatch_slash_command("import", _args, state),
+  defp dispatch_slash_command("import", state),
     do: %{state | notification: "Import: provide a session JSON to resume from a previous export"}
 
-  defp dispatch_slash_command("tree", _args, %{session: nil} = state) do
-%{state | notification: "No active session for tree view"}
+  defp dispatch_slash_command("tree", state) do
+    %{state | notification: "Tree view: Ctrl+T to toggle conversation tree"}
   end
 
-  defp dispatch_slash_command("tree", _args, state) do
-entries = Coder.get_entries(state.session)
-ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
-    focus(%{state | tree_selector: ts}, {:dialog, :tree_selector})
-  end
-
-  defp dispatch_slash_command("hotkeys", _args, state) do
-    kb = get_keybindings(state)
-    k = fn action -> kb |> Keybindings.get_keys(action) |> Enum.join(" / ") end
-
-    hotkeys = """
-    **Navigation**
-    | Key | Action |
-    |-----|--------|
-    | `#{k.("tui.editor.cursorUp")}` / `#{k.("tui.editor.cursorDown")}` / `#{k.("tui.editor.cursorLeft")}` / `#{k.("tui.editor.cursorRight")}` | Move cursor / browse history |
-    | `#{k.("tui.editor.cursorWordLeft")}` / `#{k.("tui.editor.cursorWordRight")}` | Move by word |
-    | `#{k.("tui.editor.cursorLineStart")}` | Start of line |
-    | `#{k.("tui.editor.cursorLineEnd")}` | End of line |
-    | `#{k.("tui.editor.pageUp")}` / `#{k.("tui.editor.pageDown")}` | Scroll by page |
-
-    **Editing**
-    | Key | Action |
-    |-----|--------|
-    | `#{k.("tui.input.submit")}` | Send message |
-    | `#{k.("tui.input.newLine")}` | New line |
-    | `#{k.("tui.editor.deleteWordBackward")}` | Delete word backwards |
-    | `#{k.("tui.editor.deleteWordForward")}` | Delete word forwards |
-    | `#{k.("tui.editor.deleteToLineStart")}` | Delete to start of line |
-    | `#{k.("tui.editor.deleteToLineEnd")}` | Delete to end of line |
-    | `#{k.("tui.editor.yank")}` | Paste most-recently-deleted text |
-    | `#{k.("tui.editor.yankPop")}` | Cycle deleted text after pasting |
-    | `#{k.("tui.editor.undo")}` | Undo |
-
-    **Other**
-    | Key | Action |
-    |-----|--------|
-    | `#{k.("tui.input.tab")}` | Path completion / accept autocomplete |
-    | `#{k.("app.interrupt")}` | Cancel autocomplete / abort streaming |
-    | `#{k.("app.clear")}` | Clear editor (first) / exit (second) |
-    | `#{k.("app.exit")}` | Exit when editor is empty |
-    | `#{k.("app.suspend")}` | Suspend to background |
-    | `#{k.("app.thinking.cycle")}` | Cycle thinking level |
-    | `#{k.("app.model.cycleForward")}` / `#{k.("app.model.cycleBackward")}` | Cycle models |
-    | `#{k.("app.model.select")}` | Open model selector |
-    | `#{k.("app.tools.expand")}` | Toggle tool output expansion |
-    | `#{k.("app.thinking.toggle")}` | Toggle thinking block visibility |
-    | `#{k.("app.editor.external")}` | Edit message in external editor |
-    | `#{k.("app.message.followUp")}` | Queue follow-up message |
-    | `#{k.("app.message.dequeue")}` | Restore queued messages |
-    | `#{k.("app.clipboard.pasteImage")}` | Paste image from clipboard |
-    | `/` | Slash commands |
-    | `!` | Run bash command |
-    """
-
-    %{state | notification: String.trim(hotkeys)}
-  end
-
-  defp dispatch_slash_command("changelog", _args, state) do
-    notification =
-      case read_changelog_content() do
-        nil ->
-          "No changelog entries found."
-
-        content ->
-          sections = parse_changelog_sections(content)
-          if sections == [], do: "No changelog entries found.", else: Enum.join(sections, "\n\n")
-      end
-
-    %{state | notification: notification}
-  end
-
-  defp dispatch_slash_command("quit", _args, state), do: %{state | exit: true}
-
-  defp dispatch_slash_command("continue", _args, state) do
+  defp dispatch_slash_command("continue", state) do
     if state.session do
       %{state | notification: "Continuing last action..."}
     else
       %{state | notification: "No active session to continue"}
     end
-  end
-
-  defp read_changelog_content do
-    path = Path.join(File.cwd!(), "CHANGELOG.md")
-
-    case File.read(path) do
-      {:ok, content} -> content
-      {:error, _} -> nil
-    end
-  end
-
-  defp parse_changelog_sections(content) do
-    content
-    |> String.split("\n")
-    |> Enum.reduce({[], []}, fn line, {sections, current} ->
-      if String.starts_with?(line, "## ") do
-        sections = if current != [], do: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()], else: sections
-        {sections, [line]}
-      else
-        {sections, [line | current]}
-      end
-    end)
-    |> then(fn {sections, current} ->
-      if current != [], do: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()], else: sections
-    end)
-    |> Enum.reverse()
   end
 
   defp append_user_msg(transcript, user_msg) do
@@ -2112,95 +1914,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
       nil -> state
       entry -> %{state | transcript: Transcript.finalize(state.transcript, key, entry.snapshot)}
     end
-  end
-
-  defp build_session_info(%{footer: f, transcript: t, session: session} = state) do
-    user_count = Enum.count(t.data, fn {_, v} -> match?(%UserMessage{}, v) end)
-    asst_count = Enum.count(t.data, fn {_, v} -> match?(%AssistantHeader{}, v) end)
-    tool_count = Enum.count(t.data, fn {_, v} -> match?(%ToolExecution{}, v) end)
-    total = map_size(t.data)
-
-    lines =
-      ["Session Info"]
-      |> then(fn acc ->
-        if state.footer.session_name, do: acc ++ ["Name: #{f.session_name}"], else: acc
-      end)
-      |> then(fn acc ->
-        file = if session, do: inspect(session), else: "In-memory"
-        acc ++ ["File: #{file}", "ID: #{if session, do: inspect(session), else: "(none)"}", ""]
-      end)
-      |> Kernel.++(["Messages"])
-      |> Kernel.++(["User: #{user_count}", "Assistant: #{asst_count}", "Tool Calls: #{tool_count}", "Total: #{total}", ""])
-      |> Kernel.++(["Tokens"])
-      |> Kernel.++(["Input: #{f.input_tokens}", "Output: #{f.output_tokens}"])
-      |> then(fn acc ->
-        acc = if f.cache_read > 0, do: acc ++ ["Cache Read: #{f.cache_read}"], else: acc
-        acc = if f.cache_write > 0, do: acc ++ ["Cache Write: #{f.cache_write}"], else: acc
-        total_tokens = f.input_tokens + f.output_tokens + f.cache_read + f.cache_write
-        acc ++ ["Total: #{total_tokens}"]
-      end)
-      |> then(fn acc ->
-        if f.cost > 0 do
-          acc ++ ["", "Cost", "Total: $#{:erlang.float_to_binary(f.cost, decimals: 4)}"]
-        else
-          acc
-        end
-      end)
-
-    Enum.join(lines, "\n")
-  end
-
-  defp last_assistant_text(%Transcript{order: order, data: data}) do
-    order
-    |> Enum.reverse()
-    |> Enum.find_value(fn key ->
-      case Map.get(data, key) do
-        %TextBlock{snapshot: text} when byte_size(text) > 0 -> text
-        _ -> nil
-      end
-    end)
-  end
-
-  defp copy_to_clipboard(text) do
-    tmp = Path.join(System.tmp_dir!(), "pi_copy_#{:erlang.unique_integer([:positive])}.txt")
-    File.write!(tmp, text)
-
-    quoted = ~s("#{tmp}")
-
-    cmd =
-      case :os.type() do
-        {:unix, :darwin} -> "pbcopy < #{quoted}"
-        {:unix, _} -> "xclip -selection clipboard < #{quoted}"
-        {:win32, _} -> "clip < #{quoted}"
-      end
-
-    {_output, exit_code} = System.shell(cmd)
-    File.rm(tmp)
-
-    if exit_code == 0, do: :ok, else: {:error, "exited #{exit_code}"}
-  rescue
-    e -> {:error, Exception.message(e)}
-  end
-
-  defp export_transcript_text(%Transcript{data: data}) do
-    data
-    |> Enum.flat_map(fn
-      {_k, %UserMessage{text: text}} when is_binary(text) ->
-        ["## User\n\n#{text}\n"]
-
-      {_k, %TextBlock{snapshot: text}} when is_binary(text) ->
-        ["## Assistant\n\n#{text}\n"]
-
-      _ ->
-        []
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp user_messages_for_fork(%Transcript{data: data}) do
-    data
-    |> Enum.filter(fn {_k, v} -> match?(%UserMessage{}, v) end)
-    |> Enum.map(fn {k, %UserMessage{text: text}} -> %{id: k, text: text || ""} end)
   end
 
   defp block_struct(:text, snapshot), do: %TextBlock{snapshot: snapshot}
@@ -2425,11 +2138,7 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
   defp render_notification(nil, _width), do: []
 
   defp render_notification(text, width) do
-    text
-    |> String.split("\n")
-    |> Enum.flat_map(fn line ->
-      [%TruncatedText{text: Theme.dim(line)}] |> Container.new() |> Container.render(width)
-    end)
+    [%TruncatedText{text: Theme.dim(text)}] |> Container.new() |> Container.render(width)
   end
 
   # Extract a plain string from a queued message struct. Post-
@@ -2453,7 +2162,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
   defp next_thinking_level(:high), do: :off
   defp next_thinking_level(_), do: :low
 
-  defp thinking_level_label(:off), do: "thinking off"
   defp thinking_level_label(level), do: to_string(level)
 
   defp dispatch_key_to_focused(state, key) do
@@ -2469,7 +2177,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
   defp dispatch_dialog_key(state, :settings, key), do: handle_settings_selector_key(state, key)
   defp dispatch_dialog_key(state, :settings_list, key), do: handle_settings_list_key(state, key)
   defp dispatch_dialog_key(state, :session_selector, key), do: handle_session_selector_key(state, key)
-  defp dispatch_dialog_key(state, :user_message_selector, key), do: handle_user_message_selector_key(state, key)
   defp dispatch_dialog_key(state, :tree_selector, key), do: handle_tree_selector_key(state, key)
   defp dispatch_dialog_key(state, :summarize_prompt, key), do: handle_summarize_prompt_key(state, key)
   defp dispatch_dialog_key(state, :select_list, key), do: handle_select_list_key(state, key)
@@ -2553,14 +2260,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
     end
   end
 
-  defp handle_user_message_selector_key(%{user_message_selector: ums} = state, key) do
-    case UserMessageSelector.handle_key(ums, key) do
-      {_new_ums, [:cancel]} -> unfocus(%{state | user_message_selector: nil})
-      {_new_ums, [{:fork_at, msg}]} -> fork_from(unfocus(%{state | user_message_selector: nil}), msg)
-      result -> apply_component_result(state, :user_message_selector, result)
-    end
-  end
-
   defp handle_tree_selector_key(%{tree_selector: ts} = state, key) do
     case TreeSelector.handle_key(ts, key) do
       {_new_ts, [:cancel]} ->
@@ -2606,41 +2305,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
 
   defp apply_api_key(state, _api_key), do: state
 
-  defp read_auth_providers do
-    auth_file = Path.expand("~/.octo_pi/auth.json")
-
-    case File.read(auth_file) do
-      {:ok, body} ->
-        case Jason.decode(body) do
-          {:ok, map} when is_map(map) -> Map.keys(map) |> Enum.sort()
-          _ -> []
-        end
-
-      _ ->
-        []
-    end
-  end
-
-  defp delete_auth_provider(provider) do
-    auth_file = Path.expand("~/.octo_pi/auth.json")
-
-    existing =
-      case File.read(auth_file) do
-        {:ok, body} ->
-          case Jason.decode(body) do
-            {:ok, map} when is_map(map) -> map
-            _ -> %{}
-          end
-
-        _ ->
-          %{}
-      end
-
-    updated = Map.delete(existing, provider)
-    File.mkdir_p!(Path.dirname(auth_file))
-    File.write!(auth_file, Jason.encode!(updated, pretty: true))
-  end
-
   defp save_auth_key(provider, api_key) do
     auth_file = Path.expand("~/.octo_pi/auth.json")
 
@@ -2673,18 +2337,6 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
 
   defp delete_session(state, _session), do: state
 
-  defp fork_from(state, _msg), do: %{state | notification: "Forked to new session"}
-
-  defp resolve_select_list(%{dialog: {:select, :logout, _options, _opts}} = state, nil) do
-    unfocus(%{state | select_list: nil, dialog: nil})
-  end
-
-  defp resolve_select_list(%{dialog: {:select, :logout, _options, _opts}} = state, provider)
-       when is_binary(provider) do
-    delete_auth_provider(provider)
-    unfocus(%{state | select_list: nil, dialog: nil, notification: "Logged out of #{provider}"})
-  end
-
   defp resolve_select_list(%{dialog: {:select, from, _options, _opts}} = state, value) when not is_nil(from) do
     GenServer.reply(from, value)
     unfocus(%{state | select_list: nil, dialog: nil})
@@ -2701,39 +2353,15 @@ ts = TreeSelector.new(entries, leaf_id: state.current_msg_id)
       {:ok, names} ->
         names
         |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
-        |> Enum.map(&session_file_info(session_dir, &1))
-        |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
+        |> Enum.map(fn name ->
+          id = String.replace_suffix(name, ".jsonl", "")
+          %{id: id, name: id, message_count: 0}
+        end)
+        |> Enum.sort_by(& &1.name, :desc)
 
       _ ->
         []
     end
-  end
-
-  defp session_file_info(dir, name) do
-    id = String.replace_suffix(name, ".jsonl", "")
-    path = Path.join(dir, name)
-
-    stat = File.stat!(path, time: :posix)
-    updated_at = DateTime.from_unix!(stat.mtime)
-    created_at = DateTime.from_unix!(stat.ctime)
-    message_count = count_jsonl_lines(path)
-
-    %{id: id, name: id, path: path, message_count: message_count, updated_at: updated_at, created_at: created_at}
-  end
-
-  defp count_jsonl_lines(path) do
-    path
-    |> File.stream!()
-    |> Enum.count()
-  rescue
-    _ -> 0
-  end
-
-  defp open_session_selector(state) do
-    sessions = list_recent_sessions(state)
-    current_id = state.session && inspect(state.session)
-    ss = SessionSelector.new(sessions, state.theme, current: current_id)
-    focus(%{state | session_selector: ss}, {:dialog, :session_selector})
   end
 
   defp select_list_item(%SelectList.Item{} = item), do: item

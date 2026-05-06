@@ -76,7 +76,7 @@ defmodule OctoPi.TUI.Components.Footer do
   defp build_pwd_line(f, width) do
     pwd = shorten_home(f.cwd)
     pwd = if f.git_branch, do: "#{pwd} (#{f.git_branch})", else: pwd
-    pwd = if f.session_name, do: "#{pwd} · #{f.session_name}", else: pwd
+    pwd = if f.session_name, do: "#{pwd} • #{f.session_name}", else: pwd
     truncate_dim(pwd, width)
   end
 
@@ -123,15 +123,17 @@ defmodule OctoPi.TUI.Components.Footer do
          cost: cost
        }) do
     []
+    # Append in order so the final list is in correct order: ↑ ↓ R W
     |> maybe_add_section(input > 0, {"↑", input})
     |> maybe_add_section(output > 0, {"↓", output})
     |> maybe_add_section(cache_read > 0, {"R", cache_read})
     |> maybe_add_section(cache_write > 0, {"W", cache_write})
-    |> maybe_add_section(cost > 0, "$#{:erlang.float_to_binary(cost, decimals: 3)}")
+    # Cost is appended at the end
+    |> then(fn parts -> maybe_add_section(parts, cost > 0, "$#{:erlang.float_to_binary(cost, decimals: 3)}") end)
   end
 
-  defp maybe_add_section(parts, true, {marker, n}), do: ["#{marker}#{format_tokens(n)}" | parts]
-  defp maybe_add_section(parts, true, text) when is_binary(text), do: [text | parts]
+  defp maybe_add_section(parts, true, {marker, n}), do: parts ++ ["#{marker}#{format_tokens(n)}"]
+  defp maybe_add_section(parts, true, text) when is_binary(text), do: parts ++ [text]
   defp maybe_add_section(parts, _, _), do: parts
 
   @doc false
@@ -160,15 +162,9 @@ defmodule OctoPi.TUI.Components.Footer do
   end
 
   defp model_part(f) do
-    base =
-      case f.thinking_level do
-        nil -> f.model_id
-        level -> "#{f.model_id} · #{level}"
-      end
-
-    case f.provider do
-      nil -> base
-      provider -> "(#{provider}) #{base}"
+    case f.thinking_level do
+      nil -> f.model_id
+      level -> "#{f.model_id} • #{level}"
     end
   end
 

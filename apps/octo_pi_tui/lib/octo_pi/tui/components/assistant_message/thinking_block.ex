@@ -34,7 +34,8 @@ defmodule OctoPi.TUI.Components.AssistantMessage.ThinkingBlock do
 
     lines =
       if text == "" do
-        []
+        # Show placeholder when thinking block exists but has no content yet
+        [" " <> Theme.fg(theme, :thinking_text, Theme.italic("Thinking…"))]
       else
         content_width = max(1, width - 1)
 

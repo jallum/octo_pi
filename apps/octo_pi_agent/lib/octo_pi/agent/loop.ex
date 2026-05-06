@@ -380,6 +380,14 @@ defmodule OctoPi.Agent.Loop do
     ctx = build_turn_context(store.loop)
     loop = store.loop
 
+    # Auto-enable thinking for reasoning-required models if not explicitly set
+    thinking_level =
+      if loop.model.reasoning and loop.thinking_level == :off do
+        :low
+      else
+        loop.thinking_level
+      end
+
     {:ok, pid} =
       Task.Supervisor.start_child(
         TurnTaskSupervisor,
@@ -387,7 +395,8 @@ defmodule OctoPi.Agent.Loop do
           Worker.stream(parent, ref, %{
             context: ctx,
             model: loop.model,
-            transport: loop.transport
+            transport: loop.transport,
+            thinking_level: thinking_level
           })
         end,
         restart: :temporary

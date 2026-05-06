@@ -1,9 +1,9 @@
-defmodule OctoPi.Coder.MixProject do
+defmodule OctoPi.AI.Providers.OpenRouter.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :octo_pi_coder,
+      app: :octo_pi_ai_openrouter,
       version: "0.1.0",
       build_path: "../../_build",
       config_path: "../../config/config.exs",
@@ -12,15 +12,14 @@ defmodule OctoPi.Coder.MixProject do
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      test_ignore_filters: [&String.contains?(&1, "/fixtures/")],
       deps: deps()
     ]
   end
 
   def application do
     [
-      extra_applications: [:logger, :erlexec],
-      mod: {OctoPi.Coder.Application, []}
+      extra_applications: [:logger],
+      mod: {OctoPi.AI.Providers.OpenRouter.Application, []}
     ]
   end
 
@@ -30,10 +29,10 @@ defmodule OctoPi.Coder.MixProject do
   defp deps do
     [
       {:octo_pi_tracer, in_umbrella: true},
-      {:octo_pi_agent, in_umbrella: true},
-      {:octo_pi_ai_openai, in_umbrella: true},
-      {:octo_pi_ai_openrouter, in_umbrella: true},
-      {:erlexec, "~> 2.3"}
+      {:octo_pi_ai, in_umbrella: true},
+      {:req, "~> 0.5"},
+      {:jason, "~> 1.4"},
+      {:telemetry, "~> 1.4"}
     ]
   end
 end

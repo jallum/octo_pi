@@ -164,7 +164,9 @@ defmodule OctoPi.AI.Providers.OpenAI.Request do
       effort = map_reasoning_effort(opts.reasoning, compat.reasoning_effort_map)
       Map.put(body, "reasoning", %{"effort" => effort})
     else
-      Map.put(body, "reasoning", %{"effort" => "none"})
+      # Don't send reasoning field at all when disabled - some models (e.g. minimax)
+      # require reasoning to be enabled and reject {"effort": "none"}
+      body
     end
   end
 

@@ -1,0 +1,32 @@
+# The directory Mix will write compiled artifacts to.
+/_build/
+
+# If you run "mix test --cover", coverage assets end up here.
+/cover/
+
+# The directory Mix downloads your dependencies sources to.
+/deps/
+
+# Where third-party dependencies like ExDoc output collected docs.
+/doc/
+
+# Ignore .fetch files in case you to enable / Install Run In Dev mode.
+/.fetch
+
+# Ignore package tarball unless it is for local testing
+/packages/*
+
+# If the VM crashes, it generates a dump, and we should also ignore the beam files.
+erl_crash.dump
+
+# Also ignore archive artifacts (built via "mix archive.build").
+*.ez
+
+# Temporary files, for example, in tests by writing `CharData_writer_tmpdir()`.
+/tmp/
+
+# Ignore macOS artifacts
+.DS_Store
+
+# Also ignore dialyzer artifacts
+/plts/

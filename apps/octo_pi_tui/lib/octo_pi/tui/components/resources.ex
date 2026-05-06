@@ -4,6 +4,7 @@ defmodule OctoPi.TUI.Components.Resources do
   @behaviour OctoPi.TUI.Component
 
   alias OctoPi.TUI.Components.Resources.Context
+  alias OctoPi.TUI.Components.Resources.Extensions
   alias OctoPi.TUI.Components.Resources.Prompts
   alias OctoPi.TUI.Components.Resources.Skills
   alias OctoPi.TUI.VDOM
@@ -12,17 +13,19 @@ defmodule OctoPi.TUI.Components.Resources do
           context: Context.t(),
           skills: Skills.t(),
           prompts: Prompts.t(),
+          extensions: Extensions.t(),
           expanded: boolean()
         }
 
-  defstruct context: %Context{}, skills: %Skills{}, prompts: %Prompts{}, expanded: false
+  defstruct context: %Context{}, skills: %Skills{}, prompts: %Prompts{}, extensions: %Extensions{}, expanded: false
 
-  @spec new(%{context_files: list(), skills: list(), prompt_templates: list()}) :: t()
+  @spec new(%{context_files: list(), skills: list(), prompt_templates: list(), extensions: list()}) :: t()
   def new(data) do
     %__MODULE__{
       context: Context.new(data.context_files),
       skills: Skills.new(data.skills),
-      prompts: Prompts.new(data.prompt_templates)
+      prompts: Prompts.new(data.prompt_templates),
+      extensions: Extensions.new(data.extensions)
     }
   end
 
@@ -31,6 +34,7 @@ defmodule OctoPi.TUI.Components.Resources do
     {_, c_vnode} = Context.render(%{self.context | expanded: expanded}, ctx)
     {_, s_vnode} = Skills.render(%{self.skills | expanded: expanded}, ctx)
     {_, p_vnode} = Prompts.render(%{self.prompts | expanded: expanded}, ctx)
-    {self, %VDOM.VFlow{children: [c_vnode, s_vnode, p_vnode]}}
+    {_, e_vnode} = Extensions.render(%{self.extensions | expanded: expanded}, ctx)
+    {self, %VDOM.VFlow{children: [c_vnode, s_vnode, p_vnode, e_vnode]}}
   end
 end

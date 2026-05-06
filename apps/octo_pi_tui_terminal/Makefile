@@ -11,13 +11,9 @@ endif
 
 .PHONY: all clean
 
-all: $(PRIV_DIR) $(NIF_SO)
-
-$(PRIV_DIR):
-	mkdir -p $@
-
-$(NIF_SO): c_src/tty_nif.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+all:
+	@mkdir -p $(PRIV_DIR)
+	@if [ ! -f $(NIF_SO) ]; then $(CC) $(CFLAGS) $(LDFLAGS) -o $(NIF_SO) c_src/tty_nif.c; fi
 
 clean:
-	rm -f $(NIF_SO)
+	@rm -f $(NIF_SO)

@@ -153,13 +153,15 @@ defmodule OctoPi.AI.Providers.OpenAI.Decoder do
     input = max(0, prompt_tokens - cache_read - cache_write)
     output = (raw["completion_tokens"] || 0) + reasoning_tokens
 
-    usage = %Usage{
-      input: input,
-      output: output,
-      cache_read: cache_read,
-      cache_write: cache_write,
-      total_tokens: input + output + cache_read + cache_write
-    }
+    usage =
+      %Usage{
+        input: input,
+        output: output,
+        cache_read: cache_read,
+        cache_write: cache_write,
+        total_tokens: input + output + cache_read + cache_write
+      }
+      |> then(&Model.calculate_cost(state.model, &1))
 
     %{state | message: %{state.message | usage: usage}}
   end

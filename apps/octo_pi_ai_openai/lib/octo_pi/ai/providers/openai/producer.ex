@@ -132,9 +132,17 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
   end
 
   defp process_chunk(chunk, state) do
-    {sse_events, sse} = SSE.decode(state.sse, chunk)
-    decoder = apply_sse_events(sse_events, state.decoder, state.caller)
-    %{state | sse: sse, decoder: decoder}
+    # Some providers (e.g., OpenRouter) return plain JSON errors instead of SSE.
+    # Detect and raise early so the error message is properly captured.
+    case Jason.decode(chunk) do
+      {:ok, %{"error" => %{"message" => message}}} ->
+        raise "API error: #{message}"
+
+      _ ->
+        {sse_events, sse} = SSE.decode(state.sse, chunk)
+        decoder = apply_sse_events(sse_events, state.decoder, state.caller)
+        %{state | sse: sse, decoder: decoder}
+    end
   end
 
   defp flush_sse(state) do
@@ -153,6 +161,9 @@ defmodule OctoPi.AI.Providers.OpenAI.Producer do
 
   defp handle_sse_event(%SseEvent{data: data}, dstate, caller) do
     case PartialJson.parse_with_repair(data) do
+      {:ok, %{"error" => %{"message" => message}}} ->
+        raise "API error: #{message}"
+
       {:ok, event} when is_map(event) ->
         {events, dstate} = Decoder.handle(dstate, event)
         Enum.each(events, &send(caller, {self(), :event, &1}))

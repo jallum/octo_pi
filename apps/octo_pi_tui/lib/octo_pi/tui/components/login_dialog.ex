@@ -100,6 +100,8 @@ defmodule OctoPi.TUI.Components.LoginDialog do
   end
 
   defp valid_api_key?(key) do
-    String.starts_with?(key, "sk-ant-") and String.length(key) > 20
+    # Accept common API key formats (Anthropic sk-ant-*, OpenRouter sk-or-*, OpenAI sk-*, etc.)
+    # Just validate minimum length to filter out obviously invalid inputs
+    String.length(key) > 10
   end
 end

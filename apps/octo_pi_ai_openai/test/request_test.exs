@@ -362,12 +362,14 @@ defmodule OctoPi.AI.Providers.OpenAI.RequestTest do
       assert req.body["reasoning"] == %{"effort" => "high"}
     end
 
-    test "openrouter: no reasoning sends effort none" do
+    test "openrouter: no reasoning omits the field entirely" do
       m = model(%{reasoning: true, provider: :openrouter})
       compat = Compat.detect(m)
       req = Request.build(m, context([]), %CallOptions{}, compat)
 
-      assert req.body["reasoning"] == %{"effort" => "none"}
+      # When reasoning is disabled, we omit the field entirely rather than
+      # sending {"effort": "none"} - some models (e.g. minimax) reject "none"
+      assert req.body["reasoning"] == nil
     end
 
     test "zai format: enable_thinking" do

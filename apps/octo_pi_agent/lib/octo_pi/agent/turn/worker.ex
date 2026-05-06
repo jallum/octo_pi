@@ -41,7 +41,8 @@ defmodule OctoPi.Agent.Turn.Worker do
   @type stream_opts :: %{
           required(:context) => OctoPi.AI.Context.t(),
           required(:model) => OctoPi.AI.Model.t(),
-          required(:transport) => module()
+          required(:transport) => module(),
+          optional(:thinking_level) => :off | :minimal | :low | :medium | :high | :xhigh
         }
 
   @type tool_opts :: %{
@@ -62,8 +63,9 @@ defmodule OctoPi.Agent.Turn.Worker do
   on a transport error or truncated stream).
   """
   @spec stream(pid(), reference(), stream_opts()) :: :ok
-  def stream(parent, ref, %{context: ctx, model: model, transport: transport}) do
-    {:ok, producer_pid} = transport.stream_to(model, ctx, [], self())
+  def stream(parent, ref, %{context: ctx, model: model, transport: transport, thinking_level: level}) do
+    opts = stream_opts(level)
+    {:ok, producer_pid} = transport.stream_to(model, ctx, opts, self())
 
     final_assistant =
       receive_stream(parent, ref, producer_pid, %{partial: nil, snapshots: %{}})
@@ -81,6 +83,11 @@ defmodule OctoPi.Agent.Turn.Worker do
       send(parent, {:stream_failed, ref, Exception.message(e)})
       :ok
   end
+
+  # Convert agent thinking_level to AI reasoning option.
+  # :off means no reasoning, otherwise maps to the reasoning level.
+  defp stream_opts(:off), do: []
+  defp stream_opts(level) when level in [:minimal, :low, :medium, :high, :xhigh], do: [reasoning: level]
 
   defp receive_stream(parent, ref, producer_pid, acc) do
     receive do

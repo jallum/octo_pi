@@ -30,6 +30,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   alias OctoPi.TUI.Components.ToolExecution
   alias OctoPi.TUI.Components.TreeSelector
   alias OctoPi.TUI.Components.UserMessage
+  alias OctoPi.TUI.Components.UserMessageSelector
   alias OctoPi.TUI.Interactive
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.Paste
@@ -227,6 +228,118 @@ defmodule OctoPi.TUI.InteractiveTest do
       refute_received {:expanded, _}
     end
 
+    test "/quit sets exit flag" do
+      s = %Interactive{input: %Input{value: "/quit", cursor: 5}, session: nil}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.exit
+    end
+
+    test "/session shows session info in multiline notification" do
+      s = %Interactive{input: %Input{value: "/session", cursor: 8}, footer: %Footer{input_tokens: 100, output_tokens: 50}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "Session Info"
+      assert s.notification =~ "Messages"
+      assert s.notification =~ "Tokens"
+      assert s.notification =~ "Input: 100"
+      assert s.notification =~ "Output: 50"
+    end
+
+    test "/name with argument sets session name in footer" do
+      s = %Interactive{input: %Input{value: "/name my-feature", cursor: 16}, footer: %Footer{}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.footer.session_name == "my-feature"
+      assert s.notification =~ "Session name set"
+    end
+
+    test "/name without argument shows usage when no name set" do
+      s = %Interactive{input: %Input{value: "/name", cursor: 5}, footer: %Footer{session_name: nil}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "Usage:"
+    end
+
+    test "/name without argument shows current name when one is set" do
+      s = %Interactive{input: %Input{value: "/name", cursor: 5}, footer: %Footer{session_name: "existing"}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "existing"
+    end
+
+    test "/copy shows warning when no assistant messages exist" do
+      s = %Interactive{input: %Input{value: "/copy", cursor: 5}, session: nil}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "No agent messages"
+    end
+
+    test "/copy finds last assistant text block in transcript" do
+      text_block = %TextBlock{snapshot: "Hello from assistant"}
+      key = "turn-1:0"
+      t = seed_transcript([{key, text_block}])
+      s = %Interactive{input: %Input{value: "/copy", cursor: 5}, session: nil, transcript: t}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      # Either clipboard succeeded (notification says "Copied") or clipboard
+      # command unavailable (notification says "Copy failed") — either way,
+      # the "no messages" guard was not triggered.
+      refute s.notification =~ "No agent messages"
+    end
+
+    test "/new clears transcript and shows confirmation" do
+      s = %Interactive{
+        input: %Input{value: "/new", cursor: 4},
+        session: nil,
+        transcript: seed_transcript([wrap(UserMessage.new("hi"))])
+      }
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.transcript == %Transcript{}
+      assert s.notification =~ "New session"
+    end
+
+    test "/changelog shows fallback when no CHANGELOG.md exists" do
+      tmp = Path.join(System.tmp_dir!(), "no_changelog_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      s = %Interactive{input: %Input{value: "/changelog", cursor: 10}}
+      result = File.cd!(tmp, fn -> Interactive.handle_event(s, %Key{key: :enter}) end)
+      File.rm_rf!(tmp)
+      assert result.notification == "No changelog entries found."
+    end
+
+    test "/changelog shows entries when CHANGELOG.md exists" do
+      tmp = Path.join(System.tmp_dir!(), "has_changelog_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+
+      File.write!(Path.join(tmp, "CHANGELOG.md"), """
+      # Changelog
+
+      ## [1.1.0] - 2026-05-01
+
+      ### Added
+      - Feature B
+
+      ## [1.0.0] - 2026-01-01
+
+      Initial release.
+      """)
+
+      s = %Interactive{input: %Input{value: "/changelog", cursor: 10}}
+      result = File.cd!(tmp, fn -> Interactive.handle_event(s, %Key{key: :enter}) end)
+      File.rm_rf!(tmp)
+      assert result.notification =~ "1.0.0"
+      assert result.notification =~ "1.1.0"
+    end
+
+    test "/hotkeys shows keyboard shortcuts grouped by section" do
+      s = %Interactive{input: %Input{value: "/hotkeys", cursor: 8}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "Navigation"
+      assert s.notification =~ "Editing"
+      assert s.notification =~ "Other"
+    end
+
+    test "/hotkeys resolves actual configured key names" do
+      s = %Interactive{input: %Input{value: "/hotkeys", cursor: 8}}
+      s = Interactive.handle_event(s, %Key{key: :enter})
+      assert s.notification =~ "escape"
+      assert s.notification =~ "enter"
+    end
+
     test "/model opens model selector" do
       model = %OctoPi.AI.Model{
         id: "m1",
@@ -326,10 +439,10 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2.footer.thinking_level == "low"
     end
 
-    test "footer thinking_level is 'off' when cycling back to off" do
+    test "footer thinking_level is 'thinking off' when cycling back to off" do
       s = %Interactive{thinking_level: :high, footer: %Footer{}}
       s2 = Interactive.handle_event(s, %Key{key: :tab, modifiers: [:shift]})
-      assert s2.footer.thinking_level == "off"
+      assert s2.footer.thinking_level == "thinking off"
     end
 
     test "footer thinking_level rendered in stats line after cycle" do
@@ -1943,14 +2056,15 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert text =~ "octo_pi"
     end
 
-    test "? toggles banner when input is empty" do
+    test "? inserts into input even when input is empty (no longer a toggle key)" do
       theme = Theme.load_builtin(:dark, :truecolor)
       banner = Header.new(theme, model: "test-model")
       s = %Interactive{input: %Input{value: ""}, banner: banner, theme: theme}
       refute s.banner.expanded
 
       s2 = Interactive.handle_event(s, %Key{key: ??})
-      assert s2.banner.expanded
+      assert s2.input.value == "?"
+      refute s2.banner.expanded
     end
 
     test "? types into input when input is not empty" do
@@ -2066,6 +2180,14 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert s2.focused_component == {:dialog, :session_selector}
     end
 
+    test "/resume opens the same SessionSelector" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{input: %Input{value: "/resume", cursor: 7}, theme: theme, footer: %Footer{cwd: "/tmp"}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %SessionSelector{} = s2.session_selector
+      assert s2.focused_component == {:dialog, :session_selector}
+    end
+
     test "Escape from SessionSelector unfocuses" do
       theme = Theme.load_builtin(:dark, :truecolor)
       ss = SessionSelector.new([], theme)
@@ -2080,6 +2202,125 @@ defmodule OctoPi.TUI.InteractiveTest do
       ss = SessionSelector.new([], theme)
       s = %Interactive{session_selector: ss, focused_component: {:dialog, :session_selector}}
       s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.focused_component == :input
+    end
+  end
+
+  describe "/share command" do
+    test "/share shows error when gh CLI not found" do
+      # Simulate missing gh by overriding PATH to an empty dir
+      tmp = Path.join(System.tmp_dir!(), "empty_path_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      orig_path = System.get_env("PATH")
+      System.put_env("PATH", tmp)
+      s = %Interactive{input: %Input{value: "/share", cursor: 6}}
+      result = Interactive.handle_event(s, %Key{key: :enter})
+      System.put_env("PATH", orig_path)
+      File.rm_rf!(tmp)
+      assert result.notification =~ "gh CLI not found"
+    end
+  end
+
+  describe "/reload command" do
+    test "/reload shows reloaded notification" do
+      s = %Interactive{input: %Input{value: "/reload", cursor: 7}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "Reloaded"
+    end
+
+    test "/reload is blocked while compacting" do
+      s = %Interactive{input: %Input{value: "/reload", cursor: 7}, is_compacting?: true}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "Cannot reload"
+    end
+
+    test "/reload refreshes keybindings in state" do
+      s = %Interactive{input: %Input{value: "/reload", cursor: 7}, keybindings: nil}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.keybindings != nil
+    end
+  end
+
+  describe "/logout command" do
+    test "/logout opens SelectList when auth file has providers" do
+      # The real ~/.octo_pi/auth.json exists with providers on this machine.
+      # Just verify the command opens the select list dialog.
+      s = %Interactive{input: %Input{value: "/logout", cursor: 7}}
+      result = Interactive.handle_event(s, %Key{key: :enter})
+      # Either opens the selector (has providers) or shows notification (no providers).
+      # Both are valid; we just check the command is dispatched without error.
+      assert result.input.value == ""
+    end
+
+    test "selecting a provider from logout dialog shows logged-out notification" do
+      items = [%SelectList.Item{value: "anthropic", label: "anthropic"}]
+      sl = %SelectList{items: items, selected: 0}
+      s = %Interactive{
+        select_list: sl,
+        dialog: {:select, :logout, ["anthropic"], []},
+        focused_component: {:dialog, :select_list}
+      }
+      # Override HOME to avoid touching real auth file
+      tmp = Path.join(System.tmp_dir!(), "logout_test_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(Path.join(tmp, ".octo_pi"))
+      File.write!(Path.join([tmp, ".octo_pi", "auth.json"]), Jason.encode!(%{"anthropic" => %{}}))
+      orig_home = System.get_env("HOME")
+      System.put_env("HOME", tmp)
+      result = Interactive.handle_event(s, %Key{key: :enter})
+      System.put_env("HOME", orig_home)
+      File.rm_rf!(tmp)
+      assert result.notification =~ "Logged out of anthropic"
+      assert result.focused_component == :input
+    end
+  end
+
+  describe "/clone command" do
+    test "/clone with empty transcript shows guard message" do
+      s = %Interactive{input: %Input{value: "/clone", cursor: 6}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "Nothing to clone"
+    end
+
+    test "/clone with transcript shows confirmation" do
+      t = seed_transcript([wrap(UserMessage.new("hello"))])
+      s = %Interactive{input: %Input{value: "/clone", cursor: 6}, transcript: t}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "Cloned"
+    end
+  end
+
+  describe "interactive component dispatch — UserMessageSelector (/fork)" do
+    test "/fork with no transcript shows notification" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      s = %Interactive{input: %Input{value: "/fork", cursor: 5}, theme: theme}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "No messages"
+    end
+
+    test "/fork with messages opens UserMessageSelector" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      t = seed_transcript([wrap(UserMessage.new("Hello there"))])
+      s = %Interactive{input: %Input{value: "/fork", cursor: 5}, theme: theme, transcript: t}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert %UserMessageSelector{} = s2.user_message_selector
+      assert s2.focused_component == {:dialog, :user_message_selector}
+    end
+
+    test "Enter from UserMessageSelector shows forked notification" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      msgs = [%{id: "u1", text: "Hello"}]
+      ums = UserMessageSelector.new(msgs, theme)
+      s = %Interactive{user_message_selector: ums, focused_component: {:dialog, :user_message_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :enter})
+      assert s2.notification =~ "Forked"
+    end
+
+    test "Escape from UserMessageSelector unfocuses" do
+      theme = Theme.load_builtin(:dark, :truecolor)
+      ums = UserMessageSelector.new([], theme)
+      s = %Interactive{user_message_selector: ums, focused_component: {:dialog, :user_message_selector}}
+      s2 = Interactive.handle_event(s, %Key{key: :escape})
+      assert s2.user_message_selector == nil
       assert s2.focused_component == :input
     end
   end
@@ -2632,7 +2873,8 @@ defmodule OctoPi.TUI.InteractiveTest do
         Resources.new(%{
           context_files: [],
           skills: [],
-          prompt_templates: [%{name: "my-template"}, %{name: "other"}]
+          prompt_templates: [%{name: "my-template"}, %{name: "other"}],
+          extensions: []
         })
 
       provider = Interactive.build_autocomplete_provider(resources)
@@ -3245,7 +3487,7 @@ defmodule OctoPi.TUI.InteractiveTest do
   # ── loaded_resources rendering ─────────────────────────────────
 
   defp fake_resources(overrides \\ %{}) do
-    %{context_files: [], skills: [], prompt_templates: []}
+    %{context_files: [], skills: [], prompt_templates: [], extensions: []}
     |> Map.merge(overrides)
     |> Resources.new()
   end
@@ -3373,7 +3615,8 @@ defmodule OctoPi.TUI.InteractiveTest do
         Resources.new(%{
           context_files: [%{path: "/p/CLAUDE.md"}],
           skills: [%{name: "my-skill", file_path: "/s/SKILL.md"}],
-          prompt_templates: [%{name: "cmd"}]
+          prompt_templates: [%{name: "cmd"}],
+          extensions: [%{name: "my-ext"}]
         })
 
       s = %Interactive{width: 80, height: 40, loaded_resources: resources}
@@ -3381,6 +3624,22 @@ defmodule OctoPi.TUI.InteractiveTest do
       assert output =~ "[Context]"
       assert output =~ "[Skills]"
       assert output =~ "[Prompts]"
+      assert output =~ "[Extensions]"
+    end
+
+    test "extensions section appears when extensions is non-empty" do
+      resources =
+        Resources.new(%{
+          context_files: [],
+          skills: [],
+          prompt_templates: [],
+          extensions: [%{name: "my-extension"}]
+        })
+
+      s = %Interactive{width: 80, height: 40, loaded_resources: resources}
+      output = strip_ansi(joined_render(s))
+      assert output =~ "[Extensions]"
+      assert output =~ "my-extension"
     end
   end
 

@@ -42,6 +42,8 @@ defmodule OctoPi.MixProject do
         applications: [
           octo_pi_ai: :permanent,
           octo_pi_ai_anthropic: :permanent,
+          octo_pi_ai_openai: :permanent,
+          octo_pi_ai_openrouter: :permanent,
           octo_pi_agent: :permanent,
           octo_pi_coder: :permanent,
           octo_pi_tui: :permanent

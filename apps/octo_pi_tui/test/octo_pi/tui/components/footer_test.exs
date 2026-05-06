@@ -50,6 +50,27 @@ defmodule OctoPi.TUI.Components.FooterTest do
       assert stats =~ "↓1.2k"
     end
 
+    test "stats line shows token counts in correct order (input, output, cache)" do
+      f = footer(%{input_tokens: 5_000, output_tokens: 1_234, cache_read: 500})
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
+      # Check order: ↑ should come before ↓ which should come before R
+      assert String.match?(stats, ~r/↑.*↓.*R/), "token counts should be in order ↑ ↓ R"
+    end
+
+    test "stats line shows cost when cost > 0" do
+      f = footer(%{input_tokens: 5_000, output_tokens: 1_234, cost: 0.042})
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
+      assert stats =~ "$0.042"
+    end
+
+    test "stats line shows cost after tokens (rightmost before model name)" do
+      f = footer(%{input_tokens: 5_000, output_tokens: 1_234, cost: 0.042})
+      stats = strip_ansi(Enum.at(render_lines(f), 1))
+      # Cost should come before model name, after token counts
+      # e.g. "↑5.0k ↓1.2k $0.042 claude-opus-4-6"
+      assert String.match?(stats, ~r/(\$0\.042|\$0\.0+42).*claude-opus-4-6/), "cost should appear before model name"
+    end
+
     test "stats line shows model name" do
       stats = strip_ansi(Enum.at(render_lines(footer()), 1))
       assert stats =~ "claude-opus-4-6"
@@ -79,17 +100,8 @@ defmodule OctoPi.TUI.Components.FooterTest do
       assert stats =~ "?%"
     end
 
-    test "shows provider in parentheses when set" do
-      f = footer(%{provider: :ollama})
-      stats = strip_ansi(Enum.at(render_lines(f), 1))
-      assert stats =~ "(ollama)"
-    end
-
-    test "omits provider when nil" do
-      f = footer(%{provider: nil})
-      stats = strip_ansi(Enum.at(render_lines(f), 1))
-      refute stats =~ "()"
-    end
+    # Provider display removed per opi-276.9 fix
+    # (provider prefix is no longer shown in the footer)
 
     test "extension statuses add a third line" do
       f = footer(%{extension_statuses: %{"mcp" => "connected", "auth" => "ready"}})

@@ -253,7 +253,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
   # ── render/2 ─────────────────────────────────────────────────────────────
 
   describe "render/2" do
-    test "returns one line per filtered node" do
+    test "returns one line per filtered node plus header, hints, search, and count" do
       entries = [
         user_entry("u1", nil, "hello"),
         asst_entry("a1", "u1", "world")
@@ -261,21 +261,59 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
 
       sel = TreeSelector.new(entries, leaf_id: "a1")
       lines = TreeSelector.render(sel, 80)
-      assert length(lines) == length(sel.filtered_nodes)
+      assert length(lines) == length(sel.filtered_nodes) + 4
     end
 
     test "selected entry shows › cursor" do
       entries = [user_entry("u1", nil, "hi"), asst_entry("a1", "u1", "ho")]
       sel = TreeSelector.new(entries, initial_selected_id: "u1")
       lines = TreeSelector.render(sel, 80)
-      assert hd(lines) =~ "›"
+      # Fourth line is first data entry (0=header, 1=hints, 2=search, 3=first entry)
+      assert Enum.at(lines, 3) =~ "›"
     end
 
     test "non-selected entries show space cursor" do
       entries = [user_entry("u1", nil, "hi"), asst_entry("a1", "u1", "ho")]
       sel = TreeSelector.new(entries, initial_selected_id: "u1")
       lines = TreeSelector.render(sel, 80)
-      refute Enum.at(lines, 1) =~ "›"
+      # Fifth line is second data entry
+      refute Enum.at(lines, 4) =~ "›"
+    end
+
+    test "first line is Session Tree header" do
+      entries = [user_entry("u1", nil, "hello")]
+      sel = TreeSelector.new(entries)
+      lines = TreeSelector.render(sel, 80)
+      assert hd(lines) =~ "Session Tree"
+    end
+
+    test "second line is navigation hints" do
+      entries = [user_entry("u1", nil, "hello")]
+      sel = TreeSelector.new(entries)
+      lines = TreeSelector.render(sel, 80)
+      # Second line should contain navigation hints
+      assert Enum.at(lines, 1) =~ "↑/↓"
+    end
+
+    test "third line is search prompt" do
+      entries = [user_entry("u1", nil, "hello")]
+      sel = TreeSelector.new(entries)
+      lines = TreeSelector.render(sel, 80)
+      # Third line should be "Type to search:"
+      assert Enum.at(lines, 2) =~ "Type to search"
+    end
+
+    test "last line is count badge showing visible/total" do
+      entries = [
+        user_entry("u1", nil, "hello"),
+        asst_entry("a1", "u1", "world")
+      ]
+
+      sel = TreeSelector.new(entries)
+      lines = TreeSelector.render(sel, 80)
+      # Last line should contain "(2/2)" count badge
+      last_line = List.last(lines)
+      assert last_line =~ "(2/2)"
     end
   end
 end

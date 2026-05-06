@@ -106,11 +106,25 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     end
   end
 
-  def render(%__MODULE__{} = state, _width) do
-    Tree.render_lines(state.filtered_nodes,
+  def render(%__MODULE__{} = state, width) do
+    tree_lines = Tree.render_lines(state.filtered_nodes,
       leaf_id: state.leaf_id,
       selected_id: selected_id(state)
     )
+
+    # Build count badge: (visible/total)
+    filtered_count = length(state.filtered_nodes)
+    total_count = length(state.flat_nodes)
+    count_badge = "(#{filtered_count}/#{total_count})"
+
+    # Pad count badge to right-align within width
+    count_line = String.pad_leading(count_badge, width, " ")
+
+    [
+      "Session Tree",
+      "↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch",
+      "Type to search:" | tree_lines
+    ] ++ [count_line]
   end
 
   def handle_key(%__MODULE__{} = state, %Key{} = key) do
