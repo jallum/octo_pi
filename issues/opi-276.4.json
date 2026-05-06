@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T00:02:33Z",
   "created": "2026-05-05T09:30:47Z",
   "description": "The compact startup hint (\"Press ctrl+o...\") is now showing correctly. Two gaps remain: the compact instructions line uses wrong color treatment, and the expanded (full help) view has only 5 of the 19 upstream hints and uses the wrong toggle key.\n\n**COMPACT BANNER — showing correctly:**\n```\n Press ctrl+o to show full startup help and loaded resources.\n Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.\n```\n\n**COMPACT INSTRUCTIONS LINE — color gap:**\nElixir renders the entire hints line as one `Theme.dim(...)` string:\n```elixir\nhints = Theme.dim(\" escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more\")\n```\nUpstream uses per-segment color tokens — key text is `theme.fg(\"dim\", keyText)`, descriptions are `theme.fg(\"muted\", description)`, and the ` · ` separators are `theme.fg(\"muted\", \" · \")`:\n```typescript\n[hint(\"app.interrupt\", \"interrupt\"), rawKeyHint(\"ctrl+c/ctrl+d\", \"clear/exit\"), ...].join(theme.fg(\"muted\", \" · \"))\n```\n\n**EXPANDED VIEW — wrong key and missing hints:**\nToggled by `?` in Elixir (`handle_key` pattern `%Key{key: ??}`). Upstream toggles via `app.tools.expand` (default `ctrl+o`). The toggle key itself is wrong.\n\nElixir expanded shows 5 hints:\n```\n  Esc        interrupt generation\n  Ctrl+C     clear / Ctrl+D exit\n  /          commands\n  !          run bash command\n  ?          toggle this banner\n```\n\nUpstream expanded shows 19 hints (each `dim(key) muted(description)`, one per line):\n```\napp.interrupt            to interrupt\napp.clear                to clear\napp.clear twice          to exit\napp.exit                 to exit (empty)\napp.suspend              to suspend\ntui.editor.deleteToLineEnd  to delete to end\napp.thinking.cycle       to cycle thinking level\napp.model.cycleForward/app.model.cycleBackward  to cycle models\napp.model.select         to select model\napp.tools.expand         to expand tools\napp.thinking.toggle      to expand thinking\napp.editor.external      for external editor\n/                        for commands\n!                        to run bash\n!!                       to run bash (no context)\napp.message.followUp     to queue follow-up\napp.message.dequeue      to edit all queued messages\napp.clipboard.pasteImage to paste image\ndrop files               to attach\n```\n(Key names expand to their default bindings via `keyText()`.)\n\n**Where to fix:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/header.ex`\n  - `render/2` compact: apply separate color tokens to key text, descriptions, and ` · ` separators\n  - `render/2` expanded: expand from 5 to 19 hints matching upstream list; use `keyText`-equivalent to resolve from `Keybindings`\n  - `handle_key/2`: change toggle key from `?` to `app.tools.expand` (ctrl+o) — or remove toggle from Header entirely and let Interactive handle `app.tools.expand`",
   "id": "opi-276.4",
   "labels": [],
   "parent": "opi-276",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "TUI-4: Missing 'Press ctrl+o to show full startup help' hint",
   "type": "task",
-  "updated_at": "2026-05-05T23:54:31Z"
+  "updated_at": "2026-05-06T00:02:33Z"
 }
