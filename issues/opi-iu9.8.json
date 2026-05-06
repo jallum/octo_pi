@@ -4,14 +4,15 @@
   "blocks": [
     "opi-iu9.10"
   ],
+  "closed_at": "2026-05-06T14:39:06Z",
   "created": "2026-05-06T13:13:11Z",
   "description": "TreeNode is currently defined inside OctoPi.Coder.Components.TreeSelector — a TUI component.\nSessionManager.get_tree/1 (upcoming) needs to return [TreeNode.t()], which would create an upward\ndependency from the business logic layer into the UI component layer. Fix the layer violation first.\n\n## What to do\n\n1. Define OctoPi.Coder.Session.TreeNode (new file:\n   apps/octo_pi_coder/lib/octo_pi/coder/session/tree_node.ex):\n\n```elixir\ndefmodule OctoPi.Coder.Session.TreeNode do\n  @moduledoc \"\"\"\n  A node in the session tree returned by SessionManager.get_tree/1.\n  Mirrors SessionTreeNode in tmp/pi-mono/.../core/session-manager.ts:152-160.\n  \"\"\"\n  alias OctoPi.Coder.Session.Entry\n\n  @enforce_keys [:entry, :children]\n  defstruct [:entry, :children, :label, :label_timestamp]\n\n  @type t :: %__MODULE__{\n          entry: Entry.t(),\n          children: [t()],\n          label: String.t() | nil,\n          label_timestamp: String.t() | nil\n        }\nend\n```\n\n2. In apps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex:\n   - Remove the defmodule OctoPi.Coder.Components.TreeSelector.TreeNode block\n   - Add: alias OctoPi.Coder.Session.TreeNode\n   - Update all %TreeNode{} / TreeNode.t() references to use the aliased name\n\n3. Update any other files that reference OctoPi.Coder.Components.TreeSelector.TreeNode\n   (check test files as well).\n\n## Upstream reference\nsession-manager.ts lines 152-160 (SessionTreeNode interface definition)\n\n## Verification\nmix compile with no warnings. Existing tree_selector tests still pass.",
   "id": "opi-iu9.8",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Move TreeNode to OctoPi.Coder.Session.TreeNode",
   "type": "task",
-  "updated_at": "2026-05-06T14:37:47Z"
+  "updated_at": "2026-05-06T14:39:06Z"
 }
