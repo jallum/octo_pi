@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T00:10:03Z",
   "created": "2026-05-05T23:48:27Z",
   "description": "## Summary\nPort the `/copy` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/copy` copies the last assistant message text to the system clipboard with no interactive UI.\n\nBehavior details:\n- Calls `getLastAssistantText()` to extract the most recent assistant turn's plain text\n- Calls `copyToClipboard(text)` (platform-native clipboard write)\n- Shows transient status: `showStatus(\"Copied last agent message to clipboard\")`\n- If there is no assistant message yet, the command is silently ignored (or shows a warning — confirm via source)\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 5015 `handleCopyCommand()`\n- Clipboard utility: search `copyToClipboard` in `tmp/pi-mono/packages/coding-agent/src/`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"copy\"`\n\n## What to Implement in Elixir\n1. Add `\"copy\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/copy` dispatch clause\n3. Implement handler: get last assistant text from transcript, write to clipboard (use `xclip`/`pbcopy`/`wl-copy` as appropriate for platform), show status confirmation\n4. Guard: if no assistant message exists, show appropriate warning",
   "id": "opi-276.7.5",
   "labels": [],
   "parent": "opi-276.7",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port /copy command",
   "type": "task",
-  "updated_at": "2026-05-06T00:06:53Z"
+  "updated_at": "2026-05-06T00:10:03Z"
 }
