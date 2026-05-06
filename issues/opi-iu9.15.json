@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-06T15:52:41Z",
+  "description": "The \"Session Tree\" header in our /tree overlay is a plain string. Upstream renders it with dashed border separator lines above and below the header block.\n\n## Upstream rendering\n\n```\n─── Session Tree ──────────────────────────────── (dashed line spanning full width)\n↑/↓: move. ←/→: page. ... (hints)\nType to search:\n(entries)\n─────────────────────────────────────────────────  (dashed bottom border)\n(0/0)\n```\n\n## Current rendering\n\n```\nSession Tree                    (plain string, no borders)\n↑/↓: move. ←/→: page. ...\nType to search:\n(entries)\n(2/2)\n```\n\n## Where to fix\n\n`apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex`, `render/2`:\n- Replace `\"Session Tree\"` with a dashed border line containing the title centered or left-aligned\n- Add a closing dashed border line after the count badge, or rely on the overlay frame for the bottom border\n\nThe exact styling depends on whether opi-iu9.13 (full-width overlay) is landed first, since border width depends on terminal width being available to render/2.\n\nBlocked by: opi-iu9.13 (full-width overlay needed to know the border width)\n\n## Verification\n\nOpen /tree and confirm \"Session Tree\" appears with dashed separator lines above and below the header block.",
+  "id": "opi-iu9.15",
+  "labels": [],
+  "parent": "opi-iu9",
+  "priority": 3,
+  "status": "open",
+  "title": "/tree header: bordered Session Tree title with dashed separator lines",
+  "type": "task",
+  "updated_at": "2026-05-06T15:52:41Z"
+}
