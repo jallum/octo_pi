@@ -227,11 +227,12 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     leaf_id = Keyword.get(opts, :leaf_id)
     selected_id = Keyword.get(opts, :selected_id)
     multiple_roots = Keyword.get(opts, :multiple_roots, detect_multiple_roots(flat_nodes))
+    ansi = Keyword.get(opts, :ansi, false)
 
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
 
     Enum.map(flat_nodes, fn flat_node ->
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids)
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi)
     end)
   end
 
@@ -239,18 +240,20 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 4}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 5}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi) do
     entry = flat_node.node.entry
-    cursor = if selected_id && entry.id == selected_id, do: "› ", else: "  "
+    is_selected = selected_id != nil and entry.id == selected_id
+    cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
     display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
     connector = node_connector(flat_node)
     connector_position = if connector == "", do: -1, else: display_indent - 1
     prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
-    path_marker = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
-    label = if flat_node.node.label, do: "[#{flat_node.node.label}] ", else: ""
-    content = entry_display_text(flat_node.node)
-    cursor <> prefix <> path_marker <> label <> content
+    path_marker = if MapSet.member?(active_path_ids, entry.id), do: ansi_fg("• ", :accent, ansi), else: ""
+    label_str = if flat_node.node.label, do: ansi_fg("[#{flat_node.node.label}] ", :warning, ansi), else: ""
+    content = entry_display_text(flat_node.node, is_selected, ansi)
+    line = cursor <> ansi_fg(prefix, :dim, ansi) <> path_marker <> label_str <> content
+    if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
 
   defp node_connector(%FlatNode{show_connector: true, is_virtual_root_child: false, is_last: true}), do: "└─ "
@@ -290,42 +293,74 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp prefix_char(_gutter, _connector, _level, _cp, _pos, _last), do: " "
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}) do
-    "user: " <> extract_content_text(msg["content"])
+  defp entry_display_text(node, is_selected, ansi) do
+    result = entry_content(node, ansi)
+    if is_selected and ansi, do: IO.ANSI.bright() <> result <> IO.ANSI.reset(), else: result
   end
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi) do
+    ansi_fg("user: ", :accent, ansi) <> extract_content_text(msg["content"])
+  end
+
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi) do
     text = extract_content_text(msg["content"])
     stop = msg["stopReason"] || msg["stop_reason"]
-    assistant_display_text(text, stop)
+    assistant_content(text, stop, ansi)
   end
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}) do
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi) do
     tool_name = msg["toolName"] || msg["tool_name"] || "tool"
-    "[#{tool_name}]"
+    ansi_fg("[#{tool_name}]", :muted, ansi)
   end
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}) do
-    "[bash]: #{normalize_text(msg["command"] || "")}"
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi) do
+    ansi_fg("[bash]: #{normalize_text(msg["command"] || "")}", :dim, ansi)
   end
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}), do: "[#{role}]"
-  defp entry_display_text(%TreeNode{entry: %Entry.ModelChange{model_id: id}}), do: "model: #{id}"
-  defp entry_display_text(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}), do: "thinking: #{lvl}"
+  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => role}}}, ansi),
+    do: ansi_fg("[#{role}]", :dim, ansi)
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Compaction{summary: s}}),
-    do: "compaction: #{String.slice(s || "", 0, 40)}"
+  defp entry_content(%TreeNode{entry: %Entry.ModelChange{model_id: id}}, ansi),
+    do: ansi_fg("[model: #{id}]", :dim, ansi)
 
-  defp entry_display_text(%TreeNode{entry: %Entry.BranchSummary{summary: s}}),
-    do: "branch summary: #{String.slice(s || "", 0, 40)}"
+  defp entry_content(%TreeNode{entry: %Entry.ThinkingLevelChange{thinking_level: lvl}}, ansi),
+    do: ansi_fg("[thinking: #{lvl}]", :dim, ansi)
 
-  defp entry_display_text(%TreeNode{entry: %Entry.Label{label: label}}), do: "label: #{label}"
-  defp entry_display_text(%TreeNode{entry: %Entry.SessionInfo{}}), do: "session info"
-  defp entry_display_text(_node), do: "[entry]"
+  defp entry_content(%TreeNode{entry: %Entry.Compaction{tokens_before: tokens}}, ansi) do
+    k = if is_integer(tokens), do: round(tokens / 1000), else: 0
+    ansi_fg("[compaction: #{k}k tokens]", :border_accent, ansi)
+  end
 
-  defp assistant_display_text("", "aborted"), do: "assistant: (aborted)"
-  defp assistant_display_text("", _stop), do: "assistant: (no content)"
-  defp assistant_display_text(text, _stop), do: "assistant: " <> text
+  defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi) do
+    ansi_fg("[branch summary]: ", :warning, ansi) <> normalize_text(String.slice(s || "", 0, 40))
+  end
+
+  defp entry_content(%TreeNode{entry: %Entry.Label{label: label}}, ansi),
+    do: ansi_fg("label: #{label}", :dim, ansi)
+
+  defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi),
+    do: ansi_fg("session info", :dim, ansi)
+
+  defp entry_content(_node, _ansi), do: "[entry]"
+
+  defp assistant_content("", "aborted", ansi),
+    do: ansi_fg("assistant: ", :success, ansi) <> ansi_fg("(aborted)", :muted, ansi)
+
+  defp assistant_content("", _stop, ansi),
+    do: ansi_fg("assistant: ", :success, ansi) <> ansi_fg("(no content)", :muted, ansi)
+
+  defp assistant_content(text, _stop, ansi),
+    do: ansi_fg("assistant: ", :success, ansi) <> text
+
+  defp ansi_fg(text, _role, false), do: text
+  defp ansi_fg("", _role, _ansi), do: ""
+  defp ansi_fg(text, :accent, true), do: IO.ANSI.cyan() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :dim, true), do: IO.ANSI.faint() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :success, true), do: IO.ANSI.green() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :warning, true), do: IO.ANSI.yellow() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :muted, true), do: IO.ANSI.faint() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, :border_accent, true), do: IO.ANSI.cyan() <> text <> IO.ANSI.reset()
+  defp ansi_fg(text, _role, true), do: text
 
   defp extract_content_text(nil), do: ""
   defp extract_content_text(s) when is_binary(s), do: normalize_text(s)

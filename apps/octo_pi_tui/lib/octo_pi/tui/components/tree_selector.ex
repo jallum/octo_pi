@@ -142,7 +142,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   def render(%__MODULE__{} = state, width) do
     tree_lines = Tree.render_lines(state.filtered_nodes,
       leaf_id: state.leaf_id,
-      selected_id: selected_id(state)
+      selected_id: selected_id(state),
+      ansi: true
     )
 
     # Build count badge: (visible/total)
