@@ -50,6 +50,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
           selected_index: non_neg_integer(),
           flat_nodes: [Tree.FlatNode.t()],
           filtered_nodes: [Tree.FlatNode.t()],
+          visible_nodes: [Tree.FlatNode.t()],
+          folded_nodes: MapSet.t(),
           max_visible_lines: pos_integer(),
           show_label_timestamps: boolean(),
           label_input: {String.t(), Input.t()} | nil
@@ -63,6 +65,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     selected_index: 0,
     flat_nodes: [],
     filtered_nodes: [],
+    visible_nodes: [],
+    folded_nodes: MapSet.new(),
     max_visible_lines: 20,
     show_label_timestamps: false,
     label_input: nil
@@ -99,6 +103,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       selected_index: idx,
       flat_nodes: flat,
       filtered_nodes: filtered,
+      visible_nodes: filtered,
+      folded_nodes: MapSet.new(),
       max_visible_lines: max_lines
     }
   end
@@ -131,13 +137,15 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       selected_index: idx,
       flat_nodes: flat,
       filtered_nodes: filtered,
+      visible_nodes: filtered,
+      folded_nodes: MapSet.new(),
       max_visible_lines: max_lines
     }
   end
 
   @doc "Return the id of the currently selected entry, or `nil` if empty."
   @spec selected_id(t()) :: String.t() | nil
-  def selected_id(%__MODULE__{filtered_nodes: nodes, selected_index: idx}) do
+  def selected_id(%__MODULE__{visible_nodes: nodes, selected_index: idx}) do
     case Enum.at(nodes, idx) do
       nil -> nil
       flat_node -> flat_node.node.entry.id
@@ -155,7 +163,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   end
 
   def render(%__MODULE__{} = state, width) do
-    total = length(state.filtered_nodes)
+    total = length(state.visible_nodes)
 
     window_start = max(
       0,
@@ -167,13 +175,14 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
     window_end = min(window_start + state.max_visible_lines, total)
 
-    visible_nodes = Enum.slice(state.filtered_nodes, window_start, window_end - window_start)
+    window_nodes = Enum.slice(state.visible_nodes, window_start, window_end - window_start)
 
-    tree_lines = Tree.render_lines(visible_nodes,
+    tree_lines = Tree.render_lines(window_nodes,
       leaf_id: state.leaf_id,
       selected_id: selected_id(state),
       ansi: true,
-      show_label_timestamps: state.show_label_timestamps
+      show_label_timestamps: state.show_label_timestamps,
+      folded_ids: state.folded_nodes
     )
 
     status_suffix = if state.show_label_timestamps, do: " [+label time]", else: ""
@@ -224,6 +233,10 @@ defmodule OctoPi.TUI.Components.TreeSelector do
         {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
       Keybindings.matches?(kb, key, "app.tree.editLabel") ->
         open_label_input(state)
+      Keybindings.matches?(kb, key, "app.tree.foldOrUp") ->
+        {handle_fold_or_up(state), []}
+      Keybindings.matches?(kb, key, "app.tree.unfoldOrDown") ->
+        {handle_unfold_or_down(state), []}
       true -> handle_filter_key(state, kb, key)
     end
   end
@@ -266,8 +279,114 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
     %{state |
       flat_nodes: Enum.map(state.flat_nodes, patch),
-      filtered_nodes: Enum.map(state.filtered_nodes, patch)
+      filtered_nodes: Enum.map(state.filtered_nodes, patch),
+      visible_nodes: Enum.map(state.visible_nodes, patch)
     }
+  end
+
+  defp handle_fold_or_up(state) do
+    case selected_id(state) do
+      nil ->
+        state
+
+      id ->
+        {vis_children, vis_parent} = build_visible_maps(state.visible_nodes)
+
+        if is_foldable(id, vis_children, vis_parent) and not MapSet.member?(state.folded_nodes, id) do
+          apply_fold(state, id)
+        else
+          jump_to_branch_start(state, id, vis_children, vis_parent)
+        end
+    end
+  end
+
+  defp handle_unfold_or_down(state) do
+    case selected_id(state) do
+      nil ->
+        state
+
+      id ->
+        if MapSet.member?(state.folded_nodes, id) do
+          apply_unfold(state, id)
+        else
+          {vis_children, vis_parent} = build_visible_maps(state.visible_nodes)
+          jump_to_branch_end(state, id, vis_children, vis_parent)
+        end
+    end
+  end
+
+  defp apply_fold(state, id) do
+    new_folded = MapSet.put(state.folded_nodes, id)
+    new_visible = Tree.fold_filter(state.filtered_nodes, new_folded)
+    idx = find_nearest_visible_index(new_visible, state.flat_nodes, id)
+    %{state | folded_nodes: new_folded, visible_nodes: new_visible, selected_index: idx}
+  end
+
+  defp apply_unfold(state, id) do
+    new_folded = MapSet.delete(state.folded_nodes, id)
+    new_visible = Tree.fold_filter(state.filtered_nodes, new_folded)
+    idx = find_nearest_visible_index(new_visible, state.flat_nodes, id)
+    %{state | folded_nodes: new_folded, visible_nodes: new_visible, selected_index: idx}
+  end
+
+  defp jump_to_branch_start(state, id, vis_children, vis_parent) do
+    target_id = find_segment_start(id, vis_children, vis_parent)
+    idx = find_nearest_visible_index(state.visible_nodes, state.flat_nodes, target_id)
+    %{state | selected_index: idx}
+  end
+
+  defp jump_to_branch_end(state, id, vis_children, vis_parent) do
+    target_id = find_segment_end(id, vis_children, vis_parent)
+    idx = find_nearest_visible_index(state.visible_nodes, state.flat_nodes, target_id)
+    %{state | selected_index: idx}
+  end
+
+  defp build_visible_maps(visible_nodes) do
+    vis_parent = Map.new(visible_nodes, fn fn_node ->
+      {fn_node.node.entry.id, fn_node.node.entry.parent_id}
+    end)
+
+    vis_children = Enum.reduce(visible_nodes, %{}, fn fn_node, acc ->
+      parent_id = fn_node.node.entry.parent_id
+      if parent_id do
+        Map.update(acc, parent_id, [fn_node.node.entry.id], &(&1 ++ [fn_node.node.entry.id]))
+      else
+        acc
+      end
+    end)
+
+    {vis_children, vis_parent}
+  end
+
+  defp is_foldable(id, vis_children, vis_parent) do
+    has_children = Map.has_key?(vis_children, id)
+    parent_id = Map.get(vis_parent, id)
+    parent_sibling_count = if parent_id, do: length(Map.get(vis_children, parent_id, [])), else: 0
+    has_children and (is_nil(parent_id) or parent_sibling_count > 1)
+  end
+
+  defp find_segment_start(id, vis_children, vis_parent) do
+    parent_id = Map.get(vis_parent, id)
+    cond do
+      is_nil(parent_id) -> id
+      length(Map.get(vis_children, parent_id, [])) > 1 -> id
+      true -> find_segment_start(parent_id, vis_children, vis_parent)
+    end
+  end
+
+  defp find_segment_end(id, vis_children, vis_parent) do
+    children = Map.get(vis_children, id, [])
+    case children do
+      [] ->
+        id
+      [first_child | _] ->
+        grandchildren = Map.get(vis_children, first_child, [])
+        if length(grandchildren) > 1 do
+          hd(Map.get(vis_children, first_child))
+        else
+          find_segment_end(first_child, vis_children, vis_parent)
+        end
+    end
   end
 
   defp handle_filter_key(state, kb, key) do
@@ -300,16 +419,16 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   # ── private ───────────────────────────────────────────────────────────────
 
-  defp move_cursor(%__MODULE__{filtered_nodes: []} = state, _delta), do: state
+  defp move_cursor(%__MODULE__{visible_nodes: []} = state, _delta), do: state
 
-  defp move_cursor(%__MODULE__{selected_index: idx, filtered_nodes: nodes} = state, delta)
+  defp move_cursor(%__MODULE__{selected_index: idx, visible_nodes: nodes} = state, delta)
        when delta in [-1, 1] do
     count = length(nodes)
     new_idx = rem(idx + delta + count, count)
     %{state | selected_index: new_idx}
   end
 
-  defp move_cursor(%__MODULE__{selected_index: idx, filtered_nodes: nodes} = state, delta) do
+  defp move_cursor(%__MODULE__{selected_index: idx, visible_nodes: nodes} = state, delta) do
     count = length(nodes)
     new_idx = (idx + delta) |> max(0) |> min(count - 1)
     %{state | selected_index: new_idx}
@@ -317,13 +436,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp set_filter(%__MODULE__{} = state, new_mode) do
     filtered = Tree.filter(state.flat_nodes, new_mode, state.leaf_id)
-    idx = preserve_or_find(state, filtered)
-    %{state | filter_mode: new_mode, filtered_nodes: filtered, selected_index: idx}
-  end
-
-  defp preserve_or_find(%__MODULE__{} = state, new_filtered) do
-    current_id = selected_id(state)
-    find_nearest_visible_index(new_filtered, state.flat_nodes, current_id)
+    idx = find_nearest_visible_index(filtered, state.flat_nodes, selected_id(state))
+    %{state | filter_mode: new_mode, filtered_nodes: filtered, visible_nodes: filtered, folded_nodes: MapSet.new(), selected_index: idx}
   end
 
   defp toggle_filter(current, mode) when current == mode, do: :default

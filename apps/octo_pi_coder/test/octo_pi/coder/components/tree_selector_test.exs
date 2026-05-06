@@ -427,23 +427,23 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
       assert l4 =~ "assistant: response 2"
     end
 
-    test "branch A gets ├─ connector (active branch first)" do
+    test "branch A gets ├ connector (active branch first)" do
       flat = build_branching_flat()
       filtered = TreeSelector.filter(flat, :default)
       lines = TreeSelector.render_lines(filtered)
 
-      # After the 4 linear entries: branch A with ├─
+      # After the 4 linear entries: branch A with ├ (foldable → ⊟ at pos 1)
       branch_a_line = Enum.find(lines, fn l -> l =~ "branch A start" end)
-      assert branch_a_line =~ "├─"
+      assert branch_a_line =~ "├"
     end
 
-    test "branch B gets └─ connector (last sibling)" do
+    test "branch B gets └ connector (last sibling)" do
       flat = build_branching_flat()
       filtered = TreeSelector.filter(flat, :default)
       lines = TreeSelector.render_lines(filtered)
 
       branch_b_line = Enum.find(lines, fn l -> l =~ "branch B start" end)
-      assert branch_b_line =~ "└─"
+      assert branch_b_line =~ "└"
     end
 
     test "descendants of branch A have │ gutter" do
@@ -735,6 +735,79 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
 
       u1_line = Enum.find(lines, fn l -> l =~ "first message" end)
       assert String.starts_with?(u1_line, "  ")
+    end
+  end
+
+  describe "fold_filter/2" do
+    test "empty folded_ids returns all nodes unchanged" do
+      flat = build_branching_flat()
+      filtered = TreeSelector.filter(flat, :default)
+      assert TreeSelector.fold_filter(filtered, MapSet.new()) == filtered
+    end
+
+    test "folded node stays visible, its descendants are hidden" do
+      entries = [
+        user_entry("u1", nil, "root"),
+        assistant_entry("a1", "u1", "level 1"),
+        user_entry("u2", "a1", "level 2")
+      ]
+
+      flat = TreeSelector.flatten(TreeSelector.build_tree(entries))
+      filtered = TreeSelector.filter(flat, :all)
+      folded = MapSet.new(["a1"])
+      visible = TreeSelector.fold_filter(filtered, folded)
+      ids = Enum.map(visible, & &1.node.entry.id)
+      assert "u1" in ids
+      assert "a1" in ids
+      refute "u2" in ids
+    end
+
+    test "nested folds: descendants of descendants are also hidden" do
+      entries = [
+        user_entry("u1", nil, "root"),
+        assistant_entry("a1", "u1", "child"),
+        user_entry("u2", "a1", "grandchild"),
+        assistant_entry("a2", "u2", "great-grandchild")
+      ]
+
+      flat = TreeSelector.flatten(TreeSelector.build_tree(entries))
+      filtered = TreeSelector.filter(flat, :all)
+      folded = MapSet.new(["u1"])
+      visible = TreeSelector.fold_filter(filtered, folded)
+      ids = Enum.map(visible, & &1.node.entry.id)
+      assert ids == ["u1"]
+    end
+  end
+
+  describe "render_lines/2 — fold markers" do
+    test "foldable branch node shows ⊟ at connector pos 1" do
+      flat = build_branching_flat()
+      filtered = TreeSelector.filter(flat, :default)
+      lines = TreeSelector.render_lines(filtered)
+      branch_a_line = Enum.find(lines, fn l -> l =~ "branch A start" end)
+      assert branch_a_line =~ "⊟"
+    end
+
+    test "folded branch node shows ⊞ at connector pos 1 with folded_ids" do
+      flat = build_branching_flat()
+      filtered = TreeSelector.filter(flat, :default)
+      branch_a = Enum.find(filtered, fn fn_node -> fn_node.node.entry.id == "user-3a" end)
+      folded = MapSet.new([branch_a.node.entry.id])
+      lines = TreeSelector.render_lines(filtered, folded_ids: folded)
+      branch_a_line = Enum.find(lines, fn l -> l =~ "branch A start" end)
+      assert branch_a_line =~ "⊞"
+    end
+
+    test "single-child node shows ─ (not foldable)" do
+      flat = build_branching_flat()
+      filtered = TreeSelector.filter(flat, :default)
+      # The first line (user-1) is the only root, no connector — check a single-child node
+      lines = TreeSelector.render_lines(filtered)
+      # user-2 has only one child (asst-2) so it's not foldable
+      u2_line = Enum.find(lines, fn l -> l =~ "second message" end)
+      # u2 is linear so it may have no connector at all
+      refute u2_line =~ "⊟"
+      refute u2_line =~ "⊞"
     end
   end
 end

@@ -188,6 +188,38 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     do_flatten(child_items ++ rest_stack, [flat_node | result], contains_active, multiple_roots)
   end
 
+  # ── fold_filter/2 ────────────────────────────────────────────────────────
+
+  @doc """
+  Remove descendants of folded nodes from `flat_nodes`. Folded nodes
+  themselves remain visible. Mirrors upstream fold-filter inside `applyFilter`.
+  """
+  @spec fold_filter([FlatNode.t()], MapSet.t()) :: [FlatNode.t()]
+  def fold_filter(flat_nodes, folded_ids) do
+    if MapSet.size(folded_ids) == 0 do
+      flat_nodes
+    else
+      {visible, _hidden} =
+        Enum.reduce(flat_nodes, {[], MapSet.new()}, fn fn_node, {acc, hidden} ->
+          id = fn_node.node.entry.id
+          parent_id = fn_node.node.entry.parent_id
+
+          cond do
+            parent_id && MapSet.member?(hidden, parent_id) ->
+              {acc, MapSet.put(hidden, id)}
+
+            MapSet.member?(folded_ids, id) ->
+              {[fn_node | acc], MapSet.put(hidden, id)}
+
+            true ->
+              {[fn_node | acc], hidden}
+          end
+        end)
+
+      Enum.reverse(visible)
+    end
+  end
+
   # ── filter/3 ─────────────────────────────────────────────────────────────
 
   @doc """
@@ -222,6 +254,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     * `:multiple_roots`       — if `true`, shift display indent left by 1
       (auto-detected from `flat_nodes` when not provided)
     * `:show_label_timestamps` — if `true`, emit label timestamps next to labels
+    * `:folded_ids`            — `MapSet` of folded entry IDs for fold markers (⊞/⊟)
   """
   @spec render_lines([FlatNode.t()], keyword()) :: [String.t()]
   def render_lines(flat_nodes, opts \\ []) do
@@ -230,12 +263,15 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     multiple_roots = Keyword.get(opts, :multiple_roots, detect_multiple_roots(flat_nodes))
     ansi = Keyword.get(opts, :ansi, false)
     show_label_timestamps = Keyword.get(opts, :show_label_timestamps, false)
+    folded_ids = Keyword.get(opts, :folded_ids, MapSet.new())
 
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
     tool_call_map = build_tool_call_map(flat_nodes)
+    fold_marker_map = build_fold_marker_map(flat_nodes, folded_ids)
 
     Enum.map(flat_nodes, fn flat_node ->
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps)
+      fold_marker = Map.get(fold_marker_map, flat_node.node.entry.id)
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker)
     end)
   end
 
@@ -243,15 +279,16 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 7}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 8}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker) do
     entry = flat_node.node.entry
     is_selected = selected_id != nil and entry.id == selected_id
     cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
     display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
     connector = node_connector(flat_node)
     connector_position = if connector == "", do: -1, else: display_indent - 1
-    prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
+    prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last, fold_marker)
+    root_fold_marker = if not flat_node.show_connector and fold_marker == :folded, do: ansi_fg("⊞ ", :accent, ansi), else: ""
     path_marker = if MapSet.member?(active_path_ids, entry.id), do: ansi_fg("• ", :accent, ansi), else: ""
     label_str = if flat_node.node.label, do: ansi_fg("[#{flat_node.node.label}] ", :warning, ansi), else: ""
     label_ts_str =
@@ -261,7 +298,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
         ""
       end
     content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map)
-    line = cursor <> ansi_fg(prefix, :dim, ansi) <> path_marker <> label_str <> label_ts_str <> content
+    line = cursor <> ansi_fg(prefix, :dim, ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
     if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
 
@@ -269,38 +306,70 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp node_connector(%FlatNode{show_connector: true, is_virtual_root_child: false}), do: "├─ "
   defp node_connector(_flat_node), do: ""
 
-  defp build_prefix(display_indent, gutters, connector, connector_position, is_last) do
+  defp build_prefix(display_indent, gutters, connector, connector_position, is_last, fold_marker) do
     total_chars = display_indent * 3
 
     if total_chars == 0 do
       ""
     else
-      build_prefix_chars(total_chars, gutters, connector, connector_position, is_last)
+      build_prefix_chars(total_chars, gutters, connector, connector_position, is_last, fold_marker)
     end
   end
 
-  defp build_prefix_chars(total_chars, gutters, connector, connector_position, is_last) do
+  defp build_prefix_chars(total_chars, gutters, connector, connector_position, is_last, fold_marker) do
     Enum.map_join(0..(total_chars - 1)//1, fn i ->
       level = div(i, 3)
       pos = rem(i, 3)
       gutter = Enum.find(gutters, fn g -> g.position == level end)
-      prefix_char(gutter, connector, level, connector_position, pos, is_last)
+      prefix_char(gutter, connector, level, connector_position, pos, is_last, fold_marker)
     end)
   end
 
-  defp prefix_char(gutter, _connector, _level, _cp, pos, _last) when not is_nil(gutter) do
+  defp prefix_char(gutter, _connector, _level, _cp, pos, _last, _fm) when not is_nil(gutter) do
     if pos == 0, do: if(gutter.show, do: "│", else: " "), else: " "
   end
 
-  defp prefix_char(_gutter, connector, level, cp, pos, is_last) when connector != "" and level == cp do
+  defp prefix_char(_gutter, connector, level, cp, pos, is_last, fold_marker) when connector != "" and level == cp do
     case pos do
       0 -> if is_last, do: "└", else: "├"
-      1 -> "─"
+      1 -> fold_connector_char(fold_marker)
       _ -> " "
     end
   end
 
-  defp prefix_char(_gutter, _connector, _level, _cp, _pos, _last), do: " "
+  defp prefix_char(_gutter, _connector, _level, _cp, _pos, _last, _fm), do: " "
+
+  defp fold_connector_char(:folded), do: "⊞"
+  defp fold_connector_char(:foldable), do: "⊟"
+  defp fold_connector_char(_), do: "─"
+
+  defp build_fold_marker_map(flat_nodes, folded_ids) do
+    visible_children =
+      Enum.reduce(flat_nodes, %{}, fn fn_node, acc ->
+        parent_id = fn_node.node.entry.parent_id
+        if parent_id do
+          Map.update(acc, parent_id, [fn_node.node.entry.id], &[fn_node.node.entry.id | &1])
+        else
+          acc
+        end
+      end)
+
+    Map.new(flat_nodes, fn fn_node ->
+      id = fn_node.node.entry.id
+      parent_id = fn_node.node.entry.parent_id
+      has_children = Map.has_key?(visible_children, id)
+      parent_sibling_count = if parent_id, do: length(Map.get(visible_children, parent_id, [])), else: 0
+
+      marker =
+        cond do
+          MapSet.member?(folded_ids, id) -> :folded
+          has_children and (is_nil(parent_id) or parent_sibling_count > 1) -> :foldable
+          true -> nil
+        end
+
+      {id, marker}
+    end)
+  end
 
   defp entry_display_text(node, is_selected, ansi, tool_call_map) do
     result = entry_content(node, ansi, tool_call_map)

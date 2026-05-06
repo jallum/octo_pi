@@ -86,7 +86,9 @@ defmodule OctoPi.TUI.Keybindings do
     "app.tree.filter.cycleForward" => %{keys: ["ctrl+o"], description: "Tree filter: cycle forward"},
     "app.tree.filter.cycleBackward" => %{keys: ["shift+ctrl+o"], description: "Tree filter: cycle backward"},
     "app.tree.toggleLabelTimestamp" => %{keys: ["shift+t"], description: "Tree: toggle label timestamps"},
-    "app.tree.editLabel" => %{keys: ["shift+l"], description: "Tree: edit label for selected entry"}
+    "app.tree.editLabel" => %{keys: ["shift+l"], description: "Tree: edit label for selected entry"},
+    "app.tree.foldOrUp" => %{keys: ["ctrl+left", "alt+left"], description: "Tree: fold node or go to branch start"},
+    "app.tree.unfoldOrDown" => %{keys: ["ctrl+right", "alt+right"], description: "Tree: unfold node or go to next branch"}
   }
 
   @spec new(map()) :: t()

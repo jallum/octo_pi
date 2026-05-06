@@ -350,6 +350,85 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     end
   end
 
+  # ── node folding ──────────────────────────────────────────────────────────
+
+  describe "node folding" do
+    defp press_ctrl_named(state, name) do
+      TreeSelector.handle_key(state, %Key{key: name, modifiers: [:ctrl]})
+    end
+
+    # u1 → a1 → [u2a → a2a (branch A), u2b (branch B)]
+    # u2a is foldable: has child a2a, parent a1 has 2 children
+    defp branching_with_children do
+      entries = [
+        user_entry("u1", nil, "root"),
+        asst_entry("a1", "u1", "level 1"),
+        user_entry("u2a", "a1", "branch A"),
+        asst_entry("a2a", "u2a", "response A"),
+        user_entry("u2b", "a1", "branch B")
+      ]
+
+      TreeSelector.new(entries, initial_selected_id: "u2a")
+    end
+
+    test "ctrl+left on foldable node adds it to folded_nodes" do
+      sel = branching_with_children()
+      {sel1, []} = press_ctrl_named(sel, :left)
+      assert MapSet.member?(sel1.folded_nodes, "u2a")
+    end
+
+    test "ctrl+right on folded node removes it from folded_nodes" do
+      sel = branching_with_children()
+      {sel1, []} = press_ctrl_named(sel, :left)
+      assert MapSet.member?(sel1.folded_nodes, "u2a")
+      {sel2, []} = press_ctrl_named(sel1, :right)
+      refute MapSet.member?(sel2.folded_nodes, "u2a")
+    end
+
+    test "filter change clears folded_nodes" do
+      sel = branching_with_children()
+      {sel1, []} = press_ctrl_named(sel, :left)
+      assert MapSet.size(sel1.folded_nodes) > 0
+      {sel2, []} = press_ctrl(sel1, ?u)
+      assert MapSet.size(sel2.folded_nodes) == 0
+    end
+
+    test "ctrl+left on non-foldable node jumps to branch segment start (parent is branch head)" do
+      entries = [
+        user_entry("u1", nil, "root"),
+        asst_entry("a1", "u1", "mid"),
+        user_entry("u2a", "a1", "branch A"),
+        asst_entry("a2a", "u2a", "response A"),
+        user_entry("u2b", "a1", "branch B")
+      ]
+
+      # a2a is not foldable (has no children), but its parent u2a is a branch start
+      sel = TreeSelector.new(entries, initial_selected_id: "a2a")
+      {sel1, []} = press_ctrl_named(sel, :left)
+      # Should jump to u2a (start of segment: its parent a1 has 2 children)
+      assert TreeSelector.selected_id(sel1) == "u2a"
+    end
+
+    test "ctrl+right on non-folded node follows first-child path to end of branch chain" do
+      sel = branching_with_children()
+      # cursor on a1 (branch point with children u2a, u2b)
+      a1_idx = Enum.find_index(sel.visible_nodes, & &1.node.entry.id == "a1")
+      sel_at_a1 = %{sel | selected_index: a1_idx}
+      {sel1, []} = press_ctrl_named(sel_at_a1, :right)
+      # follows first child chain: a1 → u2a → a2a (leaf)
+      assert TreeSelector.selected_id(sel1) == "a2a"
+    end
+
+    test "visible_nodes excludes descendants of folded nodes" do
+      sel = branching_with_children()
+      {sel1, []} = press_ctrl_named(sel, :left)
+      visible_ids = Enum.map(sel1.visible_nodes, & &1.node.entry.id)
+      assert "u2a" in visible_ids
+      refute "a2a" in visible_ids
+      assert "u2b" in visible_ids
+    end
+  end
+
   # ── label editing ─────────────────────────────────────────────────────────
 
   describe "label editing" do
