@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T14:56:54Z",
   "created": "2026-05-06T12:04:41Z",
   "description": "All tree entries are rendered as plain text. Upstream applies ANSI colors to every part of a tree entry line.\n\n## Current Elixir behavior (tree_selector.ex render_node)\n\n`render_node/4` in `apps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex` produces plain text only:\n- Cursor: plain `\"› \"` or `\"  \"`\n- Prefix (tree connectors): plain `\"├─ \"`, `\"│  \"`, etc.\n- Path marker: plain `\"• \"`\n- Labels: plain `\"[label] \"`\n- Role/content: plain text, e.g. `\"user: hello\"`\n- Selected row: no background highlight\n\n## Expected upstream styling (tree-selector.ts render())\n\nEvery part of the line is styled:\n| Element | Style |\n|---------|-------|\n| Cursor `\"› \"` | `theme.fg(\"accent\", \"› \")` |\n| No-cursor `\"  \"` | plain |\n| Tree prefix (connectors/gutters) | `theme.fg(\"dim\", prefix)` |\n| Active path marker `\"• \"` | `theme.fg(\"accent\", \"• \")` |\n| Label `\"[label] \"` | `theme.fg(\"warning\", \"[label] \")` |\n| Label timestamp | `theme.fg(\"muted\", \"HH:MM \")` |\n| Entry text when selected | `theme.bold(result)` |\n| Entire selected row | `theme.bg(\"selectedBg\", line)` |\n| `\"user: \"` prefix | `theme.fg(\"accent\", \"user: \")` |\n| `\"assistant: \"` prefix | `theme.fg(\"success\", \"assistant: \")` |\n| Tool result text | `theme.fg(\"muted\", ...)` |\n| bash entry | `theme.fg(\"dim\", ...)` |\n| Compaction | `theme.fg(\"borderAccent\", ...)` |\n| Branch summary prefix | `theme.fg(\"warning\", \"[branch summary]: \")` |\n| model/thinking/custom/label entries | `theme.fg(\"dim\", ...)` |\n| Session info title name | `theme.fg(\"dim\", ...)` |\n\n## Where to fix\n\n`apps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex` — `render_node/4` and `entry_display_text/1`.\n\nThe docstring says 'No ANSI escape codes — suitable for snapshot testing.' This is intentional for the pure render layer. The colors need to be applied in the TUI render wrapper, i.e. `apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex` — `render/2`, which calls `Tree.render_lines/2`. Options:\n1. Add an `ansi: true` option to `render_lines/2` that enables styled output (keeps tests using plain version)\n2. Move rendering to TUI layer and add theme wrapping there\n\nVerify by opening /tree in tmux and confirming: cursor is accent-colored, selection has a background, path markers are accent, tree connectors are dim, role prefixes have correct colors.\n\n## Key upstream function references\n- `render()` lines 602-688 in tree-selector.ts\n- `getEntryDisplayText()` lines 690-790 in tree-selector.ts",
   "id": "opi-iu9.1",
   "labels": [],
   "parent": "opi-iu9",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "/tree: tree entry ANSI color styling missing",
   "type": "task",
-  "updated_at": "2026-05-06T14:51:59Z"
+  "updated_at": "2026-05-06T14:56:54Z"
 }
