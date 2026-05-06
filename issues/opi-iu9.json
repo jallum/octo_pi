@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-06T12:04:23Z",
+  "description": "Second sweep of /tree feature parity against upstream pi-coding-agent.\n\n## Background\n\nopi-ce3 (now closed) addressed the four structural chrome gaps (header borders, hints, search field, count badge). This epic captures the remaining gaps found in a thorough side-by-side comparison (2026-05-06) running both programs in tmux.\n\n## Scope\n\n### Rendering / color gaps\n- All tree entries render as plain text; upstream applies extensive ANSI styling\n- toolResult entries show [toolName] instead of formatted [read: ~/path], [bash: cmd], etc.\n- Compaction entries show summary text instead of [compaction: Nk tokens] using tokensBefore\n- session_info entries show 'session info' instead of [title: name]\n- CustomMessage entries fall through to '[entry]' catch-all\n\n### Feature gaps  \n- Node folding: no fold/unfold state, no fold markers (⊞/⊟), no branch-segment navigation\n- Label editing: shift+L opens inline LabelInput modal (not implemented)\n- Label timestamp toggle: shift+T toggles label timestamps in entries + (N/N) [+label time] suffix\n\n### Navigation / interaction gaps\n- Windowed display: all filtered nodes rendered; upstream shows only maxVisibleLines centered on selection\n- maxVisibleLines: hardcoded 20; should be max(5, floor(terminalHeight / 2))\n- Escape when search is active should clear search query before closing the overlay\n- Up/down navigation clamps at boundaries; upstream wraps around (circular)\n- ctrl+left and ctrl+right not registered as page-up/page-down aliases\n\n## Files\n- apps/octo_pi_tui/lib/octo_pi/tui/components/tree_selector.ex\n- apps/octo_pi_coder/lib/octo_pi/coder/components/tree_selector.ex\n- apps/octo_pi_tui/lib/octo_pi/tui/interactive.ex\n\n## Upstream reference\ntmp/pi-mono/packages/coding-agent/src/modes/interactive/components/tree-selector.ts",
+  "id": "opi-iu9",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "/tree full feature parity: Part II (rendering, interaction, and feature gaps)",
+  "type": "epic",
+  "updated_at": "2026-05-06T12:04:23Z"
+}
