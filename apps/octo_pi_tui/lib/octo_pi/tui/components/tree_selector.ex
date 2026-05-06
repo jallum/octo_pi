@@ -156,7 +156,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     input_lines = Input.render(%{input | width: max(1, width - 2), height: 1}, width - 2)
 
     [
-      "Session Tree",
+      header_line("Session Tree", width),
       "↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch",
       "  Label (empty to remove):"
     ] ++ Enum.map(input_lines, &("  " <> &1)) ++ ["  enter: save   escape: cancel"]
@@ -191,10 +191,15 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     count_line = String.pad_leading(count_badge, width, " ")
 
     [
-      "Session Tree",
+      header_line("Session Tree", width),
       "↑/↓: move. ←/→: page. ^←/^→ or Alt+←/Alt+→: fold/branch",
       "Type to search:" | tree_lines
-    ] ++ [count_line]
+    ] ++ [String.duplicate("─", width), count_line]
+  end
+
+  defp header_line(title, width) do
+    prefix = "─── " <> title <> " "
+    String.duplicate("─", max(0, width - String.length(prefix))) |> then(&(prefix <> &1))
   end
 
   def handle_key(%__MODULE__{label_input: {entry_id, input}} = state, %Key{} = key) do

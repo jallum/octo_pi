@@ -1039,6 +1039,16 @@ defmodule OctoPi.TUI.Interactive do
     Overlay.composite(lines, [ov], w, h)
   end
 
+  defp composite_active_overlay(
+         %{focused_component: {:dialog, :tree_selector}, tree_selector: ts, width: w, height: h},
+         _lines
+       )
+       when not is_nil(ts) do
+    ts_lines = TreeSelector.render(ts, w)
+    len = length(ts_lines)
+    if len < h, do: ts_lines ++ List.duplicate("", h - len), else: Enum.take(ts_lines, h)
+  end
+
   defp composite_active_overlay(%{focused_component: {:dialog, key}, width: w, height: h} = state, lines) do
     ov_w = min(70, w)
 
@@ -1090,6 +1100,14 @@ defmodule OctoPi.TUI.Interactive do
   end
 
   defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _layout) when not is_nil(cw), do: "\e[?25l"
+
+  defp cursor_position(
+         %__MODULE__{focused_component: {:dialog, :tree_selector}},
+         _input_lines,
+         _lines,
+         _layout
+       ),
+       do: "\e[?25l"
 
   defp cursor_position(%__MODULE__{input: input, width: width, height: height}, input_lines, lines, %{
          footer_height: footer_height,

@@ -261,7 +261,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
 
       sel = TreeSelector.new(entries, leaf_id: "a1")
       lines = TreeSelector.render(sel, 80)
-      assert length(lines) == length(sel.filtered_nodes) + 4
+      assert length(lines) == length(sel.filtered_nodes) + 5
     end
 
     test "selected entry shows › cursor" do
@@ -280,11 +280,22 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
       refute Enum.at(lines, 4) =~ "›"
     end
 
-    test "first line is Session Tree header" do
+    test "first line is Session Tree header with dashed borders" do
       entries = [user_entry("u1", nil, "hello")]
       sel = TreeSelector.new(entries)
       lines = TreeSelector.render(sel, 80)
-      assert hd(lines) =~ "Session Tree"
+      header = hd(lines)
+      assert header =~ "Session Tree"
+      assert String.starts_with?(header, "─── ")
+      assert String.length(header) == 80
+    end
+
+    test "second-to-last line is a dashed separator" do
+      entries = [user_entry("u1", nil, "hello")]
+      sel = TreeSelector.new(entries)
+      lines = TreeSelector.render(sel, 80)
+      sep = Enum.at(lines, length(lines) - 2)
+      assert sep == String.duplicate("─", 80)
     end
 
     test "second line is navigation hints" do
@@ -329,8 +340,8 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
       sel = TreeSelector.new(entries, initial_selected_id: "u5", max_visible_lines: 3)
       lines = TreeSelector.render(sel, 80)
 
-      # 3 data lines + 4 chrome lines
-      assert length(lines) == 3 + 4
+      # 3 data lines + 5 chrome lines (header, hints, search, bottom border, count)
+      assert length(lines) == 3 + 5
     end
 
     test "windowed: selected entry is always visible" do
