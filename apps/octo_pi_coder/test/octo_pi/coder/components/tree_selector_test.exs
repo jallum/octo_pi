@@ -654,6 +654,70 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
     end
   end
 
+  describe "render_lines/2 — label timestamps" do
+    alias OctoPi.Coder.Session.TreeNode
+    alias OctoPi.Coder.Components.TreeSelector.FlatNode
+
+    defp flat_node_with_label(label, label_timestamp) do
+      entry = %Entry.Message{
+        id: "lts-1",
+        parent_id: nil,
+        timestamp: "2026-04-27T00:00:00Z",
+        message: %{"role" => "user", "content" => "hello"}
+      }
+      node = %TreeNode{entry: entry, children: [], label: label, label_timestamp: label_timestamp}
+      %FlatNode{node: node, indent: 0, show_connector: false, is_last: true, gutters: [], is_virtual_root_child: false}
+    end
+
+    test "show_label_timestamps: false — no timestamp emitted even when present" do
+      flat_node = flat_node_with_label("my-label", "2026-05-06T14:30:00Z")
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: false)
+      assert line =~ "[my-label]"
+      refute line =~ "14:30"
+    end
+
+    test "show_label_timestamps: true, same day — emits HH:MM after label" do
+      now = DateTime.utc_now()
+      ts = Calendar.strftime(now, "%Y-%m-%dT%H:%M:%SZ")
+      flat_node = flat_node_with_label("today-label", ts)
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: true)
+      assert line =~ "[today-label]"
+      expected_time = Calendar.strftime(now, "%H:%M")
+      assert line =~ expected_time
+      refute line =~ "/"
+    end
+
+    test "show_label_timestamps: true, different day same year — emits M/D HH:MM" do
+      flat_node = flat_node_with_label("old-label", "2026-01-15T09:05:00Z")
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: true)
+      assert line =~ "[old-label]"
+      assert line =~ "1/15 09:05"
+    end
+
+    test "show_label_timestamps: true, different year — emits YY/M/D HH:MM" do
+      flat_node = flat_node_with_label("ancient-label", "2024-03-07T22:45:00Z")
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: true)
+      assert line =~ "[ancient-label]"
+      assert line =~ "24/3/7 22:45"
+    end
+
+    test "show_label_timestamps: true, no label — no timestamp emitted" do
+      flat_node = flat_node_with_label(nil, "2026-05-06T14:30:00Z")
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: true)
+      refute line =~ "14:30"
+      refute line =~ "["
+    end
+
+    test "show_label_timestamps: true, label but no timestamp — label shown without timestamp" do
+      flat_node = flat_node_with_label("no-ts-label", nil)
+      [line] = TreeSelector.render_lines([flat_node], show_label_timestamps: true)
+      assert line =~ "[no-ts-label]"
+      refute line =~ "/"
+      # no digits after label besides the content
+      refute line =~ ~r/\[no-ts-label\] \d/
+    end
+  end
+
   describe "render_lines/2 — cursor marker" do
     test "selected node gets › prefix" do
       flat = build_branching_flat()

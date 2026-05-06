@@ -216,11 +216,12 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   lines. No ANSI escape codes — suitable for snapshot testing.
 
   Options:
-    * `:leaf_id`       — marks nodes on the active path with `"• "` prefix
-    * `:selected_id`   — marks the selected node with `"› "` prefix
+    * `:leaf_id`              — marks nodes on the active path with `"• "` prefix
+    * `:selected_id`          — marks the selected node with `"› "` prefix
       (default `"  "` for all nodes)
-    * `:multiple_roots` — if `true`, shift display indent left by 1
+    * `:multiple_roots`       — if `true`, shift display indent left by 1
       (auto-detected from `flat_nodes` when not provided)
+    * `:show_label_timestamps` — if `true`, emit label timestamps next to labels
   """
   @spec render_lines([FlatNode.t()], keyword()) :: [String.t()]
   def render_lines(flat_nodes, opts \\ []) do
@@ -228,12 +229,13 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     selected_id = Keyword.get(opts, :selected_id)
     multiple_roots = Keyword.get(opts, :multiple_roots, detect_multiple_roots(flat_nodes))
     ansi = Keyword.get(opts, :ansi, false)
+    show_label_timestamps = Keyword.get(opts, :show_label_timestamps, false)
 
     active_path_ids = build_active_path_ids(flat_nodes, leaf_id)
     tool_call_map = build_tool_call_map(flat_nodes)
 
     Enum.map(flat_nodes, fn flat_node ->
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map)
+      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps)
     end)
   end
 
@@ -241,8 +243,8 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 6}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 7}
+  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps) do
     entry = flat_node.node.entry
     is_selected = selected_id != nil and entry.id == selected_id
     cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
@@ -252,8 +254,14 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last)
     path_marker = if MapSet.member?(active_path_ids, entry.id), do: ansi_fg("• ", :accent, ansi), else: ""
     label_str = if flat_node.node.label, do: ansi_fg("[#{flat_node.node.label}] ", :warning, ansi), else: ""
+    label_ts_str =
+      if show_label_timestamps and not is_nil(flat_node.node.label) and not is_nil(flat_node.node.label_timestamp) do
+        ansi_fg(format_label_timestamp(flat_node.node.label_timestamp) <> " ", :muted, ansi)
+      else
+        ""
+      end
     content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map)
-    line = cursor <> ansi_fg(prefix, :dim, ansi) <> path_marker <> label_str <> content
+    line = cursor <> ansi_fg(prefix, :dim, ansi) <> path_marker <> label_str <> label_ts_str <> content
     if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
 
@@ -387,6 +395,33 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp ansi_fg(text, :border_accent, true), do: IO.ANSI.cyan() <> text <> IO.ANSI.reset()
   defp ansi_fg(text, :custom_label, true), do: IO.ANSI.magenta() <> text <> IO.ANSI.reset()
   defp ansi_fg(text, _role, true), do: text
+
+  defp format_label_timestamp(iso_string) when is_binary(iso_string) do
+    case DateTime.from_iso8601(iso_string) do
+      {:ok, dt, _offset} ->
+        now = DateTime.utc_now()
+        same_day = dt.year == now.year and dt.month == now.month and dt.day == now.day
+        same_year = dt.year == now.year
+
+        if same_day do
+          :io_lib.format("~2..0B:~2..0B", [dt.hour, dt.minute]) |> IO.iodata_to_binary()
+        else
+          h = :io_lib.format("~2..0B:~2..0B", [dt.hour, dt.minute]) |> IO.iodata_to_binary()
+
+          if same_year do
+            "#{dt.month}/#{dt.day} #{h}"
+          else
+            yy = rem(dt.year, 100)
+            "#{yy}/#{dt.month}/#{dt.day} #{h}"
+          end
+        end
+
+      _ ->
+        ""
+    end
+  end
+
+  defp format_label_timestamp(_), do: ""
 
   defp build_tool_call_map(flat_nodes) do
     Enum.reduce(flat_nodes, %{}, fn %FlatNode{node: %TreeNode{entry: entry}}, acc ->

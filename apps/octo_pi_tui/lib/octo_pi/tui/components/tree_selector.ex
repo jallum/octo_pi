@@ -49,7 +49,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
           selected_index: non_neg_integer(),
           flat_nodes: [Tree.FlatNode.t()],
           filtered_nodes: [Tree.FlatNode.t()],
-          max_visible_lines: pos_integer()
+          max_visible_lines: pos_integer(),
+          show_label_timestamps: boolean()
         }
 
   defstruct [
@@ -60,7 +61,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     selected_index: 0,
     flat_nodes: [],
     filtered_nodes: [],
-    max_visible_lines: 20
+    max_visible_lines: 20,
+    show_label_timestamps: false
   ]
 
   @doc """
@@ -157,10 +159,12 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     tree_lines = Tree.render_lines(visible_nodes,
       leaf_id: state.leaf_id,
       selected_id: selected_id(state),
-      ansi: true
+      ansi: true,
+      show_label_timestamps: state.show_label_timestamps
     )
 
-    count_badge = "(#{state.selected_index + 1}/#{total})"
+    status_suffix = if state.show_label_timestamps, do: " [+label time]", else: ""
+    count_badge = "(#{state.selected_index + 1}/#{total})#{status_suffix}"
 
     count_line = String.pad_leading(count_badge, width, " ")
 
@@ -181,6 +185,8 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       Keybindings.matches?(kb, key, "tui.select.pageDown") -> {move_cursor(state, +state.max_visible_lines), []}
       Keybindings.matches?(kb, key, "tui.select.confirm") -> handle_confirm(state)
       Keybindings.matches?(kb, key, "tui.select.cancel") -> {state, [:cancel]}
+      Keybindings.matches?(kb, key, "app.tree.toggleLabelTimestamp") ->
+        {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
       true -> handle_filter_key(state, kb, key)
     end
   end
