@@ -315,5 +315,38 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
       last_line = List.last(lines)
       assert last_line =~ "(2/2)"
     end
+
+    test "windowed: only max_visible_lines entries are rendered" do
+      # Build 10 entries in a chain, limit to 5 visible
+      entries =
+        Enum.reduce(1..10, [], fn i, acc ->
+          parent = if i == 1, do: nil, else: "u#{i - 1}"
+          [user_entry("u#{i}", parent, "message #{i}") | acc]
+        end)
+        |> Enum.reverse()
+
+      # Select entry 5, max_visible_lines 3 → window centers around 5
+      sel = TreeSelector.new(entries, initial_selected_id: "u5", max_visible_lines: 3)
+      lines = TreeSelector.render(sel, 80)
+
+      # 3 data lines + 4 chrome lines
+      assert length(lines) == 3 + 4
+    end
+
+    test "windowed: selected entry is always visible" do
+      entries =
+        Enum.reduce(1..10, [], fn i, acc ->
+          parent = if i == 1, do: nil, else: "u#{i - 1}"
+          [user_entry("u#{i}", parent, "message #{i}") | acc]
+        end)
+        |> Enum.reverse()
+
+      sel = TreeSelector.new(entries, initial_selected_id: "u8", max_visible_lines: 3)
+      lines = TreeSelector.render(sel, 80)
+
+      # The selected entry content (or cursor) must appear in the data lines
+      data_lines = Enum.slice(lines, 3, 3)
+      assert Enum.any?(data_lines, &(&1 =~ "›"))
+    end
   end
 end

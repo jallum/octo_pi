@@ -140,18 +140,28 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   end
 
   def render(%__MODULE__{} = state, width) do
-    tree_lines = Tree.render_lines(state.filtered_nodes,
+    total = length(state.filtered_nodes)
+
+    window_start = max(
+      0,
+      min(
+        state.selected_index - div(state.max_visible_lines, 2),
+        total - state.max_visible_lines
+      )
+    )
+
+    window_end = min(window_start + state.max_visible_lines, total)
+
+    visible_nodes = Enum.slice(state.filtered_nodes, window_start, window_end - window_start)
+
+    tree_lines = Tree.render_lines(visible_nodes,
       leaf_id: state.leaf_id,
       selected_id: selected_id(state),
       ansi: true
     )
 
-    # Build count badge: (visible/total)
-    filtered_count = length(state.filtered_nodes)
-    total_count = length(state.flat_nodes)
-    count_badge = "(#{filtered_count}/#{total_count})"
+    count_badge = "(#{state.selected_index + 1}/#{total})"
 
-    # Pad count badge to right-align within width
     count_line = String.pad_leading(count_badge, width, " ")
 
     [
