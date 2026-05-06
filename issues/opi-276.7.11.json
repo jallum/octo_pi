@@ -2,14 +2,15 @@
   "assignee": "Jason Allum",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-06T10:48:40Z",
   "created": "2026-05-05T23:49:27Z",
   "description": "## Summary\nPort the `/reload` command, which is missing from octo_pi's autocomplete and command dispatcher.\n\n## Observed Upstream Behavior\n`/reload` reloads all runtime-configurable resources (keybindings, extensions, skills, prompts, themes) without restarting the app.\n\nBehavior details:\n1. Guard: if a stream is in progress or a compaction is running, show an error and abort\n2. The editor input area is transiently replaced by a bordered loading box:\n   ```\n   ─────────────────────\n     Reloading...\n   ─────────────────────\n   ```\n   The box uses `muted` color for the text. This is a transient overlay that appears only during the reload operation.\n3. After reload completes, the loading box is removed and status is shown:\n   `showStatus(\"Reloaded keybindings, extensions, skills, prompts, themes\")`\n\nThe loading box uses the same DynamicBorder chrome as other overlays.\n\n## Source References\n- Handler: `tmp/pi-mono/packages/coding-agent/src/modes/interactive/interactive-mode.ts` ~line 4746 `handleReloadCommand()`\n- Command registration: `tmp/pi-mono/packages/coding-agent/src/core/slash-commands.ts` — entry `\"reload\"`\n\n## What to Implement in Elixir\n1. Add `\"reload\"` to `builtin_commands/0` in `autocomplete.ex`\n2. Add `/reload` dispatch clause\n3. Implement handler with guards for streaming/compacting states\n4. Show transient bordered loading box with muted \"Reloading...\" text while reload is in progress\n5. After reload, show confirmation status message listing what was reloaded",
   "id": "opi-276.7.11",
   "labels": [],
   "parent": "opi-276.7",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Port /reload command",
   "type": "task",
-  "updated_at": "2026-05-06T10:47:01Z"
+  "updated_at": "2026-05-06T10:48:40Z"
 }
