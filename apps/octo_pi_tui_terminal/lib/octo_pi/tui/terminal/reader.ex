@@ -131,6 +131,7 @@ defmodule OctoPi.TUI.Terminal.Reader do
     disable_keyboard_protocol(state)
     drain_input(System.monotonic_time(:millisecond) + state.drain_timeout_ms, state.drain_idle_ms)
     tty_write(state, "\e[?2004l")
+    tty_write(state, "\e[?25h")
     state.raw_mode_fn.(:exit)
     :ok
   end
