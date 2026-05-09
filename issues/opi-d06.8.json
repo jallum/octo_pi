@@ -1,5 +1,4 @@
 {
-  "annotations": [],
   "assignee": "",
   "blocked_by": [
     "opi-d06.3",
@@ -9,15 +8,20 @@
     "opi-d06.15"
   ],
   "blocks": [],
-  "comments": [],
   "created": "2026-05-01T11:20:50.205905Z",
   "description": "**Blocked by d06.15 (audit) and transitively by every conversion.\nThis ticket only fires after d06.15 is closed green. Read deck §11\n\"Reconciler\" and §14 \"Migration plan\" final step before starting.**\n\nThe cleanup ticket. Every region is on VDom; the bilingual codebase\nbecomes monolingual.\n\n**Read first:**\n- The d06.15 audit ticket's closing comments — they confirm zero\n  legacy callers remain.\n- `apps/octo_pi_tui/lib/octo_pi/tui/component.ex` — the current\n  Component behaviour; this ticket shrinks it.\n- `apps/octo_pi_tui/lib/octo_pi/tui/compat.ex` (created in d06.1)\n  — deleted in this ticket.\n- `apps/octo_pi_tui/lib/octo_pi/tui/renderer.ex` — review for any\n  fields/parameters that exist solely to support legacy paths\n  (e.g. external `cursor_seq` paths that d06.7 now sources from\n  the painter).\n\n**Steps:**\n\n  1. Delete `apps/octo_pi_tui/lib/octo_pi/tui/compat.ex`.\n\n  2. Remove the feature flag `:octo_pi_tui_vdom?` (introduced in\n     d06.1). All call sites unconditionally use the VDom path.\n     `grep -rn \"octo_pi_tui_vdom?\" apps/ config/` returns 0.\n\n  3. Shrink `OctoPi.TUI.Component` to the new contract only:\n     ```elixir\n     @callback render(props :: term(), ctx :: RenderContext.t(),\n                       hook_handle :: UI.Hooks.handle()) :: VNode.t()\n     ```\n     Drop the legacy `render(state, width)` and\n     `render(state, ctx) :: {state, lines, frame_ms}` callbacks.\n     Drop `update/2`, `finalize/2`, `invalidate/1` from the\n     behaviour — those callbacks are gone, replaced by\n     reconciler-driven `handle_event/2` routing.\n\n  4. Audit `Renderer.render/3,4` for fields used only by legacy\n     paths:\n       * The separate `cursor_seq` input parameter: keep — d06.7's\n         contract is \"UI.State paints, returns iodata + cursor_or_nil,\n         and the GenServer wrapper formats and passes cursor_seq.\"\n         The Renderer interface itself is unchanged.\n       * Any other dead fields: remove only if confidently unused.\n         When in doubt, leave them and file a follow-up ticket.\n\n  5. Remove `OctoPi.TUI.StreamingComponent` aliases / behaviour\n     references if any remain (d06.5 + d06.9 should have already\n     dropped them).\n\n  6. Delete `transcript_entry.ex` and `streaming_transcript_entry.ex`\n     if they still exist (the latest commit on the branch — `opi-tze.2`\n     — already removes them, so this is a verification step).\n\n**Acceptance:**\n- `git diff main HEAD -- apps/octo_pi_tui/lib/octo_pi/tui/component.ex`\n  shows the behaviour shrunk to the new single callback.\n- `mix dialyzer` green; `mix test` 1251+ green.\n- `mix compile --warnings-as-errors` green.\n- tmux smoke: full TUI lifecycle (open, prompt, scroll, dialog, exit)\n  with no regressions vs. main.\n- One commit per logical step (file deletion / behaviour shrink /\n  flag removal); makes the cleanup easy to review.",
   "id": "opi-d06.8",
   "labels": [],
   "parent": "opi-d06",
+  "comments": [
+    {
+      "text": "Superseded by the tui2 architecture decision in docs/tui-architecture.md. The d06 plan refactored octo_pi_tui in place; the new direction builds octo_pi_tui2 as a parallel implementation on Filament, leaving octo_pi_tui frozen. New epics: opi-58c, opi-pyl, opi-yhj, opi-t3t, opi-ow9, opi-4tr, opi-m6b. Closing without further work.",
+      "timestamp": "2026-05-09T20:40:38Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "Delete Compat adapter and feature flag; remove legacy Component callback shape",
   "type": "task",
-  "updated_at": "2026-05-01T12:00:58.341189Z"
+  "updated_at": "2026-05-09T20:40:38Z"
 }
