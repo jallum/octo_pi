@@ -6,6 +6,7 @@
   "blocks": [
     "opi-d06.15"
   ],
+  "closed_at": "2026-05-09T20:40:43Z",
   "created": "2026-05-01T11:23:39.696379Z",
   "description": "**Blocked by d06.1 (VText must exist). Read deck §3 \"The model:\nVNode → LineBuf\" and §4 \"Component API\".**\n\nTwo thin single-purpose modules become helper functions returning\n`%VText{}`. The modules go away.\n\n**Read first:**\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/text.ex` (~36 lines).\n  Today: a struct + Component behaviour that splits content on\n  newlines and truncates each line to width.\n- `apps/octo_pi_tui/lib/octo_pi/tui/components/truncated_text.ex`\n  (~45 lines). Same idea, single-line truncation with optional\n  ellipsis.\n- `apps/octo_pi_tui/lib/octo_pi/tui/wrap_ansi.ex` —\n  `visible_width/1` and `truncate_to_width/3`. The painter calls\n  these at VText leaves where width is known.\n- All callers — find with:\n  `grep -rln \"Components.Text\\\\|Components.TruncatedText\" apps/octo_pi_tui/`\n\n**Target shape:**\n- New module `OctoPi.TUI.UI` (or fold into `OctoPi.TUI.VDom` —\n  pick one and document):\n  ```elixir\n  def text(string), do: %VText{text: string}\n  def text(string, style), do: %VText{text: string, style: style}\n  def truncate(string, width), do: ...   # may emit a VText or\n                                          # special marker for the\n                                          # painter; if marker, add\n                                          # a paint case for it\n  ```\n- Modules `Components.Text` and `Components.TruncatedText` deleted.\n- All callers updated to use the helper functions.\n- Painter MUST call `WrapAnsi.truncate_to_width/3` when emitting a\n  VText whose visible width exceeds the current paint width.\n\n**Acceptance:**\n- `Components.Text` and `Components.TruncatedText` modules deleted.\n- `grep -rn \"Components.Text\\\\b\\\\|Components.TruncatedText\" apps/octo_pi_tui`\n  returns 0 lines outside this commit.\n- Existing tests that touched these modules updated to use the\n  helper functions; assertions stay green.\n- Painter's VText path correctly truncates oversized lines (test\n  with a 200-char line at width 80; visible width of result is\n  exactly 80).\n- Visible-width tracking remains correct in the LineBuf so\n  cursor stamping (d06.7) works through truncated lines.",
   "id": "opi-d06.12",
@@ -18,7 +19,7 @@
     }
   ],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Collapse Text + TruncatedText into VText helpers",
   "type": "task",
   "updated_at": "2026-05-09T20:40:43Z"
