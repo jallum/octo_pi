@@ -285,9 +285,6 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # ── private: render helpers ───────────────────────────────────────────────
 
-  # build_active_path_ids returns a MapSet whose internal type Dialyzer
-  # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 3}
   defp render_node(flat_node, fold_marker, ctx) do
     entry = flat_node.node.entry
     is_selected = ctx.selected_id != nil and entry.id == ctx.selected_id
@@ -323,7 +320,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp root_fold_marker_pair(_flat_node, _fold_marker, _ansi), do: {"", ""}
 
   defp path_marker_pair(entry_id, active_path_ids, ansi) do
-    if MapSet.member?(active_path_ids, entry_id),
+    if Map.has_key?(active_path_ids, entry_id),
       do: {"• ", ansi_fg("• ", :accent, ansi)},
       else: {"", ""}
   end
@@ -922,7 +919,9 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     end)
   end
 
-  defp build_active_path_ids(_flat_nodes, nil), do: MapSet.new()
+  # Returns a plain map used as a set: %{entry_id => true}. Avoids MapSet
+  # opacity false positives when threaded through render_node/path_marker_pair.
+  defp build_active_path_ids(_flat_nodes, nil), do: %{}
 
   defp build_active_path_ids(flat_nodes, leaf_id) do
     entry_map = Map.new(flat_nodes, fn fn_node -> {fn_node.node.entry.id, fn_node} end)
@@ -938,7 +937,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           fn_node -> {id, fn_node.node.entry.parent_id}
         end
     end)
-    |> MapSet.new()
+    |> Map.new(fn id -> {id, true} end)
   end
 
   defp detect_multiple_roots(flat_nodes) do

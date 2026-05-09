@@ -51,7 +51,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
           flat_nodes: [Tree.FlatNode.t()],
           filtered_nodes: [Tree.FlatNode.t()],
           visible_nodes: [Tree.FlatNode.t()],
-          folded_nodes: MapSet.t(),
+          folded_nodes: %{optional(String.t()) => true},
           max_visible_lines: pos_integer(),
           show_label_timestamps: boolean(),
           label_input: {String.t(), Input.t()} | nil
@@ -66,7 +66,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     flat_nodes: [],
     filtered_nodes: [],
     visible_nodes: [],
-    folded_nodes: MapSet.new(),
+    folded_nodes: %{},
     max_visible_lines: 20,
     show_label_timestamps: false,
     label_input: nil
@@ -104,7 +104,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       flat_nodes: flat,
       filtered_nodes: filtered,
       visible_nodes: filtered,
-      folded_nodes: MapSet.new(),
+      folded_nodes: %{},
       max_visible_lines: max_lines
     }
   end
@@ -138,7 +138,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       flat_nodes: flat,
       filtered_nodes: filtered,
       visible_nodes: filtered,
-      folded_nodes: MapSet.new(),
+      folded_nodes: %{},
       max_visible_lines: max_lines
     }
   end
@@ -184,7 +184,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
         selected_id: selected_id(state),
         ansi: true,
         show_label_timestamps: state.show_label_timestamps,
-        folded_ids: state.folded_nodes,
+        folded_ids: MapSet.new(Map.keys(state.folded_nodes)),
         width: width
       )
 
@@ -330,7 +330,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       id ->
         {vis_children, vis_parent} = build_visible_maps(state.visible_nodes)
 
-        if foldable?(id, vis_children, vis_parent) and not MapSet.member?(state.folded_nodes, id) do
+        if foldable?(id, vis_children, vis_parent) and not Map.has_key?(state.folded_nodes, id) do
           apply_fold(state, id)
         else
           jump_to_branch_start(state, id, vis_children, vis_parent)
@@ -344,7 +344,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
         state
 
       id ->
-        if MapSet.member?(state.folded_nodes, id) do
+        if Map.has_key?(state.folded_nodes, id) do
           apply_unfold(state, id)
         else
           {vis_children, vis_parent} = build_visible_maps(state.visible_nodes)
@@ -354,15 +354,15 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   end
 
   defp apply_fold(state, id) do
-    new_folded = MapSet.put(state.folded_nodes, id)
-    new_visible = Tree.fold_filter(state.filtered_nodes, new_folded)
+    new_folded = Map.put(state.folded_nodes, id, true)
+    new_visible = Tree.fold_filter(state.filtered_nodes, MapSet.new(Map.keys(new_folded)))
     idx = find_nearest_visible_index(new_visible, state.flat_nodes, id)
     %{state | folded_nodes: new_folded, visible_nodes: new_visible, selected_index: idx}
   end
 
   defp apply_unfold(state, id) do
-    new_folded = MapSet.delete(state.folded_nodes, id)
-    new_visible = Tree.fold_filter(state.filtered_nodes, new_folded)
+    new_folded = Map.delete(state.folded_nodes, id)
+    new_visible = Tree.fold_filter(state.filtered_nodes, MapSet.new(Map.keys(new_folded)))
     idx = find_nearest_visible_index(new_visible, state.flat_nodes, id)
     %{state | folded_nodes: new_folded, visible_nodes: new_visible, selected_index: idx}
   end
@@ -487,7 +487,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       | filter_mode: new_mode,
         filtered_nodes: filtered,
         visible_nodes: filtered,
-        folded_nodes: MapSet.new(),
+        folded_nodes: %{},
         selected_index: idx
     }
   end

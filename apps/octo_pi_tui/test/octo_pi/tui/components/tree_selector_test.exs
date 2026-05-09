@@ -387,23 +387,23 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     test "ctrl+left on foldable node adds it to folded_nodes" do
       sel = branching_with_children()
       {sel1, []} = press_ctrl_named(sel, :left)
-      assert MapSet.member?(sel1.folded_nodes, "u2a")
+      assert Map.has_key?(sel1.folded_nodes, "u2a")
     end
 
     test "ctrl+right on folded node removes it from folded_nodes" do
       sel = branching_with_children()
       {sel1, []} = press_ctrl_named(sel, :left)
-      assert MapSet.member?(sel1.folded_nodes, "u2a")
+      assert Map.has_key?(sel1.folded_nodes, "u2a")
       {sel2, []} = press_ctrl_named(sel1, :right)
-      refute MapSet.member?(sel2.folded_nodes, "u2a")
+      refute Map.has_key?(sel2.folded_nodes, "u2a")
     end
 
     test "filter change clears folded_nodes" do
       sel = branching_with_children()
       {sel1, []} = press_ctrl_named(sel, :left)
-      assert MapSet.size(sel1.folded_nodes) > 0
+      assert map_size(sel1.folded_nodes) > 0
       {sel2, []} = press_ctrl(sel1, ?u)
-      assert MapSet.size(sel2.folded_nodes) == 0
+      assert map_size(sel2.folded_nodes) == 0
     end
 
     test "ctrl+left on non-foldable node jumps to branch segment start (parent is branch head)" do

@@ -2677,8 +2677,6 @@ defmodule OctoPi.TUI.Interactive do
     %{state | notification: "API key saved (restart to use)"}
   end
 
-  defp apply_api_key(state, _api_key), do: state
-
   defp read_auth_providers do
     auth_file = Path.expand("~/.octo_pi/auth.json")
 
