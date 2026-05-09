@@ -5,6 +5,7 @@
     "opi-m0i"
   ],
   "blocks": [],
+  "closed_at": "2026-05-09T20:41:49Z",
   "created": "2026-05-02T00:46:24Z",
   "description": "Gated on T5 and T6. Both components now own their zones via %VZone{} composition. The post-pass is dead code.\n\nDelete from interactive.ex:\n- weld_assistant_turns/1 (line 2439)\n- do_weld/3 (lines 2441–2455)\n- weld_lines/3 (lines 2461–2476)\n- @osc133_zone_start, @osc133_zone_end, @osc133_zone_final attrs (lines 2457–2459)\n- alias …AssistantHeader (line 77) if unused\n- alias …AssistantStatus (line 78) if unused\n\nConfirm render_transcript/2 is clean — no post-processing at all.\n\nTests: mix test green. OSC 133 zones still present in output (now via VZone in components). Streaming turns render correctly. tmux smoke test.",
   "id": "opi-kc7",
@@ -16,7 +17,7 @@
     }
   ],
   "priority": 3,
-  "status": "open",
+  "status": "closed",
   "title": "Delete weld post-passes from interactive.ex",
   "type": "task",
   "updated_at": "2026-05-09T20:41:49Z"
