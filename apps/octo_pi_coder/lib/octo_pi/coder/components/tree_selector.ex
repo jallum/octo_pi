@@ -318,8 +318,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     if is_selected and ctx.ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
 
-  defp root_fold_marker_pair(%FlatNode{show_connector: false}, :folded, ansi),
-    do: {"⊞ ", ansi_fg("⊞ ", :accent, ansi)}
+  defp root_fold_marker_pair(%FlatNode{show_connector: false}, :folded, ansi), do: {"⊞ ", ansi_fg("⊞ ", :accent, ansi)}
 
   defp root_fold_marker_pair(_flat_node, _fold_marker, _ansi), do: {"", ""}
 
@@ -661,8 +660,13 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp format_tool_call_dispatch("write", args), do: "[write: #{shorten_path(path_arg(args))}]"
   defp format_tool_call_dispatch("edit", args), do: "[edit: #{shorten_path(path_arg(args))}]"
   defp format_tool_call_dispatch("bash", args), do: "[bash: #{format_bash_command(args["command"])}]"
-  defp format_tool_call_dispatch("grep", args), do: "[grep: /#{args["pattern"] || ""}/ in #{shorten_path(args["path"] || ".")}]"
-  defp format_tool_call_dispatch("find", args), do: "[find: #{args["pattern"] || ""} in #{shorten_path(args["path"] || ".")}]"
+
+  defp format_tool_call_dispatch("grep", args),
+    do: "[grep: /#{args["pattern"] || ""}/ in #{shorten_path(args["path"] || ".")}]"
+
+  defp format_tool_call_dispatch("find", args),
+    do: "[find: #{args["pattern"] || ""} in #{shorten_path(args["path"] || ".")}]"
+
   defp format_tool_call_dispatch("ls", args), do: "[ls: #{shorten_path(args["path"] || ".")}]"
 
   defp format_tool_call_dispatch(name, args) do
