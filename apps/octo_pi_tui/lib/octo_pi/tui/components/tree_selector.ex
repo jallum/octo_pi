@@ -320,7 +320,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       id ->
         {vis_children, vis_parent} = build_visible_maps(state.visible_nodes)
 
-        if is_foldable(id, vis_children, vis_parent) and not MapSet.member?(state.folded_nodes, id) do
+        if foldable?(id, vis_children, vis_parent) and not MapSet.member?(state.folded_nodes, id) do
           apply_fold(state, id)
         else
           jump_to_branch_start(state, id, vis_children, vis_parent)
@@ -389,7 +389,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     {vis_children, vis_parent}
   end
 
-  defp is_foldable(id, vis_children, vis_parent) do
+  defp foldable?(id, vis_children, vis_parent) do
     has_children = Map.has_key?(vis_children, id)
     parent_id = Map.get(vis_parent, id)
     parent_sibling_count = if parent_id, do: length(Map.get(vis_children, parent_id, [])), else: 0

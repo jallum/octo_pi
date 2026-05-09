@@ -20,3 +20,6 @@ apps/*/src/*.erl
 
 # Dynamic extension test fixtures (created/removed per test)
 apps/octo_pi_coder/test/octo_pi/coder/extension/fixtures/
+
+# Claude harness runtime artifacts
+.claude/scheduled_tasks.lock

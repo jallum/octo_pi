@@ -87,13 +87,13 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       {sm, e2} = add_assistant(sm, "response")
 
       sm = SessionManager.set_leaf(sm, e2.id)
-      {sm, eA} = add_user(sm, "branch-A")
+      {sm, e_a} = add_user(sm, "branch-A")
 
       sm = SessionManager.set_leaf(sm, e2.id)
-      {sm, eB} = add_user(sm, "branch-B")
+      {sm, e_b} = add_user(sm, "branch-B")
 
       sm = SessionManager.set_leaf(sm, e2.id)
-      {sm, eC} = add_user(sm, "branch-C")
+      {sm, e_c} = add_user(sm, "branch-C")
 
       tree = SessionManager.get_tree(sm)
       node2 = hd(hd(tree).children)
@@ -101,7 +101,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       assert length(node2.children) == 3
 
       branch_ids = Enum.map(node2.children, & &1.entry.id)
-      assert Enum.sort(branch_ids) == Enum.sort([eA.id, eB.id, eC.id])
+      assert Enum.sort(branch_ids) == Enum.sort([e_a.id, e_b.id, e_c.id])
     end
 
     test "handles deep branching" do
@@ -138,10 +138,10 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       {sm, e2} = add_assistant(sm, "2")
 
       sm = SessionManager.set_leaf(sm, e2.id)
-      {sm, _eA} = add_user(sm, "A")
+      {sm, _e_a} = add_user(sm, "A")
 
       sm = SessionManager.set_leaf(sm, e2.id)
-      {sm, _eB} = add_user(sm, "B")
+      {sm, _e_b} = add_user(sm, "B")
 
       tree = SessionManager.get_tree(sm)
       node2 = hd(hd(tree).children)

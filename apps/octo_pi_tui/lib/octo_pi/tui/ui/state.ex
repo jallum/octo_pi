@@ -6,6 +6,7 @@ defmodule OctoPi.TUI.UI.State do
   alias OctoPi.TUI.Key
   alias OctoPi.TUI.RenderContext
   alias OctoPi.TUI.VDOM.LineBuf
+  alias OctoPi.TUI.VDOM.Paint
 
   defstruct [
     :root_component,
@@ -163,7 +164,7 @@ defmodule OctoPi.TUI.UI.State do
     vnode = component.render(state.props, ctx)
 
     # Paint VDOM to iodata
-    {iodata, cursor} = LineBuf.finalize(OctoPi.TUI.VDOM.Paint.paint(vnode, LineBuf.new(), render_ctx))
+    {iodata, cursor} = LineBuf.finalize(Paint.paint(vnode, LineBuf.new(), render_ctx))
 
     state = %{state | dirty: false, dirty_since_ms: nil, last_paint_at_ms: now, hook_cells: ctx.state.hook_cells}
 
