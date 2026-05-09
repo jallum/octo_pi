@@ -1,6 +1,7 @@
 {
   "assignee": "",
   "blocked_by": [
+    "opi-4tr",
     "opi-t3t",
     "opi-yhj"
   ],
@@ -13,5 +14,5 @@
   "status": "open",
   "title": "[EPIC] octo_pi_tui2 public documentation: extensions, slots, style, cells",
   "type": "epic",
-  "updated_at": "2026-05-09T20:39:35Z"
+  "updated_at": "2026-05-09T20:39:36Z"
 }
