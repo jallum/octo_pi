@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-09T20:58:58Z",
+  "description": "This is the OctoPi-side tracking ticket for the upstream Filament Core extraction (flm-3wr in /Users/j5n/Workspace/filament's bw tracker).\n\n## Purpose\n\nProvide visibility into upstream Filament progress from OctoPi's tracker. Coordination point between OctoPi and Filament work.\n\n## Acceptance\n\n- Filament-side flm-3wr is closed (Filament Core / Web split shipped, vnode tuples canonical, cell mechanism, capture/bubble events).\n- A Filament release is tagged that includes the substrate changes.\n- That release works in standalone tests against the API surface OctoPi expects.\n\n## What this ticket does NOT do\n\nThis ticket does not implement anything in OctoPi. It only tracks the upstream dependency. OctoPi's Filament-consuming work happens in the sibling tickets under opi-58c.\n\n## Notes\n\n- Pre-read: `docs/tui-architecture.md` for the architectural rationale.\n- Filament tracker: `/Users/j5n/Workspace/filament` runs `bw`; the upstream epic is `flm-3wr` and is blocked on `flm-40e` (in-progress gap closure).\n- During development of flm-3wr, OctoPi will path-dep against `/Users/j5n/Workspace/filament` (not a hex release). Vendoring/release decisions are the next sibling ticket's concern.",
+  "id": "opi-58c.1",
+  "labels": [],
+  "parent": "opi-58c",
+  "priority": 2,
+  "status": "open",
+  "title": "Track Filament Core readiness (flm-3wr in Filament tracker)",
+  "type": "task",
+  "updated_at": "2026-05-09T20:58:58Z"
+}
