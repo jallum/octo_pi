@@ -96,7 +96,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       {sm, eC} = add_user(sm, "branch-C")
 
       tree = SessionManager.get_tree(sm)
-      node2 = hd(tree).children |> hd()
+      node2 = hd(hd(tree).children)
       assert node2.entry.id == e2.id
       assert length(node2.children) == 3
 
@@ -122,7 +122,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
 
       tree = SessionManager.get_tree(sm)
 
-      node2 = hd(tree).children |> hd()
+      node2 = hd(hd(tree).children)
       assert length(node2.children) == 2
 
       node5 = Enum.find(node2.children, &(&1.entry.id == e5.id))
@@ -144,7 +144,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       {sm, _eB} = add_user(sm, "B")
 
       tree = SessionManager.get_tree(sm)
-      node2 = hd(tree).children |> hd()
+      node2 = hd(hd(tree).children)
       timestamps = Enum.map(node2.children, & &1.entry.timestamp)
       assert timestamps == Enum.sort(timestamps)
     end
@@ -187,7 +187,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
       assert root.label_timestamp == l1.timestamp
 
       node2 = Enum.find(root.children, &(&1.entry.id == e2.id))
-      assert node2 != nil
+      assert node2
       assert node2.label == "response"
       assert node2.label_timestamp == l2.timestamp
     end

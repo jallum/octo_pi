@@ -25,8 +25,7 @@ defmodule OctoPi.AI.Runners.OpenRouter do
   def auth, do: {:env, "OPENROUTER_API_KEY"}
 
   @impl true
-  def validate(%{"base_url" => v}) when not is_binary(v),
-    do: {:error, "base_url must be a string"}
+  def validate(%{"base_url" => v}) when not is_binary(v), do: {:error, "base_url must be a string"}
 
   def validate(_config), do: :ok
 
@@ -132,6 +131,7 @@ defmodule OctoPi.AI.Runners.OpenRouter do
 
   defp open_router_routing(data) do
     recommended = data |> Map.get("recommended_routing", %{}) |> clean_routing()
+
     data
     |> Map.get("routing", %{})
     |> Map.merge(recommended)

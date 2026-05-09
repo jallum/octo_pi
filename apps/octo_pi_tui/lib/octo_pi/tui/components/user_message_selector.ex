@@ -50,7 +50,7 @@ defmodule OctoPi.TUI.Components.UserMessageSelector do
     start_idx = max(0, min(sel - div(@max_visible, 2), total - @max_visible))
     end_idx = min(start_idx + @max_visible, total)
 
-    lines =
+    for_result =
       for i <- start_idx..(end_idx - 1) do
         msg = Enum.at(msgs, i)
         is_sel = i == sel
@@ -62,7 +62,8 @@ defmodule OctoPi.TUI.Components.UserMessageSelector do
         meta = Theme.fg(theme, :muted, "  Message #{i + 1} of #{total}")
         [cursor <> text, meta, ""]
       end
-      |> List.flatten()
+
+    lines = List.flatten(for_result)
 
     scroll_line =
       if start_idx > 0 or end_idx < total,

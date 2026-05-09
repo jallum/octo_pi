@@ -116,8 +116,7 @@ defmodule OctoPi.Coder.SessionStore do
   Raises if `target_id` is not a known entry.
   """
   @spec append_label_change(t(), String.t(), String.t() | nil) :: :ok
-  def append_label_change(pid, target_id, label),
-    do: GenServer.call(pid, {:append_label_change, target_id, label})
+  def append_label_change(pid, target_id, label), do: GenServer.call(pid, {:append_label_change, target_id, label})
 
   @doc "Walk from current leaf to root; returns root→leaf order. `[]` for empty session."
   @spec get_branch(t()) :: [Entry.t()]

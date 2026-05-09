@@ -330,7 +330,8 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     test "windowed: only max_visible_lines entries are rendered" do
       # Build 10 entries in a chain, limit to 5 visible
       entries =
-        Enum.reduce(1..10, [], fn i, acc ->
+        1..10
+        |> Enum.reduce([], fn i, acc ->
           parent = if i == 1, do: nil, else: "u#{i - 1}"
           [user_entry("u#{i}", parent, "message #{i}") | acc]
         end)
@@ -346,7 +347,8 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
 
     test "windowed: selected entry is always visible" do
       entries =
-        Enum.reduce(1..10, [], fn i, acc ->
+        1..10
+        |> Enum.reduce([], fn i, acc ->
           parent = if i == 1, do: nil, else: "u#{i - 1}"
           [user_entry("u#{i}", parent, "message #{i}") | acc]
         end)
@@ -423,7 +425,7 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
     test "ctrl+right on non-folded node follows first-child path to end of branch chain" do
       sel = branching_with_children()
       # cursor on a1 (branch point with children u2a, u2b)
-      a1_idx = Enum.find_index(sel.visible_nodes, & &1.node.entry.id == "a1")
+      a1_idx = Enum.find_index(sel.visible_nodes, &(&1.node.entry.id == "a1"))
       sel_at_a1 = %{sel | selected_index: a1_idx}
       {sel1, []} = press_ctrl_named(sel_at_a1, :right)
       # follows first child chain: a1 → u2a → a2a (leaf)
@@ -454,24 +456,31 @@ defmodule OctoPi.TUI.Components.TreeSelectorTest do
 
     test "shift+L opens label input mode", %{sel: sel} do
       {sel1, []} = press_shift(sel, ?l)
-      assert sel1.label_input != nil
+      assert sel1.label_input
     end
 
     test "label input is pre-filled with existing label", %{sel: sel} do
       # Give u1 a label first by patching flat_nodes
-      labeled_sel = put_in(
-        sel.flat_nodes,
-        Enum.map(sel.flat_nodes, fn fn_node ->
-          if fn_node.node.entry.id == "u1",
-            do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
-            else: fn_node
-        end)
-      )
-      labeled_sel = %{labeled_sel | filtered_nodes: Enum.map(labeled_sel.filtered_nodes, fn fn_node ->
-        if fn_node.node.entry.id == "u1",
-          do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
-          else: fn_node
-      end)}
+      labeled_sel =
+        put_in(
+          sel.flat_nodes,
+          Enum.map(sel.flat_nodes, fn fn_node ->
+            if fn_node.node.entry.id == "u1",
+              do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
+              else: fn_node
+          end)
+        )
+
+      labeled_sel = %{
+        labeled_sel
+        | filtered_nodes:
+            Enum.map(labeled_sel.filtered_nodes, fn fn_node ->
+              if fn_node.node.entry.id == "u1",
+                do: %{fn_node | node: %{fn_node.node | label: "my-label"}},
+                else: fn_node
+            end)
+      }
+
       {sel1, []} = press_shift(labeled_sel, ?l)
       {_entry_id, input} = sel1.label_input
       assert input.value == "my-label"

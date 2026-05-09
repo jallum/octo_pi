@@ -1,3 +1,5 @@
-import_deps: [:ecto, :ecto_antix, :octo_pi_ai, :telemetry]
-plugins: [Phoenix.LiveView.HTMLFormatter]
-inputs: ["*.{ex,exs}", "{config,lib,test}/**/*.{ex,exs}"]
+[
+  plugins: [Styler],
+  line_length: 120,
+  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+]

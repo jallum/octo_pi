@@ -24,12 +24,12 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
 
   describe "get_label/2" do
     test "returns nil when no label set" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       assert SessionManager.get_label(sm, entry.id) == nil
     end
 
     test "returns the label after append_label_change" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       {sm, _} = SessionManager.append_label_change(sm, entry.id, "checkpoint")
       assert SessionManager.get_label(sm, entry.id) == "checkpoint"
     end
@@ -37,19 +37,19 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
 
   describe "append_label_change/3" do
     test "label entry appears in entries" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       {sm, label_entry} = SessionManager.append_label_change(sm, entry.id, "checkpoint")
 
       entries = SessionManager.get_entries(sm)
       found = Enum.find(entries, &match?(%Entry.Label{}, &1))
-      assert found != nil
+      assert found
       assert found.id == label_entry.id
       assert found.target_id == entry.id
       assert found.label == "checkpoint"
     end
 
     test "clears label when nil passed" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       {sm, _} = SessionManager.append_label_change(sm, entry.id, "checkpoint")
       assert SessionManager.get_label(sm, entry.id) == "checkpoint"
 
@@ -58,7 +58,7 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
     end
 
     test "last label wins" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       {sm, _} = SessionManager.append_label_change(sm, entry.id, "first")
       {sm, _} = SessionManager.append_label_change(sm, entry.id, "second")
       {sm, last} = SessionManager.append_label_change(sm, entry.id, "third")
@@ -69,13 +69,14 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
 
     test "raises for unknown target_id" do
       sm = new_session()
+
       assert_raise RuntimeError, ~r/not found/, fn ->
         SessionManager.append_label_change(sm, "nope", "x")
       end
     end
 
     test "labels not included in build_session_context messages" do
-      {sm, entry} = new_session() |> add_user()
+      {sm, entry} = add_user(new_session())
       {sm, _} = SessionManager.append_label_change(sm, entry.id, "checkpoint")
 
       ctx = SessionManager.build_session_context(sm)
@@ -86,7 +87,7 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
 
   describe "label persistence (reload from file)" do
     test "labels in JSONL are resolved on load" do
-      {sm, msg} = new_session() |> add_user()
+      {sm, msg} = add_user(new_session())
       {sm, label_entry} = SessionManager.append_label_change(sm, msg.id, "important")
 
       # Serialize all entries back to a file
@@ -100,7 +101,7 @@ defmodule OctoPi.Coder.SessionManager.LabelsTest do
     end
 
     test "label cleared by nil entry is absent after reload" do
-      {sm, msg} = new_session() |> add_user()
+      {sm, msg} = add_user(new_session())
       {sm, _} = SessionManager.append_label_change(sm, msg.id, "first")
       {sm, _} = SessionManager.append_label_change(sm, msg.id, nil)
 

@@ -116,7 +116,7 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
 
   describe "sort" do
     test "Ctrl+S cycles to next sort mode" do
-      sel = test_sessions() |> SessionSelector.new(@theme)
+      sel = SessionSelector.new(test_sessions(), @theme)
       assert sel.sort_mode == :modified
       sel = press(sel, ctrl(?s))
       assert sel.sort_mode == :name
@@ -144,7 +144,7 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
 
   describe "named_only" do
     test "Ctrl+N toggles named-only filter" do
-      sel = unnamed_sessions() |> SessionSelector.new(@theme)
+      sel = SessionSelector.new(unnamed_sessions(), @theme)
       assert sel.named_only == false
       sel = press(sel, ctrl(?n))
       assert sel.named_only == true
@@ -166,7 +166,7 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
 
   describe "show_path" do
     test "Ctrl+P toggles path display" do
-      sel = test_sessions() |> SessionSelector.new(@theme)
+      sel = SessionSelector.new(test_sessions(), @theme)
       refute sel.show_path
       sel = press(sel, ctrl(?p))
       assert sel.show_path
@@ -191,7 +191,7 @@ defmodule OctoPi.TUI.Components.SessionSelectorTest do
     test "Ctrl+D enters confirm mode" do
       sel = SessionSelector.new(test_sessions(), @theme)
       sel = press(sel, ctrl(?d))
-      assert sel.confirm_delete != nil
+      assert sel.confirm_delete
     end
 
     test "y confirms deletion" do

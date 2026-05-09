@@ -235,7 +235,11 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "/session shows session info in multiline notification" do
-      s = %Interactive{input: %Input{value: "/session", cursor: 8}, footer: %Footer{input_tokens: 100, output_tokens: 50}}
+      s = %Interactive{
+        input: %Input{value: "/session", cursor: 8},
+        footer: %Footer{input_tokens: 100, output_tokens: 50}
+      }
+
       s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.notification =~ "Session Info"
       assert s.notification =~ "Messages"
@@ -287,6 +291,7 @@ defmodule OctoPi.TUI.InteractiveTest do
         session: nil,
         transcript: seed_transcript([wrap(UserMessage.new("hi"))])
       }
+
       s = Interactive.handle_event(s, %Key{key: :enter})
       assert s.transcript == %Transcript{}
       assert s.notification =~ "New session"
@@ -2243,7 +2248,7 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "/reload refreshes keybindings in state" do
       s = %Interactive{input: %Input{value: "/reload", cursor: 7}, keybindings: nil}
       s2 = Interactive.handle_event(s, %Key{key: :enter})
-      assert s2.keybindings != nil
+      assert s2.keybindings
     end
   end
 
@@ -2261,11 +2266,13 @@ defmodule OctoPi.TUI.InteractiveTest do
     test "selecting a provider from logout dialog shows logged-out notification" do
       items = [%SelectList.Item{value: "anthropic", label: "anthropic"}]
       sl = %SelectList{items: items, selected: 0}
+
       s = %Interactive{
         select_list: sl,
         dialog: {:select, :logout, ["anthropic"], []},
         focused_component: {:dialog, :select_list}
       }
+
       # Override HOME to avoid touching real auth file
       tmp = Path.join(System.tmp_dir!(), "logout_test_#{System.unique_integer([:positive])}")
       File.mkdir_p!(Path.join(tmp, ".octo_pi"))

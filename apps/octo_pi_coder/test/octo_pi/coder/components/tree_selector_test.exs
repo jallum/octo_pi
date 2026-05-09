@@ -550,11 +550,14 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
         timestamp: "2026-04-27T00:00:00Z",
         message: %{
           "role" => "assistant",
-          "content" => [%{"type" => "toolCall", "id" => "tc-1", "name" => "read", "arguments" => %{"path" => "/home/user/foo.txt"}}],
+          "content" => [
+            %{"type" => "toolCall", "id" => "tc-1", "name" => "read", "arguments" => %{"path" => "/home/user/foo.txt"}}
+          ],
           "stopReason" => "toolUse",
           "usage" => %{"input" => 0, "output" => 0, "cacheRead" => 0, "cacheWrite" => 0, "totalTokens" => 0}
         }
       }
+
       result_entry = %Entry.Message{
         id: "r1",
         parent_id: "a1",
@@ -655,8 +658,8 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
   end
 
   describe "render_lines/2 — label timestamps" do
-    alias OctoPi.Coder.Session.TreeNode
     alias OctoPi.Coder.Components.TreeSelector.FlatNode
+    alias OctoPi.Coder.Session.TreeNode
 
     defp flat_node_with_label(label, label_timestamp) do
       entry = %Entry.Message{
@@ -665,6 +668,7 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
         timestamp: "2026-04-27T00:00:00Z",
         message: %{"role" => "user", "content" => "hello"}
       }
+
       node = %TreeNode{entry: entry, children: [], label: label, label_timestamp: label_timestamp}
       %FlatNode{node: node, indent: 0, show_connector: false, is_last: true, gutters: [], is_virtual_root_child: false}
     end
@@ -816,9 +820,14 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
   describe "render_lines/2 — width truncation" do
     test "entries are single lines when width: opt is given" do
       entries = [
-        user_entry("u1", nil, "hello world, this is a very long message that would normally wrap across multiple terminal lines"),
+        user_entry(
+          "u1",
+          nil,
+          "hello world, this is a very long message that would normally wrap across multiple terminal lines"
+        ),
         assistant_entry("a1", "u1", "this is also a very long assistant response that would wrap without truncation")
       ]
+
       flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
       lines = TreeSelector.render_lines(flat, width: 40)
       assert length(lines) == 2
@@ -832,10 +841,14 @@ defmodule OctoPi.Coder.Components.TreeSelectorTest do
       flat = entries |> TreeSelector.build_tree() |> TreeSelector.flatten()
       [line] = TreeSelector.render_lines(flat, width: 20)
       # Line must not be wider than 20 display cols
-      display_width = line |> String.graphemes() |> Enum.reduce(0, fn g, acc ->
-        cp = g |> :unicode.characters_to_list() |> hd()
-        acc + if cp >= 0x10000, do: 2, else: 1
-      end)
+      display_width =
+        line
+        |> String.graphemes()
+        |> Enum.reduce(0, fn g, acc ->
+          cp = g |> :unicode.characters_to_list() |> hd()
+          acc + if cp >= 0x10000, do: 2, else: 1
+        end)
+
       assert display_width <= 20
       assert String.ends_with?(line, "…")
     end

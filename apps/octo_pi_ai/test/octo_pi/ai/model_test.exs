@@ -1,7 +1,8 @@
 defmodule OctoPi.AI.ModelTest do
   use ExUnit.Case, async: true
 
-  alias OctoPi.AI.{Model, Usage}
+  alias OctoPi.AI.Model
+  alias OctoPi.AI.Usage
 
   defp model_with_pricing do
     %Model{

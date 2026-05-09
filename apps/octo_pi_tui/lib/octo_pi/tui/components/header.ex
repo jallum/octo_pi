@@ -39,14 +39,16 @@ defmodule OctoPi.TUI.Components.Header do
     separator = Theme.fg(theme, :muted, " · ")
 
     hints =
-      [
-        hint(theme, kb, "app.interrupt", "interrupt"),
-        raw_hint(theme, "#{key_text(kb, "app.clear")}/#{key_text(kb, "app.exit")}", "clear/exit"),
-        raw_hint(theme, "/", "commands"),
-        raw_hint(theme, "!", "bash"),
-        hint(theme, kb, "app.tools.expand", "more")
-      ]
-      |> Enum.join(separator)
+      Enum.join(
+        [
+          hint(theme, kb, "app.interrupt", "interrupt"),
+          raw_hint(theme, "#{key_text(kb, "app.clear")}/#{key_text(kb, "app.exit")}", "clear/exit"),
+          raw_hint(theme, "/", "commands"),
+          raw_hint(theme, "!", "bash"),
+          hint(theme, kb, "app.tools.expand", "more")
+        ],
+        separator
+      )
 
     help_hint = Theme.dim(" Press #{key_text(kb, "app.tools.expand")} to show full startup help and loaded resources.")
     pi_hint = Theme.dim(" Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
@@ -58,28 +60,34 @@ defmodule OctoPi.TUI.Components.Header do
     kb = self.keybindings || Keybindings.new()
 
     hints =
-      [
-        hint(theme, kb, "app.interrupt", "to interrupt"),
-        hint(theme, kb, "app.clear", "to clear"),
-        raw_hint(theme, "#{key_text(kb, "app.clear")} twice", "to exit"),
-        hint(theme, kb, "app.exit", "to exit (empty)"),
-        hint(theme, kb, "app.suspend", "to suspend"),
-        hint(theme, kb, "tui.editor.deleteToLineEnd", "to delete to end"),
-        hint(theme, kb, "app.thinking.cycle", "to cycle thinking level"),
-        raw_hint(theme, "#{key_text(kb, "app.model.cycleForward")}/#{key_text(kb, "app.model.cycleBackward")}", "to cycle models"),
-        hint(theme, kb, "app.model.select", "to select model"),
-        hint(theme, kb, "app.tools.expand", "to expand tools"),
-        hint(theme, kb, "app.thinking.toggle", "to expand thinking"),
-        hint(theme, kb, "app.editor.external", "for external editor"),
-        raw_hint(theme, "/", "for commands"),
-        raw_hint(theme, "!", "to run bash"),
-        raw_hint(theme, "!!", "to run bash (no context)"),
-        hint(theme, kb, "app.message.followUp", "to queue follow-up"),
-        hint(theme, kb, "app.message.dequeue", "to edit all queued messages"),
-        hint(theme, kb, "app.clipboard.pasteImage", "to paste image"),
-        raw_hint(theme, "drop files", "to attach")
-      ]
-      |> Enum.map(&"  #{&1}")
+      Enum.map(
+        [
+          hint(theme, kb, "app.interrupt", "to interrupt"),
+          hint(theme, kb, "app.clear", "to clear"),
+          raw_hint(theme, "#{key_text(kb, "app.clear")} twice", "to exit"),
+          hint(theme, kb, "app.exit", "to exit (empty)"),
+          hint(theme, kb, "app.suspend", "to suspend"),
+          hint(theme, kb, "tui.editor.deleteToLineEnd", "to delete to end"),
+          hint(theme, kb, "app.thinking.cycle", "to cycle thinking level"),
+          raw_hint(
+            theme,
+            "#{key_text(kb, "app.model.cycleForward")}/#{key_text(kb, "app.model.cycleBackward")}",
+            "to cycle models"
+          ),
+          hint(theme, kb, "app.model.select", "to select model"),
+          hint(theme, kb, "app.tools.expand", "to expand tools"),
+          hint(theme, kb, "app.thinking.toggle", "to expand thinking"),
+          hint(theme, kb, "app.editor.external", "for external editor"),
+          raw_hint(theme, "/", "for commands"),
+          raw_hint(theme, "!", "to run bash"),
+          raw_hint(theme, "!!", "to run bash (no context)"),
+          hint(theme, kb, "app.message.followUp", "to queue follow-up"),
+          hint(theme, kb, "app.message.dequeue", "to edit all queued messages"),
+          hint(theme, kb, "app.clipboard.pasteImage", "to paste image"),
+          raw_hint(theme, "drop files", "to attach")
+        ],
+        &"  #{&1}"
+      )
 
     pi_hint = Theme.dim(" Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
     lines = [" #{title}", ""] ++ hints ++ ["", pi_hint, ""]

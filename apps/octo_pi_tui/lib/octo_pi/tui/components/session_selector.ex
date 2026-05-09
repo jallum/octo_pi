@@ -161,7 +161,7 @@ defmodule OctoPi.TUI.Components.SessionSelector do
   end
 
   defp sort_sessions(sessions, :name) do
-    Enum.sort_by(sessions, &(Map.get(&1, :name, "") |> to_string() |> String.downcase()))
+    Enum.sort_by(sessions, &(&1 |> Map.get(:name, "") |> to_string() |> String.downcase()))
   end
 
   defp next_sort_mode(current) do

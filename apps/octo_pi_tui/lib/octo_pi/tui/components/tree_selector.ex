@@ -165,26 +165,28 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   def render(%__MODULE__{} = state, width) do
     total = length(state.visible_nodes)
 
-    window_start = max(
-      0,
-      min(
-        state.selected_index - div(state.max_visible_lines, 2),
-        total - state.max_visible_lines
+    window_start =
+      max(
+        0,
+        min(
+          state.selected_index - div(state.max_visible_lines, 2),
+          total - state.max_visible_lines
+        )
       )
-    )
 
     window_end = min(window_start + state.max_visible_lines, total)
 
     window_nodes = Enum.slice(state.visible_nodes, window_start, window_end - window_start)
 
-    tree_lines = Tree.render_lines(window_nodes,
-      leaf_id: state.leaf_id,
-      selected_id: selected_id(state),
-      ansi: true,
-      show_label_timestamps: state.show_label_timestamps,
-      folded_ids: state.folded_nodes,
-      width: width
-    )
+    tree_lines =
+      Tree.render_lines(window_nodes,
+        leaf_id: state.leaf_id,
+        selected_id: selected_id(state),
+        ansi: true,
+        show_label_timestamps: state.show_label_timestamps,
+        folded_ids: state.folded_nodes,
+        width: width
+      )
 
     status_suffix = if state.show_label_timestamps, do: " [+label time]", else: ""
     count_badge = "(#{state.selected_index + 1}/#{total})#{status_suffix}"
@@ -200,18 +202,20 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp header_line(title, width) do
     prefix = "─── " <> title <> " "
-    String.duplicate("─", max(0, width - String.length(prefix))) |> then(&(prefix <> &1))
+    "─" |> String.duplicate(max(0, width - String.length(prefix))) |> then(&(prefix <> &1))
   end
 
   def handle_key(%__MODULE__{label_input: {entry_id, input}} = state, %Key{} = key) do
     case Input.handle_key(input, key, state.keybindings) do
       {_new_input, [{:submit, value}]} ->
         label = value |> String.trim() |> then(fn s -> if s == "", do: nil, else: s end)
-        ts = if label, do: DateTime.to_iso8601(DateTime.utc_now()), else: nil
+        ts = if label, do: DateTime.to_iso8601(DateTime.utc_now())
+
         new_state =
           state
           |> Map.put(:label_input, nil)
           |> update_flat_node_label(entry_id, label, ts)
+
         {new_state, [{:label_change, entry_id, label}]}
 
       {_new_input, [:cancel]} ->
@@ -229,21 +233,38 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     kb = state.keybindings
 
     cond do
-      Keybindings.matches?(kb, key, "tui.select.up") -> {move_cursor(state, -1), []}
-      Keybindings.matches?(kb, key, "tui.select.down") -> {move_cursor(state, +1), []}
-      Keybindings.matches?(kb, key, "tui.select.pageUp") -> {move_cursor(state, -state.max_visible_lines), []}
-      Keybindings.matches?(kb, key, "tui.select.pageDown") -> {move_cursor(state, +state.max_visible_lines), []}
-      Keybindings.matches?(kb, key, "tui.select.confirm") -> handle_confirm(state)
-      Keybindings.matches?(kb, key, "tui.select.cancel") -> {state, [:cancel]}
+      Keybindings.matches?(kb, key, "tui.select.up") ->
+        {move_cursor(state, -1), []}
+
+      Keybindings.matches?(kb, key, "tui.select.down") ->
+        {move_cursor(state, +1), []}
+
+      Keybindings.matches?(kb, key, "tui.select.pageUp") ->
+        {move_cursor(state, -state.max_visible_lines), []}
+
+      Keybindings.matches?(kb, key, "tui.select.pageDown") ->
+        {move_cursor(state, +state.max_visible_lines), []}
+
+      Keybindings.matches?(kb, key, "tui.select.confirm") ->
+        handle_confirm(state)
+
+      Keybindings.matches?(kb, key, "tui.select.cancel") ->
+        {state, [:cancel]}
+
       Keybindings.matches?(kb, key, "app.tree.toggleLabelTimestamp") ->
         {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
+
       Keybindings.matches?(kb, key, "app.tree.editLabel") ->
         open_label_input(state)
+
       Keybindings.matches?(kb, key, "app.tree.foldOrUp") ->
         {handle_fold_or_up(state), []}
+
       Keybindings.matches?(kb, key, "app.tree.unfoldOrDown") ->
         {handle_unfold_or_down(state), []}
-      true -> handle_filter_key(state, kb, key)
+
+      true ->
+        handle_filter_key(state, kb, key)
     end
   end
 
@@ -283,10 +304,11 @@ defmodule OctoPi.TUI.Components.TreeSelector do
       end
     end
 
-    %{state |
-      flat_nodes: Enum.map(state.flat_nodes, patch),
-      filtered_nodes: Enum.map(state.filtered_nodes, patch),
-      visible_nodes: Enum.map(state.visible_nodes, patch)
+    %{
+      state
+      | flat_nodes: Enum.map(state.flat_nodes, patch),
+        filtered_nodes: Enum.map(state.filtered_nodes, patch),
+        visible_nodes: Enum.map(state.visible_nodes, patch)
     }
   end
 
@@ -348,18 +370,21 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   end
 
   defp build_visible_maps(visible_nodes) do
-    vis_parent = Map.new(visible_nodes, fn fn_node ->
-      {fn_node.node.entry.id, fn_node.node.entry.parent_id}
-    end)
+    vis_parent =
+      Map.new(visible_nodes, fn fn_node ->
+        {fn_node.node.entry.id, fn_node.node.entry.parent_id}
+      end)
 
-    vis_children = Enum.reduce(visible_nodes, %{}, fn fn_node, acc ->
-      parent_id = fn_node.node.entry.parent_id
-      if parent_id do
-        Map.update(acc, parent_id, [fn_node.node.entry.id], &(&1 ++ [fn_node.node.entry.id]))
-      else
-        acc
-      end
-    end)
+    vis_children =
+      Enum.reduce(visible_nodes, %{}, fn fn_node, acc ->
+        parent_id = fn_node.node.entry.parent_id
+
+        if parent_id do
+          Map.update(acc, parent_id, [fn_node.node.entry.id], &(&1 ++ [fn_node.node.entry.id]))
+        else
+          acc
+        end
+      end)
 
     {vis_children, vis_parent}
   end
@@ -373,6 +398,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp find_segment_start(id, vis_children, vis_parent) do
     parent_id = Map.get(vis_parent, id)
+
     cond do
       is_nil(parent_id) -> id
       length(Map.get(vis_children, parent_id, [])) > 1 -> id
@@ -382,11 +408,14 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp find_segment_end(id, vis_children, vis_parent) do
     children = Map.get(vis_children, id, [])
+
     case children do
       [] ->
         id
+
       [first_child | _] ->
         grandchildren = Map.get(vis_children, first_child, [])
+
         if length(grandchildren) > 1 do
           hd(Map.get(vis_children, first_child))
         else
@@ -427,8 +456,7 @@ defmodule OctoPi.TUI.Components.TreeSelector do
 
   defp move_cursor(%__MODULE__{visible_nodes: []} = state, _delta), do: state
 
-  defp move_cursor(%__MODULE__{selected_index: idx, visible_nodes: nodes} = state, delta)
-       when delta in [-1, 1] do
+  defp move_cursor(%__MODULE__{selected_index: idx, visible_nodes: nodes} = state, delta) when delta in [-1, 1] do
     count = length(nodes)
     new_idx = rem(idx + delta + count, count)
     %{state | selected_index: new_idx}
@@ -443,7 +471,15 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   defp set_filter(%__MODULE__{} = state, new_mode) do
     filtered = Tree.filter(state.flat_nodes, new_mode, state.leaf_id)
     idx = find_nearest_visible_index(filtered, state.flat_nodes, selected_id(state))
-    %{state | filter_mode: new_mode, filtered_nodes: filtered, visible_nodes: filtered, folded_nodes: MapSet.new(), selected_index: idx}
+
+    %{
+      state
+      | filter_mode: new_mode,
+        filtered_nodes: filtered,
+        visible_nodes: filtered,
+        folded_nodes: MapSet.new(),
+        selected_index: idx
+    }
   end
 
   defp toggle_filter(current, mode) when current == mode, do: :default

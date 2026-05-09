@@ -11,6 +11,7 @@ defmodule OctoPi.AI.Model do
   """
 
   alias OctoPi.AI.Model.Cost
+  alias OctoPi.AI.Usage
 
   @type input_modality :: :text | :image
 
@@ -42,8 +43,6 @@ defmodule OctoPi.AI.Model do
     cost: %Cost{},
     compat: nil
   ]
-
-  alias OctoPi.AI.Usage
 
   @doc """
   Calculates the dollar cost for `usage` given `model`'s per-million-token

@@ -272,7 +272,18 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
     Enum.map(flat_nodes, fn flat_node ->
       fold_marker = Map.get(fold_marker_map, flat_node.node.entry.id)
-      render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker, width)
+
+      render_node(
+        flat_node,
+        selected_id,
+        multiple_roots,
+        active_path_ids,
+        ansi,
+        tool_call_map,
+        show_label_timestamps,
+        fold_marker,
+        width
+      )
     end)
   end
 
@@ -281,7 +292,17 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
   @dialyzer {:nowarn_function, render_lines: 2, render_node: 9}
-  defp render_node(flat_node, selected_id, multiple_roots, active_path_ids, ansi, tool_call_map, show_label_timestamps, fold_marker, width) do
+  defp render_node(
+         flat_node,
+         selected_id,
+         multiple_roots,
+         active_path_ids,
+         ansi,
+         tool_call_map,
+         show_label_timestamps,
+         fold_marker,
+         width
+       ) do
     entry = flat_node.node.entry
     is_selected = selected_id != nil and entry.id == selected_id
     cursor_plain = if is_selected, do: "› ", else: "  "
@@ -290,7 +311,9 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
     connector = node_connector(flat_node)
     connector_position = if connector == "", do: -1, else: display_indent - 1
-    prefix = build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last, fold_marker)
+
+    prefix =
+      build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last, fold_marker)
 
     root_fold_plain = if not flat_node.show_connector and fold_marker == :folded, do: "⊞ ", else: ""
     root_fold_marker = ansi_fg(root_fold_plain, :accent, ansi)
@@ -307,16 +330,23 @@ defmodule OctoPi.Coder.Components.TreeSelector do
       else
         ""
       end
+
     label_ts_str = ansi_fg(label_ts_plain, :muted, ansi)
 
     content_avail =
       if width do
-        fixed_vw = String.length(cursor_plain) + String.length(prefix) + String.length(root_fold_plain) + String.length(path_plain) + String.length(label_plain) + String.length(label_ts_plain)
+        fixed_vw =
+          String.length(cursor_plain) + String.length(prefix) + String.length(root_fold_plain) +
+            String.length(path_plain) + String.length(label_plain) + String.length(label_ts_plain)
+
         max(0, width - fixed_vw)
       end
 
     content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map, content_avail)
-    line = cursor <> ansi_fg(prefix, :dim, ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
+
+    line =
+      cursor <> ansi_fg(prefix, :dim, ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
+
     if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
   end
 
@@ -365,6 +395,7 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     visible_children =
       Enum.reduce(flat_nodes, %{}, fn fn_node, acc ->
         parent_id = fn_node.node.entry.parent_id
+
         if parent_id do
           Map.update(acc, parent_id, [fn_node.node.entry.id], &[fn_node.node.entry.id | &1])
         else
@@ -396,28 +427,45 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "user"} = msg}}, ansi, _tcm, content_avail) do
     role = "user: "
-    text = extract_content_text(msg["content"]) |> truncate_content(avail(content_avail, String.length(role)))
+    text = msg["content"] |> extract_content_text() |> truncate_content(avail(content_avail, String.length(role)))
     ansi_fg(role, :accent, ansi) <> text
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}}, ansi, _tcm, content_avail) do
+  defp entry_content(
+         %TreeNode{entry: %Entry.Message{message: %{"role" => "assistant"} = msg}},
+         ansi,
+         _tcm,
+         content_avail
+       ) do
     text = extract_content_text(msg["content"])
     stop = msg["stopReason"] || msg["stop_reason"]
     assistant_content(text, stop, ansi, content_avail)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}}, ansi, tcm, content_avail) do
+  defp entry_content(
+         %TreeNode{entry: %Entry.Message{message: %{"role" => "toolResult"} = msg}},
+         ansi,
+         tcm,
+         content_avail
+       ) do
     tool_call_id = msg["toolCallId"] || msg["tool_call_id"]
+
     text =
       case tool_call_id && Map.get(tcm, tool_call_id) do
         %{name: name, arguments: args} -> format_tool_call(name, args)
         _ -> "[#{msg["toolName"] || msg["tool_name"] || "tool"}]"
       end
+
     ansi_fg(truncate_content(text, content_avail), :muted, ansi)
   end
 
-  defp entry_content(%TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}}, ansi, _tcm, content_avail) do
-    text = "[bash]: #{normalize_text(msg["command"] || "")}" |> truncate_content(content_avail)
+  defp entry_content(
+         %TreeNode{entry: %Entry.Message{message: %{"role" => "bashExecution"} = msg}},
+         ansi,
+         _tcm,
+         content_avail
+       ) do
+    text = truncate_content("[bash]: #{normalize_text(msg["command"] || "")}", content_avail)
     ansi_fg(text, :dim, ansi)
   end
 
@@ -437,7 +485,13 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp entry_content(%TreeNode{entry: %Entry.BranchSummary{summary: s}}, ansi, _tcm, content_avail) do
     role = "[branch summary]: "
-    text = normalize_text(String.slice(s || "", 0, 40)) |> truncate_content(avail(content_avail, String.length(role)))
+
+    text =
+      (s || "")
+      |> String.slice(0, 40)
+      |> normalize_text()
+      |> truncate_content(avail(content_avail, String.length(role)))
+
     ansi_fg(role, :warning, ansi) <> text
   end
 
@@ -450,11 +504,19 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp entry_content(%TreeNode{entry: %Entry.SessionInfo{}}, ansi, _tcm, _content_avail),
     do: ansi_fg("[title: (empty)]", :dim, ansi)
 
-  defp entry_content(%TreeNode{entry: %Entry.CustomMessage{custom_type: type, content: content}}, ansi, _tcm, content_avail) do
+  defp entry_content(
+         %TreeNode{entry: %Entry.CustomMessage{custom_type: type, content: content}},
+         ansi,
+         _tcm,
+         content_avail
+       ) do
     role = "[#{type}]: "
+
     raw =
       case content do
-        s when is_binary(s) -> s
+        s when is_binary(s) ->
+          s
+
         blocks when is_list(blocks) ->
           blocks
           |> Enum.flat_map(fn
@@ -462,9 +524,12 @@ defmodule OctoPi.Coder.Components.TreeSelector do
             _ -> []
           end)
           |> Enum.join("")
-        _ -> ""
+
+        _ ->
+          ""
       end
-    text = normalize_text(raw) |> truncate_content(avail(content_avail, String.length(role)))
+
+    text = raw |> normalize_text() |> truncate_content(avail(content_avail, String.length(role)))
     ansi_fg(role, :custom_label, ansi) <> text
   end
 
@@ -487,19 +552,23 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp truncate_content(text, nil), do: text
   defp truncate_content(_text, max_width) when max_width <= 0, do: ""
+
   defp truncate_content(text, max_width) do
     text = text |> String.replace(~r/\s+/, " ") |> String.trim()
+
     if display_width(text) <= max_width do
       text
     else
       # Walk grapheme-by-grapheme keeping display-column budget (leave 1 col for "…")
       graphemes = String.graphemes(text)
+
       {kept, _} =
         Enum.reduce_while(graphemes, {[], 0}, fn g, {acc, w} ->
           gw = grapheme_display_width(g)
           if w + gw <= max_width - 1, do: {:cont, {[g | acc], w + gw}}, else: {:halt, {acc, w}}
         end)
-      Enum.reverse(kept) |> Enum.join() |> Kernel.<>("…")
+
+      kept |> Enum.reverse() |> Enum.join() |> Kernel.<>("…")
     end
   end
 
@@ -509,19 +578,27 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   defp grapheme_display_width(<<cp::utf8, _::binary>>) do
     cond do
       cp < 0x1100 -> 1
-      cp <= 0x115F -> 2   # Hangul Jamo
-      cp < 0x2E80 -> 1   # Misc punctuation, symbols (narrow)
-      cp <= 0x9FFF -> 2   # CJK Radicals, CJK Unified Ideographs
+      # Hangul Jamo
+      cp <= 0x115F -> 2
+      # Misc punctuation, symbols (narrow)
+      cp < 0x2E80 -> 1
+      # CJK Radicals, CJK Unified Ideographs
+      cp <= 0x9FFF -> 2
       cp < 0xAC00 -> 1
-      cp <= 0xD7FF -> 2   # Hangul Syllables
+      # Hangul Syllables
+      cp <= 0xD7FF -> 2
       cp < 0xF900 -> 1
-      cp <= 0xFAFF -> 2   # CJK Compatibility
+      # CJK Compatibility
+      cp <= 0xFAFF -> 2
       cp < 0xFF01 -> 1
-      cp <= 0xFF60 -> 2   # Fullwidth Latin/Katakana
+      # Fullwidth Latin/Katakana
+      cp <= 0xFF60 -> 2
       cp < 0x10000 -> 1
-      true -> 2           # Supplementary: emoji, etc.
+      # Supplementary: emoji, etc.
+      true -> 2
     end
   end
+
   defp grapheme_display_width(_), do: 1
 
   defp display_width(text) do
@@ -547,9 +624,9 @@ defmodule OctoPi.Coder.Components.TreeSelector do
         same_year = dt.year == now.year
 
         if same_day do
-          :io_lib.format("~2..0B:~2..0B", [dt.hour, dt.minute]) |> IO.iodata_to_binary()
+          "~2..0B:~2..0B" |> :io_lib.format([dt.hour, dt.minute]) |> IO.iodata_to_binary()
         else
-          h = :io_lib.format("~2..0B:~2..0B", [dt.hour, dt.minute]) |> IO.iodata_to_binary()
+          h = "~2..0B:~2..0B" |> :io_lib.format([dt.hour, dt.minute]) |> IO.iodata_to_binary()
 
           if same_year do
             "#{dt.month}/#{dt.day} #{h}"
@@ -573,24 +650,31 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           Enum.reduce(content, acc, fn
             %{"type" => "toolCall", "id" => id, "name" => name, "arguments" => args}, a ->
               Map.put(a, id, %{name: name, arguments: args || %{}})
-            _, a -> a
+
+            _, a ->
+              a
           end)
-        _ -> acc
+
+        _ ->
+          acc
       end
     end)
   end
 
   defp format_tool_call(name, args) do
     home = System.get_env("HOME") || ""
+
     shorten = fn p ->
       s = to_string(p)
       if home != "" and String.starts_with?(s, home), do: "~" <> String.slice(s, String.length(home)..-1//1), else: s
     end
+
     case name do
       "read" ->
         path = shorten.(args["path"] || args["file_path"] || "")
         offset = args["offset"]
         limit = args["limit"]
+
         display =
           if offset || limit do
             start = offset || 1
@@ -599,19 +683,29 @@ defmodule OctoPi.Coder.Components.TreeSelector do
           else
             path
           end
+
         "[read: #{display}]"
-      "write" -> "[write: #{shorten.(args["path"] || args["file_path"] || "")}]"
-      "edit"  -> "[edit: #{shorten.(args["path"] || args["file_path"] || "")}]"
-      "bash"  ->
+
+      "write" ->
+        "[write: #{shorten.(args["path"] || args["file_path"] || "")}]"
+
+      "edit" ->
+        "[edit: #{shorten.(args["path"] || args["file_path"] || "")}]"
+
+      "bash" ->
         raw = to_string(args["command"] || "")
         cmd = raw |> String.replace(~r/[\n\t]/, " ") |> String.trim() |> String.slice(0, 50)
         "[bash: #{cmd}#{if String.length(raw) > 50, do: "...", else: ""}]"
+
       "grep" ->
         "[grep: /#{args["pattern"] || ""}/ in #{shorten.(args["path"] || ".")}]"
+
       "find" ->
         "[find: #{args["pattern"] || ""} in #{shorten.(args["path"] || ".")}]"
+
       "ls" ->
         "[ls: #{shorten.(args["path"] || ".")}]"
+
       _ ->
         args_str = Jason.encode!(args)
         "[#{name}: #{String.slice(args_str, 0, 40)}#{if String.length(args_str) > 40, do: "...", else: ""}]"

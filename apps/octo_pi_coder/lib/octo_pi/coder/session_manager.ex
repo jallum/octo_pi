@@ -628,7 +628,7 @@ defmodule OctoPi.Coder.SessionManager do
   """
   @spec append_label_change(t(), String.t(), String.t() | nil) :: {t(), Entry.Label.t()}
   def append_label_change(%__MODULE__{} = sm, target_id, label) do
-    unless Map.has_key?(sm.by_id, target_id) do
+    if !Map.has_key?(sm.by_id, target_id) do
       raise "Entry #{target_id} not found"
     end
 
@@ -640,8 +640,7 @@ defmodule OctoPi.Coder.SessionManager do
         {Map.put(sm.labels_by_id, target_id, label),
          Map.put(sm.label_timestamps_by_id, target_id, materialized.timestamp)}
       else
-        {Map.delete(sm.labels_by_id, target_id),
-         Map.delete(sm.label_timestamps_by_id, target_id)}
+        {Map.delete(sm.labels_by_id, target_id), Map.delete(sm.label_timestamps_by_id, target_id)}
       end
 
     {%{sm | labels_by_id: labels, label_timestamps_by_id: timestamps}, materialized}
@@ -690,6 +689,7 @@ defmodule OctoPi.Coder.SessionManager do
 
   defp build_tree_node(entry, children_map, labels, label_timestamps) do
     id = entry_id(entry)
+
     children =
       children_map
       |> Map.get(id, [])

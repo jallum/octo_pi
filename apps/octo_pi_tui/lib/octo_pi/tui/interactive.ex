@@ -778,11 +778,14 @@ defmodule OctoPi.TUI.Interactive do
     if System.get_env("TMUX") do
       case System.cmd("tmux", ["show-option", "-w", "extended-keys-format"]) do
         {output, 0} ->
-          unless String.contains?(output, "csi-u") do
+          if !String.contains?(output, "csi-u") do
             [current_format] = Regex.run(~r/\S+$/, output)
+
             "Warning: tmux extended-keys-format is #{current_format}. Pi works best with csi-u. Add 'set -g extended-keys-format csi-u' to ~/.tmux.conf and restart tmux."
           end
-        _ -> nil
+
+        _ ->
+          nil
       end
     end
   end
@@ -1101,13 +1104,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp cursor_position(%__MODULE__{custom_widget: cw}, _input_lines, _lines, _layout) when not is_nil(cw), do: "\e[?25l"
 
-  defp cursor_position(
-         %__MODULE__{focused_component: {:dialog, :tree_selector}},
-         _input_lines,
-         _lines,
-         _layout
-       ),
-       do: "\e[?25l"
+  defp cursor_position(%__MODULE__{focused_component: {:dialog, :tree_selector}}, _input_lines, _lines, _layout),
+    do: "\e[?25l"
 
   defp cursor_position(%__MODULE__{input: input, width: width, height: height}, input_lines, lines, %{
          footer_height: footer_height,
@@ -1260,7 +1258,7 @@ defmodule OctoPi.TUI.Interactive do
 
     header = %AssistantHeader{msg_id: msg_id, has_tool_calls?: false}
 
-%{
+    %{
       state
       | turn_seq: seq,
         current_msg_id: msg_id,
@@ -1759,7 +1757,8 @@ defmodule OctoPi.TUI.Interactive do
 
   defp dispatch_slash_command("theme", _args, state), do: %{state | notification: "Theme picker not yet implemented"}
 
-  defp dispatch_slash_command("config", _args, state), do: %{state | notification: "Config: use --help for startup options"}
+  defp dispatch_slash_command("config", _args, state),
+    do: %{state | notification: "Config: use --help for startup options"}
 
   defp dispatch_slash_command("login", _args, %{theme: nil} = state),
     do: %{state | notification: "No theme loaded — cannot open login dialog"}
@@ -1806,12 +1805,12 @@ defmodule OctoPi.TUI.Interactive do
 
       _gh ->
         text = export_transcript_text(state.transcript)
-        tmp = System.tmp_dir!() |> Path.join("octo_pi_share_#{System.unique_integer([:positive])}.md")
+        tmp = Path.join(System.tmp_dir!(), "octo_pi_share_#{System.unique_integer([:positive])}.md")
 
         with :ok <- File.write(tmp, text),
              {output, 0} <- System.shell("gh gist create --public \"#{tmp}\" 2>&1") do
           File.rm(tmp)
-          url = output |> String.trim()
+          url = String.trim(output)
           %{state | notification: "Share URL: #{url}"}
         else
           _ ->
@@ -1868,7 +1867,7 @@ defmodule OctoPi.TUI.Interactive do
     do: %{state | notification: "Import: provide a session JSON to resume from a previous export"}
 
   defp dispatch_slash_command("tree", _args, %{session: nil} = state) do
-%{state | notification: "No active session for tree view"}
+    %{state | notification: "No active session for tree view"}
   end
 
   defp dispatch_slash_command("tree", _args, state) do
@@ -1972,14 +1971,18 @@ defmodule OctoPi.TUI.Interactive do
     |> String.split("\n")
     |> Enum.reduce({[], []}, fn line, {sections, current} ->
       if String.starts_with?(line, "## ") do
-        sections = if current != [], do: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()], else: sections
+        sections =
+          if current == [],
+            do: sections,
+            else: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()]
+
         {sections, [line]}
       else
         {sections, [line | current]}
       end
     end)
     |> then(fn {sections, current} ->
-      if current != [], do: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()], else: sections
+      if current == [], do: sections, else: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()]
     end)
     |> Enum.reverse()
   end
@@ -2154,7 +2157,13 @@ defmodule OctoPi.TUI.Interactive do
         acc ++ ["File: #{file}", "ID: #{if session, do: inspect(session), else: "(none)"}", ""]
       end)
       |> Kernel.++(["Messages"])
-      |> Kernel.++(["User: #{user_count}", "Assistant: #{asst_count}", "Tool Calls: #{tool_count}", "Total: #{total}", ""])
+      |> Kernel.++([
+        "User: #{user_count}",
+        "Assistant: #{asst_count}",
+        "Tool Calls: #{tool_count}",
+        "Total: #{total}",
+        ""
+      ])
       |> Kernel.++(["Tokens"])
       |> Kernel.++(["Input: #{f.input_tokens}", "Output: #{f.output_tokens}"])
       |> then(fn acc ->
@@ -2600,10 +2609,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp handle_summarize_prompt_key(
-         %{summarize_prompt: sp, dialog: {:tree_navigate, entry_id}} = state,
-         key
-       ) do
+  defp handle_summarize_prompt_key(%{summarize_prompt: sp, dialog: {:tree_navigate, entry_id}} = state, key) do
     case SummarizePrompt.handle_key(sp, key) do
       {_sp, [:cancel]} ->
         unfocus(%{state | summarize_prompt: nil, dialog: nil})
@@ -2629,8 +2635,7 @@ defmodule OctoPi.TUI.Interactive do
     end
   end
 
-  defp do_tree_navigate(%{session: session, model: model} = state, entry_id, choice)
-       when not is_nil(session) do
+  defp do_tree_navigate(%{session: session, model: model} = state, entry_id, choice) when not is_nil(session) do
     opts = [target_id: entry_id, user_wants_summary: choice, model: model]
 
     case Coder.navigate_tree(session, opts) do
@@ -2672,7 +2677,7 @@ defmodule OctoPi.TUI.Interactive do
     case File.read(auth_file) do
       {:ok, body} ->
         case Jason.decode(body) do
-          {:ok, map} when is_map(map) -> Map.keys(map) |> Enum.sort()
+          {:ok, map} when is_map(map) -> map |> Map.keys() |> Enum.sort()
           _ -> []
         end
 
@@ -2739,8 +2744,7 @@ defmodule OctoPi.TUI.Interactive do
     unfocus(%{state | select_list: nil, dialog: nil})
   end
 
-  defp resolve_select_list(%{dialog: {:select, :logout, _options, _opts}} = state, provider)
-       when is_binary(provider) do
+  defp resolve_select_list(%{dialog: {:select, :logout, _options, _opts}} = state, provider) when is_binary(provider) do
     delete_auth_provider(provider)
     unfocus(%{state | select_list: nil, dialog: nil, notification: "Logged out of #{provider}"})
   end
