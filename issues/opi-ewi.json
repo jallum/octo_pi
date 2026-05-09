@@ -8,9 +8,15 @@
   "description": "New component file. Replaces render_pending_messages/4 in interactive.ex. Also delete dim/1 from interactive.ex after verifying no remaining callers.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/pending_messages.ex\n\nSpec: render([String.t()], [String.t()], kb(), RenderContext.t()) :: VDOM.t()\n- [], [], _kb, _ctx → %VDOM.VFlow{children: []}\n- steering, follow_up, kb, ctx → %VFlow{children: steering items ++ follow_up items ++ hint VText}\n\nAll items: %VDOM.VText{text: Theme.fg(ctx.theme, :dim, text)}\n\nNo Theme.dim/1 — use Theme.fg(theme, :dim, text).\n\nDelete from interactive.ex: render_pending_messages/4, dim/1 (verify no callers first)\n\nTests: [], [] → empty VFlow. Mixed items. Hint with/without keybinding. Paint and verify output.",
   "id": "opi-ewi",
   "labels": [],
+  "comments": [
+    {
+      "text": "Superseded by the tui2 architecture decision in docs/tui-architecture.md. This ticket added a new component to octo_pi_tui's VDOM-based pipeline; that pipeline is being replaced by Filament-on-tui2 rather than refactored further. The corresponding component will be implemented as a Filament defcomponent in a slot under the opi-t3t epic. Closing without further work.",
+      "timestamp": "2026-05-09T20:41:05Z"
+    }
+  ],
   "priority": 1,
   "status": "open",
   "title": "PendingMessages component + delete dim/1",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:49Z"
+  "updated_at": "2026-05-09T20:41:05Z"
 }
