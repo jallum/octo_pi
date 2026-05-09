@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-58c.1"
+  ],
   "blocks": [],
   "created": "2026-05-09T20:58:59Z",
   "description": "Once Filament Core ships (flm-3wr closed), validate that its API surface meets the requirements OctoPi's TUI backend (`opi-yhj`) and bootstrap (`opi-pyl`) need. Catch any gap between what we expect and what shipped before building on it.\n\n## Validation surface\n\nConcrete tests against Filament Core, in OctoPi-adjacent code (probably a small validation app in `/tmp` or a test-only app):\n\n**1. Vnode IR is target-agnostic.**\n- A component that returns a vnode tuple renders correctly without `Phoenix.LiveView.Rendered` ever being mentioned.\n- `Filament.Reconciler.mount/3`'s return type does not include `Rendered`.\n- A non-web backend can consume `mount/update` output without dragging in Phoenix deps.\n\n**2. Cell mechanism works for the non-GenServer transport case.**\n- `use_local(initial)` (or whatever the final API is) provides fiber-local state without a GenServer.\n- A wrapper-owned in-process cell can be created, filled, and observed without mailbox hops.\n- Cell cleanup on fiber unmount works correctly (no leaked subscriptions).\n\n**3. Capture/bubble event dispatch.**\n- `Filament.Core.dispatch_event(tree, target_fiber, event)` walks ancestry correctly.\n- A capture-phase handler on the root fiber runs before any focused-fiber bubble handler.\n- A bubble handler returning `:propagate` continues; `:captured` stops; `{:captured, side_effect}` stops and surfaces the side effect to the dispatcher caller.\n- Mid-bubble fiber unmount (e.g. handler closes a dialog) doesn't crash the dispatcher.\n\n**4. `event_at` returns a backend-opaque handle.**\n- A non-web backend can store the handle and dispatch events to it without parsing or interpreting it.\n- The handle is stable across renders for the same fiber+slot.\n\n**5. `~F` produces vnode tuples.**\n- A `~F` template returns a vnode tree that any backend can render.\n- Components defined with `~F` work end-to-end without LiveView.\n\n## Acceptance\n\n- All five validation cases pass against shipped Filament Core.\n- Any gaps are filed as upstream tickets in Filament's tracker (flm-* IDs).\n- A short report (in this ticket's comments or as a doc) summarizes the API surface OctoPi will use.\n\n## What this is NOT\n\nNot implementation of the OctoPi TUI backend — that's `opi-yhj`. Not the bootstrap spike — that's `opi-pyl`. This is just validation of the upstream API.\n\n## Dependencies\n\nBlocks on the Filament-tracking ticket (flm-3wr being closed). Output gates `opi-pyl` and `opi-yhj` starting non-trivial work.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Validate Filament Core API against OctoPi spike requirements",
   "type": "task",
-  "updated_at": "2026-05-09T20:58:59Z"
+  "updated_at": "2026-05-09T20:59:08Z"
 }
