@@ -52,9 +52,10 @@ defmodule OctoPi.AI.Providers.OpenAI.Auth do
   defp auth_file_key(:openrouter), do: "openrouter"
   defp auth_file_key(provider), do: to_string(provider)
 
-  # Read API key from ~/.octo_pi/auth.json
+  # Read API key from ~/.octo_pi/auth.json (path overridable via app env for tests)
   defp read_auth_file(provider_key) do
-    auth_file = Path.expand("~/.octo_pi/auth.json")
+    auth_file =
+      Application.get_env(:octo_pi_ai_openai, :auth_file, Path.expand("~/.octo_pi/auth.json"))
 
     case File.read(auth_file) do
       {:ok, body} ->

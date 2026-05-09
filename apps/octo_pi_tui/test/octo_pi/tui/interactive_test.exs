@@ -1557,32 +1557,34 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "no extensions — no session_start messages sent" do
-      interactive_name = :"ext_test_interactive_#{System.unique_integer([:positive])}"
-      test_pid = self()
+      ExUnit.CaptureLog.capture_log(fn ->
+        interactive_name = :"ext_test_interactive_#{System.unique_integer([:positive])}"
+        test_pid = self()
 
-      runner =
-        Task.async(fn ->
-          Interactive.run(
-            model: ext_model(),
-            transport: FakeTransport,
-            tools: [],
-            extensions: [],
-            write_fn: fn _ ->
-              send(test_pid, :rendered)
-              :ok
-            end,
-            skip_raw_mode: true,
-            skip_sigwinch: true,
-            auto_start_reader: false,
-            dimensions: {80, 24},
-            terminal_name: nil,
-            name: interactive_name
-          )
-        end)
+        runner =
+          Task.async(fn ->
+            Interactive.run(
+              model: ext_model(),
+              transport: FakeTransport,
+              tools: [],
+              extensions: [],
+              write_fn: fn _ ->
+                send(test_pid, :rendered)
+                :ok
+              end,
+              skip_raw_mode: true,
+              skip_sigwinch: true,
+              auto_start_reader: false,
+              dimensions: {80, 24},
+              terminal_name: nil,
+              name: interactive_name
+            )
+          end)
 
-      assert_receive :rendered, 2_000
-      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
-      Task.await(runner, 2_000)
+        assert_receive :rendered, 2_000
+        send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
+        Task.await(runner, 2_000)
+      end)
     end
   end
 
@@ -1918,75 +1920,79 @@ defmodule OctoPi.TUI.InteractiveTest do
     end
 
     test "normal exit path calls raw_mode_fn.(:exit)" do
-      test_pid = self()
-      raw_mode_fn = counting_raw_mode(test_pid)
-      interactive_name = :"crash_test_interactive_#{System.unique_integer([:positive])}"
+      ExUnit.CaptureLog.capture_log(fn ->
+        test_pid = self()
+        raw_mode_fn = counting_raw_mode(test_pid)
+        interactive_name = :"crash_test_interactive_#{System.unique_integer([:positive])}"
 
-      write_fn = fn _ ->
-        send(test_pid, :frame_rendered)
-        :ok
-      end
+        write_fn = fn _ ->
+          send(test_pid, :frame_rendered)
+          :ok
+        end
 
-      runner =
-        Task.async(fn ->
-          Interactive.run(
-            model: crash_safety_model(),
-            transport: FakeTransport,
-            tools: [],
-            write_fn: write_fn,
-            raw_mode_fn: raw_mode_fn,
-            tty_fn: fn _ -> :ok end,
-            skip_sigwinch: true,
-            auto_start_reader: false,
-            dimensions: {80, 24},
-            terminal_name: nil,
-            name: interactive_name
-          )
-        end)
+        runner =
+          Task.async(fn ->
+            Interactive.run(
+              model: crash_safety_model(),
+              transport: FakeTransport,
+              tools: [],
+              write_fn: write_fn,
+              raw_mode_fn: raw_mode_fn,
+              tty_fn: fn _ -> :ok end,
+              skip_sigwinch: true,
+              auto_start_reader: false,
+              dimensions: {80, 24},
+              terminal_name: nil,
+              name: interactive_name
+            )
+          end)
 
-      assert_receive {:raw_mode, :enter}, 1_000
-      assert_receive :frame_rendered, 1_000
+        assert_receive {:raw_mode, :enter}, 1_000
+        assert_receive :frame_rendered, 1_000
 
-      send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
-      assert :ok = Task.await(runner, 2_000)
+        send(interactive_name, {:hid_event, %Key{key: ?d, modifiers: [:ctrl]}})
+        assert :ok = Task.await(runner, 2_000)
 
-      assert_receive {:raw_mode, :exit}, 1_000
+        assert_receive {:raw_mode, :exit}, 1_000
+      end)
     end
 
     test "child crash still restores tty via the after block" do
-      test_pid = self()
-      raw_mode_fn = counting_raw_mode(test_pid)
-      terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
+      ExUnit.CaptureLog.capture_log(fn ->
+        test_pid = self()
+        raw_mode_fn = counting_raw_mode(test_pid)
+        terminal_name = :"crash_test_terminal_#{System.unique_integer([:positive])}"
 
-      write_fn = fn _ ->
-        send(test_pid, :frame_rendered)
-        :ok
-      end
+        write_fn = fn _ ->
+          send(test_pid, :frame_rendered)
+          :ok
+        end
 
-      runner =
-        Task.async(fn ->
-          Interactive.run(
-            model: crash_safety_model(),
-            transport: FakeTransport,
-            tools: [],
-            write_fn: write_fn,
-            raw_mode_fn: raw_mode_fn,
-            tty_fn: fn _ -> :ok end,
-            skip_sigwinch: true,
-            auto_start_reader: false,
-            dimensions: {80, 24},
-            terminal_name: terminal_name
-          )
-        end)
+        runner =
+          Task.async(fn ->
+            Interactive.run(
+              model: crash_safety_model(),
+              transport: FakeTransport,
+              tools: [],
+              write_fn: write_fn,
+              raw_mode_fn: raw_mode_fn,
+              tty_fn: fn _ -> :ok end,
+              skip_sigwinch: true,
+              auto_start_reader: false,
+              dimensions: {80, 24},
+              terminal_name: terminal_name
+            )
+          end)
 
-      assert_receive {:raw_mode, :enter}, 1_000
-      assert_receive :frame_rendered, 1_000
+        assert_receive {:raw_mode, :enter}, 1_000
+        assert_receive :frame_rendered, 1_000
 
-      # Hard-kill Terminal so its terminate/2 can't restore the tty.
-      Process.exit(Process.whereis(terminal_name), :kill)
+        # Hard-kill Terminal so its terminate/2 can't restore the tty.
+        Process.exit(Process.whereis(terminal_name), :kill)
 
-      assert :ok = Task.await(runner, 2_000)
-      assert_receive {:raw_mode, :exit}, 1_000
+        assert :ok = Task.await(runner, 2_000)
+        assert_receive {:raw_mode, :exit}, 1_000
+      end)
     end
   end
 

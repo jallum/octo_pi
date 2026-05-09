@@ -13,7 +13,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
     sm
   end
 
-  defp add_user(sm, content \\ "hello") do
+  defp add_user(sm, content) do
     SessionManager.add_entry(sm, %Entry.Message{
       id: nil,
       timestamp: nil,
@@ -21,7 +21,7 @@ defmodule OctoPi.Coder.SessionManager.GetTreeTest do
     })
   end
 
-  defp add_assistant(sm, content \\ "world") do
+  defp add_assistant(sm, content) do
     SessionManager.add_entry(sm, %Entry.Message{
       id: nil,
       timestamp: nil,

@@ -4,6 +4,21 @@ defmodule OctoPi.AI.Providers.OpenAI.AuthTest do
   alias OctoPi.AI.{CallOptions, Model}
   alias OctoPi.AI.Providers.OpenAI.Auth
 
+  setup do
+    # Isolate from any real ~/.octo_pi/auth.json on the developer machine.
+    prev = Application.get_env(:octo_pi_ai_openai, :auth_file)
+    Application.put_env(:octo_pi_ai_openai, :auth_file, "/nonexistent/octo_pi/auth.json")
+
+    on_exit(fn ->
+      case prev do
+        nil -> Application.delete_env(:octo_pi_ai_openai, :auth_file)
+        v -> Application.put_env(:octo_pi_ai_openai, :auth_file, v)
+      end
+    end)
+
+    :ok
+  end
+
   defp model(provider) do
     %Model{
       id: "x",
