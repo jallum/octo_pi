@@ -5,6 +5,7 @@
     "opi-pyl"
   ],
   "blocks": [
+    "opi-m6b",
     "opi-t3t"
   ],
   "created": "2026-05-09T20:37:28Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "[EPIC] Filament TUI backend: full vnode-\u003eframe renderer with styling, focus, events",
   "type": "epic",
-  "updated_at": "2026-05-09T20:39:34Z"
+  "updated_at": "2026-05-09T20:39:35Z"
 }
