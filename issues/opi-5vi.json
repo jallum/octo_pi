@@ -8,9 +8,15 @@
   "description": "New component file. Replaces render_notification/2 in interactive.ex.\n\nFile: apps/octo_pi_tui/lib/octo_pi/tui/components/notification.ex\n\nSpec: render(String.t() | nil, RenderContext.t()) :: VDOM.t()\n- nil → %VDOM.VFlow{children: []}\n- text, ctx → %VDOM.VText{text: Theme.fg(ctx.theme, :dim, text)}\n\nDelete from interactive.ex: render_notification/2\n\nTests: nil → empty VFlow. Text → VText with dim styling. Paint and verify output matches previous.",
   "id": "opi-5vi",
   "labels": [],
+  "comments": [
+    {
+      "text": "Superseded by the tui2 architecture decision in docs/tui-architecture.md. This ticket added a new component to octo_pi_tui's VDOM-based pipeline; that pipeline is being replaced by Filament-on-tui2 rather than refactored further. The corresponding component will be implemented as a Filament defcomponent in a slot under the opi-t3t epic. Closing without further work.",
+      "timestamp": "2026-05-09T20:41:06Z"
+    }
+  ],
   "priority": 1,
   "status": "open",
   "title": "Notification component — VNode",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:49Z"
+  "updated_at": "2026-05-09T20:41:06Z"
 }
