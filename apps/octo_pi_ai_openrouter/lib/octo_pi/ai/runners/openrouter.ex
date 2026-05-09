@@ -78,7 +78,7 @@ defmodule OctoPi.AI.Runners.OpenRouter do
 
   defp req_get(url, _config) do
     headers = [
-      {"HTTP-Referer", "https://github.com/j5n/octo_pi"},
+      {"HTTP-Referer", "https://github.com/jallum/octo_pi"},
       {"X-Title", "OctoPi"}
     ]
 
