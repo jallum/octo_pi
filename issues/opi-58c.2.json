@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "opi-58c.3"
+  ],
   "created": "2026-05-09T20:58:58Z",
   "description": "Decide how `octo_pi_tui2` consumes Filament Core during and after development. Three options, each with trade-offs.\n\n## Options\n\n**A. Path-dep against `/Users/j5n/Workspace/filament` during development.**\n- Pro: instant iteration on upstream API changes; no release cadence.\n- Pro: changes in either repo are visible immediately.\n- Con: doesn't work for collaborators or CI without local Filament checkout.\n- Con: must switch to vendor or hex before any external consumer.\n\n**B. Vendor Filament source into `octo_pi_tui2/deps_vendored/filament/` (or similar).**\n- Pro: self-contained; works in CI without external deps.\n- Pro: changes pinned to known-good snapshot.\n- Con: divergence pressure — Filament evolves, vendored copy goes stale.\n- Con: discipline required to sync vendor with upstream.\n\n**C. Filament hex release.**\n- Pro: standard Elixir dependency; works everywhere.\n- Pro: forces clean release cadence on Filament.\n- Con: requires Filament publish discipline; releases gate OctoPi work.\n- Con: probably only viable post-flm-3wr stabilization.\n\n## Recommendation\n\nPhase 1 (during flm-3wr active work and opi-tui2-bootstrap): path-dep (A). Iteration speed dominates.\n\nPhase 2 (once flm-3wr ships and OctoPi is in opi-fil-tui or opi-screen): hex release (C). Filament has a stable surface; OctoPi consumes the canonical path.\n\nPhase 3 (any deviation needed): if OctoPi needs Filament changes that haven't shipped upstream, vendor (B) temporarily, with a tracking ticket to upstream the change.\n\n## Acceptance\n\n- Decision documented in this ticket with rationale.\n- `mix.exs` configuration matches the chosen strategy.\n- README/docs note the dependency setup for new contributors.\n- If path-dep: explicit note that this is temporary, with the trigger condition for switching to hex.\n\n## Dependencies\n\nShould land before opi-tui2-bootstrap starts non-trivial work, since the bootstrap epic spins up `apps/octo_pi_tui2` which needs Filament available.",
   "id": "opi-58c.2",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Decide Filament dependency strategy: path-dep, vendor, or hex release",
   "type": "task",
-  "updated_at": "2026-05-09T20:58:58Z"
+  "updated_at": "2026-05-09T20:59:08Z"
 }
