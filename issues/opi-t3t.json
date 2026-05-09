@@ -4,6 +4,7 @@
     "opi-yhj"
   ],
   "blocks": [
+    "opi-4tr",
     "opi-ow9"
   ],
   "created": "2026-05-09T20:38:06Z",
@@ -14,5 +15,5 @@
   "status": "open",
   "title": "[EPIC] octo_pi_tui2 screen template, slot contract, and default components",
   "type": "epic",
-  "updated_at": "2026-05-09T20:39:34Z"
+  "updated_at": "2026-05-09T20:39:35Z"
 }
