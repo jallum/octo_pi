@@ -199,24 +199,20 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     if MapSet.size(folded_ids) == 0 do
       flat_nodes
     else
-      {visible, _hidden} =
-        Enum.reduce(flat_nodes, {[], MapSet.new()}, fn fn_node, {acc, hidden} ->
-          id = fn_node.node.entry.id
-          parent_id = fn_node.node.entry.parent_id
-
-          cond do
-            parent_id && MapSet.member?(hidden, parent_id) ->
-              {acc, MapSet.put(hidden, id)}
-
-            MapSet.member?(folded_ids, id) ->
-              {[fn_node | acc], MapSet.put(hidden, id)}
-
-            true ->
-              {[fn_node | acc], hidden}
-          end
-        end)
+      {visible, _hidden} = Enum.reduce(flat_nodes, {[], MapSet.new()}, &fold_filter_step(&1, &2, folded_ids))
 
       Enum.reverse(visible)
+    end
+  end
+
+  defp fold_filter_step(fn_node, {acc, hidden}, folded_ids) do
+    id = fn_node.node.entry.id
+    parent_id = fn_node.node.entry.parent_id
+
+    cond do
+      parent_id && MapSet.member?(hidden, parent_id) -> {acc, MapSet.put(hidden, id)}
+      MapSet.member?(folded_ids, id) -> {[fn_node | acc], MapSet.put(hidden, id)}
+      true -> {[fn_node | acc], hidden}
     end
   end
 
@@ -561,14 +557,20 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     else
       # Walk grapheme-by-grapheme keeping display-column budget (leave 1 col for "…")
       graphemes = String.graphemes(text)
-
-      {kept, _} =
-        Enum.reduce_while(graphemes, {[], 0}, fn g, {acc, w} ->
-          gw = grapheme_display_width(g)
-          if w + gw <= max_width - 1, do: {:cont, {[g | acc], w + gw}}, else: {:halt, {acc, w}}
-        end)
+      budget = max_width - 1
+      {kept, _} = Enum.reduce_while(graphemes, {[], 0}, &take_grapheme(&1, &2, budget))
 
       kept |> Enum.reverse() |> Enum.join() |> Kernel.<>("…")
+    end
+  end
+
+  defp take_grapheme(g, {acc, w}, budget) do
+    gw = grapheme_display_width(g)
+
+    if w + gw <= budget do
+      {:cont, {[g | acc], w + gw}}
+    else
+      {:halt, {acc, w}}
     end
   end
 
@@ -618,48 +620,42 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp format_label_timestamp(iso_string) when is_binary(iso_string) do
     case DateTime.from_iso8601(iso_string) do
-      {:ok, dt, _offset} ->
-        now = DateTime.utc_now()
-        same_day = dt.year == now.year and dt.month == now.month and dt.day == now.day
-        same_year = dt.year == now.year
-
-        if same_day do
-          "~2..0B:~2..0B" |> :io_lib.format([dt.hour, dt.minute]) |> IO.iodata_to_binary()
-        else
-          h = "~2..0B:~2..0B" |> :io_lib.format([dt.hour, dt.minute]) |> IO.iodata_to_binary()
-
-          if same_year do
-            "#{dt.month}/#{dt.day} #{h}"
-          else
-            yy = rem(dt.year, 100)
-            "#{yy}/#{dt.month}/#{dt.day} #{h}"
-          end
-        end
-
-      _ ->
-        ""
+      {:ok, dt, _offset} -> format_relative_dt(dt, DateTime.utc_now())
+      _ -> ""
     end
   end
 
   defp format_label_timestamp(_), do: ""
 
-  defp build_tool_call_map(flat_nodes) do
-    Enum.reduce(flat_nodes, %{}, fn %FlatNode{node: %TreeNode{entry: entry}}, acc ->
-      case entry do
-        %Entry.Message{message: %{"role" => "assistant", "content" => content}} when is_list(content) ->
-          Enum.reduce(content, acc, fn
-            %{"type" => "toolCall", "id" => id, "name" => name, "arguments" => args}, a ->
-              Map.put(a, id, %{name: name, arguments: args || %{}})
+  defp format_relative_dt(dt, now) do
+    same_day = dt.year == now.year and dt.month == now.month and dt.day == now.day
+    h = "~2..0B:~2..0B" |> :io_lib.format([dt.hour, dt.minute]) |> IO.iodata_to_binary()
 
-            _, a ->
-              a
-          end)
-
-        _ ->
-          acc
-      end
-    end)
+    cond do
+      same_day -> h
+      dt.year == now.year -> "#{dt.month}/#{dt.day} #{h}"
+      true -> "#{rem(dt.year, 100)}/#{dt.month}/#{dt.day} #{h}"
+    end
   end
+
+  defp build_tool_call_map(flat_nodes) do
+    Enum.reduce(flat_nodes, %{}, &collect_tool_calls/2)
+  end
+
+  defp collect_tool_calls(%FlatNode{node: %TreeNode{entry: entry}}, acc) do
+    case entry do
+      %Entry.Message{message: %{"role" => "assistant", "content" => content}} when is_list(content) ->
+        Enum.reduce(content, acc, &add_tool_call/2)
+
+      _ ->
+        acc
+    end
+  end
+
+  defp add_tool_call(%{"type" => "toolCall", "id" => id, "name" => name, "arguments" => args}, acc),
+    do: Map.put(acc, id, %{name: name, arguments: args || %{}})
+
+  defp add_tool_call(_, acc), do: acc
 
   defp format_tool_call(name, args) do
     home = System.get_env("HOME") || ""

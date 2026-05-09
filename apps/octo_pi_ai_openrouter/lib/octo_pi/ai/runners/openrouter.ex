@@ -36,14 +36,15 @@ defmodule OctoPi.AI.Runners.OpenRouter do
     base_url = effective_base_url(config)
 
     case discover(config) do
-      {:ok, models} ->
-        case Enum.find(models, fn m -> m.id == id end) do
-          %Model{} = model -> {:ok, %{model | base_url: base_url}}
-          nil -> :not_found
-        end
+      {:ok, models} -> find_model_by_id(models, id, base_url)
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp find_model_by_id(models, id, base_url) do
+    case Enum.find(models, fn m -> m.id == id end) do
+      %Model{} = model -> {:ok, %{model | base_url: base_url}}
+      nil -> :not_found
     end
   end
 

@@ -205,18 +205,23 @@ defmodule OctoPi.TUI.Components.TreeSelector do
     "─" |> String.duplicate(max(0, width - String.length(prefix))) |> then(&(prefix <> &1))
   end
 
+  @key_actions [
+    {"tui.select.up", :cursor_up},
+    {"tui.select.down", :cursor_down},
+    {"tui.select.pageUp", :cursor_page_up},
+    {"tui.select.pageDown", :cursor_page_down},
+    {"tui.select.confirm", :confirm},
+    {"tui.select.cancel", :cancel},
+    {"app.tree.toggleLabelTimestamp", :toggle_label_timestamp},
+    {"app.tree.editLabel", :edit_label},
+    {"app.tree.foldOrUp", :fold_or_up},
+    {"app.tree.unfoldOrDown", :unfold_or_down}
+  ]
+
   def handle_key(%__MODULE__{label_input: {entry_id, input}} = state, %Key{} = key) do
     case Input.handle_key(input, key, state.keybindings) do
       {_new_input, [{:submit, value}]} ->
-        label = value |> String.trim() |> then(fn s -> if s == "", do: nil, else: s end)
-        ts = if label, do: DateTime.to_iso8601(DateTime.utc_now())
-
-        new_state =
-          state
-          |> Map.put(:label_input, nil)
-          |> update_flat_node_label(entry_id, label, ts)
-
-        {new_state, [{:label_change, entry_id, label}]}
+        handle_label_submit(state, entry_id, value)
 
       {_new_input, [:cancel]} ->
         {%{state | label_input: nil}, []}
@@ -232,41 +237,44 @@ defmodule OctoPi.TUI.Components.TreeSelector do
   def handle_key(%__MODULE__{} = state, %Key{} = key) do
     kb = state.keybindings
 
-    cond do
-      Keybindings.matches?(kb, key, "tui.select.up") ->
-        {move_cursor(state, -1), []}
-
-      Keybindings.matches?(kb, key, "tui.select.down") ->
-        {move_cursor(state, +1), []}
-
-      Keybindings.matches?(kb, key, "tui.select.pageUp") ->
-        {move_cursor(state, -state.max_visible_lines), []}
-
-      Keybindings.matches?(kb, key, "tui.select.pageDown") ->
-        {move_cursor(state, +state.max_visible_lines), []}
-
-      Keybindings.matches?(kb, key, "tui.select.confirm") ->
-        handle_confirm(state)
-
-      Keybindings.matches?(kb, key, "tui.select.cancel") ->
-        {state, [:cancel]}
-
-      Keybindings.matches?(kb, key, "app.tree.toggleLabelTimestamp") ->
-        {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
-
-      Keybindings.matches?(kb, key, "app.tree.editLabel") ->
-        open_label_input(state)
-
-      Keybindings.matches?(kb, key, "app.tree.foldOrUp") ->
-        {handle_fold_or_up(state), []}
-
-      Keybindings.matches?(kb, key, "app.tree.unfoldOrDown") ->
-        {handle_unfold_or_down(state), []}
-
-      true ->
-        handle_filter_key(state, kb, key)
+    case Enum.find(@key_actions, fn {binding, _} -> Keybindings.matches?(kb, key, binding) end) do
+      {_binding, action} -> dispatch_key_action(state, action)
+      nil -> handle_filter_key(state, kb, key)
     end
   end
+
+  defp handle_label_submit(state, entry_id, value) do
+    label = normalize_label(value)
+    ts = if label, do: DateTime.to_iso8601(DateTime.utc_now())
+
+    new_state =
+      state
+      |> Map.put(:label_input, nil)
+      |> update_flat_node_label(entry_id, label, ts)
+
+    {new_state, [{:label_change, entry_id, label}]}
+  end
+
+  defp normalize_label(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp dispatch_key_action(state, :cursor_up), do: {move_cursor(state, -1), []}
+  defp dispatch_key_action(state, :cursor_down), do: {move_cursor(state, +1), []}
+  defp dispatch_key_action(state, :cursor_page_up), do: {move_cursor(state, -state.max_visible_lines), []}
+  defp dispatch_key_action(state, :cursor_page_down), do: {move_cursor(state, +state.max_visible_lines), []}
+  defp dispatch_key_action(state, :confirm), do: handle_confirm(state)
+  defp dispatch_key_action(state, :cancel), do: {state, [:cancel]}
+
+  defp dispatch_key_action(state, :toggle_label_timestamp),
+    do: {%{state | show_label_timestamps: not state.show_label_timestamps}, []}
+
+  defp dispatch_key_action(state, :edit_label), do: open_label_input(state)
+  defp dispatch_key_action(state, :fold_or_up), do: {handle_fold_or_up(state), []}
+  defp dispatch_key_action(state, :unfold_or_down), do: {handle_unfold_or_down(state), []}
 
   @spec invalidate(t()) :: t()
   def invalidate(state), do: state
@@ -284,14 +292,16 @@ defmodule OctoPi.TUI.Components.TreeSelector do
         {state, []}
 
       entry_id ->
-        current_label =
-          case Enum.find(state.flat_nodes, fn fn_node -> fn_node.node.entry.id == entry_id end) do
-            nil -> ""
-            fn_node -> fn_node.node.label || ""
-          end
-
+        current_label = current_label_for(state, entry_id)
         input = %Input{value: current_label, cursor: String.length(current_label)}
         {%{state | label_input: {entry_id, input}}, []}
+    end
+  end
+
+  defp current_label_for(state, entry_id) do
+    case Enum.find(state.flat_nodes, fn fn_node -> fn_node.node.entry.id == entry_id end) do
+      nil -> ""
+      fn_node -> fn_node.node.label || ""
     end
   end
 

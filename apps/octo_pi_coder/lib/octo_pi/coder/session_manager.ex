@@ -660,31 +660,30 @@ defmodule OctoPi.Coder.SessionManager do
   def get_tree(%__MODULE__{} = sm) do
     entries = get_entries(sm)
 
-    children_map =
-      Enum.reduce(entries, %{}, fn entry, acc ->
-        id = entry_id(entry)
-
-        if id do
-          parent_id = entry_parent(entry)
-
-          bucket =
-            cond do
-              is_nil(parent_id) -> :root
-              parent_id == id -> :root
-              Map.has_key?(sm.by_id, parent_id) -> parent_id
-              true -> :root
-            end
-
-          Map.update(acc, bucket, [entry], &[entry | &1])
-        else
-          acc
-        end
-      end)
+    children_map = Enum.reduce(entries, %{}, &add_to_children_map(&1, &2, sm))
 
     root_entries = children_map |> Map.get(:root, []) |> sort_by_timestamp()
     sorted_map = Map.new(children_map, fn {k, v} -> {k, sort_by_timestamp(v)} end)
 
     Enum.map(root_entries, &build_tree_node(&1, sorted_map, sm.labels_by_id, sm.label_timestamps_by_id))
+  end
+
+  defp add_to_children_map(entry, acc, sm) do
+    case entry_id(entry) do
+      nil -> acc
+      id -> Map.update(acc, parent_bucket(entry, id, sm), [entry], &[entry | &1])
+    end
+  end
+
+  defp parent_bucket(entry, id, sm) do
+    parent_id = entry_parent(entry)
+
+    cond do
+      is_nil(parent_id) -> :root
+      parent_id == id -> :root
+      Map.has_key?(sm.by_id, parent_id) -> parent_id
+      true -> :root
+    end
   end
 
   defp build_tree_node(entry, children_map, labels, label_timestamps) do

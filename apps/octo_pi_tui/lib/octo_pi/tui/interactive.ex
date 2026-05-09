@@ -775,18 +775,23 @@ defmodule OctoPi.TUI.Interactive do
   defp default_raw_mode(:exit), do: RawMode.exit()
 
   defp check_tmux_config do
-    if System.get_env("TMUX") do
-      case System.cmd("tmux", ["show-option", "-w", "extended-keys-format"]) do
-        {output, 0} ->
-          if !String.contains?(output, "csi-u") do
-            [current_format] = Regex.run(~r/\S+$/, output)
+    if System.get_env("TMUX"), do: tmux_extended_keys_warning()
+  end
 
-            "Warning: tmux extended-keys-format is #{current_format}. Pi works best with csi-u. Add 'set -g extended-keys-format csi-u' to ~/.tmux.conf and restart tmux."
-          end
+  defp tmux_extended_keys_warning do
+    case System.cmd("tmux", ["show-option", "-w", "extended-keys-format"]) do
+      {output, 0} -> tmux_warning_for_output(output)
+      _ -> nil
+    end
+  end
 
-        _ ->
-          nil
-      end
+  defp tmux_warning_for_output(output) do
+    if String.contains?(output, "csi-u") do
+      nil
+    else
+      [current_format] = Regex.run(~r/\S+$/, output)
+
+      "Warning: tmux extended-keys-format is #{current_format}. Pi works best with csi-u. Add 'set -g extended-keys-format csi-u' to ~/.tmux.conf and restart tmux."
     end
   end
 
@@ -1969,22 +1974,25 @@ defmodule OctoPi.TUI.Interactive do
   defp parse_changelog_sections(content) do
     content
     |> String.split("\n")
-    |> Enum.reduce({[], []}, fn line, {sections, current} ->
-      if String.starts_with?(line, "## ") do
-        sections =
-          if current == [],
-            do: sections,
-            else: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()]
-
-        {sections, [line]}
-      else
-        {sections, [line | current]}
-      end
-    end)
+    |> Enum.reduce({[], []}, &reduce_changelog_line/2)
     |> then(fn {sections, current} ->
       if current == [], do: sections, else: sections ++ [current |> Enum.reverse() |> Enum.join("\n") |> String.trim()]
     end)
     |> Enum.reverse()
+  end
+
+  defp reduce_changelog_line(line, {sections, current}) do
+    cond do
+      String.starts_with?(line, "## ") and current == [] ->
+        {sections, [line]}
+
+      String.starts_with?(line, "## ") ->
+        finished = current |> Enum.reverse() |> Enum.join("\n") |> String.trim()
+        {sections ++ [finished], [line]}
+
+      true ->
+        {sections, [line | current]}
+    end
   end
 
   defp append_user_msg(transcript, user_msg) do
