@@ -8,9 +8,15 @@
   "description": "composite_active_overlay/2 (interactive.ex:1043) post-processes [binary()] after build_screen. Replace with a %VOverlay{} node in the tree, so the single paint pass handles compositing.\n\nStep 1 — add height to RenderContext (render_context.ex):\n  defstruct [..., height: 0]\n  # render_ctx/1 in interactive.ex: height: state.height\n\nStep 2 — add %VOverlay{} to vdom.ex:\n  defmodule VOverlay do\n    # base:    VNode — full screen content\n    # overlay: VNode | nil — floating dialog (nil = passthrough)\n    # anchor, width, margin: forwarded to Overlay.resolve_and_clip/3\n    defstruct [:base, :overlay, :anchor, :width, :margin]\n  end\n\nStep 3 — paint %VOverlay{} in paint.ex:\n  def paint(%VDOM.VOverlay{overlay: nil, base: base}, buf, ctx),\n    do: paint(base, buf, ctx)\n\n  def paint(%VDOM.VOverlay{base: base, overlay: ov_node, anchor: anchor, width: ov_w, margin: margin}, buf, ctx) do\n    base_lines = paint_to_lines(base, ctx)\n    ov_lines   = paint_to_lines(ov_node, %{ctx | width: ov_w})\n    ov         = %Overlay{lines: ov_lines, anchor: anchor, width: ov_w, margin: margin}\n    composited = Overlay.composite(base_lines, [ov], ctx.width, ctx.height)\n    paint(%VDOM.VLines{lines: composited}, buf, ctx)\n  end\n\n  defp paint_to_lines(vnode, ctx) do\n    {iodata, _} = Paint.paint(vnode, LineBuf.new(), ctx) |\u003e LineBuf.finalize()\n    iodata |\u003e IO.iodata_to_binary() |\u003e String.split(\"\\n\")\n  end\n\nStep 4 — build_screen wraps in %VOverlay{}:\n  screen_vflow = %VDOM.VFlow{children: [...sections...]}\n  tree = %VDOM.VOverlay{\n    base:    screen_vflow,\n    overlay: active_overlay_node(state, ctx),\n    anchor:  :center,\n    width:   overlay_width(state),\n    margin:  2\n  }\n\nactive_overlay_node/2 replaces render_dialog_overlay/3: same dispatch over dialog types (login, settings, session_selector, tree_selector, summarize_prompt, select_list), but returns VNode tree. Each dialog component wraps current output in %VLines{} as migration step.\n\n⚠ Read render_dialog_overlay/3 in full before cutting — all dialog type dispatches must be covered by active_overlay_node/2.\n\nDelete from send_render / interactive.ex:\n- lines = composite_active_overlay(state, lines) (line 1031)\n- composite_active_overlay/2 (lines 1043–1059)\n- render_dialog_overlay/3 — replaced by active_overlay_node/2\n\nTests: No overlay → screen unchanged. Model selector → centred correctly. Each dialog type → renders at expected position. Overlay taller than terminal → clipped by margin.",
   "id": "opi-44y",
   "labels": [],
+  "comments": [
+    {
+      "text": "Superseded by the tui2 architecture decision in docs/tui-architecture.md. This ticket added a new component to octo_pi_tui's VDOM-based pipeline; that pipeline is being replaced by Filament-on-tui2 rather than refactored further. The corresponding component will be implemented as a Filament defcomponent in a slot under the opi-t3t epic. Closing without further work.",
+      "timestamp": "2026-05-09T20:41:06Z"
+    }
+  ],
   "priority": 1,
   "status": "open",
   "title": "Overlay compositing via %VOverlay{} — delete composite_active_overlay/2",
   "type": "task",
-  "updated_at": "2026-05-02T00:46:52Z"
+  "updated_at": "2026-05-09T20:41:06Z"
 }
