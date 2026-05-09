@@ -269,17 +269,17 @@ defmodule OctoPi.Coder.Components.TreeSelector do
     Enum.map(flat_nodes, fn flat_node ->
       fold_marker = Map.get(fold_marker_map, flat_node.node.entry.id)
 
-      render_node(
-        flat_node,
-        selected_id,
-        multiple_roots,
-        active_path_ids,
-        ansi,
-        tool_call_map,
-        show_label_timestamps,
-        fold_marker,
-        width
-      )
+      ctx = %{
+        selected_id: selected_id,
+        multiple_roots: multiple_roots,
+        active_path_ids: active_path_ids,
+        ansi: ansi,
+        tool_call_map: tool_call_map,
+        show_label_timestamps: show_label_timestamps,
+        width: width
+      }
+
+      render_node(flat_node, fold_marker, ctx)
     end)
   end
 
@@ -287,63 +287,64 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   # build_active_path_ids returns a MapSet whose internal type Dialyzer
   # cannot resolve to the parametric MapSet.t(String.t()). False positive.
-  @dialyzer {:nowarn_function, render_lines: 2, render_node: 9}
-  defp render_node(
-         flat_node,
-         selected_id,
-         multiple_roots,
-         active_path_ids,
-         ansi,
-         tool_call_map,
-         show_label_timestamps,
-         fold_marker,
-         width
-       ) do
+  @dialyzer {:nowarn_function, render_lines: 2, render_node: 3}
+  defp render_node(flat_node, fold_marker, ctx) do
     entry = flat_node.node.entry
-    is_selected = selected_id != nil and entry.id == selected_id
+    is_selected = ctx.selected_id != nil and entry.id == ctx.selected_id
     cursor_plain = if is_selected, do: "› ", else: "  "
-    cursor = if is_selected, do: ansi_fg("› ", :accent, ansi), else: "  "
+    cursor = if is_selected, do: ansi_fg("› ", :accent, ctx.ansi), else: "  "
 
-    display_indent = if multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
+    display_indent = if ctx.multiple_roots, do: max(0, flat_node.indent - 1), else: flat_node.indent
     connector = node_connector(flat_node)
     connector_position = if connector == "", do: -1, else: display_indent - 1
 
     prefix =
       build_prefix(display_indent, flat_node.gutters, connector, connector_position, flat_node.is_last, fold_marker)
 
-    root_fold_plain = if not flat_node.show_connector and fold_marker == :folded, do: "⊞ ", else: ""
-    root_fold_marker = ansi_fg(root_fold_plain, :accent, ansi)
-
-    path_plain = if MapSet.member?(active_path_ids, entry.id), do: "• ", else: ""
-    path_marker = ansi_fg(path_plain, :accent, ansi)
-
-    label_plain = if flat_node.node.label, do: "[#{flat_node.node.label}] ", else: ""
-    label_str = ansi_fg(label_plain, :warning, ansi)
-
-    label_ts_plain =
-      if show_label_timestamps and not is_nil(flat_node.node.label) and not is_nil(flat_node.node.label_timestamp) do
-        format_label_timestamp(flat_node.node.label_timestamp) <> " "
-      else
-        ""
-      end
-
-    label_ts_str = ansi_fg(label_ts_plain, :muted, ansi)
+    {root_fold_plain, root_fold_marker} = root_fold_marker_pair(flat_node, fold_marker, ctx.ansi)
+    {path_plain, path_marker} = path_marker_pair(entry.id, ctx.active_path_ids, ctx.ansi)
+    {label_plain, label_str} = label_pair(flat_node.node.label, ctx.ansi)
+    {label_ts_plain, label_ts_str} = label_timestamp_pair(flat_node.node, ctx.show_label_timestamps, ctx.ansi)
 
     content_avail =
-      if width do
-        fixed_vw =
-          String.length(cursor_plain) + String.length(prefix) + String.length(root_fold_plain) +
-            String.length(path_plain) + String.length(label_plain) + String.length(label_ts_plain)
+      compute_content_avail(ctx.width, [cursor_plain, prefix, root_fold_plain, path_plain, label_plain, label_ts_plain])
 
-        max(0, width - fixed_vw)
-      end
-
-    content = entry_display_text(flat_node.node, is_selected, ansi, tool_call_map, content_avail)
+    content = entry_display_text(flat_node.node, is_selected, ctx.ansi, ctx.tool_call_map, content_avail)
 
     line =
-      cursor <> ansi_fg(prefix, :dim, ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
+      cursor <>
+        ansi_fg(prefix, :dim, ctx.ansi) <> root_fold_marker <> path_marker <> label_str <> label_ts_str <> content
 
-    if is_selected and ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
+    if is_selected and ctx.ansi, do: IO.ANSI.reverse() <> line <> IO.ANSI.reset(), else: line
+  end
+
+  defp root_fold_marker_pair(%FlatNode{show_connector: false}, :folded, ansi),
+    do: {"⊞ ", ansi_fg("⊞ ", :accent, ansi)}
+
+  defp root_fold_marker_pair(_flat_node, _fold_marker, _ansi), do: {"", ""}
+
+  defp path_marker_pair(entry_id, active_path_ids, ansi) do
+    if MapSet.member?(active_path_ids, entry_id),
+      do: {"• ", ansi_fg("• ", :accent, ansi)},
+      else: {"", ""}
+  end
+
+  defp label_pair(nil, _ansi), do: {"", ""}
+  defp label_pair(label, ansi), do: {"[#{label}] ", ansi_fg("[#{label}] ", :warning, ansi)}
+
+  defp label_timestamp_pair(%TreeNode{label: label, label_timestamp: ts}, true, ansi)
+       when not is_nil(label) and not is_nil(ts) do
+    plain = format_label_timestamp(ts) <> " "
+    {plain, ansi_fg(plain, :muted, ansi)}
+  end
+
+  defp label_timestamp_pair(_node, _show, _ansi), do: {"", ""}
+
+  defp compute_content_avail(nil, _plain_parts), do: nil
+
+  defp compute_content_avail(width, plain_parts) do
+    fixed_vw = plain_parts |> Enum.map(&String.length/1) |> Enum.sum()
+    max(0, width - fixed_vw)
   end
 
   defp node_connector(%FlatNode{show_connector: true, is_virtual_root_child: false, is_last: true}), do: "└─ "
@@ -577,31 +578,28 @@ defmodule OctoPi.Coder.Components.TreeSelector do
   # Display column width of a single grapheme cluster using East Asian Width heuristic.
   # Covers Hangul, CJK, fullwidth forms, and emoji (supplementary plane).
   # Symbols/punctuation in U+1100–U+2E7F (bullets, box-drawing, etc.) are narrow (1).
-  defp grapheme_display_width(<<cp::utf8, _::binary>>) do
-    cond do
-      cp < 0x1100 -> 1
-      # Hangul Jamo
-      cp <= 0x115F -> 2
-      # Misc punctuation, symbols (narrow)
-      cp < 0x2E80 -> 1
-      # CJK Radicals, CJK Unified Ideographs
-      cp <= 0x9FFF -> 2
-      cp < 0xAC00 -> 1
-      # Hangul Syllables
-      cp <= 0xD7FF -> 2
-      cp < 0xF900 -> 1
-      # CJK Compatibility
-      cp <= 0xFAFF -> 2
-      cp < 0xFF01 -> 1
-      # Fullwidth Latin/Katakana
-      cp <= 0xFF60 -> 2
-      cp < 0x10000 -> 1
-      # Supplementary: emoji, etc.
-      true -> 2
-    end
-  end
-
+  defp grapheme_display_width(<<cp::utf8, _::binary>>), do: codepoint_width(cp)
   defp grapheme_display_width(_), do: 1
+
+  defp codepoint_width(cp) when cp < 0x1100, do: 1
+  # Hangul Jamo
+  defp codepoint_width(cp) when cp <= 0x115F, do: 2
+  # Misc punctuation, symbols (narrow)
+  defp codepoint_width(cp) when cp < 0x2E80, do: 1
+  # CJK Radicals, CJK Unified Ideographs
+  defp codepoint_width(cp) when cp <= 0x9FFF, do: 2
+  defp codepoint_width(cp) when cp < 0xAC00, do: 1
+  # Hangul Syllables
+  defp codepoint_width(cp) when cp <= 0xD7FF, do: 2
+  defp codepoint_width(cp) when cp < 0xF900, do: 1
+  # CJK Compatibility
+  defp codepoint_width(cp) when cp <= 0xFAFF, do: 2
+  defp codepoint_width(cp) when cp < 0xFF01, do: 1
+  # Fullwidth Latin/Katakana
+  defp codepoint_width(cp) when cp <= 0xFF60, do: 2
+  defp codepoint_width(cp) when cp < 0x10000, do: 1
+  # Supplementary: emoji, etc.
+  defp codepoint_width(_cp), do: 2
 
   defp display_width(text) do
     text |> String.graphemes() |> Enum.reduce(0, &(grapheme_display_width(&1) + &2))
@@ -657,54 +655,55 @@ defmodule OctoPi.Coder.Components.TreeSelector do
 
   defp add_tool_call(_, acc), do: acc
 
-  defp format_tool_call(name, args) do
+  defp format_tool_call(name, args), do: format_tool_call_dispatch(name, args)
+
+  defp format_tool_call_dispatch("read", args), do: "[read: #{format_read_target(args)}]"
+  defp format_tool_call_dispatch("write", args), do: "[write: #{shorten_path(path_arg(args))}]"
+  defp format_tool_call_dispatch("edit", args), do: "[edit: #{shorten_path(path_arg(args))}]"
+  defp format_tool_call_dispatch("bash", args), do: "[bash: #{format_bash_command(args["command"])}]"
+  defp format_tool_call_dispatch("grep", args), do: "[grep: /#{args["pattern"] || ""}/ in #{shorten_path(args["path"] || ".")}]"
+  defp format_tool_call_dispatch("find", args), do: "[find: #{args["pattern"] || ""} in #{shorten_path(args["path"] || ".")}]"
+  defp format_tool_call_dispatch("ls", args), do: "[ls: #{shorten_path(args["path"] || ".")}]"
+
+  defp format_tool_call_dispatch(name, args) do
+    args_str = Jason.encode!(args)
+    suffix = if String.length(args_str) > 40, do: "...", else: ""
+    "[#{name}: #{String.slice(args_str, 0, 40)}#{suffix}]"
+  end
+
+  defp path_arg(args), do: args["path"] || args["file_path"] || ""
+
+  defp format_read_target(args) do
+    path = shorten_path(path_arg(args))
+    offset = args["offset"]
+    limit = args["limit"]
+
+    if offset || limit do
+      start = offset || 1
+      finish = if limit, do: "-#{start + limit - 1}", else: ""
+      "#{path}:#{start}#{finish}"
+    else
+      path
+    end
+  end
+
+  defp format_bash_command(nil), do: ""
+
+  defp format_bash_command(command) do
+    raw = to_string(command)
+    cmd = raw |> String.replace(~r/[\n\t]/, " ") |> String.trim() |> String.slice(0, 50)
+    suffix = if String.length(raw) > 50, do: "...", else: ""
+    "#{cmd}#{suffix}"
+  end
+
+  defp shorten_path(p) do
+    s = to_string(p)
     home = System.get_env("HOME") || ""
 
-    shorten = fn p ->
-      s = to_string(p)
-      if home != "" and String.starts_with?(s, home), do: "~" <> String.slice(s, String.length(home)..-1//1), else: s
-    end
-
-    case name do
-      "read" ->
-        path = shorten.(args["path"] || args["file_path"] || "")
-        offset = args["offset"]
-        limit = args["limit"]
-
-        display =
-          if offset || limit do
-            start = offset || 1
-            finish = if limit, do: "-#{start + limit - 1}", else: ""
-            "#{path}:#{start}#{finish}"
-          else
-            path
-          end
-
-        "[read: #{display}]"
-
-      "write" ->
-        "[write: #{shorten.(args["path"] || args["file_path"] || "")}]"
-
-      "edit" ->
-        "[edit: #{shorten.(args["path"] || args["file_path"] || "")}]"
-
-      "bash" ->
-        raw = to_string(args["command"] || "")
-        cmd = raw |> String.replace(~r/[\n\t]/, " ") |> String.trim() |> String.slice(0, 50)
-        "[bash: #{cmd}#{if String.length(raw) > 50, do: "...", else: ""}]"
-
-      "grep" ->
-        "[grep: /#{args["pattern"] || ""}/ in #{shorten.(args["path"] || ".")}]"
-
-      "find" ->
-        "[find: #{args["pattern"] || ""} in #{shorten.(args["path"] || ".")}]"
-
-      "ls" ->
-        "[ls: #{shorten.(args["path"] || ".")}]"
-
-      _ ->
-        args_str = Jason.encode!(args)
-        "[#{name}: #{String.slice(args_str, 0, 40)}#{if String.length(args_str) > 40, do: "...", else: ""}]"
+    if home != "" and String.starts_with?(s, home) do
+      "~" <> String.slice(s, String.length(home)..-1//1)
+    else
+      s
     end
   end
 
