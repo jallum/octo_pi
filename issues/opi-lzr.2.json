@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-12T10:03:28Z",
+  "description": "Lift two rejections in tag_engine.ex and implement slot collection.\n\n## Changes\n\n**lib/filament/tag_engine.ex**\n\n**Step A** — Remote component inner content\n- Add handler for `{:remote_component, name, attrs, tag_meta}` open-tag form (non-self-closing)\n- Walk tokens until matching closing tag, collecting `\u003c:slot_name\u003e` sub-trees\n- Emit component vnode with slot entries injected into assigns\n\n**Step B** — `\u003c:slot_name\u003e...\u003c/:slot_name\u003e` collector (replaces raise_syntax_error! at line 520)\n- Parse open slot sub-tag, collect inner VNode tree until matching close\n- Build quoted zero-arity lambda (`render_fn`) over the inner AST; it captures caller's `assigns`\n- Produce `%Filament.Slot.Entry{render_fn: fn, attrs: attrs_map}`\n\n**New module: lib/filament/slot/entry.ex**\n```elixir\ndefmodule Filament.Slot.Entry do\n  defstruct [:render_fn, :attrs]\n  @type t :: %__MODULE__{render_fn: (-\u003e Filament.VNode.t()), attrs: map()}\nend\n```\n\n## Acceptance\n- `\u003cMyComp\u003e\u003c:header\u003e...\u003c/:header\u003e\u003c/MyComp\u003e` compiles without error\n- Bare content at top level of component tag raises compile-time error with helpful message\n- Unknown slot name raises compile-time error when target module is resolvable",
+  "id": "opi-lzr.2",
+  "labels": [],
+  "parent": "opi-lzr",
+  "priority": 2,
+  "status": "open",
+  "title": "Tag engine: consumer \u003c:slot_name\u003e and remote component inner content",
+  "type": "task",
+  "updated_at": "2026-05-12T10:03:28Z"
+}
