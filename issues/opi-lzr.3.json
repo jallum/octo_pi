@@ -3,7 +3,9 @@
   "blocked_by": [
     "opi-lzr.2"
   ],
-  "blocks": [],
+  "blocks": [
+    "opi-lzr.4"
+  ],
   "created": "2026-05-12T10:03:29Z",
   "description": "Enable `\u003c:slot_name /\u003e` inside a component's own render/1 template.\n\n## Changes\n\n**lib/filament/tag_engine.ex**\n- Add handler for `{:slot, slot_name, attrs, %{closing: :self}}` (self-closing form)\n- Parse optional `default={Module}` attr from the slot render tag\n- Emit vnode: `{:slot, slot_name, Map.get(assigns, slot_name, []), default_mod}`\n\n**lib/filament/vnode.ex** — extend the `@type t` union:\n```elixir\n| {:slot, atom(), [Filament.Slot.Entry.t()], module() | nil}\n#           ^name  ^entries from caller        ^default module\n```\n\n## Acceptance\n- `\u003c:header /\u003e` inside a defcomponent render/1 compiles and emits the new :slot vnode\n- `\u003c:footer default={AltFooter} /\u003e` passes the default module through\n- The :slot vnode round-trips through inspect/logging without error",
   "id": "opi-lzr.3",
