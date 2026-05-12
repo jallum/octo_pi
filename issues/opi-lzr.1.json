@@ -4,14 +4,15 @@
   "blocks": [
     "opi-lzr.2"
   ],
+  "closed_at": "2026-05-12T13:16:24Z",
   "created": "2026-05-12T10:03:28Z",
   "description": "Add `slot` macro to defcomponent.ex parallel to `prop`.\n\n## Changes\n\n**lib/filament/defcomponent.ex**\n- Add `slot(name, opts \\\\ [])` macro accumulating `@filament_slots {name, opts}`\n- In `@before_compile`: collect slots into `__slots__/0` returning `[%{name:, required:, default:}]`\n- Extend `__validate_props__!/1` to check required slots are present and non-empty in the props map\n- Slot names must not collide with prop names (compile-time error)\n\n## Acceptance\n- `slot :name, required: false, default: SomeMod` compiles without error\n- `MyComp.__slots__/0` returns declared metadata\n- `__validate_props__!/1` raises with a clear message when a required slot is absent\n- Defining a slot with the same name as a prop raises a compile-time error",
   "id": "opi-lzr.1",
   "labels": [],
   "parent": "opi-lzr",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "defcomponent slot macro and __slots__/0 metadata",
   "type": "task",
-  "updated_at": "2026-05-12T13:14:23Z"
+  "updated_at": "2026-05-12T13:16:24Z"
 }
