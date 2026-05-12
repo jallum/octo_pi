@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-12T10:03:30Z",
+  "description": "Extend Renderer.walk_vnode/2 to resolve slot vnodes at render time.\n\n## Changes\n\n**lib/filament/renderer.ex** — add walk_vnode heads:\n```elixir\ndef walk_vnode({:slot, _name, [], nil}, _ctx),\n  do: {:fragment, []}\n\ndef walk_vnode({:slot, _name, [], default_mod}, ctx) when not is_nil(default_mod),\n  do: walk_vnode({:component, default_mod, %{}, nil}, ctx)\n\ndef walk_vnode({:slot, _name, entries, _default}, ctx) do\n  children =\n    Enum.flat_map(entries, fn %Filament.Slot.Entry{render_fn: f} -\u003e\n      [walk_child(f.(), ctx)]\n    end)\n  {:fragment, children}\nend\n```\n\nSlot content is rendered in the **provider's** fiber context. Each `{:component, ...}` inside a slot gets its own child fiber via the existing `render_component_child/3` machinery — no special casing needed.\n\n## Acceptance\n- Slot content components receive proper child fiber identity; hooks survive re-renders\n- Empty optional slot with no default renders nothing (empty fragment)\n- Empty optional slot with default renders the default component\n- Filled slot renders caller-supplied content in the provider's fiber tree",
+  "id": "opi-lzr.4",
+  "labels": [],
+  "parent": "opi-lzr",
+  "priority": 2,
+  "status": "open",
+  "title": "Renderer: resolve and walk {:slot, ...} vnodes",
+  "type": "task",
+  "updated_at": "2026-05-12T10:03:30Z"
+}
