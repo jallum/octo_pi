@@ -4,13 +4,14 @@
   "blocks": [
     "opi-0il"
   ],
+  "closed_at": "2026-05-12T13:29:44Z",
   "created": "2026-05-12T10:03:01Z",
   "description": "Add a named-slot mechanism to Filament so components can declare typed injection points and callers can fill them with arbitrary child VNodes.\n\nTwo restrictions currently in tag_engine.ex must be lifted together:\n1. `\u003c:slot_name\u003e` consumer syntax is rejected (lines 520-527)\n2. Remote components with inner content (`\u003cModule\u003e...\u003c/Module\u003e`) are rejected (lines 511-518)\n\n## Provider API (defcomponent)\n\n```elixir\ndefcomponent MyLayout do\n  slot :header, required: false, default: MyDefaultHeader\n  slot :inner_block, required: true\n  slot :footer, required: false\n\n  def render(assigns) do\n    ~F\"\"\"\n    \u003cdiv\u003e\n      \u003c:header /\u003e\n      \u003c:inner_block /\u003e\n      \u003c:footer default={AltFooter} /\u003e\n    \u003c/div\u003e\n    \"\"\"\n  end\nend\n```\n\n## Consumer API\n\n```elixir\n~F\"\"\"\n\u003cMyLayout\u003e\n  \u003c:header\u003e\u003cPageHeader title=\"Hello\" /\u003e\u003c/:header\u003e\n  \u003c:inner_block\u003e\u003cContent items={@items} /\u003e\u003c/:inner_block\u003e\n\u003c/MyLayout\u003e\n\"\"\"\n```\n\n## Data Representation\n\nSlots are passed as lists of `%Filament.Slot.Entry{render_fn: fn, attrs: map}` in the props map. The VNode type gains a `{:slot, atom(), [Entry.t()], module() | nil}` node that the renderer resolves at walk time.\n\n## Primary Use Case\n\nScreen template pattern for octo_pi_tui2: a root layout component declares structural regions (header, body, status bar) that applications fill with component trees.\n\nSee docs/filament-slots-feature-request.md for full spec including edge cases, fiber identity semantics, and future :for/:let extensibility.",
   "id": "opi-lzr",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "Filament: Named Slot Mechanism for ~F Templates",
   "type": "epic",
-  "updated_at": "2026-05-12T10:03:50Z"
+  "updated_at": "2026-05-12T13:29:44Z"
 }
