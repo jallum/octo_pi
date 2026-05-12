@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-lzr.3"
   ],
@@ -10,8 +10,8 @@
   "labels": [],
   "parent": "opi-lzr",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Renderer: resolve and walk {:slot, ...} vnodes",
   "type": "task",
-  "updated_at": "2026-05-12T10:03:34Z"
+  "updated_at": "2026-05-12T13:27:49Z"
 }
