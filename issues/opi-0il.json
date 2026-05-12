@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "opi-lzr"
+  ],
   "blocks": [],
   "created": "2026-05-12T10:03:46Z",
   "description": "Build a terminal rendering backend for Filament in octo_pi, to be pushed upstream once the design is proven.\n\n## Motivation\n\nFilament currently targets web (HTML/LiveView). The octo_pi TUI needs the same reactive component model — fiber trees, cells, hooks, event dispatch — but painting terminal output instead of HTML. Building it here first lets us iterate on the API without coupling to the upstream release cycle.\n\n## Scope\n\n- `Filament.TUI.Backend` behaviour: takes a walked VNode tree and produces terminal output (ANSI escape sequences / VLines)\n- VNode-to-terminal mapping: {:element, tag, attrs, children} drives layout (box model, flex direction, width/height)\n- Integration with existing octo_pi VDOM primitives (VLines, Paint) as the initial paint layer\n- Reconciler loop: diffs fiber tree between renders, applies minimal terminal updates\n- Event routing: map terminal key/mouse events to Filament's capture/bubble dispatch\n\n## Relationship to Existing TUI\n\nThe current octo_pi_tui app uses a hand-rolled VDOM (VLines + Paint). This backend would power a parallel `octo_pi_tui2` app built on Filament components, eventually replacing the hand-rolled layer.\n\n## Upstream Path\n\nOnce the design is stable and the screen template pattern (opi-lzr) is validated end-to-end, extract Filament.TUI into the upstream Filament repository as an optional backend package.",
@@ -10,5 +12,5 @@
   "status": "open",
   "title": "Filament.TUI: terminal rendering backend (octo_pi prototype)",
   "type": "epic",
-  "updated_at": "2026-05-12T10:03:46Z"
+  "updated_at": "2026-05-12T10:03:50Z"
 }
