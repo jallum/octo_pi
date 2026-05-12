@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Jason Allum",
   "blocked_by": [
     "opi-lzr.2"
   ],
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "opi-lzr",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Tag engine: provider render site \u003c:slot_name /\u003e",
   "type": "task",
-  "updated_at": "2026-05-12T10:03:34Z"
+  "updated_at": "2026-05-12T13:25:18Z"
 }
